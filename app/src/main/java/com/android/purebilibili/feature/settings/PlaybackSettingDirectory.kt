@@ -25,6 +25,8 @@ internal fun settingItemTitle(settingId: String): String =
 internal fun settingItemTitle(settingId: String, context: Context): String = when (settingId) {
     "navigation.video_companion_enabled" -> context.getString(com.android.purebilibili.R.string.video_companion_title)
     "animation.card_transition_enabled" -> context.getString(com.android.purebilibili.R.string.animation_title_card_transition)
+    CARD_TRANSITION_METHOD_SETTING_ID -> context.getString(com.android.purebilibili.R.string.animation_card_transition_method_title)
+    SETTINGS_ICON_GLYPHS_SETTING_ID -> context.getString(com.android.purebilibili.R.string.appearance_settings_icon_glyphs_title)
     PROGRESSIVE_BLUR_RENDERER_SETTING_ID -> context.getString(com.android.purebilibili.R.string.animation_progressive_renderer_title)
     GRID_CUSTOMIZATION_SETTING_ID -> context.getString(com.android.purebilibili.R.string.home_settings_grid_customization_title)
     GRID_SHARE_SETTING_ID -> context.getString(com.android.purebilibili.R.string.home_settings_grid_share_title)
@@ -81,6 +83,7 @@ internal val playbackSettingDirectory = listOf(
     PlaybackSettingItem("playback.double_tap_like", "双击点赞", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, null),
     PlaybackSettingItem("playback.favorite_quick_save_default_folder", "点按收藏进默认收藏夹", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, { context -> com.android.purebilibili.core.store.FavoriteInteractionSettingsStore .getQuickSaveDefaultFolder(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.auto_skip_op_ed", "自动跳过片头片尾", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_INTERACTION, null),
+    PlaybackSettingItem("playback.sub_reply_threaded_enabled", "楼中楼树状显示", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, { context -> com.android.purebilibili.core.store.SettingsManager.getSubReplyThreadedEnabled(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.sub_reply_loaded_count_enabled", "显示已加载回复数", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, { context -> com.android.purebilibili.core.store.SettingsManager .getSubReplyLoadedCountEnabled(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.comment_fraud_detection_enabled", "评论发送检测", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, { context -> com.android.purebilibili.core.store.SettingsManager .getCommentFraudDetectionEnabled(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.comment_avatar_push_enabled", "评论头像推挤", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, { context -> com.android.purebilibili.core.store.SettingsManager.getCommentAvatarPushEnabled(context).map { if (it) "开启" else "关闭" } }),

@@ -8,20 +8,6 @@ internal fun resolveAudioNowPlayingCoverSizeDp(mergeProgress: Float, searchProgr
 internal fun resolveAudioNowPlayingBarHeightDp(mergeProgress: Float, searchProgress: Float): Float =
     resolveAudioNowPlayingCoverSizeDp(mergeProgress, searchProgress) + 14f
 
-/**
- * The source bar is hidden only while the shared-transition host owns the
- * return handoff; that contract lives in
- * [com.android.purebilibili.core.ui.transition.resolveNowPlayingBarReturnVisibility].
- * A separate landing animation is intentionally not used:
- * the shared morph is the only geometry timeline.
- */
-
-internal fun canOpenAudioNowPlayingBarSource(
-    layoutStable: Boolean,
-    imeSettled: Boolean = true,
-    sharedTransitionRunning: Boolean = false,
-): Boolean = layoutStable && imeSettled && !sharedTransitionRunning
-
 internal data class AudioNowPlayingBarRowMetrics(
     val coverPx: Int,
     val horizontalPaddingPx: Int,

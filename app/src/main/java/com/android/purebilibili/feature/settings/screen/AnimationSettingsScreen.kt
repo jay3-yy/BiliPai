@@ -7,7 +7,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import com.android.purebilibili.core.ui.findHostActivity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import com.android.purebilibili.core.util.PickGalleryVisualMedia
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
@@ -35,6 +37,7 @@ import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.CardRemovalDissolveMode
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.AppAlertDialog
@@ -146,6 +149,16 @@ fun AnimationSettingsContent(
         mutableStateOf<SettingsShareImportSession?>(null)
     }
     var isLiquidGlassImporting by remember { mutableStateOf(false) }
+    val liquidGlassPreviewImagePicker = rememberLauncherForActivityResult(
+        contract = PickGalleryVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            viewModel.setLiquidGlassPreviewImageUri(uri.toString())
+        }
+    }
     val liquidGlassImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -169,6 +182,17 @@ fun AnimationSettingsContent(
     }
     val listState = rememberLazyListState()
     val focusRequest by SettingsSearchFocusController.request.collectAsStateWithLifecycle()
+    LaunchedEffect(focusRequest?.token, state.cardTransitionEnabled) {
+        val request = focusRequest ?: return@LaunchedEffect
+        if (!state.cardTransitionEnabled && request.settingId == CARD_TRANSITION_METHOD_SETTING_ID) {
+            SettingsSearchFocusController.submit(
+                target = SettingsSearchTarget.ANIMATION,
+                focusId = "animation_card",
+                settingId = "animation.card_transition_enabled",
+                query = request.query,
+            )
+        }
+    }
     LaunchedEffect(focusRequest?.token, state.hapticFeedbackEnabled) {
         val request = focusRequest ?: return@LaunchedEffect
         if (!state.hapticFeedbackEnabled && (request.settingId == HAPTIC_SCENES_SETTING_ID ||
@@ -204,21 +228,10 @@ fun AnimationSettingsContent(
     }
     val homeConfiguration = rememberSettingsHomeConfiguration()
     val themeConfiguration = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
-    val progressiveBlurRenderer = if (com.android.purebilibili.feature.home.components.isOfficialProgressiveBlurSupported()) {
-        com.android.purebilibili.core.ui.blur.LocalProgressiveBlurRenderer.current
-    } else {
-        val savedRenderer by remember(context) {
-            com.android.purebilibili.core.store.home.LiquidGlassSettingsStore.observeProgressiveBlurRenderer(context)
-        }.collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.home.ProgressiveBlurRenderer.MIUIX,
-        )
-        savedRenderer
-    }
     val isLiquidGlassAvailable = shouldAllowHomeChromeLiquidGlass(Build.VERSION.SDK_INT)
     val liquidGlassPreviewImageUri by remember(context) { SettingsManager.getLiquidGlassPreviewImageUri(context) }
         .collectAsStateWithLifecycle(initialValue = null)
     val liquidGlassAdvancedSettings = homeConfiguration.liquidGlassAdvancedSettings
-    val liquidGlassReadabilityMode = homeConfiguration.liquidGlassReadabilityMode
     val uiEntranceAnimationEnabled by remember(context) { SettingsManager.getUiEntranceAnimationEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = themeConfiguration.uiEntranceAnimationEnabled)
     val globalDragFeedbackEnabled by remember(context) { SettingsManager.getGlobalDragFeedbackEnabled(context) }
@@ -226,53 +239,31 @@ fun AnimationSettingsContent(
     val maidLottieAnimationEnabled by remember(context) { SettingsManager.getMaidLottieAnimationEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val skeletonBreathingEnabled = com.android.purebilibili.core.ui.skeleton.rememberSkeletonBreathingEnabled()
-    val liquidControlsUseThemeColor by remember(context) { SettingsManager.getLiquidControlsUseThemeColor(context) }
-        .collectAsStateWithLifecycle(initialValue = false)
-    val switchThumbMode by remember(context) { SettingsManager.getLiquidSwitchThumbMode(context) }
-        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
-    val homeCardFrostedGlassEnabled by remember(context) { SettingsManager.getHomeCardFrostedGlassEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = false)
     val globalTextTapCopyEnabled by remember(context) { SettingsManager.getGlobalTextTapCopyEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = themeConfiguration.globalTextTapCopyEnabled)
     val appNavigationSettings = rememberSettingsNavigationConfiguration()
-    val previewBottomBarItems = remember(
-        appNavigationSettings.orderedVisibleTabIds,
-        homeConfiguration.isBottomBarSearchEnabled,
-        homeConfiguration.bottomBarSearchLayoutMode,
-    ) {
-        resolveBottomBarVisibleItemsForSearchMode(
-            visibleItems = resolveVisibleBottomBarItems(
-                appNavigationSettings.orderedVisibleTabIds
-            ),
-            bottomBarSearchEnabled = homeConfiguration.isBottomBarSearchEnabled,
-            searchLayoutMode = homeConfiguration.bottomBarSearchLayoutMode,
-        )
-    }
-    val videoTransitionRealtimeBlurEnabled by remember(context) { SettingsManager.getVideoTransitionRealtimeBlurEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = false)
     val transitionWindowConfiguration = LocalConfiguration.current
     val videoTransitionCapability = remember(context, transitionWindowConfiguration, state.cardTransitionEnabled) {
         SystemVideoCardTransition.deviceCapability(context.findHostActivity())
     }
     val systemReduceMotion = rememberSystemReduceMotion()
+    val preferSharedElement = homeConfiguration.preferSharedElementCardTransition
     val cardTransitionSourceDescription = stringResource(
         when {
             systemReduceMotion -> R.string.animation_card_transition_source_reduced_motion
+            preferSharedElement -> R.string.animation_card_transition_source_shared
             videoTransitionCapability.available -> R.string.animation_card_transition_source_official
             else -> R.string.animation_card_transition_source_fallback
         },
     )
     val transitionBlurDescription = stringResource(
         when {
-            !videoTransitionCapability.available -> R.string.animation_transition_blur_summary
+            preferSharedElement || !videoTransitionCapability.available -> R.string.animation_transition_blur_summary
             videoTransitionCapability.configurableBlur -> R.string.animation_transition_blur_official_supported
             else -> R.string.animation_transition_blur_official_system
         },
     )
-    val settingsContainerRealtimeBlurEnabled by remember(context) { SettingsManager.getSettingsContainerRealtimeBlurEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = false)
-    val settingsContainerMorphEnabled by remember(context) { SettingsManager.getSettingsContainerMorphEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = true)
+    val settingsContainerMorphEnabled = appNavigationSettings.settingsContainerMorphEnabled
     val fullScreenSwipeBackEnabled by remember(context) { SettingsManager.getFullScreenSwipeBackEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val effectiveEntranceSpec = rememberEffectiveEntranceMotionSpec()
@@ -322,7 +313,7 @@ fun AnimationSettingsContent(
     SettingsSectionFocusEffect(
         listState = listState,
         target = SettingsSearchTarget.ANIMATION,
-        sectionKeys = listOf("animation_glass_title", "animation_glass") + (if (advancedOnly) emptyList() else listOf("animation_card_title", "animation_card", "animation_page_title", "animation_page", "animation_maid_lottie_title", "animation_maid_lottie")),
+        sectionKeys = animationSettingsScrollItemKeys(advancedOnly),
         legacyKeys = mapOf(
             SettingsSearchFocusIds.ANIMATION_START to "animation_page_title",
             SettingsSearchFocusIds.ANIMATION_VISUAL_EFFECTS to "animation_glass_title",
@@ -344,166 +335,212 @@ fun AnimationSettingsContent(
                     AppPreferenceSectionTitle(if (advancedOnly) stringResource(R.string.animation_glass_advanced_title) else stringResource(R.string.animation_glass_section_title))
                 }
             }
-            item(key = "animation_glass") {
-                Box(modifier = Modifier.entrance()) {
-                    AppPreferenceGroup {
-                        // 玻璃家族总开关与材质条目统一收口在本分组;设备不支持时以提示替代开关。
-                        SettingsItemAnchor("appearance.effective_liquid_glass_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.ANDROID_LIQUID_GLASS),
-                                title = settingItemTitle("appearance.effective_liquid_glass_enabled"),
-                                subtitle = if (isLiquidGlassAvailable) {
-                                    context.getString(R.string.appearance_liquid_glass_summary)
-                                } else {
-                                    context.getString(R.string.appearance_liquid_glass_unsupported)
-                                },
-                                checked = state.androidNativeLiquidGlassEnabled,
-                                onCheckedChange = { viewModel.toggleAndroidNativeLiquidGlass(it) },
-                                enabled = isLiquidGlassAvailable,
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-                        AppPreferenceDivider()
-                        com.android.purebilibili.feature.settings.LiquidGlassScenePreference(
-                            enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
+            // 标题负责页面入场，预览和模糊分段随滚动直接显示。
+            item(key = "animation_glass", contentType = "settings_preference_group") {
+                val liquidControlsUseThemeColor by remember(context) { SettingsManager.getLiquidControlsUseThemeColor(context) }
+                    .collectAsStateWithLifecycle(initialValue = themeConfiguration.liquidControlsUseThemeColor)
+                val switchThumbMode by remember(context) { SettingsManager.getLiquidSwitchThumbMode(context) }
+                    .collectAsStateWithLifecycle(initialValue = themeConfiguration.liquidSwitchThumbMode)
+                AppPreferenceGroup(segment = AppPreferenceGroupSegment.FIRST) {
+                    // 玻璃家族总开关与材质条目统一收口在本分组;设备不支持时以提示替代开关。
+                    SettingsItemAnchor("appearance.effective_liquid_glass_enabled") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.ANDROID_LIQUID_GLASS),
+                            title = settingItemTitle("appearance.effective_liquid_glass_enabled"),
+                            subtitle = if (isLiquidGlassAvailable) {
+                                context.getString(R.string.appearance_liquid_glass_summary)
+                            } else {
+                                context.getString(R.string.appearance_liquid_glass_unsupported)
+                            },
+                            checked = state.androidNativeLiquidGlassEnabled,
+                            onCheckedChange = { viewModel.toggleAndroidNativeLiquidGlass(it) },
+                            enabled = isLiquidGlassAvailable,
+                            iconTint = AppContentColors.secondaryText()
                         )
+                    }
+                    AppPreferenceDivider()
+                    com.android.purebilibili.feature.settings.LiquidGlassScenePreference(
+                        enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
+                    )
+                    AppPreferenceDivider()
+                    SettingsItemAnchor("appearance.liquid_controls_use_theme_color") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.LIQUID_CONTROLS_THEME_COLOR),
+                            title = context.getString(R.string.appearance_liquid_controls_theme_title),
+                            subtitle = context.getString(R.string.appearance_liquid_controls_theme_summary),
+                            checked = liquidControlsUseThemeColor,
+                            enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
+                            onCheckedChange = { enabled ->
+                                scope.launch { SettingsManager.setLiquidControlsUseThemeColor(context, enabled) }
+                            },
+                        )
+                    }
+                    AppPreferenceDivider()
+                    SettingsItemAnchor("appearance.switch_thumb_mode") {
+                        SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.SWITCH_THUMB_MODE),
+                            title = settingItemTitle("appearance.switch_thumb_mode"),
+                            subtitle = "选择开关滑块的颜色",
+                            options = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.entries.map {
+                                AppSegmentOption(it, it.label)
+                            },
+                            selectedValue = switchThumbMode,
+                            // 拇指强制色只作用于液态玻璃开启后的开关；关闭玻璃时不可选。
+                            enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
+                            onSelectionChange = { mode ->
+                                scope.launch { SettingsManager.setLiquidSwitchThumbMode(context, mode) }
+                            },
+                        )
+                    }
+                    if (!isLiquidGlassAvailable) {
                         AppPreferenceDivider()
-                        SettingsItemAnchor("appearance.liquid_controls_use_theme_color") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.LIQUID_CONTROLS_THEME_COLOR),
-                                title = context.getString(R.string.appearance_liquid_controls_theme_title),
-                                subtitle = context.getString(R.string.appearance_liquid_controls_theme_summary),
-                                checked = liquidControlsUseThemeColor,
-                                enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
-                                onCheckedChange = { enabled ->
-                                    scope.launch { SettingsManager.setLiquidControlsUseThemeColor(context, enabled) }
-                                },
+                        AppText(
+                            text = stringResource(R.string.animation_glass_unavailable),
+                            modifier = Modifier.padding(16.dp),
+                            color = AppContentColors.secondaryText(),
+                        )
+                    }
+                    SettingsItemAnchor("animation.app_navigation_settings.liquid_indicator_dynamic_length_enabled") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.LIQUID_INDICATOR_DYNAMIC_LENGTH),
+                            title = stringResource(R.string.animation_indicator_dynamic_length_title),
+                            subtitle = stringResource(R.string.animation_indicator_dynamic_length_summary),
+                            checked = appNavigationSettings.liquidIndicatorDynamicLengthEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch { SettingsManager.setLiquidIndicatorDynamicLengthEnabled(context, enabled) }
+                            },
+                            iconTint = AppContentColors.secondaryText(),
+                        )
+                    }
+                    AppPreferenceDivider()
+                    SettingsItemAnchor("animation.app_navigation_settings.liquid_indicator_wobble_enabled") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.LIQUID_INDICATOR_WOBBLE),
+                            title = stringResource(R.string.animation_indicator_wobble_title),
+                            subtitle = stringResource(R.string.animation_indicator_wobble_summary),
+                            checked = appNavigationSettings.liquidIndicatorWobbleEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch { SettingsManager.setLiquidIndicatorWobbleEnabled(context, enabled) }
+                            },
+                            iconTint = AppContentColors.secondaryText(),
+                        )
+                    }
+                }
+            }
+            item(key = ANIMATION_GLASS_PREVIEW, contentType = "settings_preference_group") {
+                val previewBottomBarItems = remember(
+                    appNavigationSettings.orderedVisibleTabIds,
+                    homeConfiguration.isBottomBarSearchEnabled,
+                    homeConfiguration.bottomBarSearchLayoutMode,
+                ) {
+                    resolveBottomBarVisibleItemsForSearchMode(
+                        visibleItems = resolveVisibleBottomBarItems(
+                            appNavigationSettings.orderedVisibleTabIds
+                        ),
+                        bottomBarSearchEnabled = homeConfiguration.isBottomBarSearchEnabled,
+                        searchLayoutMode = homeConfiguration.bottomBarSearchLayoutMode,
+                    )
+                }
+                val segment = if (advancedOnly) AppPreferenceGroupSegment.LAST else AppPreferenceGroupSegment.MIDDLE
+                AppPreferenceGroup(segment = segment) {
+                    LiquidGlassAdjustmentPanel(
+                        alwaysShowAdvanced = false,
+                        persistedProgress = state.liquidGlassProgress,
+                        previewImageUri = liquidGlassPreviewImageUri,
+                        persistedAdvancedSettings = liquidGlassAdvancedSettings,
+                        persistedReadabilityMode = homeConfiguration.liquidGlassReadabilityMode,
+                        bottomBarItems = previewBottomBarItems,
+                        bottomBarSearchEnabled = state.bottomBarSearchEnabled,
+                        onProgressCommitted = viewModel::setLiquidGlassProgress,
+                        onPresetCommitted = viewModel::applyLiquidGlassPreset,
+                        onPickPreviewImage = {
+                            liquidGlassPreviewImagePicker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("appearance.switch_thumb_mode") {
-                            SettingsSingleChoicePreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.SWITCH_THUMB_MODE),
-                                title = settingItemTitle("appearance.switch_thumb_mode"),
-                                subtitle = "选择开关滑块的颜色",
-                                options = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.entries.map {
-                                    AppSegmentOption(it, it.label)
-                                },
-                                selectedValue = switchThumbMode,
-                                // 拇指强制色只作用于液态玻璃开启后的开关；关闭玻璃时不可选。
-                                enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
-                                onSelectionChange = { mode ->
-                                    scope.launch { SettingsManager.setLiquidSwitchThumbMode(context, mode) }
-                                },
+                        },
+                        onPreviewImageChanged = viewModel::setLiquidGlassPreviewImageUri,
+                        advancedSettingSearchToken = focusRequest?.takeIf {
+                            it.target == SettingsSearchTarget.ANIMATION && isLiquidGlassAdvancedSetting(it.settingId)
+                        }?.token,
+                        onAdvancedSettingsCommitted =
+                            viewModel::setLiquidGlassAdvancedSettings,
+                        onReadabilityModeChanged =
+                            viewModel::setLiquidGlassReadabilityMode,
+                        onImportSettings = {
+                            liquidGlassImportLauncher.launch(
+                                arrayOf(
+                                    "application/json",
+                                    "text/json",
+                                    "text/plain",
+                                )
                             )
-                        }
-                        if (!isLiquidGlassAvailable) {
-                            AppPreferenceDivider()
-                            AppText(
-                                text = stringResource(R.string.animation_glass_unavailable),
-                                modifier = Modifier.padding(16.dp),
-                                color = AppContentColors.secondaryText(),
-                            )
-                        }
-                        SettingsItemAnchor("animation.app_navigation_settings.liquid_indicator_dynamic_length_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.LIQUID_INDICATOR_DYNAMIC_LENGTH),
-                                title = stringResource(R.string.animation_indicator_dynamic_length_title),
-                                subtitle = stringResource(R.string.animation_indicator_dynamic_length_summary),
-                                checked = appNavigationSettings.liquidIndicatorDynamicLengthEnabled,
-                                onCheckedChange = { enabled ->
-                                    scope.launch { SettingsManager.setLiquidIndicatorDynamicLengthEnabled(context, enabled) }
-                                },
-                                iconTint = AppContentColors.secondaryText(),
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("animation.app_navigation_settings.liquid_indicator_wobble_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.LIQUID_INDICATOR_WOBBLE),
-                                title = stringResource(R.string.animation_indicator_wobble_title),
-                                subtitle = stringResource(R.string.animation_indicator_wobble_summary),
-                                checked = appNavigationSettings.liquidIndicatorWobbleEnabled,
-                                onCheckedChange = { enabled ->
-                                    scope.launch { SettingsManager.setLiquidIndicatorWobbleEnabled(context, enabled) }
-                                },
-                                iconTint = AppContentColors.secondaryText(),
-                            )
-                        }
-                        AppPreferenceDivider()
-                        LiquidGlassAdjustmentPanel(
-                                alwaysShowAdvanced = false,
-                                persistedProgress = state.liquidGlassProgress,
-                                previewImageUri = liquidGlassPreviewImageUri,
-                                persistedAdvancedSettings = liquidGlassAdvancedSettings,
-                                persistedReadabilityMode = liquidGlassReadabilityMode,
-                                bottomBarItems = previewBottomBarItems,
-                                bottomBarSearchEnabled = state.bottomBarSearchEnabled,
-                                onProgressCommitted = viewModel::setLiquidGlassProgress,
-                                onPresetCommitted = viewModel::applyLiquidGlassPreset,
-                                onPreviewImageChanged = viewModel::setLiquidGlassPreviewImageUri,
-                                onAdvancedSettingsCommitted =
-                                    viewModel::setLiquidGlassAdvancedSettings,
-                                onReadabilityModeChanged =
-                                    viewModel::setLiquidGlassReadabilityMode,
-                                onImportSettings = {
-                                    liquidGlassImportLauncher.launch(
-                                        arrayOf(
-                                            "application/json",
-                                            "text/json",
-                                            "text/plain",
-                                        )
-                                    )
-                                },
-                                isImportingSettings = isLiquidGlassImporting,
-                                onShareSettings = {
-                                    scope.launch {
-                                        liquidGlassShareService
-                                            .createLiquidGlassShareUri()
-                                            .onSuccess { shareUri ->
-                                                runCatching {
-                                                    val shareIntent = Intent(
-                                                        Intent.ACTION_SEND
-                                                    ).apply {
-                                                        type = "application/json"
-                                                        putExtra(
-                                                            Intent.EXTRA_STREAM,
-                                                            shareUri,
-                                                        )
-                                                        putExtra(
-                                                            Intent.EXTRA_TEXT,
-                                                            context.getString(R.string.animation_glass_share_text),
-                                                        )
-                                                        addFlags(
-                                                            Intent.FLAG_GRANT_READ_URI_PERMISSION
-                                                        )
-                                                    }
-                                                    context.startActivity(
-                                                        Intent.createChooser(
-                                                            shareIntent,
-                                                            context.getString(R.string.animation_glass_share_title),
-                                                        )
-                                                    )
-                                                }.onFailure { error ->
-                                                    Toast.makeText(
-                                                        context,
-                                                        error.message ?: context.getString(R.string.animation_glass_share_failed),
-                                                        Toast.LENGTH_SHORT,
-                                                    ).show()
-                                                }
+                        },
+                        isImportingSettings = isLiquidGlassImporting,
+                        onShareSettings = {
+                            scope.launch {
+                                liquidGlassShareService
+                                    .createLiquidGlassShareUri()
+                                    .onSuccess { shareUri ->
+                                        runCatching {
+                                            val shareIntent = Intent(
+                                                Intent.ACTION_SEND
+                                            ).apply {
+                                                type = "application/json"
+                                                putExtra(
+                                                    Intent.EXTRA_STREAM,
+                                                    shareUri,
+                                                )
+                                                putExtra(
+                                                    Intent.EXTRA_TEXT,
+                                                    context.getString(
+                                                        R.string.animation_glass_share_text,
+                                                        context.getString(R.string.animation_effects_title),
+                                                        context.getString(R.string.animation_glass_section_title),
+                                                    ),
+                                                )
+                                                addFlags(
+                                                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                                )
                                             }
-                                            .onFailure { error ->
-                                                Toast.makeText(
-                                                    context,
-                                                    error.message ?: context.getString(R.string.animation_glass_export_failed),
-                                                    Toast.LENGTH_SHORT,
-                                                ).show()
-                                            }
+                                            context.startActivity(
+                                                Intent.createChooser(
+                                                    shareIntent,
+                                                    context.getString(R.string.animation_glass_share_title),
+                                                )
+                                            )
+                                        }.onFailure { error ->
+                                            Toast.makeText(
+                                                context,
+                                                error.message ?: context.getString(R.string.animation_glass_share_failed),
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
                                     }
-                                },
-                            )
-                        AppPreferenceDivider()
-                        if (!advancedOnly) {
+                                    .onFailure { error ->
+                                        Toast.makeText(
+                                            context,
+                                            error.message ?: context.getString(R.string.animation_glass_export_failed),
+                                            Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                            }
+                        },
+                    )
+                }
+            }
+            if (!advancedOnly) {
+                item(key = ANIMATION_GLASS_HEADER, contentType = "settings_preference_group") {
+                    val progressiveBlurRenderer = if (com.android.purebilibili.feature.home.components.isOfficialProgressiveBlurSupported()) {
+                        com.android.purebilibili.core.ui.blur.LocalProgressiveBlurRenderer.current
+                    } else {
+                        val savedRenderer by remember(context) {
+                            com.android.purebilibili.core.store.home.LiquidGlassSettingsStore.observeProgressiveBlurRenderer(context)
+                        }.collectAsStateWithLifecycle(
+                            initialValue = com.android.purebilibili.core.store.home.ProgressiveBlurRenderer.MIUIX,
+                        )
+                        savedRenderer
+                    }
+                    AppPreferenceGroup(segment = AppPreferenceGroupSegment.MIDDLE) {
                         // 磨砂效果 (始终显示)
                         SettingsItemAnchor("animation.header_blur_enabled") {
                             AppSwitchPreference(
@@ -572,7 +609,13 @@ fun AnimationSettingsContent(
                                 iconTint = AppContentColors.secondaryText()
                             )
                         }
-                        AppPreferenceDivider()
+                    }
+                }
+                item(key = ANIMATION_GLASS_SURFACES, contentType = "settings_preference_group") {
+                    val videoTransitionRealtimeBlurEnabled by remember(context) { SettingsManager.getVideoTransitionRealtimeBlurEnabled(context) }
+                        .collectAsStateWithLifecycle(initialValue = false)
+                    val homeCardFrostedGlassEnabled = homeConfiguration.homeCardFrostedGlassEnabled
+                    AppPreferenceGroup(segment = AppPreferenceGroupSegment.LAST) {
                         SettingsItemAnchor("animation.bottom_bar_blur_enabled") {
                             AppSwitchPreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.BOTTOM_BAR_BLUR),
@@ -619,17 +662,15 @@ fun AnimationSettingsContent(
                         // 模糊强度（仅在任意模糊开启时显示）
                         if (state.headerBlurEnabled || state.progressiveTopBlurEnabled || state.bottomBarBlurEnabled) {
                             AppPreferenceDivider()
-                            BlurIntensitySelector(
-                                selectedIntensity = state.blurIntensity,
-                                onIntensityChange = { viewModel.setBlurIntensity(it) }
-                            )
-                        }
+                            SettingsItemAnchor("animation.blur_intensity") {
+                                BlurIntensitySelector(
+                                    selectedIntensity = state.blurIntensity,
+                                    onIntensityChange = { viewModel.setBlurIntensity(it) }
+                                )
+                            }
                         }
                     }
                 }
-            }
-
-            if (!advancedOnly) {
             //  过渡动画
             item(key = "animation_card_title") {
                 Box(modifier = Modifier.entrance()) {
@@ -672,6 +713,46 @@ fun AnimationSettingsContent(
                         }
                         AppPreferenceDivider()
 
+                        if (state.cardTransitionEnabled) {
+                            SettingsItemAnchor(CARD_TRANSITION_METHOD_SETTING_ID) {
+                                SettingsSingleChoicePreference(
+                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.TRANSITION_MODE),
+                                    title = stringResource(R.string.animation_card_transition_method_title),
+                                    subtitle = cardTransitionSourceDescription,
+                                    options = listOf(
+                                        AppSegmentOption(false, stringResource(R.string.animation_card_transition_auto)),
+                                        AppSegmentOption(true, stringResource(R.string.animation_card_transition_shared_element)),
+                                    ),
+                                    selectedValue = preferSharedElement,
+                                    onSelectionChange = { shared ->
+                                        scope.launch {
+                                            SettingsManager.setPreferSharedElementCardTransition(context, shared)
+                                        }
+                                    },
+                                    iconTint = AppContentColors.secondaryText(),
+                                )
+                            }
+                            AppPreferenceDivider()
+                        }
+                        SettingsItemAnchor(CARD_REMOVAL_DISSOLVE_SETTING_ID) {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_REMOVAL_DISSOLVE),
+                                title = stringResource(R.string.animation_card_removal_dissolve_title),
+                                subtitle = stringResource(R.string.animation_card_removal_dissolve_summary),
+                                options = CardRemovalDissolveMode.entries.map { mode ->
+                                    AppSegmentOption(mode, stringResource(cardRemovalDissolveModeLabel(mode)))
+                                },
+                                selectedValue = rememberSettingsHomeConfiguration().cardRemovalDissolveMode,
+                                onSelectionChange = { mode ->
+                                    scope.launch {
+                                        SettingsManager.setCardRemovalDissolveMode(context, mode)
+                                    }
+                                },
+                                iconTint = AppContentColors.secondaryText()
+                            )
+                        }
+                        AppPreferenceDivider()
+
                         SettingsItemAnchor("animation.app_navigation_settings.settings_container_morph_enabled") {
                             SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.SETTINGS_CONTAINER_MORPH),
@@ -688,20 +769,6 @@ fun AnimationSettingsContent(
                             )
                         }
                         AppPreferenceDivider()
-                        SettingsItemAnchor("animation.app_navigation_settings.settings_container_realtime_blur_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.SETTINGS_CONTAINER_BLUR),
-                                title = settingItemTitle("animation.app_navigation_settings.settings_container_realtime_blur_enabled"),
-                                subtitle = stringResource(R.string.animation_settings_container_blur_summary),
-                                checked = settingsContainerRealtimeBlurEnabled,
-                                enabled = settingsContainerMorphEnabled && android.os.Build.VERSION.SDK_INT >= 31,
-                                onCheckedChange = { enabled ->
-                                    scope.launch { SettingsManager.setSettingsContainerRealtimeBlurEnabled(context, enabled) }
-                                },
-                                iconTint = AppContentColors.secondaryText(),
-                            )
-                        }
-                        AppPreferenceDivider()
                         SettingsItemAnchor("animation.predictive_back_enabled") {
                             AppSwitchPreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.PREDICTIVE_BACK_GESTURE),
@@ -715,42 +782,46 @@ fun AnimationSettingsContent(
                             )
                         }
                         AppPreferenceDivider()
-                        SettingsSingleChoicePreference(
-                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PREDICTIVE_BACK),
-                            title = stringResource(R.string.animation_back_title),
-                            subtitle = stringResource(R.string.animation_back_summary),
-                            options = predictiveBackStyleOptions,
-                            selectedValue = predictiveBackStyle,
-                            onSelectionChange = { style ->
-                                scope.launch {
-                                    SettingsManager.setPredictiveBackAnimationStyle(
-                                        context,
-                                        style.storageValue,
-                                    )
-                                }
-                            },
-                            iconTint = AppContentColors.secondaryText()
-                        )
-                        if (predictiveBackStyle == BiliPaiPredictiveBackAnimationStyle.MIUIX) {
-                            AppPreferenceDivider()
-                            AppSliderDialogPreference(
-                                title = stringResource(R.string.animation_back_preview_title),
-                                subtitle = stringResource(R.string.animation_back_preview_summary),
-                                value = appNavigationSettings
-                                    .miuixPredictiveBackMaxProgressPercent
-                                    .toFloat(),
-                                onValueChange = { value ->
+                        SettingsItemAnchor("animation.page_transition_style") {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.PREDICTIVE_BACK),
+                                title = stringResource(R.string.animation_back_title),
+                                subtitle = stringResource(R.string.animation_back_summary),
+                                options = predictiveBackStyleOptions,
+                                selectedValue = predictiveBackStyle,
+                                onSelectionChange = { style ->
                                     scope.launch {
-                                        SettingsManager.setMiuixPredictiveBackMaxProgressPercent(
+                                        SettingsManager.setPredictiveBackAnimationStyle(
                                             context,
-                                            value.roundToInt(),
+                                            style.storageValue,
                                         )
                                     }
                                 },
-                                valueRange = 0f..100f,
-                                steps = 99,
-                                valueFormatter = { value -> "${value.roundToInt()}%" },
+                                iconTint = AppContentColors.secondaryText()
                             )
+                        }
+                        if (predictiveBackStyle == BiliPaiPredictiveBackAnimationStyle.MIUIX) {
+                            AppPreferenceDivider()
+                            SettingsItemAnchor("animation.back_preview_progress") {
+                                AppSliderDialogPreference(
+                                    title = stringResource(R.string.animation_back_preview_title),
+                                    subtitle = stringResource(R.string.animation_back_preview_summary),
+                                    value = appNavigationSettings
+                                        .miuixPredictiveBackMaxProgressPercent
+                                        .toFloat(),
+                                    onValueChange = { value ->
+                                        scope.launch {
+                                            SettingsManager.setMiuixPredictiveBackMaxProgressPercent(
+                                                context,
+                                                value.roundToInt(),
+                                            )
+                                        }
+                                    },
+                                    valueRange = 0f..100f,
+                                    steps = 99,
+                                    valueFormatter = { value -> "${value.roundToInt()}%" },
+                                )
+                            }
                         }
                         if (predictiveBackStyle != BiliPaiPredictiveBackAnimationStyle.NONE) {
                             AppPreferenceDivider()
@@ -780,21 +851,23 @@ fun AnimationSettingsContent(
                         }
                         if (predictiveBackStyle == BiliPaiPredictiveBackAnimationStyle.SCALE) {
                             AppPreferenceDivider()
-                            SettingsSingleChoicePreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.EXIT_DIRECTION),
-                                title = stringResource(R.string.animation_exit_direction_title),
-                                subtitle = stringResource(R.string.animation_exit_direction_summary),
-                                options = predictiveBackExitDirectionOptions,
-                                selectedValue = predictiveBackExitDirection,
-                                onSelectionChange = { direction ->
-                                    scope.launch {
-                                        SettingsManager.setPredictiveBackExitDirection(
-                                            context,
-                                            direction.storageValue,
-                                        )
-                                    }
-                                },
-                            )
+                            SettingsItemAnchor("animation.back_exit_direction") {
+                                SettingsSingleChoicePreference(
+                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.EXIT_DIRECTION),
+                                    title = stringResource(R.string.animation_exit_direction_title),
+                                    subtitle = stringResource(R.string.animation_exit_direction_summary),
+                                    options = predictiveBackExitDirectionOptions,
+                                    selectedValue = predictiveBackExitDirection,
+                                    onSelectionChange = { direction ->
+                                        scope.launch {
+                                            SettingsManager.setPredictiveBackExitDirection(
+                                                context,
+                                                direction.storageValue,
+                                            )
+                                        }
+                                    },
+                                )
+                            }
                         }
                         AppPreferenceDivider()
                         SettingsItemAnchor("animation.full_screen_swipe_back_enabled") {
@@ -998,7 +1071,7 @@ fun AnimationSettingsContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AppIcon(
-                                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_lightbulb_24),
+                                rememberSettingsVector(R.drawable.ph_lightbulb_24, R.drawable.ms_lightbulb_24),
                                 contentDescription = null,
                                 tint = warningTint,
                                 modifier = Modifier.size(20.dp)

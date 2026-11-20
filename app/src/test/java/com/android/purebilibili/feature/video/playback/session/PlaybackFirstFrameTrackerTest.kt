@@ -25,6 +25,7 @@ class PlaybackFirstFrameTrackerTest {
         val listener = PlaybackFirstFrameListener()
         listener.onVideoSizeChanged(VideoSize(1920, 1080))
         listener.onPlaybackStateChanged(Player.STATE_READY)
+        assertFalse(listener.hasPlayed.value)
         listener.onIsPlayingChanged(true)
         assertFalse(listener.hasRenderedFirstFrame.value)
         listener.onRenderedFirstFrame()
@@ -34,12 +35,14 @@ class PlaybackFirstFrameTrackerTest {
     @Test
     fun renderedFrameSurvivesPauseBufferingAndRepeatOfTheSameMedia() {
         val listener = PlaybackFirstFrameListener()
+        listener.onIsPlayingChanged(true)
         listener.onRenderedFirstFrame()
         listener.onIsPlayingChanged(false)
         listener.onPlaybackStateChanged(Player.STATE_BUFFERING)
         listener.onPlaybackStateChanged(Player.STATE_READY)
         listener.onMediaItemTransition(null, Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)
         assertTrue(listener.hasRenderedFirstFrame.value)
+        assertTrue(listener.hasPlayed.value)
     }
 
     @Test
@@ -50,10 +53,12 @@ class PlaybackFirstFrameTrackerTest {
             Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED,
         )) {
             val listener = PlaybackFirstFrameListener()
+            listener.onIsPlayingChanged(true)
             listener.onRenderedFirstFrame()
             listener.onMediaItemTransition(null, reason)
             listener.onPlaybackStateChanged(Player.STATE_READY)
             assertFalse(listener.hasRenderedFirstFrame.value)
+            assertFalse(listener.hasPlayed.value)
             listener.onRenderedFirstFrame()
             assertTrue(listener.hasRenderedFirstFrame.value)
         }
@@ -62,8 +67,10 @@ class PlaybackFirstFrameTrackerTest {
     @Test
     fun stoppingThePlayerInvalidatesItsRetainedFrame() {
         val listener = PlaybackFirstFrameListener()
+        listener.onIsPlayingChanged(true)
         listener.onRenderedFirstFrame()
         listener.onPlaybackStateChanged(Player.STATE_IDLE)
         assertFalse(listener.hasRenderedFirstFrame.value)
+        assertFalse(listener.hasPlayed.value)
     }
 }

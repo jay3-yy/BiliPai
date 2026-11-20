@@ -23,7 +23,7 @@ import kotlin.math.roundToInt
  * 背景 blur / scrim 和壁纸 depth 读取 [depthProgress]。卡片位置、尺寸与圆角
  * 由同一导航 settle 时间采样各属性弹簧，不注册独立帧循环。
  *
- * Miuix 主链路：只跟随 NavDisplay，包含预测 seek/commit/cancel 和真实结束帧。
+ * 跟随页面转场进度，包含预测返回预览、提交、取消和真实结束帧。
  * ## 无 Nav 主驱动的兼容路径优先级（高 → 低）
  * 1. **预测手势** [gestureBackProgress]
  * 2. **Shared morph**（详情 AVS 与 sharedBounds 同一 Transition 的 progress）

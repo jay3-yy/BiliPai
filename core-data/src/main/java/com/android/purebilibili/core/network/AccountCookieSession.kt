@@ -3,7 +3,6 @@ package com.android.purebilibili.core.network
 import android.content.Context
 import com.android.purebilibili.core.network.policy.HomeFeedAnonymizerRuntime
 import com.android.purebilibili.core.network.policy.resolveHomeFeedCookieAnonymizerDecision
-import com.android.purebilibili.core.network.policy.shouldStripMergedAppFeedCookies
 import com.android.purebilibili.core.store.SessionStorageCipher
 import com.android.purebilibili.core.store.StoredAccountSession
 import com.android.purebilibili.core.store.TokenManager
@@ -132,7 +131,7 @@ class AccountCookieInterceptor : Interceptor {
         val anonymous = resolveHomeFeedCookieAnonymizerDecision(
             pluginEnabled = HomeFeedAnonymizerRuntime.enabled,
             host = url.host, encodedPath = url.encodedPath,
-        ) || shouldStripMergedAppFeedCookies(url.host, url.encodedPath, url.queryParameter("mobi_app"))
+        )
         if (anonymous || url.host == "app.bilibili.com") {
             return chain.proceed(request.newBuilder().removeHeader("Cookie").build())
         }
@@ -175,13 +174,17 @@ internal fun applyWebPlaybackHeaders(request: okhttp3.Request, cookies: Map<Stri
         .removeHeader("Origin")
     val mid = cookies["DedeUserID"]?.takeIf { (it.toLongOrNull() ?: 0L) > 0L }
     if (mid != null) {
-        val key = "ad1va46a7lza"
-        val bytes = mid.toByteArray(Charsets.US_ASCII)
-        for (index in bytes.indices) bytes[index] = (bytes[index].toInt() xor key[index % key.length].code).toByte()
         builder.header("x-bili-mid", mid)
-            .header("x-bili-aurora-eid", java.util.Base64.getEncoder().encodeToString(bytes).trimEnd('='))
+            .header("x-bili-aurora-eid", encodeBiliAuroraEid(mid))
     } else {
         builder.removeHeader("x-bili-mid").removeHeader("x-bili-aurora-eid")
     }
     return builder.build()
+}
+
+internal fun encodeBiliAuroraEid(mid: String): String {
+    val key = "ad1va46a7lza"
+    val bytes = mid.toByteArray(Charsets.US_ASCII)
+    for (index in bytes.indices) bytes[index] = (bytes[index].toInt() xor key[index % key.length].code).toByte()
+    return java.util.Base64.getEncoder().encodeToString(bytes).trimEnd('=')
 }

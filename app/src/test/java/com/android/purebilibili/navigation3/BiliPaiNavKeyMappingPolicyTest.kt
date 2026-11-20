@@ -5,8 +5,25 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class BiliPaiNavKeyMappingPolicyTest {
+    @Test
+    fun pluginCenterSubpagesRestoreTheirOwnDestinationAndContainerSource() {
+        val owner = BiliPaiNavKey.PluginsSettings()
+        val targets = listOf(
+            BiliPaiNavKey.BuiltinPluginSettings("过滤 + 内容"),
+            BiliPaiNavKey.JsonPluginEditor(),
+            BiliPaiNavKey.JsonPluginEditor("规则/a"),
+            BiliPaiNavKey.PluginSkinCatalog,
+        )
+        for (target in targets) {
+            assertEquals(target, legacyRouteToBiliPaiNavKey(target.toLegacyRoute()))
+            assertEquals(BiliPaiNavEntryContentRole.PLUGIN_CENTER_DETAIL, resolveBiliPaiNavEntryContentRole(target))
+            assertTrue(isSettingsContainerBoundary(true, listOf(owner, target), target, owner))
+        }
+    }
+
     @Test
     fun webUploadsRestoreOwnerAndCurrentCollectionWithoutBecomingAWebPage() {
         listOf(
@@ -102,6 +119,22 @@ class BiliPaiNavKeyMappingPolicyTest {
     }
 
     @Test
+    fun pgcFavoritesRestoreTheCategoryAndKeepTheirOriginOnBack() {
+        val home = listOf(BiliPaiNavKey.MainHost)
+        val hub = home + BiliPaiNavKey.Bangumi(initialType = 2)
+        for (origin in listOf(home, hub)) {
+            for (cinema in listOf(false, true)) {
+                val key = BiliPaiNavKey.FavoritePgc(cinema = cinema)
+                assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute()))
+                assertEquals(BiliPaiNavEntryContentRole.FAVORITE, resolveBiliPaiNavEntryContentRole(key))
+                assertTrue(isCardReturnTargetNavKey(key))
+                assertEquals(origin, popBiliPaiNavKey(pushBiliPaiNavKey(origin, key)))
+            }
+        }
+        assertEquals(BiliPaiNavKey.Favorite, legacyRouteToBiliPaiNavKey(ScreenRoutes.Favorite.route))
+    }
+
+    @Test
     fun `navigation state keys distinguish detail sessions for the same video`() {
         val first = BiliPaiNavKey.VideoDetail(
             bvid = "BV1",
@@ -144,8 +177,8 @@ class BiliPaiNavKeyMappingPolicyTest {
     fun `navigation state eviction keeps a key retained elsewhere in replacement stack`() {
         val duplicateSearchStack = listOf(
             BiliPaiNavKey.MainHost,
-            BiliPaiNavKey.Search,
-            BiliPaiNavKey.Search,
+            BiliPaiNavKey.Search(),
+            BiliPaiNavKey.Search(),
         )
 
         assertEquals(
@@ -162,7 +195,7 @@ class BiliPaiNavKeyMappingPolicyTest {
         assertEquals(BiliPaiNavKey.MainHost, legacyRouteToBiliPaiNavKey("main_host"))
         assertEquals(BiliPaiNavKey.Home, legacyRouteToBiliPaiNavKey(ScreenRoutes.Home.route))
         assertEquals(BiliPaiNavKey.Dynamic, legacyRouteToBiliPaiNavKey(ScreenRoutes.Dynamic.route))
-        assertEquals(BiliPaiNavKey.Search, legacyRouteToBiliPaiNavKey(ScreenRoutes.Search.route))
+        assertEquals(BiliPaiNavKey.Search(), legacyRouteToBiliPaiNavKey(ScreenRoutes.Search.route))
         assertEquals(BiliPaiNavKey.Profile, legacyRouteToBiliPaiNavKey(ScreenRoutes.Profile.route))
     }
 
@@ -371,9 +404,9 @@ class BiliPaiNavKeyMappingPolicyTest {
     fun cardReturnTargets_matchExistingSharedElementDestinations() {
         assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.MainHost))
         assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.Home))
-        assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.Search))
+        assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.Search()))
         assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.Space(42L)))
-        assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.LikedVideos))
+        assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.LikedVideos()))
         assertEquals(
             true,
             isCardReturnTargetNavKey(

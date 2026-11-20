@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -8,6 +9,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
@@ -21,16 +23,21 @@ import com.android.purebilibili.core.ui.rememberAppBottomSheetMotion
 internal fun CommentContentReveal(
     visible: Boolean,
     modifier: Modifier = Modifier,
+    animateInitialAppearance: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val uiStyle = LocalAppUiStyle.current
     val sheetMotion = rememberAppBottomSheetMotion()
     val reducedMotion = sheetMotion.reducedMotion ||
         !LocalAppThemeConfig.current.uiEntranceAnimationEnabled
+    val visibility = remember {
+        MutableTransitionState(visible && (!animateInitialAppearance || reducedMotion))
+    }
+    visibility.targetState = visible
     // Visibility owns both layout and content lifetime. Repeated taps retarget the
     // current transition; an outer animateContentSize must not chase the same height.
     AnimatedVisibility(
-        visible = visible,
+        visibleState = visibility,
         modifier = modifier,
         enter = if (reducedMotion) {
             fadeIn(AppMotionTokens.resolveBottomSheetFadeEnterSpec(uiStyle))

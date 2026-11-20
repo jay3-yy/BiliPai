@@ -1,43 +1,10 @@
 package com.android.purebilibili.feature.video.screen
 
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VideoCommentPerformancePolicyTest {
-
-    @Test
-    fun `first body frame does not also measure the hidden comment page`() {
-        assertEquals(0, resolveVideoDetailBeyondViewportPageCount(
-            selectedTabIndex = 0,
-            commentPagePreloadReady = false,
-        ))
-        assertEquals(1, resolveVideoDetailBeyondViewportPageCount(
-            selectedTabIndex = 0,
-            commentPagePreloadReady = true,
-        ))
-    }
-
-    @Test
-    fun `opening comments directly never preloads the intro page during handoff`() {
-        for (ready in listOf(false, true)) {
-            assertEquals(0, resolveVideoDetailBeyondViewportPageCount(
-                selectedTabIndex = 1,
-                commentPagePreloadReady = ready,
-            ))
-        }
-    }
-
-    @Test
-    fun `video detail preloads comments while intro is visible`() {
-        assertEquals(1, resolveVideoDetailBeyondViewportPageCount(selectedTabIndex = 0))
-    }
-
-    @Test
-    fun `video detail should avoid preloading intro tab while comment tab is visible`() {
-        assertEquals(0, resolveVideoDetailBeyondViewportPageCount(selectedTabIndex = 1))
-    }
 
     @Test
     fun `comment list should load more only when user scrolls near the end`() {

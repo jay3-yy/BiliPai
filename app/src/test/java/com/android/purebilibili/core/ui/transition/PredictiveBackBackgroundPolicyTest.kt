@@ -181,13 +181,13 @@ class PredictiveBackBackgroundPolicyTest {
         )
         assertTrue(
             shouldApplyPredictiveBackBlurToRoute(
-                entryKey = BiliPaiNavKey.Search,
-                targetBackKey = BiliPaiNavKey.Search,
+                entryKey = BiliPaiNavKey.Search(),
+                targetBackKey = BiliPaiNavKey.Search(),
             )
         )
         assertFalse(
             shouldApplyPredictiveBackBlurToRoute(
-                entryKey = BiliPaiNavKey.Search,
+                entryKey = BiliPaiNavKey.Search(),
                 targetBackKey = BiliPaiNavKey.MainHost,
             )
         )

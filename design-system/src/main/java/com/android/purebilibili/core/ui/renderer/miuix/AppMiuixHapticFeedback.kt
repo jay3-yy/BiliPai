@@ -14,10 +14,11 @@ private object NoOpHapticFeedback : HapticFeedback {
 @Composable
 internal fun ProvideAppMiuixHapticFeedback(
     scene: com.android.purebilibili.core.ui.AppHapticScene = com.android.purebilibili.core.ui.AppHapticScene.CONTROLS,
+    enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val platformHaptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(scene)
-    val effectiveHaptic = if (LocalAppThemeConfig.current.hapticFeedbackEnabled) {
+    val effectiveHaptic = if (enabled && LocalAppThemeConfig.current.hapticFeedbackEnabled) {
         platformHaptic
     } else {
         NoOpHapticFeedback

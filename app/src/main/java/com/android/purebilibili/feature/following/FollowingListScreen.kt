@@ -1,5 +1,8 @@
 package com.android.purebilibili.feature.following
 
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
+
 import com.android.purebilibili.core.ui.AppContentColors
 
 import coil3.request.crossfade
@@ -23,6 +26,8 @@ import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import androidx.compose.material.icons.Icons
@@ -1395,81 +1400,91 @@ private fun FollowingUserItem(
     val followingSinceLabel = remember(user.mtime) {
         formatFollowingSinceLabel(user.mtime)
     }
+    val userControl = if (isEditMode) null else rememberSystemWindowNavigationControl(
+        BiliPaiNavKey.Space(user.mid),
+        AppShapes.container(ContainerLevel.Card),
+        onClick,
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable(onClick = userControl?.onClick ?: onClick)
             .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.Medium),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 头像
-        Box(modifier = Modifier.size(AppSpacingTokens.TripleExtraLarge)) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(user.face))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-            if (officialBadge != null) {
-                OfficialVerifyAvatarBadge(
-                    badge = officialBadge,
-                    modifier = Modifier.align(Alignment.BottomEnd)
+        Row(
+            modifier = Modifier.weight(1f).then(userControl?.modifier ?: Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 头像
+            Box(modifier = Modifier.size(AppSpacingTokens.TripleExtraLarge)) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(FormatUtils.fixImageUrl(user.face))
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
-            } else {
-                UserAvatarCornerMarkBadge(
-                    mark = resolveUserAvatarCornerMark(
-                        officialType = null,
-                        vipStatus = user.vip?.vipStatus,
-                    ),
-                    modifier = Modifier.align(Alignment.BottomEnd),
-                    badgeSize = 14.dp,
-                )
+                if (officialBadge != null) {
+                    OfficialVerifyAvatarBadge(
+                        badge = officialBadge,
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                    )
+                } else {
+                    UserAvatarCornerMarkBadge(
+                        mark = resolveUserAvatarCornerMark(
+                            officialType = null,
+                            vipStatus = user.vip?.vipStatus,
+                        ),
+                        modifier = Modifier.align(Alignment.BottomEnd),
+                        badgeSize = 14.dp,
+                    )
+                }
             }
-        }
 
-        Spacer(Modifier.width(AppSpacingTokens.Medium))
+            Spacer(Modifier.width(AppSpacingTokens.Medium))
 
-        // 用户信息
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                AppText(
-                    text = user.uname,
-                    fontSize = MaterialTheme.typography.bodyMedium.fontSize,
-                    fontWeight = FontWeight.Medium,
-                    color = AppContentColors.primaryText(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-            }
-            if (followingSinceLabel.isNotEmpty()) {
-                Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
-                AppText(
-                    text = followingSinceLabel,
-                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                    color = AppContentColors.accent(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (user.sign.isNotEmpty()) {
-                Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
-                AppText(
-                    text = user.sign,
-                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                    color = AppContentColors.secondaryText(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            // 用户信息
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    AppText(
+                        text = user.uname,
+                        fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                        fontWeight = FontWeight.Medium,
+                        color = AppContentColors.primaryText(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
+                if (followingSinceLabel.isNotEmpty()) {
+                    Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
+                    AppText(
+                        text = followingSinceLabel,
+                        fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                        color = AppContentColors.accent(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (user.sign.isNotEmpty()) {
+                    Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
+                    AppText(
+                        text = user.sign,
+                        fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                        color = AppContentColors.secondaryText(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
 
@@ -1479,7 +1494,12 @@ private fun FollowingUserItem(
                 onCheckedChange = { onClick() }
             )
         } else {
-            AppTextButton(onClick = onFansClick) { AppText("粉丝") }
+            val fans = rememberSystemWindowNavigationControl(
+                BiliPaiNavKey.Following(user.mid, fans = true),
+                CircleShape,
+                onFansClick,
+            )
+            AppTextButton(onClick = fans.onClick, modifier = fans.modifier) { AppText("粉丝") }
         }
     }
 }

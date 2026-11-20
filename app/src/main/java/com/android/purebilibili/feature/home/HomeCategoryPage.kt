@@ -39,6 +39,10 @@ import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
 import com.android.purebilibili.core.ui.components.PageAwareAsyncImage
 import com.android.purebilibili.core.ui.rememberVisualWorkActive
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick as semanticClick
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -49,7 +53,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.HomeDurationStyle
-import com.android.purebilibili.core.store.HomeFeedCardStyle
 import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
@@ -71,8 +74,10 @@ import com.android.purebilibili.feature.home.components.cards.LocalHomeScrollTic
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardVisibility
 import com.android.purebilibili.feature.home.components.cards.VideoCardVisibilityState
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardScrolling
+import com.android.purebilibili.feature.home.components.cards.LocalHomeCardDynamicTintEnabled
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardAuxiliaryWorkAllowed
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardTransitionRunning
+import com.android.purebilibili.feature.home.components.cards.isGlobalWallpaperVisibleForHomeCard
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.feature.home.components.cards.StoryVideoCard
@@ -185,11 +190,14 @@ internal fun HomeCategoryPageContent(
     memoryRecovery: HomeFeedMemorySnapshot? = null,
     onMemoryRecoveryConsumed: (String, Boolean) -> Unit = { _, _ -> },
     isActive: Boolean,
-    /** 页面是否在屏幕上。图片加载只看这个，不看数据同步是否就绪。 */
+    /** 页面是否在屏幕上，仍可在返回落位前恢复列表位置。 */
     pageOnScreen: Boolean = isActive,
+    coverRequestsAllowed: Boolean,
     visibleDuringNavigation: Boolean = false,
     gridState: HomeFeedGridState,
     gridColumns: Int,
+    cardLayout: HomeFeedCardLayout,
+    cardWidthDp: Float,
     contentPadding: PaddingValues,
     dissolvingVideos: ImmutableSet<String>,
     followingMids: ImmutableSet<Long>,
@@ -208,9 +216,11 @@ internal fun HomeCategoryPageContent(
     onDismissVideo: (VideoItem) -> Unit,
     onWatchLater: (String, Long) -> Unit,
     onDissolveComplete: (String) -> Unit,
+    dissolvePreset: DissolveAnimationPreset,
     onDissolveReflowStarted: (String) -> Unit = {},
     dissolveReflowEnabled: Boolean = true,
-    longPressCallback: ((VideoItem) -> Unit)? = null, // [Feature] Long Press
+    longPressCallback: ((VideoItem) -> Unit)? = null,
+    downloadSelection: HomeDownloadSelection? = null,
     displayMode: Int,
     cardAnimationEnabled: Boolean,
     cardMotionTier: MotionTier = MotionTier.Normal,
@@ -234,7 +244,6 @@ internal fun HomeCategoryPageContent(
     showUpAvatars: Boolean = true,
     showPublishTime: Boolean = true,
     homeDurationStyle: HomeDurationStyle = HomeDurationStyle.OUTSIDE_COVER,
-    homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.CURRENT,
     showFullVideoCardContent: Boolean = false,
     homeHeroCarouselEnabled: Boolean = true,
     homeHeroCarouselAutoplayEnabled: Boolean = false,
@@ -301,27 +310,11 @@ internal fun HomeCategoryPageContent(
                 ?: com.android.purebilibili.core.util.CardPositionManager.lastClickedVideoSourceKey
         }
     }
-    val widthSizeClass = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
-        .windowSizeClass.widthSizeClass
-    val cardLayout = remember(homeFeedCardStyle, gridColumns, widthSizeClass) {
-        resolveHomeFeedCardLayout(
-            style = homeFeedCardStyle,
-            gridColumns = gridColumns,
-            widthSizeClass = widthSizeClass,
-        )
-    }
     val horizontalArrangement = Arrangement.spacedBy(cardLayout.itemSpacingDp.dp)
     TrackScrollJank(
         scrollableState = gridState,
         stateName = "home:feed:${category.name.lowercase()}"
     )
-    val configuration = LocalConfiguration.current
-    val estimatedCardWidthDp = remember(gridColumns, cardLayout.itemSpacingDp, configuration.screenWidthDp) {
-        val totalSpacing = cardLayout.itemSpacingDp * (gridColumns - 1)
-        val contentPaddingTotal = 16f
-        ((configuration.screenWidthDp - contentPaddingTotal - totalSpacing) / gridColumns).coerceAtLeast(100f)
-    }
-
     // Check for load more
     val latestCategoryState by rememberUpdatedState(categoryState)
     val latestIsActive by rememberUpdatedState(isActive)
@@ -479,7 +472,7 @@ internal fun HomeCategoryPageContent(
             )
         }
     }
-    val coverLoadingActive = pageOnScreen || visibleDuringNavigation
+    val coverLoadingActive = (pageOnScreen && coverRequestsAllowed) || visibleDuringNavigation
     val pageImageWorkAllowed = LocalPageImageLoadingAllowed.current && isActive
     val visualWorkActive = rememberVisualWorkActive()
     val reduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
@@ -502,12 +495,15 @@ internal fun HomeCategoryPageContent(
         val cardCoverWorkAllowed = LocalPageImageLoadingAllowed.current && coverLoadingActive && coverInLoadWindow
         val isNativeNonVideoCard = video.contentType in setOf("bangumi", "picture") ||
             (video.dynamicId.isNotBlank() && !video.bvid.startsWith("BV", ignoreCase = true))
+        val selecting = downloadSelection?.active == true
+        val canSelect = selecting && video.supportsFeedDownload()
+        val selectedForDownload = canSelect && downloadSelection?.contains(video.bvid) == true
         val isDissolving = video.bvid in dissolvingVideos
         MaybeDissolvableVideoCard(
             isDissolving = isDissolving,
             onDissolveComplete = { onDissolveComplete(video.bvid) },
             cardId = video.bvid,
-            preset = DissolveAnimationPreset.TELEGRAM_FAST,
+            preset = dissolvePreset,
             publishGlobalDissolveState = false,
             reflowDuringFinalTail = dissolveReflowEnabled,
             onReflowStarted = {
@@ -525,109 +521,148 @@ internal fun HomeCategoryPageContent(
                 LocalHomeCardCoverLoadingAllowed provides cardCoverWorkAllowed,
                 LocalHomeCardAuxiliaryWorkAllowed provides (cardImageWorkAllowed && auxiliaryWorkAllowed),
             ) {
-                when (displayMode) {
-                    1 -> StoryVideoCard(
-                        video = video,
-                        modifier = Modifier,
-                        index = index,
-                        animationEnabled = cardAnimationEnabled,
-                        motionTier = cardMotionTier,
-                        transitionEnabled = cardTransitionEnabled && !isNativeNonVideoCard,
-                        isReturningFromVideoDetail = returnFlags.returning,
-                        isQuickReturningFromVideoDetail = returnFlags.quickReturn,
-                        scrollLiteModeEnabled = false,
-                        isDataSaverActive = isDataSaverActive,
-                        preferLowQualityCover = preferLowQualityCover,
-                        coverRequestSpec = coverRequestSpec,
-                        showCoverGlassBadges = showCoverGlassBadges,
-                        showInfoGlassBadges = showInfoGlassBadges,
-                        showUpBadge = showUpBadges,
-                        showUpAvatar = showUpAvatars,
-                        homeDurationStyle = if (isNativeNonVideoCard && video.duration <= 0) {
-                            HomeDurationStyle.HIDDEN
-                        } else homeDurationStyle,
-                        coverAspectRatio = cardLayout.coverAspectRatio,
-                        cardHorizontalPadding = cardLayout.storyCardHorizontalPaddingDp.dp,
-                        compactMetadata = cardLayout.compactMetadata,
-                        titleMinLines = if (gridState.regularLayout) cardLayout.titleMaxLines else cardLayout.titleMinLines,
-                        titleMaxLines = cardLayout.titleMaxLines,
-                        onUpClick = onUpClick,
-                        showPublishTime = showPublishTime,
-                        onDismiss = { onDismissVideo(video) },
-                        onLongClick = if (isNativeNonVideoCard) null else longPressCallback?.let { cb -> { cb(video) } },
-                        onClick = { bvid, cid ->
-                            onVideoClick(
-                                HomeVideoClickRequest(
-                                    bvid = bvid,
-                                    dynamicId = video.dynamicId,
-                                    episodeId = video.episodeId,
-                                    cid = cid,
-                                    coverUrl = video.pic,
-                                    title = video.title,
-                                    isVerticalVideo = video.resolveIsVerticalForNavigation(),
-                                    source = HomeVideoClickSource.GRID,
-                                    sourceRoute = sourceRoute
-                                )
-                            )
+                Box(
+                    modifier = if (selecting) Modifier.clearAndSetSemantics {
+                        if (canSelect) {
+                            contentDescription = video.title
+                            selected = selectedForDownload
+                            semanticClick(if (selectedForDownload) "取消选择" else "选择下载") {
+                                downloadSelection?.toggle(video)
+                                true
+                            }
                         }
-                    )
+                    } else Modifier,
+                    propagateMinConstraints = gridState.regularLayout,
+                ) {
+                    when (displayMode) {
+                        1 -> StoryVideoCard(
+                            video = video,
+                            modifier = Modifier,
+                            index = index,
+                            animationEnabled = cardAnimationEnabled,
+                            motionTier = cardMotionTier,
+                            transitionEnabled = cardTransitionEnabled && !isNativeNonVideoCard && !selecting,
+                            isReturningFromVideoDetail = returnFlags.returning,
+                            isQuickReturningFromVideoDetail = returnFlags.quickReturn,
+                            scrollLiteModeEnabled = false,
+                            isDataSaverActive = isDataSaverActive,
+                            preferLowQualityCover = preferLowQualityCover,
+                            coverRequestSpec = coverRequestSpec,
+                            showCoverGlassBadges = showCoverGlassBadges,
+                            showInfoGlassBadges = showInfoGlassBadges,
+                            showUpBadge = showUpBadges,
+                            showUpAvatar = showUpAvatars,
+                            homeDurationStyle = if (isNativeNonVideoCard && video.duration <= 0) {
+                                HomeDurationStyle.HIDDEN
+                            } else homeDurationStyle,
+                            coverAspectRatio = cardLayout.coverAspectRatio,
+                            cardHorizontalPadding = cardLayout.storyCardHorizontalPaddingDp.dp,
+                            compactMetadata = cardLayout.compactMetadata,
+                            titleMinLines = if (gridState.regularLayout) cardLayout.titleMaxLines else cardLayout.titleMinLines,
+                            titleMaxLines = cardLayout.titleMaxLines,
+                            onUpClick = onUpClick.takeUnless { selecting },
+                            showPublishTime = showPublishTime,
+                            onDismiss = if (selecting) null else ({ onDismissVideo(video) }),
+                            onLongClick = if (isNativeNonVideoCard || selecting) null else longPressCallback?.let { cb -> { cb(video) } },
+                            onClick = { bvid, cid ->
+                                if (selecting) downloadSelection?.toggle(video)
+                                else onVideoClick(
+                                    HomeVideoClickRequest(
+                                        bvid = bvid,
+                                        dynamicId = video.dynamicId,
+                                        episodeId = video.episodeId,
+                                        cid = cid,
+                                        coverUrl = video.pic,
+                                        title = video.title,
+                                        isVerticalVideo = video.resolveIsVerticalForNavigation(),
+                                        source = HomeVideoClickSource.GRID,
+                                        sourceRoute = sourceRoute
+                                    )
+                                )
+                            }
+                        )
 
-                    else -> ElegantVideoCard(
-                        video = video,
-                        regularGridMetadata = gridState.regularLayout,
-                        modifier = Modifier,
-                        index = index,
-                        isFollowing = video.owner.mid in followingMids && category != HomeCategory.FOLLOW,
-                        animationEnabled = cardAnimationEnabled,
-                        motionTier = cardMotionTier,
-                        transitionEnabled = cardTransitionEnabled && !isNativeNonVideoCard,
-                        isReturningFromVideoDetail = returnFlags.returning,
-                        isQuickReturningFromVideoDetail = returnFlags.quickReturn,
-                        scrollLiteModeEnabled = false,
-                        cardWidthDp = estimatedCardWidthDp,
-                        showPublishTime = showPublishTime,
-                        isDataSaverActive = isDataSaverActive,
-                        preferLowQualityCover = preferLowQualityCover,
-                        coverRequestSpec = coverRequestSpec,
-                        compactStatsOnCover = compactStatsOnCover || cardLayout.compactStatsOnCover,
-                        showCoverGlassBadges = showCoverGlassBadges,
-                        showInfoGlassBadges = showInfoGlassBadges,
-                        badgeEffectMode = badgeEffectMode,
-                        infoGlassMode = infoGlassMode,
-                        wallpaperTintEnabled = wallpaperTintEnabled,
-                        wallpaperEffectMode = wallpaperEffectMode,
-                        showUpBadge = showUpBadges,
-                        showUpAvatar = showUpAvatars,
-                        homeDurationStyle = if (isNativeNonVideoCard && video.duration <= 0) {
-                            HomeDurationStyle.HIDDEN
-                        } else homeDurationStyle,
-                        coverAspectRatio = cardLayout.coverAspectRatio,
-                        compactMetadata = cardLayout.compactMetadata,
-                        titleMinLines = if (gridState.regularLayout) cardLayout.titleMaxLines else cardLayout.titleMinLines,
-                        titleMaxLines = cardLayout.titleMaxLines,
-                        showOnlineCount = showOnlineCount,
-                        onUpClick = onUpClick,
-                        onDismiss = { onDismissVideo(video) },
-                        onWatchLater = if (isNativeNonVideoCard) null else ({
-                            onWatchLater(video.bvid, resolveWatchLaterAid(video))
-                        }),
-                        onLongClick = if (isNativeNonVideoCard) null else longPressCallback?.let { cb -> { cb(video) } },
-                        onClick = { bvid, cid ->
-                            onVideoClick(
-                                HomeVideoClickRequest(
-                                    bvid = bvid,
-                                    dynamicId = video.dynamicId,
-                                    episodeId = video.episodeId,
-                                    cid = cid,
-                                    coverUrl = video.pic,
-                                    title = video.title,
-                                    isVerticalVideo = video.resolveIsVerticalForNavigation(),
-                                    source = HomeVideoClickSource.GRID,
-                                    sourceRoute = sourceRoute
+                        else -> ElegantVideoCard(
+                            video = video,
+                            regularGridMetadata = gridState.regularLayout,
+                            compactCornerFooter = true,
+                            modifier = Modifier,
+                            index = index,
+                            isFollowing = video.owner.mid in followingMids && category != HomeCategory.FOLLOW,
+                            animationEnabled = cardAnimationEnabled,
+                            motionTier = cardMotionTier,
+                            transitionEnabled = cardTransitionEnabled && !isNativeNonVideoCard && !selecting,
+                            isReturningFromVideoDetail = returnFlags.returning,
+                            isQuickReturningFromVideoDetail = returnFlags.quickReturn,
+                            scrollLiteModeEnabled = false,
+                            cardWidthDp = cardWidthDp,
+                            showPublishTime = showPublishTime,
+                            isDataSaverActive = isDataSaverActive,
+                            preferLowQualityCover = preferLowQualityCover,
+                            coverRequestSpec = coverRequestSpec,
+                            compactStatsOnCover = compactStatsOnCover || cardLayout.compactStatsOnCover,
+                            showCoverGlassBadges = showCoverGlassBadges,
+                            showInfoGlassBadges = showInfoGlassBadges,
+                            badgeEffectMode = badgeEffectMode,
+                            infoGlassMode = infoGlassMode,
+                            wallpaperTintEnabled = wallpaperTintEnabled,
+                            wallpaperEffectMode = wallpaperEffectMode,
+                            showUpBadge = showUpBadges,
+                            showUpAvatar = showUpAvatars,
+                            homeDurationStyle = if (isNativeNonVideoCard && video.duration <= 0) {
+                                HomeDurationStyle.HIDDEN
+                            } else homeDurationStyle,
+                            coverAspectRatio = cardLayout.coverAspectRatio,
+                            compactMetadata = cardLayout.compactMetadata,
+                            titleMinLines = if (gridState.regularLayout) cardLayout.titleMaxLines else cardLayout.titleMinLines,
+                            titleMaxLines = cardLayout.titleMaxLines,
+                            showOnlineCount = showOnlineCount,
+                            onUpClick = onUpClick.takeUnless { selecting },
+                            onDismiss = if (selecting) null else ({ onDismissVideo(video) }),
+                            onWatchLater = if (isNativeNonVideoCard || selecting) null else ({
+                                onWatchLater(video.bvid, resolveWatchLaterAid(video))
+                            }),
+                            onLongClick = if (isNativeNonVideoCard || selecting) null else longPressCallback?.let { cb -> { cb(video) } },
+                            onClick = { bvid, cid ->
+                                if (selecting) downloadSelection?.toggle(video)
+                                else onVideoClick(
+                                    HomeVideoClickRequest(
+                                        bvid = bvid,
+                                        dynamicId = video.dynamicId,
+                                        episodeId = video.episodeId,
+                                        cid = cid,
+                                        coverUrl = video.pic,
+                                        title = video.title,
+                                        isVerticalVideo = video.resolveIsVerticalForNavigation(),
+                                        source = HomeVideoClickSource.GRID,
+                                        sourceRoute = sourceRoute
+                                    )
                                 )
+                            }
+                        )
+                    }
+                    if (canSelect) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable(
+                                    interactionSource = null,
+                                    indication = null,
+                                    onClick = { downloadSelection?.toggle(video) },
+                                ),
+                        )
+                        com.android.purebilibili.core.ui.components.AppSurface(
+                            modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+                            shape = CircleShape,
+                            color = com.android.purebilibili.core.ui.AppSurfaceTokens.cardContainer(),
+                        ) {
+                            com.android.purebilibili.core.ui.components.AppCheckbox(
+                                checked = selectedForDownload,
+                                onCheckedChange = null,
+                                modifier = Modifier.padding(6.dp),
                             )
                         }
-                    )
+                    }
                 }
             }
         }
@@ -653,6 +688,8 @@ internal fun HomeCategoryPageContent(
         isLowRamDevice = coverPreloadDeviceProfile.isLowRamDevice,
         isMeteredNetwork = coverPreloadDeviceProfile.isMeteredNetwork,
         aheadCount = coverPreloadAheadCount,
+        warmCoverTint = displayMode != 1 && LocalHomeCardDynamicTintEnabled.current &&
+            !wallpaperTintEnabled && !isGlobalWallpaperVisibleForHomeCard(),
     )
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val visibilityScope = LocalAnimatedVisibilityScope.current
@@ -738,11 +775,12 @@ internal fun HomeCategoryPageContent(
                                 // 折叠屏/平板展开态:全幅沉浸式 hero(与 TV 首页同一视觉语言)
                                 HomeHeroCarouselImmersive(
                                     videos = carouselVideos,
-                                    autoAdvanceAllowed = heroMotionAllowed,
+                                    autoAdvanceAllowed = heroMotionAllowed && downloadSelection?.active != true,
                                     onGestureActiveChange = onHeroCarouselGestureActiveChange,
                                     horizontalEscapeDp = contentPadding.calculateLeftPadding(LocalLayoutDirection.current),
                                     onVideoClick = { video ->
-                                        onVideoClick(
+                                        if (downloadSelection?.active == true) downloadSelection.toggle(video)
+                                        else onVideoClick(
                                             HomeVideoClickRequest(
                                                 bvid = video.bvid,
                                                 dynamicId = video.dynamicId,
@@ -760,13 +798,15 @@ internal fun HomeCategoryPageContent(
                             } else {
                                 HomeHeroCarousel(
                                     videos = carouselVideos,
-                                    autoplayEnabled = homeHeroCarouselAutoplayEnabled && heroMotionAllowed,
+                                    autoplayEnabled = homeHeroCarouselAutoplayEnabled && heroMotionAllowed && downloadSelection?.active != true,
                                     onGestureActiveChange = onHeroCarouselGestureActiveChange,
                                     dissolvingVideos = dissolvingVideos,
                                     onDissolveComplete = onDissolveComplete,
-                                    onLongPress = longPressCallback,
+                                    dissolvePreset = dissolvePreset,
+                                    onLongPress = longPressCallback.takeUnless { downloadSelection?.active == true },
                                     onVideoClick = { video ->
-                                        onVideoClick(
+                                        if (downloadSelection?.active == true) downloadSelection.toggle(video)
+                                        else onVideoClick(
                                             HomeVideoClickRequest(
                                                 bvid = video.bvid,
                                                 dynamicId = video.dynamicId,

@@ -87,7 +87,7 @@ class AdaptiveBottomSheetPolicyTest {
             uiStyle = AppUiStyle.MIUIX,
             miuixNonGlass = false,
         )
-        assertEquals(23, nonGlassVisual.cornerRadiusDp)
+        assertEquals(28, nonGlassVisual.cornerRadiusDp)
         assertEquals(22, glassVisual.cornerRadiusDp)
     }
 

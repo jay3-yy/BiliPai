@@ -1,5 +1,14 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.R
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
+import com.android.purebilibili.core.plugin.feed.BilibiliPreviewLookup
+import com.android.purebilibili.core.plugin.feed.fetchBilibiliLinkPreview
+import com.android.purebilibili.core.plugin.feed.publicLinkPreviewUrl
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
@@ -28,12 +37,13 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.*
@@ -85,6 +95,7 @@ import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.BilibiliUrlParser
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
+import com.android.purebilibili.core.util.isBilibiliShortHost
 import com.android.purebilibili.data.model.response.ReplyFansDetail
 import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyContent
@@ -98,7 +109,6 @@ import com.android.purebilibili.data.model.response.ReplyUpAction
 import com.android.purebilibili.data.repository.BlockedUpRelationSource
 import com.android.purebilibili.data.repository.BlockedUpRepository
 import com.android.purebilibili.data.repository.COMMENT_EMOTE_TOKEN_PATTERN
-import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.data.repository.resolveCommentPictureUrls
 import com.android.purebilibili.data.repository.resolveCommentPictureGridColumns
 import com.android.purebilibili.data.repository.resolveCommentRenderableEmoteKeys
@@ -115,7 +125,11 @@ import com.android.purebilibili.feature.dynamic.components.ImageDecodeTarget
 import com.android.purebilibili.feature.dynamic.components.ImageDecodeSize
 import com.android.purebilibili.feature.dynamic.components.resolveCommentImageOriginalSizeLabel
 import com.android.purebilibili.feature.dynamic.components.resolveImageDecodeSize
+import com.android.purebilibili.navigation.isBilibiliShortWebLink
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.common.TextSelectionBottomSheet
 import com.android.purebilibili.core.ui.common.TextSelectionPolicy
 import com.android.purebilibili.core.ui.common.detectTapWithSelectionFriendly
@@ -136,12 +150,15 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 import com.android.purebilibili.core.ui.components.UserLevelBadge
 import com.android.purebilibili.core.ui.components.UserUpBadge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.feature.web.LocalLinkPreviewEnabled
+import com.android.purebilibili.feature.web.PublicWebLinkText
 
 // 表情 token 规则下沉 core-data（CommentMediaPolicy），手机原入口保留并委托。
 internal val EMOTE_TOKEN_PATTERN = COMMENT_EMOTE_TOKEN_PATTERN
@@ -207,7 +224,8 @@ internal fun resolveRichCommentLinkAction(tag: String): RichCommentLinkAction? {
 internal val COMMENT_TIMESTAMP_PATTERN =
     """(?<!\d)(\d{1,2})\s*[:：]\s*(\d{2})(?:\s*[:：]\s*(\d{2}))?(?!\d)""".toRegex()
 internal val COMMENT_URL_PATTERN =
-    """((https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])""".toRegex()
+    """((https?|bilibili|bili|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|])"""
+        .toRegex(RegexOption.IGNORE_CASE)
 internal val COMMENT_INLINE_BVID_PATTERN =
     Regex("""(?<![A-Za-z0-9])BV[a-zA-Z0-9]{10}(?![A-Za-z0-9])""", RegexOption.IGNORE_CASE)
 internal val COMMENT_VOTE_PATTERN = Regex("""\{vote:(\d+)\}""")
@@ -264,6 +282,8 @@ internal object TransparentBoundsCropTransformation : Transformation() {
         }
     }
 }
+
+internal val ReplyItemTopPadding = 10.dp
 
 internal data class ReplyItemLayoutPolicy(
     val horizontalPaddingDp: Int,
@@ -459,19 +479,6 @@ internal fun buildSubReplyPreviewPrefix(
         }
         add(": ")
     }
-}
-
-internal fun resolveSubReplyPreviewContent(content: ReplyContent): ReplyContent {
-    var previewUrls: MutableMap<String, ReplyContentUrl>? = null
-    content.urls.forEach { (token, url) ->
-        val target = BilibiliNavigationTargetParser.parse(resolveReplyContentUrlNavigationUrl(token, url))
-        if (target is BilibiliNavigationTarget.Search) {
-            // Keep the original keyword as plain text, without its search icon or link styling.
-            val filtered = previewUrls ?: content.urls.toMutableMap().also { previewUrls = it }
-            filtered.remove(token)
-        }
-    }
-    return previewUrls?.let { content.copy(urls = it) } ?: content
 }
 
 internal fun resolveReplyItemContentType(item: ReplyItem): String {
@@ -704,7 +711,11 @@ internal fun resolveReplyVideoReference(text: String): ReplyVideoReference? {
 
     return ReplyVideoReference(
         bvid = bvid,
-        navigationUrl = resolveReplyVideoNavigationUrl(bvid)
+        navigationUrl = if (trimmed.equals(bvid, ignoreCase = true)) {
+            resolveReplyVideoNavigationUrl(bvid)
+        } else {
+            normalizeReplyLink(trimmed)
+        }
     )
 }
 
@@ -725,30 +736,37 @@ internal fun resolveReplyContentUrlNavigationUrl(
     rawToken: String,
     url: ReplyContentUrl
 ): String {
+    val webUrl = normalizeReplyLink(url.url)
+    val token = normalizeReplyLink(rawToken)
     // 动态/图文链接的 app_url_schema 偶尔会被服务端下发成 bilibili://video/{动态ID}。
     // 先保留可解析为动态的 Web URL，避免把动态 ID 当视频 aid 打开。
-    listOf(url.url, rawToken).firstOrNull(::isReplyDynamicNavigationUrl)?.let { return it }
+    listOf(webUrl, token).firstOrNull(::isReplyDynamicNavigationUrl)?.let { return it }
     // 服务端给商业链接附带的视频 schema 可能指向来源视频；有明确网页目标时优先保留。
-    val webUrl = url.url.trim()
     val webUri = runCatching { java.net.URI(webUrl) }.getOrNull()
     if (webUri?.scheme?.lowercase() in listOf("http", "https") &&
-        !com.android.purebilibili.core.util.isBilibiliShortHost(webUri?.host)
+        !isBilibiliShortHost(webUri?.host)
     ) return webUrl
+    // 路径已带视频 ID 的短链可以直接站内跳转，保留其原始目标和评论定位参数。
+    listOf(webUrl, token).firstOrNull {
+        isBilibiliShortWebLink(it) &&
+            BilibiliNavigationTargetParser.parse(it) is BilibiliNavigationTarget.Video
+    }?.let { return it }
     // 商业富链接可能提供宿主不支持的 app schema；不能让它覆盖可用的网页地址。
     val appSchema = url.appUrlSchema.trim()
     if (appSchema.isNotEmpty() &&
-        com.android.purebilibili.core.util.BilibiliNavigationTargetParser.parse(appSchema) != null
+        BilibiliNavigationTargetParser.parse(appSchema) != null
     ) return appSchema
-    listOf(url.url, rawToken, appSchema).firstOrNull { candidate ->
-        val scheme = runCatching { java.net.URI(candidate.trim()).scheme }.getOrNull()
+    listOf(webUrl, token, appSchema).firstOrNull { candidate ->
+        val scheme = runCatching { java.net.URI(candidate).scheme }.getOrNull()
         scheme.equals("https", ignoreCase = true) || scheme.equals("http", ignoreCase = true)
-    }?.let { return it.trim() }
-    return listOf(
-        url.appUrlSchema,
-        url.url,
-        rawToken
-    ).firstOrNull { it.isNotBlank() }.orEmpty()
+    }?.let { return it }
+    return listOf(webUrl, token).firstOrNull {
+        BilibiliNavigationTargetParser.parse(it) != null
+    } ?: listOf(appSchema, webUrl, token).firstOrNull { it.isNotEmpty() }.orEmpty()
 }
+
+private fun normalizeReplyLink(value: String): String =
+    value.trim().let { if (it.startsWith("//")) "https:$it" else it }
 
 private fun isReplyDynamicNavigationUrl(value: String): Boolean {
     val target = value.trim().takeIf { it.isNotEmpty() } ?: return false
@@ -834,6 +852,7 @@ internal fun buildRichCommentAnnotatedString(
     voteTitle: String? = null,
     leadingReferences: List<ReplyLeadingRichTextReference> = emptyList(),
     maxTimestampSeconds: Long? = null,
+    timestampsClickable: Boolean = true,
     color: Color = Color.Unspecified,
     timestampColor: Color = Color.Unspecified,
     urlColor: Color = Color.Unspecified,
@@ -961,6 +980,7 @@ internal fun buildRichCommentAnnotatedString(
         }
 
         COMMENT_TIMESTAMP_PATTERN.findAll(remainingText).forEach { match ->
+            if (!timestampsClickable) return@forEach
             val totalSeconds = parseCommentTimestampSeconds(match) ?: return@forEach
             if (maxTimestampSeconds != null && totalSeconds > maxTimestampSeconds) return@forEach
             allMatches.add(MatchInfo(match.range, "timestamp", match.value, totalSeconds, priority = 2))
@@ -1329,6 +1349,7 @@ fun ReplyItemView(
     onUrlClick: ((String) -> Unit)? = null,
     maxTimestampMs: Long? = null,
     hideSubPreview: Boolean = false,
+    animateSupplementedSubReplies: Boolean = false,
     // Thread detail reuses this row in every material; defaults keep native main-list behavior.
     containerColor: Color = Color.Unspecified,
     onConversationClick: (() -> Unit)? = null,
@@ -1356,12 +1377,15 @@ fun ReplyItemView(
     val showResolvedIdentityDecorations = shouldShowReplyIdentityDecorations(showIdentityDecorations)
     // 右上角菜单的全局开关只控制"回复"快捷按钮本身，楼中楼预览不受影响。
     val replyButtonVisible = com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible.current
-    val showSubPreview = shouldShowReplySubPreview(
+    val hasFilteredBody = item.aiBotFolded || item.repeatedReplyFolded
+    var filteredBodyExpanded by remember(item.rpid, hasFilteredBody) { mutableStateOf(false) }
+    val collapseFilteredBody = hasFilteredBody && !filteredBodyExpanded
+    val showSubPreview = !collapseFilteredBody && shouldShowReplySubPreview(
         hideSubPreview = hideSubPreview,
         lightweightMode = lightweightMode
     )
     val previewLikesEnabled = com.android.purebilibili.core.ui.LocalSubReplyPreviewLikesEnabled.current
-    val preview = rememberReplyPreviewState(item = item, enabled = showSubPreview)
+    val preview = rememberReplyPreviewState(item = item, enabled = showSubPreview, upMid = upMid)
     val previewReactions = com.android.purebilibili.feature.video.viewmodel.LocalReplyPreviewReactions.current
     val reaction = previewReactions?.reaction(item, preview.account)
     val effectiveIsLiked = reaction?.let { it.action == 1 } ?: isLiked
@@ -1524,29 +1548,35 @@ fun ReplyItemView(
     var actionCarriedPress by remember(item.rpid) { mutableStateOf<com.android.purebilibili.core.ui.components.AppSingleChoicePopupPress?>(null) }
 
     val openButtonActions = { actionCarriedPress = null; actionSource = actionButtonSource; actionAnchor = null; showActionSheet = true }
-    val openLongPressActions = {
+    val openLongPressActions = com.android.purebilibili.core.ui.components.appLongClickWithFeedback(onLongClick = {
         onLongClick?.invoke()
         actionSource = null
         actionCarriedPress = actionPressRelay[0]
         val point = actionPressPosition[0] ?: actionCoordinates[0]?.boundsInWindow()?.center
         actionAnchor = point?.let { Rect(it, androidx.compose.ui.geometry.Size(1f, 1f)) }
         showActionSheet = true
-    }
+    })
 
     var showFreeCopyDialog by remember(item.rpid) { mutableStateOf(false) }
     var showReportDialog by remember(item.rpid) { mutableStateOf(false) }
-    // [新增] 评论翻译状态
+    // [新增] 评论翻译状态：结果由会话级 ReplyTranslationViewModel 缓存，开关只切换显示不重复请求。
+    val replyTranslation = com.android.purebilibili.feature.video.viewmodel.LocalReplyTranslation.current
     val canTranslate = remember(item.replyControl?.translationSwitch, item.content.message, item.oid, item.rpid) {
         shouldOfferCommentTranslation(item.replyControl?.translationSwitch, item.content.message, item.oid, item.rpid)
     }
-    var translatedMessage by remember(item.rpid) { mutableStateOf<String?>(null) }
-    var isTranslating by remember(item.rpid) { mutableStateOf(false) }
+    val translationState = replyTranslation?.state(item)
+    val translatedMessage = translationState?.takeIf { it.visible }?.text
+    val isTranslating = replyTranslation?.isTranslating(item) == true
     // [新增] 点踩折叠：已点踩的评论正文收起为一行，点击展开；取消点踩自动恢复
     var hatedBodyExpanded by remember(item.rpid, effectiveIsHated) { mutableStateOf(false) }
     val collapseHatedBody = effectiveIsHated && !hatedBodyExpanded
     var hatePromptHandled by remember(item.rpid) { mutableStateOf(false) }
-    // 回复长按菜单沿用中等刚度回弹。
-    val hateCollapseSpring: SpringSpec<androidx.compose.ui.unit.IntSize> = spring(
+    // 点踩和挂机识别共用正文的高度变化。
+    val bodyCollapseMotionEnabled = !hasFilteredBody || (
+        LocalAppThemeConfig.current.uiEntranceAnimationEnabled &&
+            LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current
+        )
+    val bodyCollapseSpring: SpringSpec<androidx.compose.ui.unit.IntSize> = spring(
         dampingRatio = Spring.DampingRatioMediumBouncy,
         stiffness = Spring.StiffnessMedium
     )
@@ -1554,7 +1584,22 @@ fun ReplyItemView(
         translatedMessage ?: item.content.message
     }
     val copyText = remember(item.content.message) { item.content.message.trim() }
+    var activeVoteId by remember(item.rpid) { mutableStateOf<Long?>(null) }
+    val openVote: (Long) -> Unit = { voteId -> if (voteId > 0L) activeVoteId = voteId }
+    activeVoteId?.let { voteId ->
+        com.android.purebilibili.feature.dynamic.components.DynamicVoteDialog(
+            voteId = voteId,
+            dynamicId = "",
+            onDismiss = { activeVoteId = null },
+        )
+    }
     val replyMemberMid = remember(item.member.mid, item.mid) { resolveReplyMemberMid(item) }
+    val openAuthor = { if (replyMemberMid > 0L) onAvatarClick(replyMemberMid.toString()) }
+    val authorHeader = rememberSystemWindowNavigationControl(
+        BiliPaiNavKey.Space(replyMemberMid),
+        AppShapes.container(ContainerLevel.Card),
+        openAuthor,
+    )
     fun requestSaveReplyCommentImage() { showImagePreview = true }
 
     fun shareReplyComment() {
@@ -1724,7 +1769,7 @@ fun ReplyItemView(
                     }
                 else Modifier
             )
-            .combinedClickable(
+            .appCombinedClickable(
                 onClick = appActionWithFeedback {
                     // 主列表空白可直接回复；详情正文不冒泡到回复输入框。
                     if (onReplyClick != null && !hideSubPreview) {
@@ -1742,7 +1787,7 @@ fun ReplyItemView(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    top = 10.dp,
+                    top = ReplyItemTopPadding,
                     bottom = 2.dp,
                     start = layoutPolicy.horizontalPaddingDp.dp,
                     end = layoutPolicy.horizontalPaddingDp.dp
@@ -1765,7 +1810,11 @@ fun ReplyItemView(
             }
             Column(modifier = Modifier.fillMaxWidth()) {
                 // User Info Header
-                Row() {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(end = headerEndPadding)
+                        .then(authorHeader.modifier),
+                ) {
                     if (pushAvatar) {
                         Spacer(modifier = Modifier.size(avatarSize))
                     } else {
@@ -1774,17 +1823,13 @@ fun ReplyItemView(
                             placeholderColor = appearance.placeholderColor,
                             lightweightMode = lightweightMode,
                             modifier = Modifier.size(layoutPolicy.avatarSizeDp.dp),
-                            onClick = { if (replyMemberMid > 0L) onAvatarClick(replyMemberMid.toString()) }
+                            onClick = authorHeader.onClick,
                         )
                     }
 
                     Spacer(modifier = Modifier.width(layoutPolicy.avatarContentSpacingDp.dp))
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(end = headerEndPadding)
-                    ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -1850,22 +1895,31 @@ fun ReplyItemView(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .animateContentSize(animationSpec = hateCollapseSpring)
+                        .then(
+                            if (bodyCollapseMotionEnabled) Modifier.animateContentSize(animationSpec = bodyCollapseSpring)
+                            else Modifier
+                        )
                         .padding(start = startPadding)
                 ) {
-                    if (collapseHatedBody) {
+                    if (collapseFilteredBody || collapseHatedBody) {
                         AppText(
-                            text = "已点踩的评论 · 点击展开",
+                            text = when {
+                                !collapseFilteredBody -> "已点踩的评论 · 点击展开"
+                                item.aiBotFolded -> stringResource(R.string.ai_reply_filter_expand)
+                                else -> stringResource(R.string.repeated_reply_expand)
+                            },
                             fontSize = VideoCommentTypographyTokens.body,
                             color = appearance.secondaryTextColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .appActionClickable { hatedBodyExpanded = true }
+                                .appActionClickable {
+                                    if (collapseFilteredBody) filteredBodyExpanded = true else hatedBodyExpanded = true
+                                }
                                 .padding(vertical = 2.dp)
                         )
-                        if (!hatePromptHandled) {
+                        if (!collapseFilteredBody && !hatePromptHandled) {
                             Row(
                                 modifier = Modifier.padding(top = 2.dp),
                                 horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -1890,6 +1944,7 @@ fun ReplyItemView(
                     } else {
                     ReplyMessageText(
                         text = displayMessage,
+                        showWebLinkPreviews = onUrlClick != null,
                         fontSize = VideoCommentTypographyTokens.body,
                         color = appearance.primaryTextColor,
                         emoteMap = localEmoteMap,
@@ -1899,7 +1954,7 @@ fun ReplyItemView(
                         onUrlClick = onUrlClick,
                         onUserClick = { mid -> onAvatarClick(mid.toString()) },
                         onTopicClick = { topic -> onUrlClick?.invoke(resolveReplyTopicNavigationUrl(topic)) },
-                        onVoteClick = { voteId -> onUrlClick?.invoke("bilibili://vote?id=$voteId") },
+                        onVoteClick = openVote,
                         noteCvidStr = item.noteCvidStr,
                         prefix = contentPrefix,
                         onLongPress = openLongPressActions,
@@ -1937,7 +1992,14 @@ fun ReplyItemView(
 
                     // Footer Actions；"隐藏回复"开启时收起回复快捷入口（长按菜单仍可回复）。
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (replyButtonVisible) {
+                    if (hasFilteredBody && filteredBodyExpanded) {
+                        ReplyTextAction(
+                            label = stringResource(R.string.ai_reply_filter_collapse),
+                            appearance = appearance,
+                            onClick = { filteredBodyExpanded = false },
+                        )
+                    }
+                    if (replyButtonVisible && !collapseFilteredBody) {
                         ReplyTextAction(
                             label = "回复",
                             appearance = appearance,
@@ -1946,7 +2008,7 @@ fun ReplyItemView(
                     }
 
                     // [新增] 翻译按钮 (胶囊样式)
-                    if (canTranslate) {
+                    if (!collapseFilteredBody && canTranslate && replyTranslation != null) {
                         val isTranslated = translatedMessage != null
                         val translateLabel = if (isTranslating) "翻译中" else if (isTranslated) "原文" else "翻译"
                         AppSurface(
@@ -1954,26 +2016,11 @@ fun ReplyItemView(
                             color = if (isTranslated) appearance.accentColor.copy(alpha = 0.14f) else appearance.actionTint.copy(alpha = 0.10f),
                             modifier = Modifier
                                 .appActionClickable(enabled = !isTranslating) {
-                                    if (isTranslated) {
-                                        translatedMessage = null
+                                    if (translationState != null) {
+                                        replyTranslation.toggleVisible(item)
                                     } else {
-                                        scope.launch {
-                                            isTranslating = true
-                                            val result = com.android.purebilibili.data.repository.CommentGrpcRepository.translateReply(
-                                                type = item.replyType.toLong(),
-                                                oid = item.oid,
-                                                rpid = item.rpid
-                                            )
-                                            result.onSuccess { translated ->
-                                                if (!translated.isNullOrBlank()) {
-                                                    translatedMessage = translated
-                                                } else {
-                                                    Toast.makeText(context, "翻译结果为空", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }.onFailure { e ->
-                                                Toast.makeText(context, "${e.javaClass.simpleName}: ${e.message}", Toast.LENGTH_SHORT).show()
-                                            }
-                                            isTranslating = false
+                                        replyTranslation.translate(item) { message ->
+                                            Toast.makeText(context.applicationContext, message, Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 }
@@ -2086,12 +2133,33 @@ fun ReplyItemView(
                             // This preview is already inside the indented body column.
                             .clip(AppShapes.container(ContainerLevel.Chip))
                             .background(appearance.composerHintBackgroundColor)
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(start = 8.dp, top = 8.dp, end = 8.dp),
                     ) {
                         previewReplies.forEachIndexed { index, subReply ->
                             key(subReply.rpid) {
-                                CommentContentReveal(visible = index < visibleSubReplies.size) {
+                                CommentContentReveal(
+                                    visible = index < visibleSubReplies.size,
+                                    animateInitialAppearance = animateSupplementedSubReplies &&
+                                        item.replies.orEmpty().none { it.rpid == subReply.rpid },
+                                ) {
+                                    // 间距跟随回复一起展开，避免零高度的动画行先撑开列表。
+                                    if (subReply.aiBotFolded || subReply.repeatedReplyFolded) {
+                                        AppText(
+                                            text = stringResource(
+                                                if (subReply.aiBotFolded) R.string.ai_reply_filter_open_thread
+                                                else R.string.repeated_reply_open_thread
+                                            ),
+                                            fontSize = VideoCommentTypographyTokens.subReply,
+                                            color = appearance.secondaryTextColor,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 8.dp)
+                                                .appActionClickable {
+                                                    onSubClick(previewRoot, resolveSubReplyOpenTargetId(item.rpid, subReply.rpid))
+                                                },
+                                        )
+                                        return@CommentContentReveal
+                                    }
                                     val subEmoteMap = remember(subReply.content.emote, emoteMap) {
                                         val inlineEmotes = subReply.content.emote.orEmpty()
                                         if (inlineEmotes.isEmpty()) {
@@ -2166,18 +2234,12 @@ fun ReplyItemView(
                                             }
                                         }
                                     }
-                                    // Native text links consume their own tap; previews route them
-                                    // to this reply's floor instead of navigating out of the thread.
                                     val openPreviewReply = {
                                         onSubClick(
                                             previewRoot,
                                             resolveSubReplyOpenTargetId(item.rpid, subReply.rpid)
                                         )
                                     }
-                                    val previewContent = remember(subReply.content) {
-                                        resolveSubReplyPreviewContent(subReply.content)
-                                    }
-
                                     val subReaction = previewReactions?.reaction(subReply, preview.account)
                                     val subLiked = (subReaction?.action ?: subReply.action) == 1
                                     val subLikeCount = subReaction?.likeCount ?: subReply.like
@@ -2206,6 +2268,7 @@ fun ReplyItemView(
                                             liked = subLiked,
                                             count = subLikeCount,
                                             tint = previewLikeColor,
+                                            dividerColor = appearance.dividerColor,
                                             fontSize = VideoCommentTypographyTokens.subReply,
                                         ))
                                     } else emptyMap()
@@ -2213,8 +2276,10 @@ fun ReplyItemView(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .padding(bottom = 8.dp)
                                             .testTag("$COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX${subReply.rpid}")
-                                            .combinedClickable(
+                                            .appCombinedClickable(
+                                                longPressScene = com.android.purebilibili.core.ui.AppHapticScene.TEXT,
                                                 onClick = appActionWithFeedback(openPreviewReply),
                                                 onLongClick = {
                                                     copyToClipboard(
@@ -2231,14 +2296,16 @@ fun ReplyItemView(
                                             lineHeight = VideoCommentTypographyTokens.subReply * 1.6f,
                                             color = appearance.primaryTextColor.copy(alpha = 0.8f),
                                             emoteMap = subEmoteMap,
-                                            content = previewContent,
+                                            content = subReply.content,
                                             maxLines = 2,
-                                            onTimestampClick = { openPreviewReply() },
+                                            onTimestampClick = onTimestampClick,
                                             maxTimestampMs = maxTimestampMs,
-                                            onUrlClick = { openPreviewReply() },
-                                            onUserClick = { openPreviewReply() },
-                                            onTopicClick = { openPreviewReply() },
-                                            onVoteClick = { openPreviewReply() },
+                                            onUrlClick = onUrlClick,
+                                            onUserClick = { mid -> onAvatarClick(mid.toString()) },
+                                            onTopicClick = onUrlClick?.let { openUrl ->
+                                                { topic -> openUrl(resolveReplyTopicNavigationUrl(topic)) }
+                                            },
+                                            onVoteClick = openVote,
                                             noteCvidStr = subReply.noteCvidStr,
                                             prefix = prefix,
                                             suffix = likeSuffix,
@@ -2257,23 +2324,27 @@ fun ReplyItemView(
                                 color = appearance.accentColor,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier
+                                    .padding(bottom = 8.dp)
                                     .appActionClickable { isSubPreviewExpanded = !isSubPreviewExpanded }
                                     .padding(vertical = 4.dp)
                             )
-                        } else if (showSubReplySummary) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("$COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX${item.rpid}")
-                                    .appActionClickable { onSubClick(previewRoot, 0L) },
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                AppText(
-                                    text = subReplySummaryLabel,
-                                    fontSize = VideoCommentTypographyTokens.subReply,
-                                    color = appearance.accentColor,
-                                    fontWeight = FontWeight.Medium
-                                )
+                        } else if (showSubReplySummary || animateSupplementedSubReplies) {
+                            CommentContentReveal(visible = showSubReplySummary) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                        .testTag("$COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX${item.rpid}")
+                                        .appActionClickable { onSubClick(previewRoot, 0L) },
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    AppText(
+                                        text = subReplySummaryLabel,
+                                        fontSize = VideoCommentTypographyTokens.subReply,
+                                        color = appearance.accentColor,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                             }
                         }
                     }
@@ -2292,7 +2363,8 @@ fun ReplyItemView(
                     },
                     allowNeighborContact = !boundAvatarToItem,
                     modifier = Modifier.size(avatarSize),
-                    onClick = { if (replyMemberMid > 0L) onAvatarClick(replyMemberMid.toString()) }
+                    onClickAtHeader = authorHeader.onClick,
+                    onClick = openAuthor,
                 )
             }
         }
@@ -2345,6 +2417,7 @@ private fun rememberInlinePreviewLikeContent(
     liked: Boolean,
     count: Int,
     tint: Color,
+    dividerColor: Color,
     fontSize: TextUnit,
 ): InlineTextContent {
     val outline = com.android.purebilibili.core.ui.rememberAppLikeIcon()
@@ -2353,21 +2426,58 @@ private fun rememberInlinePreviewLikeContent(
     val countText = FormatUtils.formatStat(count.toLong())
     val density = androidx.compose.ui.platform.LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
-    val countStyle = TextStyle(fontSize = fontSize * 0.85f, lineHeight = fontSize)
+    val countStyle = TextStyle(
+        fontSize = fontSize * 0.9f,
+        lineHeight = fontSize,
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+    )
     val textWidth = remember(textMeasurer, countText, countStyle) {
         textMeasurer.measure(countText, countStyle, maxLines = 1).size.width
     }
-    val width = with(density) { fontSize.toDp() + 4.dp + textWidth.toDp() }
-    val placeholderWidth = with(density) { width.toSp() }
-    return remember(icon, countText, tint, fontSize, placeholderWidth, density) {
+    val iconSize = with(density) { countStyle.fontSize.toDp() }
+    val dividerHeight = with(density) { (fontSize * 0.6f).toDp() }
+    val dividerWidth = 1.dp
+    val dividerGap = 5.dp
+    val countGap = 4.dp
+    val placeholderWidth = with(density) {
+        val widthPx = dividerWidth.roundToPx() + dividerGap.roundToPx() +
+            iconSize.roundToPx() + countGap.roundToPx() + textWidth
+        widthPx.toDp().toSp()
+    }
+    return remember(icon, countText, tint, dividerColor, countStyle, placeholderWidth, iconSize, dividerHeight) {
         InlineTextContent(
             Placeholder(width = placeholderWidth, height = fontSize, placeholderVerticalAlign = PlaceholderVerticalAlign.Center)
         ) {
-            // 图标和数字共同占据一个内联槽位，同一行垂直居中，也不会换行拆开。
+            // 分隔线、图标轮廓和数字字形共用槽位的中心线。
             Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                AppIcon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(with(density) { fontSize.toDp() }))
-                Spacer(Modifier.width(4.dp))
-                AppText(countText, color = tint, style = countStyle, maxLines = 1, tapToCopyEnabled = false)
+                Spacer(Modifier.size(dividerWidth, dividerHeight).background(dividerColor))
+                Spacer(Modifier.width(dividerGap))
+                AppIcon(
+                    icon,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier
+                        .size(iconSize)
+                        // 两个拇指图标的轮廓跨 24 单位视口的第 1 到 21 单位。
+                        .graphicsLayer { translationY = size.height / 24f },
+                )
+                Spacer(Modifier.width(countGap))
+                AppText(
+                    countText,
+                    color = tint,
+                    style = countStyle,
+                    maxLines = 1,
+                    tapToCopyEnabled = false,
+                    modifier = Modifier.layout { measurable, constraints ->
+                        val countLabel = measurable.measure(constraints)
+                        // 数字字形约占 0.7 em，从实际基线定位可避开字体上下留白。
+                        val digitCenter = countLabel[FirstBaseline] - countStyle.fontSize.toPx() * 0.35f
+                        val offset = (countLabel.height / 2f - digitCenter).roundToInt()
+                        layout(countLabel.width, countLabel.height) {
+                            countLabel.placeRelative(0, offset)
+                        }
+                    },
+                )
             }
         }
     }
@@ -2375,7 +2485,7 @@ private fun rememberInlinePreviewLikeContent(
 
 /**
  * 评论文本：普通文本继续走 RichCommentText；
- * 若整条评论是视频引用，则异步解析标题后替换为主题色标题。
+ * 紧凑回复中的视频引用以主题色标题显示。完整评论使用链接预览卡片。
  */
 @Composable
 internal fun ReplyMessageText(
@@ -2398,8 +2508,12 @@ internal fun ReplyMessageText(
     onLongPress: (() -> Unit)? = null,
     suffix: AnnotatedString? = null,
     suffixInlineContent: Map<String, InlineTextContent> = emptyMap(),
+    showWebLinkPreviews: Boolean = false,
 ) {
-    val videoReference = remember(text) { resolveReplyVideoReference(text) }
+    val showInlineVideoTitle = !showWebLinkPreviews && LocalLinkPreviewEnabled.current
+    val videoReference = remember(text, showInlineVideoTitle, content?.urls) {
+        if (showInlineVideoTitle && content?.urls.isNullOrEmpty()) resolveReplyVideoReference(text) else null
+    }
     var resolvedTitle by remember(videoReference?.bvid) {
         mutableStateOf(videoReference?.bvid?.let(replyVideoTitleCache::get))
     }
@@ -2410,8 +2524,10 @@ internal fun ReplyMessageText(
         resolvedTitle = resolveReplyVideoTitle(
             reference = reference,
             cache = replyVideoTitleCache,
-            titleProvider = { bvid ->
-                VideoRepository.getVideoTitle(bvid).getOrNull()
+            titleProvider = {
+                publicLinkPreviewUrl(resolveReplyVideoNavigationUrl(reference.bvid))
+                    ?.let(BilibiliPreviewLookup.Companion::forPage)
+                    ?.let { fetchBilibiliLinkPreview(it)?.title }
             }
         )
     }
@@ -2436,6 +2552,7 @@ internal fun ReplyMessageText(
     } else {
         RichCommentText(
             text = text,
+            showWebLinkPreviews = showWebLinkPreviews,
             fontSize = fontSize,
             lineHeight = lineHeight,
             color = color,
@@ -2474,7 +2591,10 @@ internal fun ReplyVideoReferenceText(
 ) {
     val primaryColor = AppContentColors.accent()
     val latestOnUrlClick by rememberUpdatedState(onUrlClick)
-    val latestOnLongPress by rememberUpdatedState(onLongPress)
+    val latestOnLongPress by rememberUpdatedState(onLongPress?.let {
+        com.android.purebilibili.core.ui.components.appLongClickWithFeedback(onLongClick = it)
+    })
+    val selectionHaptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.TEXT)
     val linkListener = remember(url) {
         LinkInteractionListener { latestOnUrlClick?.invoke(url) }
     }
@@ -2522,7 +2642,10 @@ internal fun ReplyVideoReferenceText(
                 onLongPress = {
                     val action = latestOnLongPress
                     if (action != null) action()
-                    else if (copyText.isNotEmpty()) showTextSelectionSheet = true
+                    else if (copyText.isNotEmpty()) {
+                        selectionHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        showTextSelectionSheet = true
+                    }
                 },
             )
         }
@@ -2575,6 +2698,7 @@ fun RichCommentText(
     onLongPress: (() -> Unit)? = null,
     suffix: AnnotatedString? = null,
     suffixInlineContent: Map<String, InlineTextContent> = emptyMap(),
+    showWebLinkPreviews: Boolean = false,
 ) {
     val context = LocalContext.current
     val timestampColor = AppContentColors.accent()
@@ -2588,7 +2712,11 @@ fun RichCommentText(
     val latestOnTopicClick by rememberUpdatedState(onTopicClick)
     val latestOnVoteClick by rememberUpdatedState(onVoteClick)
     val latestOnTimestampClick by rememberUpdatedState(onTimestampClick)
-    val latestOnLongPress by rememberUpdatedState(onLongPress)
+    val timestampsClickable = onTimestampClick != null
+    val latestOnLongPress by rememberUpdatedState(onLongPress?.let {
+        com.android.purebilibili.core.ui.components.appLongClickWithFeedback(onLongClick = it)
+    })
+    val selectionHaptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.TEXT)
     val latestOnPlainTextClick by rememberUpdatedState(onPlainTextClick)
     // 播放进度等重组仅更新回调，不能重建链接注解、取消正在进行的按压。
     val linkListener = remember {
@@ -2618,6 +2746,7 @@ fun RichCommentText(
         content?.richText,
         noteCvidStr,
         maxTimestampMs,
+        timestampsClickable,
         timestampColor,
         color,
         urlColor,
@@ -2633,6 +2762,7 @@ fun RichCommentText(
             voteTitle = content?.vote?.title,
             leadingReferences = resolveReplyLeadingRichTextReferences(content, noteCvidStr),
             maxTimestampSeconds = maxTimestampMs?.let { it / 1000L },
+            timestampsClickable = timestampsClickable,
             color = color,
             timestampColor = timestampColor,
             urlColor = urlColor,
@@ -2742,7 +2872,10 @@ fun RichCommentText(
                     onLongPress = {
                         val action = latestOnLongPress
                         if (action != null) action()
-                        else if (copyText.isNotEmpty()) showTextSelectionSheet = true
+                        else if (copyText.isNotEmpty()) {
+                            selectionHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            showTextSelectionSheet = true
+                        }
                     },
                 )
             }
@@ -2754,17 +2887,26 @@ fun RichCommentText(
                 } else Modifier
             )
 
-        AppText(
+        PublicWebLinkText(
             text = annotatedString,
-            inlineContent = inlineContent,
-            fontSize = fontSize,
-            color = color,
-            lineHeight = lineHeight,
-            style = com.android.purebilibili.core.ui.appParagraphTextStyle(),
-            maxLines = maxLines,
-            onTextLayout = { textLayoutResult = it },
-            modifier = textModifier
-        )
+            enabled = showWebLinkPreviews,
+            resolveUrl = { (resolveRichCommentLinkAction(it.tag) as? RichCommentLinkAction.Url)?.url },
+        ) { previewModifier, onPreviewTextLayout ->
+            AppText(
+                text = annotatedString,
+                inlineContent = inlineContent,
+                fontSize = fontSize,
+                color = color,
+                lineHeight = lineHeight,
+                style = com.android.purebilibili.core.ui.appParagraphTextStyle(),
+                maxLines = maxLines,
+                onTextLayout = {
+                    textLayoutResult = it
+                    onPreviewTextLayout(it)
+                },
+                modifier = textModifier.then(previewModifier)
+            )
+        }
     }
 
     if (selectionEnabled) {
@@ -2992,16 +3134,14 @@ internal fun ReplyMemberAvatar(
     placeholderColor: Color,
     lightweightMode: Boolean,
     modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null
+    onClick: () -> Unit,
 ) {
     val pendantImageUrl = remember(member) { resolveReplyMemberPendantImage(member) }
     val displayFace = member.avatar
     val hasPendant = !pendantImageUrl.isNullOrBlank()
     val faceFraction = resolveReplyAvatarFaceFraction(hasPendant)
     Box(
-        modifier = modifier.then(
-            if (onClick != null) Modifier.appActionClickable(onClick = onClick) else Modifier
-        ),
+        modifier = modifier.appActionClickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         // Face first (under), slightly smaller when a frame is present.

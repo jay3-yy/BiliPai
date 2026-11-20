@@ -105,6 +105,8 @@ fun SplashWallpaperPickerSheet(
         )
     val initialSplashTabletBias by viewModel.getSplashAlignment(true).collectAsStateWithLifecycle(initialValue = 0f
         )
+    val initialSplashMobileScale by viewModel.getSplashScale(false).collectAsStateWithLifecycle(initialValue = 1f)
+    val initialSplashTabletScale by viewModel.getSplashScale(true).collectAsStateWithLifecycle(initialValue = 1f)
     val customWallpaperPickerLauncher = rememberLauncherForActivityResult(
         contract = PickGalleryVisualMedia()
     ) { uri ->
@@ -406,15 +408,19 @@ fun SplashWallpaperPickerSheet(
                             imageUri = normalizeSplashWallpaperUrl(selectedUrl),
                             initialMobileBias = initialSplashMobileBias,
                             initialTabletBias = initialSplashTabletBias,
+                            initialMobileScale = initialSplashMobileScale,
+                            initialTabletScale = initialSplashTabletScale,
                             onDismiss = { showSplashAdjustmentSheet = false },
-                            onSave = { mBias, tBias ->
+                            onSave = { mBias, tBias, mScale, tScale ->
                                 showSplashAdjustmentSheet = false
                                 selectedUrl?.let { url ->
                                     if (isUserSelectedSplashWallpaperUri(url)) {
                                         viewModel.setCustomSplashWallpaper(
                                             uri = url,
                                             mobileBias = mBias,
-                                            tabletBias = tBias
+                                            tabletBias = tBias,
+                                            mobileScale = mScale,
+                                            tabletScale = tScale
                                         ) {
                                             onDismiss()
                                             Toast.makeText(context, "自定义壁纸设置成功", Toast.LENGTH_SHORT).show()
@@ -424,7 +430,9 @@ fun SplashWallpaperPickerSheet(
                                             url = url,
                                             saveToGallery = saveToGallery,
                                             mobileBias = mBias,
-                                            tabletBias = tBias
+                                            tabletBias = tBias,
+                                            mobileScale = mScale,
+                                            tabletScale = tScale
                                         ) {
                                             onDismiss()
                                             Toast.makeText(context, "开屏壁纸设置成功", Toast.LENGTH_SHORT).show()

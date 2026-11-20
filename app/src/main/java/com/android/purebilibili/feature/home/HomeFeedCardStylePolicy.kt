@@ -49,6 +49,7 @@ internal fun resolveHomeFeedCardLayout(
     style: HomeFeedCardStyle,
     gridColumns: Int = 2,
     widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact,
+    nativeMiuix: Boolean = false,
 ): HomeFeedCardLayout {
     val coverAspectRatio = resolveHomeFeedCoverAspectRatio(
         style = style,
@@ -60,34 +61,18 @@ internal fun resolveHomeFeedCardLayout(
         gridColumns = gridColumns,
         widthSizeClass = widthSizeClass,
     )
-    return when (style) {
-        HomeFeedCardStyle.CURRENT -> HomeFeedCardLayout(
-            coverAspectRatio = coverAspectRatio,
-            outerPaddingDp = 6,
-            itemSpacingDp = 6,
-            verticalItemSpacingDp = 6,
-            storyCardHorizontalPaddingDp = 16,
-            density = density,
-        )
-
-        HomeFeedCardStyle.OFFICIAL -> HomeFeedCardLayout(
-            coverAspectRatio = coverAspectRatio,
-            // 统一 6dp 卡间距，垂直与水平一致，卡片墙更紧凑。
-            outerPaddingDp = 6,
-            itemSpacingDp = 6,
-            verticalItemSpacingDp = 6,
-            storyCardHorizontalPaddingDp = 0,
-            density = density,
-        )
-
-        HomeFeedCardStyle.BILIPAI -> HomeFeedCardLayout(
-            // 间距对齐 BiliPai Style.cardSpace / safeSpace 系：6dp 卡间距
-            coverAspectRatio = coverAspectRatio,
-            outerPaddingDp = 6,
-            itemSpacingDp = 6,
-            verticalItemSpacingDp = 6,
-            storyCardHorizontalPaddingDp = 8,
-            density = density,
-        )
-    }
+    // 网格采用应用的 4dp 间距刻度。原生 Miuix 的外边距和卡间距统一，
+    // 其他样式保留既有紧凑网格。
+    val gridSpacingDp = if (nativeMiuix) 8 else 6
+    return HomeFeedCardLayout(
+        coverAspectRatio = coverAspectRatio,
+        outerPaddingDp = gridSpacingDp,
+        itemSpacingDp = gridSpacingDp,
+        storyCardHorizontalPaddingDp = when (style) {
+            HomeFeedCardStyle.CURRENT -> 16
+            HomeFeedCardStyle.OFFICIAL -> 0
+            HomeFeedCardStyle.BILIPAI -> 8
+        },
+        density = density,
+    )
 }

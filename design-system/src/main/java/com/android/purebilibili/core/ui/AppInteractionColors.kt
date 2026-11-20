@@ -5,8 +5,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import com.android.purebilibili.core.theme.AdaptiveAccentColors
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.theme.resolveTintedSelectionAccentColors
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -30,25 +36,51 @@ data class AppNavigationStateColors(
 @Immutable
 data class AppActionStateColors(val container: Color, val content: Color)
 
-/** 仅统一非玻璃 Miuix 的语义。返回 null 时，调用方保留原有玻璃、MD3 和显式皮肤分支。 */
+/** 主题组件共享的交互色。 */
 object AppInteractionColors {
+    /** 原生 MD3 的胶囊标签和底栏共用基于页面底色的主色选中态。 */
+    @Composable
+    fun rememberMaterialNavigationSelection(): AdaptiveAccentColors {
+        val accent = AppContentColors.accent()
+        val surface = AppSurfaceTokens.chromeBackground()
+        return remember(accent, surface) { resolveTintedSelectionAccentColors(accent, surface) }
+    }
+
+    /** 内容选中态在两种材质下使用相同的容器及前景。 */
+    @Composable
+    @ReadOnlyComposable
+    fun miuixContentSelection(): AdaptiveAccentColors? {
+        if (LocalAppUiStyle.current != AppUiStyle.MIUIX) return null
+        val scheme = MiuixTheme.colorScheme
+        return AdaptiveAccentColors(scheme.primaryContainer, scheme.onPrimaryContainer)
+    }
+
     @Composable
     fun nativeNavigation(role: AppNavigationColorRole = AppNavigationColorRole.TABS): AppNavigationStateColors? {
         if (!nativeInteractionColorsEnabled()) return null
         val scheme = MiuixTheme.colorScheme
         return when (role) {
             AppNavigationColorRole.TABS -> AppNavigationStateColors(
-                selectedContainer = scheme.surfaceContainer,
-                selectedContent = scheme.onBackground,
+                selectedContainer = scheme.primaryContainer,
+                selectedContent = scheme.onPrimaryContainer,
                 unselectedContent = scheme.onSurfaceVariantSummary,
             )
             AppNavigationColorRole.BAR -> AppNavigationStateColors(
-                selectedContainer = Color.Transparent,
+                selectedContainer = miuixNavigationBarIndicatorColor(),
                 selectedContent = scheme.onSurfaceContainer,
                 unselectedContent = scheme.onSurfaceContainer.copy(alpha = 0.4f),
             )
         }
     }
+
+    @Composable
+    @ReadOnlyComposable
+    fun miuixNavigationBarIndicatorColor(): Color =
+        if (MiuixTheme.colorScheme.onSurfaceContainer.luminance() > 0.5f) {
+            Color.White.copy(alpha = 0.13f)
+        } else {
+            Color.Black.copy(alpha = 0.075f)
+        }
 
     /** 关注、已关注及个人资料编辑均为中性关系操作；状态由文案表达，禁用态沿用原生配色。 */
     @Suppress("UNUSED_PARAMETER")

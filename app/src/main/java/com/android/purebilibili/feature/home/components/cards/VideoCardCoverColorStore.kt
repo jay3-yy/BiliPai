@@ -2,7 +2,6 @@ package com.android.purebilibili.feature.home.components.cards
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Color as AndroidColor
 import android.util.LruCache
 import androidx.compose.ui.graphics.Color
 import androidx.palette.graphics.Palette
@@ -15,6 +14,8 @@ import coil3.request.allowHardware
 import coil3.request.allowRgb565
 import coil3.size.Precision
 import coil3.size.Scale
+import com.materialkolor.hct.Hct
+import kotlin.math.abs
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -179,17 +180,37 @@ object VideoCardCoverColorStore {
         }.getOrNull()
     }
 
-    /** Select the largest useful color; saturated color wins only when it covers area. */
+    /** 相近色相合计面积，避免大片低饱和画面被一小片彩色字幕或角标染色。 */
     internal fun resolveRepresentativeSwatch(
         swatches: List<Palette.Swatch>,
     ): Palette.Swatch? {
-        if (swatches.isEmpty()) return null
-        val useful = swatches.filterNot { swatch ->
-            val hsv = FloatArray(3)
-            AndroidColor.colorToHSV(swatch.rgb, hsv)
-            hsv[1] < 0.08f || hsv[2] < 0.08f || hsv[2] > 0.96f
+        val dominant = swatches.maxByOrNull { it.population } ?: return null
+        val minimumColorPopulation = swatches.sumOf { it.population } * 0.20
+        var neutral: Palette.Swatch? = null
+        val colorful = swatches.mapNotNull { swatch ->
+            val color = Hct.fromInt(swatch.rgb)
+            if (color.chroma < 12.0) {
+                if (swatch.population > (neutral?.population ?: 0)) neutral = swatch
+                null
+            } else if (color.tone in 12.0..94.0) {
+                swatch to color.hue
+            } else null
         }
-        return (useful.ifEmpty { swatches }).maxByOrNull { it.population }
+        var best = neutral ?: dominant
+        var bestPopulation = 0
+        for ((swatch, hue) in colorful) {
+            val population = colorful.sumOf { (neighbor, neighborHue) ->
+                val distance = abs(hue - neighborHue)
+                if (minOf(distance, 360.0 - distance) <= 24.0) neighbor.population else 0
+            }
+            if (population >= minimumColorPopulation &&
+                (population > bestPopulation || (population == bestPopulation && swatch.population > best.population))
+            ) {
+                best = swatch
+                bestPopulation = population
+            }
+        }
+        return best
     }
 
     fun trimToSize(maxSize: Int) {

@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.message.feed
 
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
+import com.android.purebilibili.core.ui.components.appActionClickable
+
 import com.android.purebilibili.core.ui.AppContentColors
 
 import androidx.compose.foundation.background
@@ -166,6 +170,17 @@ internal fun MessageFeedAvatar(
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentScale = ContentScale.Crop
+    )
+}
+
+@Composable
+internal fun MessageFeedUserAvatar(avatarUrl: String, mid: Long?, onClick: () -> Unit) {
+    val control = mid?.takeIf { it > 0L }?.let {
+        rememberSystemWindowNavigationControl(BiliPaiNavKey.Space(it), CircleShape, onClick)
+    }
+    MessageFeedAvatar(
+        avatarUrl = avatarUrl,
+        modifier = if (control == null) Modifier else control.modifier.appActionClickable(onClick = control.onClick),
     )
 }
 

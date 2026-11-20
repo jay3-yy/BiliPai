@@ -26,24 +26,11 @@ class UpPreviewSheetPolicyTest {
     }
 
     @Test
-    fun statLine_formatsCountsAndSkipsNulls() {
-        assertEquals(
-            "1.5万粉丝  128投稿  6.1万获赞",
-            resolveUpPreviewStatLine(
-                followerCount = 15_291,
-                videoCount = 128,
-                likeCount = 61_000,
-            )
-        )
-        assertEquals(
-            "999粉丝",
-            resolveUpPreviewStatLine(
-                followerCount = 999,
-                videoCount = null,
-                likeCount = null,
-            )
-        )
-        assertEquals("", resolveUpPreviewStatLine(null, null, null))
+    fun statValue_formatsCountsAndDistinguishesUnknownFromZero() {
+        assertEquals("1.5万", formatUpPreviewStat(15_291))
+        assertEquals("128", formatUpPreviewStat(128))
+        assertEquals("0", formatUpPreviewStat(0))
+        assertEquals("—", formatUpPreviewStat(null))
     }
 
     @Test

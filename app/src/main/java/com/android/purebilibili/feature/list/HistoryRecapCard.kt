@@ -26,8 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
@@ -136,7 +138,7 @@ private fun HistoryRecapCardContent(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     AppText(
-                        "我的回顾",
+                        stringResource(R.string.history_activity_stats),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
@@ -145,7 +147,7 @@ private fun HistoryRecapCardContent(
                         onClick = { onExpandedChange(!expanded) },
                         modifier = Modifier
                             .heightIn(min = 48.dp)
-                            .semantics { stateDescription = if (expanded) "回顾详情已展开" else "回顾详情已收起" },
+                            .semantics { stateDescription = if (expanded) "统计详情已展开" else "统计详情已收起" },
                     ) {
                         AppText(if (expanded) "收起" else "展开")
                         Spacer(Modifier.width(4.dp))

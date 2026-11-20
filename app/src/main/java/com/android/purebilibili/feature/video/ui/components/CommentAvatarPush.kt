@@ -12,6 +12,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -81,19 +83,22 @@ internal fun PushingReplyMemberAvatar(
     modifier: Modifier = Modifier,
     contentHeightPxProvider: (() -> Int)? = null,
     allowNeighborContact: Boolean = true,
+    onClickAtHeader: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val density = LocalDensity.current
+    val avatarOffset: Density.() -> IntOffset = {
+        commentAvatarPushPlacement(listState, itemKey, 10.dp, 1.dp, contentHeightPxProvider, allowNeighborContact)
+    }
     ReplyMemberAvatar(
         member = member,
         placeholderColor = placeholderColor,
         lightweightMode = lightweightMode,
-        modifier = modifier.commentAvatarPushOffset(
-            listState = listState,
-            itemKey = itemKey,
-            contentHeightPxProvider = contentHeightPxProvider,
-            allowNeighborContact = allowNeighborContact,
-        ),
-        onClick = onClick,
+        modifier = modifier.offset(avatarOffset),
+        onClick = {
+            // 头像已经离开作者栏时，普通导航保留这次点击，避免只缩回静止的文字。
+            if (avatarOffset(density).y == 0) onClickAtHeader() else onClick()
+        },
     )
 }
 
@@ -106,6 +111,17 @@ internal fun Modifier.commentAvatarPushOffset(
     contentHeightPxProvider: (() -> Int)? = null,
     allowNeighborContact: Boolean = true,
 ): Modifier = offset {
+    commentAvatarPushPlacement(listState, itemKey, topInset, bottomInset, contentHeightPxProvider, allowNeighborContact)
+}
+
+private fun Density.commentAvatarPushPlacement(
+    listState: LazyListState,
+    itemKey: Any,
+    topInset: Dp,
+    bottomInset: Dp,
+    contentHeightPxProvider: (() -> Int)?,
+    allowNeighborContact: Boolean,
+): IntOffset {
     val layout = listState.layoutInfo
     val item = layout.visibleItemsInfo.firstOrNull { it.key == itemKey }
     val offset = if (item == null || layout.reverseLayout) {
@@ -132,7 +148,7 @@ internal fun Modifier.commentAvatarPushOffset(
             imageBottomOffsetPx = 44.dp.roundToPx(),
         )
     }
-    IntOffset(0, offset)
+    return IntOffset(0, offset)
 }
 
 @Composable

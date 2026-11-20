@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.profile
 
-import com.android.purebilibili.core.ui.components.notifyAppScrollToTop
-import com.android.purebilibili.core.ui.components.rememberAppScrollToTopFeedbackModifier
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
 import com.android.purebilibili.core.util.animateScrollToTop
 
 import com.android.purebilibili.core.util.responsiveContentWidth
@@ -35,6 +34,7 @@ import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -44,6 +44,8 @@ import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -94,6 +96,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -102,6 +105,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.transition.LocalDynamicImagePreviewTextVisible
+import com.android.purebilibili.core.ui.rememberNativeCardContainerTransition
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.Lifecycle
@@ -744,7 +748,7 @@ private fun ProfileScreenContent(
                                     }
                                 },
                                 actions = {
-                                    AppIconButton(onClick = onSettingsClick) {
+                                    ProfileNavigationIconButton(BiliPaiNavKey.Settings, onSettingsClick) {
                                         AppIcon(rememberAppSettingsIcon(), contentDescription = "Settings")
                                     }
                                 },
@@ -1549,7 +1553,6 @@ private fun ProfileSpaceContent(
                 Column(
                     modifier = Modifier
                         .widthIn(min = 300.dp, max = 360.dp)
-                        .then(rememberAppScrollToTopFeedbackModifier(tabletRailScrollState))
                         .verticalScroll(tabletRailScrollState),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -2060,10 +2063,10 @@ private fun ProfileTopActions(
     AppIconButton(onClick = { showQrAuthorization = true }) {
         AppIcon(Icons.Rounded.QrCodeScanner, contentDescription = "扫码授权登录", tint = tint)
     }
-    AppIconButton(onClick = onSearchClick) {
+    ProfileNavigationIconButton(BiliPaiNavKey.Search(), onSearchClick) {
         AppIcon(Icons.Rounded.Search, contentDescription = "搜索", tint = tint)
     }
-    AppIconButton(onClick = onInboxClick) {
+    ProfileNavigationIconButton(BiliPaiNavKey.Inbox, onInboxClick) {
         AppIcon(rememberAppInboxIcon(), contentDescription = "消息", tint = tint)
     }
     if (!compact) {
@@ -2080,7 +2083,7 @@ private fun ProfileTopActions(
         AppIconButton(onClick = onThemeClick) {
             AppIcon(Icons.Rounded.DarkMode, contentDescription = "切换主题", tint = tint)
         }
-        AppIconButton(onClick = onSettingsClick) {
+        ProfileNavigationIconButton(BiliPaiNavKey.Settings, onSettingsClick) {
             AppIcon(rememberAppSettingsIcon(), contentDescription = "设置", tint = tint)
         }
     } else {
@@ -2116,6 +2119,23 @@ private fun ProfileTopActions(
 }
 
 @Composable
+private fun ProfileNavigationIconButton(
+    target: BiliPaiNavKey,
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val control = rememberSystemWindowNavigationControl(target, CircleShape, onClick)
+    AppIconButton(onClick = control.onClick, modifier = control.modifier, content = content)
+}
+
+private data class ProfileQuickAccess(
+    val label: String,
+    val icon: ImageVector,
+    val target: BiliPaiNavKey,
+    val action: () -> Unit,
+)
+
+@Composable
 private fun ProfileQuickAccessDashboard(
     favoriteFolderShortcuts: List<ProfileFavoriteFolderShortcut>,
     onDownloadClick: () -> Unit,
@@ -2125,12 +2145,12 @@ private fun ProfileQuickAccessDashboard(
     onFavoriteClick: () -> Unit,
     onFavoriteFolderClick: (Long, Long, String) -> Unit,
     contentColor: Color,
-) {
+) = NavigationControlMotionGroup {
     val shortcuts = listOf(
-        Triple("离线缓存", rememberAppDownloadIcon(), onDownloadClick),
-        Triple("历史", rememberAppHistoryIcon(), onHistoryClick),
-        Triple("订阅", rememberAppBookmarkIcon(), onSubscriptionClick),
-        Triple("稍后再看", rememberAppWatchLaterIcon(), onWatchLaterClick),
+        ProfileQuickAccess("离线缓存", rememberAppDownloadIcon(), BiliPaiNavKey.DownloadList, onDownloadClick),
+        ProfileQuickAccess("历史", rememberAppHistoryIcon(), BiliPaiNavKey.History, onHistoryClick),
+        ProfileQuickAccess("订阅", rememberAppBookmarkIcon(), BiliPaiNavKey.FavoriteSubscribed, onSubscriptionClick),
+        ProfileQuickAccess("稍后再看", rememberAppWatchLaterIcon(), BiliPaiNavKey.WatchLater, onWatchLaterClick),
     )
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
@@ -2140,11 +2160,13 @@ private fun ProfileQuickAccessDashboard(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            shortcuts.forEach { (label, icon, action) ->
+            shortcuts.forEach { (label, icon, target, action) ->
+                val shape = AppShapes.container(ContainerLevel.Card)
+                val control = rememberSystemWindowNavigationControl(target, shape, action)
                 AppSurface(
-                    onClick = action,
-                    modifier = Modifier.weight(1f).heightIn(min = 72.dp),
-                    shape = AppShapes.container(ContainerLevel.Card),
+                    onClick = control.onClick,
+                    modifier = Modifier.weight(1f).heightIn(min = 72.dp).then(control.modifier),
+                    shape = shape,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
                 ) {
                     Column(
@@ -2305,7 +2327,7 @@ private fun ProfileSpaceHeader(
     onDynamicsClick: () -> Unit,
     modifier: Modifier = Modifier,
     showIdentity: Boolean = true,
-) {
+) = NavigationControlMotionGroup {
     val openLedger = LocalProfileLedgerNavigation.current
     val textColor = heroChrome.textColor
     val secondaryColor = heroChrome.secondaryTextColor
@@ -2370,8 +2392,11 @@ private fun ProfileSpaceHeader(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ProfileSpaceStat("动态", user.dynamic, textColor, onClick = onDynamicsClick)
-            ProfileSpaceStat("关注", user.following, textColor, onClick = onFollowingClick)
-            ProfileSpaceStat("粉丝", user.follower, textColor, onClick = onFansClick)
+            val statShape = AppShapes.container(ContainerLevel.Card)
+            val following = rememberSystemWindowNavigationControl(BiliPaiNavKey.Following(user.mid), statShape, onFollowingClick)
+            val fans = rememberSystemWindowNavigationControl(BiliPaiNavKey.Following(user.mid, fans = true), statShape, onFansClick)
+            ProfileSpaceStat("关注", user.following, textColor, onClick = following.onClick, modifier = following.modifier)
+            ProfileSpaceStat("粉丝", user.follower, textColor, onClick = fans.onClick, modifier = fans.modifier)
             val identityMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
                 !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
             val identityArrowRotation = androidx.compose.animation.core.animateFloatAsState(
@@ -2876,22 +2901,42 @@ private fun ProfileBangumiStrip(
     onBangumiClick: (Long, Long) -> Unit,
     contentChrome: ProfileContentChrome
 ) {
+    val moreControl = rememberSystemWindowNavigationControl(
+        target = BiliPaiNavKey.Bangumi(initialType = 1),
+        shape = ButtonDefaults.textShape,
+        onClick = onMoreClick,
+    )
     ProfileSpaceSection(
         title = "追番",
         count = count,
-        onMoreClick = onMoreClick,
-        textColor = contentChrome.onSurfaceColor
+        onMoreClick = moreControl.onClick,
+        textColor = contentChrome.onSurfaceColor,
+        moreModifier = moreControl.modifier,
     ) {
         items.take(8).forEach { item ->
-            ProfileSpacePosterCard(
-                title = item.title,
-                subtitle = item.progress.ifBlank { item.newEp?.indexShow.orEmpty() },
-                imageUrl = item.cover,
-                contentChrome = contentChrome,
-                onClick = { onBangumiClick(item.seasonId, item.firstEp) }
-            )
+            key(item.seasonId, item.firstEp) {
+                ProfileBangumiPosterCard(item, contentChrome, onBangumiClick)
+            }
         }
     }
+}
+
+@Composable
+private fun ProfileBangumiPosterCard(
+    item: FollowBangumiItem,
+    contentChrome: ProfileContentChrome,
+    onBangumiClick: (Long, Long) -> Unit,
+) {
+    ProfileSpacePosterCard(
+        title = item.title,
+        subtitle = item.progress.ifBlank { item.newEp?.indexShow.orEmpty() },
+        imageUrl = item.cover,
+        contentChrome = contentChrome,
+        onClick = { onBangumiClick(item.seasonId, item.firstEp) },
+        transitionTarget = if (item.seasonId > 0L || item.firstEp > 0L) {
+            BiliPaiNavKey.BangumiPlayer(seasonId = item.seasonId, epId = item.firstEp)
+        } else null,
+    )
 }
 
 @Composable
@@ -2954,6 +2999,7 @@ private fun ProfileSpaceSection(
     count: Int,
     onMoreClick: () -> Unit,
     textColor: Color = AppContentColors.primaryText(),
+    moreModifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -2970,7 +3016,7 @@ private fun ProfileSpaceSection(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f)
             )
-            AppTextButton(onClick = onMoreClick) {
+            AppTextButton(onClick = onMoreClick, modifier = moreModifier) {
                 AppText(
                     text = "查看更多",
                     fontWeight = FontWeight.Medium
@@ -2994,19 +3040,38 @@ private fun ProfileSpacePosterCard(
     subtitle: String,
     imageUrl: String,
     contentChrome: ProfileContentChrome,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    transitionTarget: BiliPaiNavKey? = null,
 ) {
     val cardTokens = remember { resolveProfileCardTokens() }
     val cardShape = AppShapes.borderedContainer(ContainerLevel.Card)
     val cardWidth = cardTokens.widthDp.dp
     val coverHeight = resolveProfileCardCoverHeightDp(cardTokens).dp
     val cardHeight = resolveProfileCardHeightDp(cardTokens).dp
+    val transition = if (transitionTarget != null) {
+        val density = LocalDensity.current
+        val direction = LocalLayoutDirection.current
+        val cornerRadius = with(density) {
+            AppShapes.transitionCornerRadiusPx(
+                shape = cardShape,
+                size = Size(cardWidth.toPx(), cardHeight.toPx()),
+                layoutDirection = direction,
+                density = density,
+            ).toDp()
+        }
+        rememberNativeCardContainerTransition(
+            target = transitionTarget,
+            onClick = onClick,
+            cornerRadius = cornerRadius,
+        )
+    } else null
     AppSurface(
         modifier = Modifier
             .width(cardWidth)
             .height(cardHeight)
+            .then(transition?.modifier ?: Modifier)
             .clip(cardShape)
-            .clickable(onClick = onClick),
+            .clickable(onClick = transition?.onClick ?: onClick),
         shape = cardShape,
         color = contentChrome.cardMetadataColor,
         border = BorderStroke(0.5.dp, contentChrome.cardBorderColor),
@@ -3103,13 +3168,9 @@ private fun ProfileBangumiList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items.forEach { item ->
-            ProfileSpacePosterCard(
-                title = item.title,
-                subtitle = item.progress.ifBlank { item.newEp?.indexShow.orEmpty() },
-                imageUrl = item.cover,
-                contentChrome = contentChrome,
-                onClick = { onBangumiClick(item.seasonId, item.firstEp) }
-            )
+            key(item.seasonId, item.firstEp) {
+                ProfileBangumiPosterCard(item, contentChrome, onBangumiClick)
+            }
         }
     }
 }
@@ -4316,7 +4377,7 @@ private fun MobileProfileContent(
                 AppIconButton(onClick = { showWallpaperActionSheet = true }) {
                     AppIcon(rememberAppPhotoIcon(), contentDescription = "背景装扮", tint = contentColor)
                 }
-                AppIconButton(onClick = onSettingsClick) {
+                ProfileNavigationIconButton(BiliPaiNavKey.Settings, onSettingsClick) {
                     AppIcon(rememberAppSettingsIcon(), contentDescription = "Settings", tint = contentColor)
                 }
             },
@@ -4365,7 +4426,7 @@ fun GuestProfileContent(
             AppIconButton(onClick = onBack) {
                 AppIcon(rememberAppBackIcon(), contentDescription = "Back", tint = Color.White)
             }
-            AppIconButton(onClick = onSettingsClick) {
+            ProfileNavigationIconButton(BiliPaiNavKey.Settings, onSettingsClick) {
                 AppIcon(rememberAppSettingsIcon(), contentDescription = "Settings", tint = Color.White)
             }
         }
@@ -5016,7 +5077,7 @@ fun ServicesSection(
     isLogin: Boolean = true,
     isTablet: Boolean = false,
     modifier: Modifier = Modifier,
-) {
+) = NavigationControlMotionGroup {
     val accountAction = rememberProfileAccountPopupAction(onAccountManageClick)
     val queryAicu = com.android.purebilibili.feature.aicu.LocalAicuNavigation.current
     val downloadIcon = rememberAppDownloadIcon()
@@ -5091,6 +5152,12 @@ fun ServicesSection(
         }
 
     } else {
+        val serviceShape = AppShapes.container(ContainerLevel.Card)
+        val downloadControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.DownloadList, serviceShape, onDownloadClick)
+        val historyControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.History, serviceShape, onHistoryClick)
+        val favoriteControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.Favorite, serviceShape, onFavoriteClick)
+        val watchLaterControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.WatchLater, serviceShape, onWatchLaterClick)
+        val inboxControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.Inbox, serviceShape, onInboxClick)
         val useImmersiveServiceLayout = borderColor != null || embeddedInPanel
         if (useImmersiveServiceLayout) {
             Column(
@@ -5113,7 +5180,8 @@ fun ServicesSection(
                     ProfileServiceRow(
                         icon = downloadIcon,
                         title = "离线缓存",
-                        onClick = onDownloadClick,
+                        onClick = downloadControl.onClick,
+                        modifier = downloadControl.modifier,
                         iconTint = AppContentColors.accent(),
                         textColor = contentColor,
                     )
@@ -5122,7 +5190,8 @@ fun ServicesSection(
                         ProfileServiceRow(
                             icon = historyIcon,
                             title = "历史记录",
-                            onClick = onHistoryClick,
+                            onClick = historyControl.onClick,
+                            modifier = historyControl.modifier,
                             iconTint = primaryAccent,
                             textColor = contentColor,
                         )
@@ -5132,7 +5201,8 @@ fun ServicesSection(
                         ProfileServiceRow(
                             icon = bookmarkIcon,
                             title = "我的收藏",
-                            onClick = onFavoriteClick,
+                            onClick = favoriteControl.onClick,
+                            modifier = favoriteControl.modifier,
                             iconTint = tertiaryAccent,
                             textColor = contentColor,
                         )
@@ -5151,7 +5221,8 @@ fun ServicesSection(
                     ProfileServiceRow(
                         icon = watchLaterIcon,
                         title = "稍后再看",
-                        onClick = onWatchLaterClick,
+                        onClick = watchLaterControl.onClick,
+                        modifier = watchLaterControl.modifier,
                         iconTint = tertiaryAccent,
                         textColor = contentColor,
                     )
@@ -5159,7 +5230,8 @@ fun ServicesSection(
                     ProfileServiceRow(
                         icon = inboxIcon,
                         title = "消息中心",
-                        onClick = onInboxClick,
+                        onClick = inboxControl.onClick,
+                        modifier = inboxControl.modifier,
                         iconTint = secondaryAccent,
                         textColor = contentColor,
                     )
@@ -5202,7 +5274,8 @@ fun ServicesSection(
                     AppPreference(
                         icon = downloadIcon,
                         title = "离线缓存",
-                        onClick = onDownloadClick,
+                        onClick = downloadControl.onClick,
+                        contentModifier = downloadControl.modifier,
                         iconTint = AppContentColors.accent(),
                         textColor = contentColor
                     )
@@ -5210,7 +5283,8 @@ fun ServicesSection(
                         AppPreference(
                             icon = historyIcon,
                             title = "历史记录",
-                            onClick = onHistoryClick,
+                            onClick = historyControl.onClick,
+                            contentModifier = historyControl.modifier,
                             iconTint = primaryAccent,
                             textColor = contentColor
                         )
@@ -5219,7 +5293,8 @@ fun ServicesSection(
                         AppPreference(
                             icon = bookmarkIcon,
                             title = "我的收藏",
-                            onClick = onFavoriteClick,
+                            onClick = favoriteControl.onClick,
+                            contentModifier = favoriteControl.modifier,
                             iconTint = tertiaryAccent,
                             textColor = contentColor
                         )
@@ -5235,14 +5310,16 @@ fun ServicesSection(
                     AppPreference(
                         icon = watchLaterIcon,
                         title = "稍后再看",
-                        onClick = onWatchLaterClick,
+                        onClick = watchLaterControl.onClick,
+                        contentModifier = watchLaterControl.modifier,
                         iconTint = tertiaryAccent,
                         textColor = contentColor
                     )
                     AppPreference(
                         icon = inboxIcon,
                         title = "消息中心",
-                        onClick = onInboxClick,
+                        onClick = inboxControl.onClick,
+                        contentModifier = inboxControl.modifier,
                         iconTint = secondaryAccent,
                         textColor = contentColor
                     )
@@ -5432,7 +5509,7 @@ private fun ProfileFavoriteFolderShortcutGrid(
     compactHorizontal: Boolean = false,
     onMoreClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
-) {
+) = NavigationControlMotionGroup {
     val folderIcon = rememberAppFolderIcon()
     if (compactHorizontal) {
         Row(
@@ -5461,7 +5538,7 @@ private fun ProfileFavoriteFolderShortcutGrid(
                 )
             }
         }
-        return
+        return@NavigationControlMotionGroup
     }
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -5500,14 +5577,21 @@ private fun ProfileFavoriteFolderShortcutChip(
     compact: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val shape = AppShapes.container(ContainerLevel.Card)
+    val control = rememberSystemWindowNavigationControl(
+        BiliPaiNavKey.SeasonSeriesDetail("favorite", shortcut.mediaId, shortcut.ownerMid, shortcut.title),
+        shape,
+        onClick,
+    )
     Row(
         modifier = modifier
             .heightIn(min = if (compact) 42.dp else 48.dp)
-            .clip(AppShapes.container(ContainerLevel.Card))
+            .then(control.modifier)
+            .clip(shape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = if (compact) 0.22f else 0.28f))
             .appGentleActionClickable(
-                shape = AppShapes.container(ContainerLevel.Card),
-                onClick = onClick,
+                shape = shape,
+                onClick = control.onClick,
             )
             .padding(horizontal = if (compact) 9.dp else 10.dp, vertical = if (compact) 7.dp else 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -6053,7 +6137,6 @@ private fun ObserveProfileScrollToTop(
         scrollState?.let { state ->
             if (state.value > 0) {
                 state.animateScrollTo(0)
-                state.notifyAppScrollToTop()
             }
         }
     }

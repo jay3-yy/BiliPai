@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.settings
 import com.android.purebilibili.core.ui.components.appElasticPress
 
-
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -40,6 +38,7 @@ import top.yukonga.miuix.kmp.window.WindowDialog
 internal fun MiuixAppUpdateDialog(
     state: AppUpdateDialogState,
     actions: AppUpdateDialogActions,
+    contentScrollState: ScrollState,
 ) {
     WindowDialog(
         show = true,
@@ -49,8 +48,13 @@ internal fun MiuixAppUpdateDialog(
         com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             MiuixUpdateHeader(state = state, onDismissRequest = actions.onDismissRequest)
-            MiuixUpdateContent(state = state, actions = actions)
-            if (!state.showReleaseNotesOnly) {
+            MiuixUpdateContent(
+                state = state,
+                actions = actions,
+                scrollState = contentScrollState,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (state.showPrimaryAction || state.showSecondaryAction) {
                 MiuixUpdateActions(state = state, actions = actions)
             }
         }
@@ -107,6 +111,7 @@ private fun MiuixUpdateHeader(
 private fun MiuixUpdateContent(
     state: AppUpdateDialogState,
     actions: AppUpdateDialogActions,
+    scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
@@ -125,17 +130,18 @@ private fun MiuixUpdateContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f, fill = false)
                 .heightIn(max = contentMaxHeightDp.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            MiuixVersionCard(state = state)
-            if (!state.showReleaseNotesOnly && state.downloadState.status != AppUpdateDownloadStatus.IDLE) {
+            if (state.downloadState.status != AppUpdateDownloadStatus.IDLE) {
                 MiuixDownloadStatus(state = state.downloadState)
             }
+            MiuixVersionCard(state = state)
             MiuixReleaseNotes(releaseNotes = state.update.releaseNotes)
         }
-        MiuixDownloadChannels(actions = actions)
+        AppUpdateDownloadChannels(state = state, actions = actions)
     }
 }
 
@@ -294,39 +300,6 @@ private fun MiuixReleaseNotes(
 }
 
 @Composable
-private fun MiuixDownloadChannels(
-    actions: AppUpdateDialogActions,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "其他下载渠道",
-            style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onSurfaceSecondary,
-        )
-        Row(
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .widthIn(max = 320.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TextButton(
-                text = "正式版下载",
-                onClick = actions.onOpenRelease,
-                modifier = Modifier.weight(1f).appElasticPress(),
-                minHeight = 48.dp,
-            )
-            TextButton(
-                text = "测试版下载",
-                onClick = actions.onOpenTestRelease,
-                modifier = Modifier.weight(1f).appElasticPress(),
-                minHeight = 48.dp,
-            )
-        }
-    }
-}
-
-@Composable
 private fun MiuixUpdateActions(
     state: AppUpdateDialogState,
     actions: AppUpdateDialogActions,
@@ -336,25 +309,24 @@ private fun MiuixUpdateActions(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (!state.showReleaseNotesOnly) {
+        val isDownloading = state.downloadState.isActiveDownload()
+        if (state.showSecondaryAction) {
             TextButton(
-                text = if (state.downloadState.isActiveDownload()) "取消下载" else "稍后",
-                onClick = if (state.downloadState.isActiveDownload()) {
-                    actions.onCancelDownload
-                } else {
-                    actions.onDismissRequest
-                },
+                text = if (isDownloading) "取消下载" else "稍后",
+                onClick = if (isDownloading) actions.onCancelDownload else actions.onDismissRequest,
                 modifier = Modifier.weight(1f).appElasticPress(),
                 minHeight = 48.dp,
             )
         }
-        TextButton(
-            text = appUpdatePrimaryLabel(state.downloadState, state.hasAsset),
-            onClick = actions.onPrimaryAction,
-            modifier = Modifier.weight(1f).appElasticPress(enabled = !state.downloadState.isActiveDownload()),
-            enabled = !state.downloadState.isActiveDownload(),
-            colors = ButtonDefaults.textButtonColorsPrimary(),
-            minHeight = 48.dp,
-        )
+        if (state.showPrimaryAction) {
+            TextButton(
+                text = appUpdatePrimaryLabel(state.downloadState, state.hasAsset),
+                onClick = actions.onPrimaryAction,
+                modifier = Modifier.weight(1f).appElasticPress(enabled = !isDownloading),
+                enabled = !isDownloading,
+                colors = ButtonDefaults.textButtonColorsPrimary(),
+                minHeight = 48.dp,
+            )
+        }
     }
 }

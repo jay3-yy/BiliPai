@@ -4,6 +4,8 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.UgcEpisode
 import com.android.purebilibili.data.model.response.UgcSeason
 import com.android.purebilibili.data.model.response.UgcSection
+import com.android.purebilibili.feature.video.playback.next.inPublishOrder
+import com.android.purebilibili.feature.video.playback.next.publishTimestamp
 
 enum class CollectionSortMode(val label: String) {
     ASCENDING("正序"),
@@ -61,8 +63,8 @@ internal fun sortCollectionEpisodes(
     currentCid: Long
 ): List<UgcEpisode> {
     return when (sortMode) {
-        CollectionSortMode.ASCENDING -> episodes
-        CollectionSortMode.DESCENDING -> episodes.asReversed()
+        CollectionSortMode.ASCENDING -> episodes.inPublishOrder()
+        CollectionSortMode.DESCENDING -> episodes.inPublishOrder().asReversed()
         CollectionSortMode.RECENT -> {
             val currentIndex = resolveCurrentUgcEpisodeIndex(
                 episodes = episodes,
@@ -118,10 +120,7 @@ internal fun resolveCollectionEpisodePublishTimeText(
     episode: UgcEpisode,
     nowMs: Long = System.currentTimeMillis()
 ): String {
-    val timestamp = episode.arc?.pubdate
-        ?.takeIf { it > 0L }
-        ?: episode.arc?.ctime?.takeIf { it > 0L }
-        ?: return ""
+    val timestamp = episode.publishTimestamp() ?: return ""
     val formattedTime = FormatUtils.formatPublishTime(
         timestampSeconds = timestamp,
         nowMs = nowMs

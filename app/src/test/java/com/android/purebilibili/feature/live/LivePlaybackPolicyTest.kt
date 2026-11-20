@@ -26,10 +26,14 @@ class LivePlaybackPolicyTest {
     fun `stream preference selects protocol format codec and falls back when missing`() {
         val candidates = listOf(
             LivePlaybackCandidate("http_stream", "flv", "avc", listOf("https://one"), 80, emptyList()),
-            LivePlaybackCandidate("http_hls", "fmp4", "hevc", listOf("https://two"), 80, emptyList()),
+            LivePlaybackCandidate("http_hls", "ts", "avc", listOf("https://two"), 80, emptyList()),
+            LivePlaybackCandidate("http_hls", "fmp4", "avc", listOf("https://three"), 80, emptyList()),
+            LivePlaybackCandidate("http_hls", "fmp4", "hevc", listOf("https://four"), 80, emptyList()),
         )
-        assertEquals(1, resolveLivePreferredCandidateIndex(candidates, "http_hls|fmp4|hevc"))
-        assertEquals(0, resolveLivePreferredCandidateIndex(candidates, "http_hls|ts|avc"))
+        assertEquals(3, resolveLivePreferredCandidateIndex(candidates, "http_hls|fmp4|hevc"))
+        assertEquals(2, resolveLivePreferredCandidateIndex(candidates, "http_hls|fmp4|av1"))
+        assertEquals(1, resolveLivePreferredCandidateIndex(candidates, "http_hls|flv|avc"))
+        assertEquals(0, resolveLivePreferredCandidateIndex(candidates, "rtmp|flv|avc"))
         assertEquals(0, resolveLivePreferredCandidateIndex(candidates, null))
         assertEquals(0, resolveLivePreferredCandidateIndex(candidates, "invalid"))
     }

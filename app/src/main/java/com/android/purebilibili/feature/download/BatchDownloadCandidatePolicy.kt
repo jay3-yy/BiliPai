@@ -18,6 +18,7 @@ internal data class BatchDownloadCandidate(
     val isVerticalVideo: Boolean = false,
     val selected: Boolean,
     val aid: Long = 0L,
+    val ownerFace: String = "",
 )
 
 internal fun resolveBatchDownloadCandidates(

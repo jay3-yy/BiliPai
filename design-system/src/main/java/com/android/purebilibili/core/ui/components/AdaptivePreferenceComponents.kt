@@ -47,7 +47,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,6 +84,7 @@ import top.yukonga.miuix.kmp.icon.basic.Search as NativeSearch
 import top.yukonga.miuix.kmp.basic.TextField as MiuixTextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults as MiuixTextFieldDefaults
 import top.yukonga.miuix.kmp.squircle.squircleBorder
+import top.yukonga.miuix.kmp.squircle.squircleSurface
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -217,8 +217,8 @@ internal fun resolveAdaptiveListRowVisualSpec(
             insideHorizontalPaddingDp = 16,
             insideVerticalPaddingDp = 16,
             trailingIconSizeDp = 14,
-            trailingSpacingDp = 6,
-            minTouchTargetHeightDp = AppChromeSizeTokens.CompactRowMinHeightDp
+            trailingSpacingDp = AppChromeSizeTokens.MiuixPreferenceActionGapDp,
+            minTouchTargetHeightDp = AppChromeSizeTokens.MiuixPreferenceRowMinHeightDp
         )
     } else {
         AdaptiveListRowVisualSpec(
@@ -543,6 +543,7 @@ fun AdaptivePreferenceGroupRenderer(
     shape: androidx.compose.ui.graphics.Shape? = null,
     border: androidx.compose.foundation.BorderStroke? = null,
     presentation: AppPreferenceGroupPresentation = AppPreferenceGroupPresentation.CARD,
+    segment: AppPreferenceGroupSegment = AppPreferenceGroupSegment.WHOLE,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val resolvedPresentation = if (
@@ -563,6 +564,34 @@ fun AdaptivePreferenceGroupRenderer(
     val defaultShape = RoundedCornerShape(visualSpec.groupCornerRadiusDp.dp)
     val appliedShape = shape ?: defaultShape
     val resolvedContainerColor = adaptivePreferenceGroupContainerColor()
+
+    if (segment != AppPreferenceGroupSegment.WHOLE) {
+        // 连续的懒列表分组只在首尾裁切圆角，中间段保留原有边距和容器色。
+        val radius = visualSpec.groupCornerRadiusDp.dp
+        val top = if (segment == AppPreferenceGroupSegment.FIRST) radius else 0.dp
+        val bottom = if (segment == AppPreferenceGroupSegment.LAST) radius else 0.dp
+        val segmentSurface = when {
+            top == 0.dp && bottom == 0.dp -> Modifier.background(resolvedContainerColor)
+            uiStyle == AppUiStyle.MIUIX -> Modifier.squircleSurface(
+                color = resolvedContainerColor,
+                topStart = top,
+                topEnd = top,
+                bottomEnd = bottom,
+                bottomStart = bottom,
+            )
+            else -> Modifier
+                .clip(RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom))
+                .background(resolvedContainerColor)
+        }
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = if (uiStyle == AppUiStyle.MIUIX) 16.dp else 12.dp)
+                .then(segmentSurface),
+            content = content,
+        )
+        return
+    }
 
     if (uiStyle == AppUiStyle.MIUIX) {
         MiuixCard(
@@ -902,9 +931,9 @@ private fun Md3NativeListItemContent(
     iconContainerSize: Dp,
     iconGlyphSize: Dp,
     iconCornerRadius: Dp,
+    contentModifier: Modifier,
 ) {
-    val haptic = LocalHapticFeedback.current
-    val hapticsEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
+    val feedbackClick = appActionWithFeedback { onClick?.invoke() }
     androidx.compose.material3.ListItem(
         headlineContent = {
             Text(
@@ -982,12 +1011,8 @@ private fun Md3NativeListItemContent(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = minTouchHeight.dp)
-            .clickable(enabled = onClick != null) {
-                if (hapticsEnabled) {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                }
-                onClick?.invoke()
-            },
+            .clickable(enabled = onClick != null, onClick = feedbackClick)
+            .then(contentModifier),
     )
 }
 
@@ -1009,6 +1034,7 @@ internal fun AdaptivePreferenceContent(
     enableCopy: Boolean = false,
     onCopyRequest: ((text: String, label: String?) -> Unit)? = null,
     showChevron: Boolean = true,
+    contentModifier: Modifier = Modifier,
     trailingContent: @Composable (() -> Unit)? = null,
 ) {
     val uiStyle = LocalAppUiStyle.current
@@ -1058,16 +1084,23 @@ internal fun AdaptivePreferenceContent(
             iconContainerSize = visualSpec.iconContainerSizeDp.dp,
             iconGlyphSize = visualSpec.iconGlyphSizeDp.dp,
             iconCornerRadius = iconCornerRadius,
+            contentModifier = contentModifier,
         )
         return
     }
+    // 原生组件在内部添加 clickable。共享入口把同一个点击操作放到内容修饰符之前。
+    val miuixClick = if (contentModifier == Modifier) onClick else null
+    val miuixContentModifier = if (contentModifier != Modifier && onClick != null) {
+        Modifier.clickable(onClick = onClick).then(contentModifier)
+    } else contentModifier
     if (nativeListItem && clickableRenderer == AppClickableItemRenderer.MIUIX_ARROW) {
         MiuixArrowPreference(
+            modifier = miuixContentModifier,
             title = title,
             titleColor = BasicComponentDefaults.titleColor(color = textColor),
             summary = subtitle?.takeIf { it.isNotBlank() },
             summaryColor = BasicComponentDefaults.summaryColor(color = subtitleColor),
-            onClick = onClick,
+            onClick = miuixClick,
             insideMargin = PaddingValues(
                 horizontal = rowSpec.insideHorizontalPaddingDp.dp,
                 vertical = rowSpec.insideVerticalPaddingDp.dp
@@ -1142,18 +1175,13 @@ internal fun AdaptivePreferenceContent(
         return
     }
     if (clickableRenderer == AppClickableItemRenderer.MD3_BASIC) {
-        val haptic = LocalHapticFeedback.current
-        val hapticsEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
+        val feedbackClick = appActionWithFeedback { onClick?.invoke() }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = rowSpec.minTouchTargetHeightDp.dp)
-                .clickable(enabled = onClick != null) {
-                    if (hapticsEnabled) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    }
-                    onClick?.invoke()
-                }
+                .clickable(enabled = onClick != null, onClick = feedbackClick)
+                .then(contentModifier)
                 .padding(
                     horizontal = rowSpec.insideHorizontalPaddingDp.dp,
                     vertical = rowSpec.insideVerticalPaddingDp.dp
@@ -1246,10 +1274,11 @@ internal fun AdaptivePreferenceContent(
         BasicComponent(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = rowSpec.minTouchTargetHeightDp.dp),
+                .heightIn(min = rowSpec.minTouchTargetHeightDp.dp)
+                .then(miuixContentModifier),
             title = title,
             summary = subtitle,
-            onClick = onClick,
+            onClick = miuixClick,
             insideMargin = PaddingValues(
                 horizontal = rowSpec.insideHorizontalPaddingDp.dp,
                 vertical = rowSpec.insideVerticalPaddingDp.dp
@@ -1336,6 +1365,7 @@ internal fun AdaptivePreferenceContent(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = onClick != null) { onClick?.invoke() }
+            .then(contentModifier)
             .padding(horizontal = rowSpec.insideHorizontalPaddingDp.dp, vertical = rowSpec.insideVerticalPaddingDp.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start
@@ -1658,49 +1688,53 @@ fun AdaptiveTextFieldRenderer(
         val nativeError = isMiuixNonGlassEnabled() && isError
         val errorColor = AppContentColors.error()
         Column(modifier = modifier.fillMaxWidth()) {
-            MiuixTextField(
-                value = value,
-                onValueChange = onValueChange,
-                // 原生输入框本身只在聚焦时绘制边框，错误态额外保留失焦后的轮廓。
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (nativeError) Modifier.squircleBorder(
-                        width = 2.dp,
-                        color = errorColor,
-                        cornerRadius = MiuixTextFieldDefaults.CornerRadius,
-                    ) else Modifier),
-                label = label ?: placeholder.orEmpty(),
-                useLabelAsPlaceholder = label == null,
-                keyboardOptions = keyboardOptions,
-                singleLine = singleLine,
-                minLines = minLines,
-                maxLines = maxLines,
-                colors = MiuixTextFieldDefaults.textFieldColors(
-                    labelColor = if (nativeError) errorColor else MiuixTheme.colorScheme.onSecondaryContainer,
-                    borderColor = if (isError) {
-                        errorColor
-                    } else {
-                        MiuixTheme.colorScheme.primary
-                    },
-                ),
-            )
+            com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                MiuixTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    // 原生输入框本身只在聚焦时绘制边框，错误态额外保留失焦后的轮廓。
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (nativeError) Modifier.squircleBorder(
+                            width = 2.dp,
+                            color = errorColor,
+                            cornerRadius = MiuixTextFieldDefaults.CornerRadius,
+                        ) else Modifier),
+                    label = label ?: placeholder.orEmpty(),
+                    useLabelAsPlaceholder = label == null,
+                    keyboardOptions = keyboardOptions,
+                    singleLine = singleLine,
+                    minLines = minLines,
+                    maxLines = maxLines,
+                    colors = MiuixTextFieldDefaults.textFieldColors(
+                        labelColor = if (nativeError) errorColor else MiuixTheme.colorScheme.onSecondaryContainer,
+                        borderColor = if (isError) {
+                            errorColor
+                        } else {
+                            MiuixTheme.colorScheme.primary
+                        },
+                    ),
+                )
+            }
             supportingText?.invoke()
         }
         return
     }
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier.fillMaxWidth(),
-        label = label?.let { { Text(it) } },
-        placeholder = placeholder?.let { { Text(it) } },
-        keyboardOptions = keyboardOptions,
-        singleLine = singleLine,
-        minLines = minLines,
-        maxLines = maxLines,
-        isError = isError,
-        supportingText = supportingText
-    )
+    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = modifier.fillMaxWidth(),
+            label = label?.let { { Text(it) } },
+            placeholder = placeholder?.let { { Text(it) } },
+            keyboardOptions = keyboardOptions,
+            singleLine = singleLine,
+            minLines = minLines,
+            maxLines = maxLines,
+            isError = isError,
+            supportingText = supportingText
+        )
+    }
 }
 
 @Composable

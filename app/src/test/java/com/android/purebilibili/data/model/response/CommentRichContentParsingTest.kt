@@ -62,7 +62,8 @@ class CommentRichContentParsingTest {
                         "https://b23.tv/demo": {
                           "title": "UP主空间",
                           "appUrlSchema": "bilibili://space/495695169",
-                          "prefixIcon": "https://example.com/icon.png"
+                          "prefixIcon": "https://example.com/icon.png",
+                          "pc_url": "//space.bilibili.com/495695169"
                         }
                       }
                     }
@@ -101,5 +102,6 @@ class CommentRichContentParsingTest {
         assertEquals("UP主空间", url.title)
         assertEquals("bilibili://space/495695169", url.appUrlSchema)
         assertEquals("https://example.com/icon.png", url.prefixIcon)
+        assertEquals("//space.bilibili.com/495695169", url.url)
     }
 }

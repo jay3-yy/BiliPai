@@ -37,11 +37,11 @@ internal fun resolvePlayerProgressSnapshot(
     )
 }
 
-/** 播放时定时采样；暂停后只等待 seek、缓冲、结束等播放器事件。 */
+/** 有采样间隔时随播放定时取样，其他时间等待播放器事件。 */
 internal suspend fun observeVideoPlayerProgress(
     player: Player,
     videoDuration: Long,
-    pollingIntervalMs: Long,
+    pollingIntervalMs: Long?,
     pollWhilePaused: Boolean = false,
     onProgress: (PlayerProgress) -> Unit,
 ) {
@@ -62,7 +62,7 @@ internal suspend fun observeVideoPlayerProgress(
                     playbackState = player.playbackState,
                 )
             )
-            if (player.isPlaying || pollWhilePaused) {
+            if (pollingIntervalMs != null && (player.isPlaying || pollWhilePaused)) {
                 withTimeoutOrNull(pollingIntervalMs) { events.receive() }
             } else {
                 events.receive()

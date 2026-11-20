@@ -41,6 +41,7 @@ data class AppWindowAction(
     val enabled: Boolean = true,
     val selected: Boolean = false,
     val children: List<AppWindowAction> = emptyList(),
+    val iconContent: (@Composable (Modifier) -> Unit)? = null,
 )
 
 /** 玻璃菜单将分级选项放入同一个面板，避免切换子级时重新测量材质外壳。 */
@@ -49,7 +50,13 @@ internal fun flattenGlassWindowActionGroups(groups: List<List<AppWindowAction>>)
         if (action.children.isEmpty()) {
             target += action
         } else {
-            target += AppWindowAction(label = action.label, icon = action.icon, iconTint = action.iconTint, enabled = false)
+            target += AppWindowAction(
+                label = action.label,
+                icon = action.icon,
+                iconTint = action.iconTint,
+                enabled = false,
+                iconContent = action.iconContent,
+            )
             action.children.forEach { child ->
                 appendAction(target, if (action.enabled) child else child.copy(enabled = false))
             }
@@ -82,8 +89,9 @@ fun AppWindowActionMenu(
     content: @Composable () -> Unit,
 ) {
     // 原生窗口菜单统一使用菜单条目与级联布局；紧凑列表仅用于其他材质。
+    val glassMenuAvailable = appGlassMenuAvailable()
     val nativeMenu = LocalAppUiStyle.current == AppUiStyle.MIUIX &&
-        LocalAppThemeConfig.current.nativeMiuixPopupsEnabled && !appGlassMenuAvailable()
+        LocalAppThemeConfig.current.nativeMiuixPopupsEnabled && !glassMenuAvailable
     if (compact && !nativeMenu) {
         AppCompactWindowActionMenu(
             groups = groups,
@@ -98,14 +106,62 @@ fun AppWindowActionMenu(
         )
         return
     }
+    AppStandardWindowActionMenu(
+        groups = { groups },
+        hasActions = groups.any { it.isNotEmpty() },
+        nativeMenu = nativeMenu,
+        glassMenuAvailable = glassMenuAvailable,
+        modifier = modifier,
+        enabled = enabled,
+        onExpandedChange = onExpandedChange,
+        anchorModifier = anchorModifier,
+        onActionSource = onActionSource,
+        source = source,
+        sourceCapturedByParent = sourceCapturedByParent,
+        content = content,
+    )
+}
 
-    val glassSource = source ?: rememberAppGlassMenuSource()
+/** 在菜单展开时准备操作。按钮可用性由调用方提供，避免为判断空列表而提前读取。 */
+@Composable
+fun AppWindowActionMenu(
+    actionGroups: @Composable () -> List<List<AppWindowAction>>,
+    modifier: Modifier = Modifier,
+    hasActions: Boolean = true,
+    content: @Composable () -> Unit,
+) {
     val glassMenuAvailable = appGlassMenuAvailable()
-    if (glassMenuAvailable || LocalAppUiStyle.current != AppUiStyle.MIUIX || !LocalAppThemeConfig.current.nativeMiuixPopupsEnabled) {
+    AppStandardWindowActionMenu(
+        groups = actionGroups,
+        hasActions = hasActions,
+        nativeMenu = LocalAppUiStyle.current == AppUiStyle.MIUIX &&
+            LocalAppThemeConfig.current.nativeMiuixPopupsEnabled && !glassMenuAvailable,
+        glassMenuAvailable = glassMenuAvailable,
+        modifier = modifier,
+        enabled = hasActions,
+        content = content,
+    )
+}
+
+@Composable
+private fun AppStandardWindowActionMenu(
+    groups: @Composable () -> List<List<AppWindowAction>>,
+    hasActions: Boolean,
+    nativeMenu: Boolean,
+    glassMenuAvailable: Boolean,
+    modifier: Modifier,
+    enabled: Boolean,
+    onExpandedChange: ((Boolean) -> Unit)? = null,
+    anchorModifier: Modifier = Modifier,
+    onActionSource: ((AppGlassMenuSource) -> Unit)? = null,
+    source: AppGlassMenuSource? = null,
+    sourceCapturedByParent: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    if (!nativeMenu) {
+        val glassSource = source ?: rememberAppGlassMenuSource()
         var expanded by remember { mutableStateOf(false) }
         var parentActions by remember { mutableStateOf(emptyList<AppWindowAction>()) }
-        val visibleGroups = if (glassMenuAvailable) flattenGlassWindowActionGroups(groups)
-            else parentActions.lastOrNull()?.let { listOf(it.children) } ?: groups.filter { it.isNotEmpty() }
         Box(modifier = modifier) {
             AppIconButton(
                 modifier = anchorModifier.appGlassMenuSource(glassSource, enabled = enabled, captureSurface = !sourceCapturedByParent, onOpen = {
@@ -129,6 +185,8 @@ fun AppWindowActionMenu(
                     onExpandedChange?.invoke(false)
                 },
             ) {
+                val visibleGroups = if (glassMenuAvailable) flattenGlassWindowActionGroups(groups())
+                    else parentActions.lastOrNull()?.let { listOf(it.children) } ?: groups().filter { it.isNotEmpty() }
                 if (parentActions.isNotEmpty()) {
                     AppDropdownMenuItem(
                         text = { AppText("返回") },
@@ -144,7 +202,7 @@ fun AppWindowActionMenu(
                     actions.forEach { action ->
                         AppDropdownMenuItem(
                             text = { AppText(action.label) },
-                            leadingIcon = action.icon?.let { icon ->
+                            leadingIcon = action.iconContent?.let { content -> { content(Modifier) } } ?: action.icon?.let { icon ->
                                 {
                                     if (action.iconTint == null) {
                                         AppIcon(icon, contentDescription = null)
@@ -180,37 +238,47 @@ fun AppWindowActionMenu(
     }
 
     var expanded by remember { mutableStateOf(false) }
+    var popupMounted by remember { mutableStateOf(false) }
     fun dismiss() {
         if (expanded) {
             expanded = false
             onExpandedChange?.invoke(false)
         }
     }
-    val selectNativeAction = appValueChangeWithFeedback<AppWindowAction>(
-        scene = com.android.purebilibili.core.ui.AppHapticScene.MENUS,
-        onValueChange = { action ->
-            if (expanded) {
-                dismiss()
-                action.onClick?.invoke()
-            }
-        },
-    )
     Box(modifier = modifier) {
         AppIconButton(
             modifier = anchorModifier,
-            enabled = enabled && groups.any { it.isNotEmpty() },
-            onClick = { expanded = true; onExpandedChange?.invoke(true) },
-        ) { content() }
-        WindowCascadingListPopup(
-            show = expanded,
-            entries = groups.filter { it.isNotEmpty() }.map { actions ->
-                DropdownEntry(items = actions.map { action ->
-                    action.toDropdownItem(selectNativeAction)
-                })
+            enabled = enabled && hasActions,
+            onClick = {
+                popupMounted = true
+                expanded = true
+                onExpandedChange?.invoke(true)
             },
-            alignment = PopupPositionProvider.Align.End,
-            onDismissRequest = ::dismiss,
-        )
+        ) { content() }
+        if (popupMounted) {
+            val selectNativeAction = appValueChangeWithFeedback<AppWindowAction>(
+                scene = com.android.purebilibili.core.ui.AppHapticScene.MENUS,
+                onValueChange = { action ->
+                    if (expanded) {
+                        dismiss()
+                        action.onClick?.invoke()
+                    }
+                },
+            )
+            val actionGroups = groups()
+            val entries = remember(actionGroups, selectNativeAction) {
+                actionGroups.filter { it.isNotEmpty() }.map { actions ->
+                    DropdownEntry(items = actions.map { it.toDropdownItem(selectNativeAction) })
+                }
+            }
+            WindowCascadingListPopup(
+                show = expanded,
+                entries = entries,
+                alignment = PopupPositionProvider.Align.End,
+                onDismissRequest = ::dismiss,
+                onDismissFinished = { if (!expanded) popupMounted = false },
+            )
+        }
     }
 }
 
@@ -265,7 +333,7 @@ private fun AppCompactWindowActionMenu(
                             selected = action.selected,
                             dismissOnClick = action.children.isEmpty(),
                             enabled = action.enabled,
-                            leadingIcon = action.icon?.let { icon ->
+                            leadingIcon = action.iconContent?.let { content -> { content(Modifier) } } ?: action.icon?.let { icon ->
                                 {
                                     if (action.iconTint == null || !action.enabled) {
                                         AppIcon(icon, contentDescription = null)
@@ -337,7 +405,7 @@ private fun AppWindowAction.toDropdownItem(onSelected: (AppWindowAction) -> Unit
     enabled = enabled,
     selected = selected,
     onClick = { onSelected(this) },
-    icon = icon?.let { imageVector ->
+    icon = iconContent ?: icon?.let { imageVector ->
         { modifier ->
             if (iconTint == null) {
                 AppIcon(

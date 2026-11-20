@@ -4,7 +4,8 @@ private const val DEFAULT_PARALLEL_CHUNK_THRESHOLD_BYTES = 8L * 1024L * 1024L
 
 internal data class DownloadRangeProbe(
     val totalBytes: Long,
-    val supportsRanges: Boolean
+    val supportsRanges: Boolean,
+    val strongETag: String? = null,
 )
 
 internal data class DownloadChunkRange(
@@ -85,8 +86,7 @@ internal fun parseDownloadContentRange(contentRange: String?): DownloadRangeProb
     val match = Regex("""bytes\s+(\d+)-(\d+)/(\d+|\*)""")
         .matchEntire(contentRange?.trim().orEmpty())
         ?: return null
-    val end = match.groupValues[2].toLongOrNull() ?: return null
-    val total = match.groupValues[3].toLongOrNull() ?: (end + 1L)
+    val total = match.groupValues[3].toLongOrNull() ?: 0L
     return DownloadRangeProbe(
         totalBytes = total.coerceAtLeast(0L),
         supportsRanges = true

@@ -54,10 +54,7 @@ class ContentLoadingSkeletonStructureTest {
 
         assertTrue(space.contains("SpaceLoadingSkeleton("))
         assertFalse(space.contains("SpaceUiState.Loading -> {\n                        com.android.purebilibili.core.ui.skeleton.ContentMediaListSkeleton("))
-        // 空间首屏骨架不再自建独立网格：它作为 item 提供者铺进 SpaceContent 的同一个
-        // LazyVerticalStaggeredGrid（同一个 gridState），Loading → Success 是 item 原地替换而不是
-        // 整棵网格重建。骨架里因此不应再出现 LazyVerticalStaggeredGrid，色块也必须是固定色
-        // （rememberStaticSkeletonBlockColor）而非呼吸脉冲，避免灰块闪烁。
+        // 空间首屏骨架沿用 SpaceContent 的网格排版，使用固定色块。
         assertTrue(space.contains("isInitialLoading = isLoadingSpace"))
         assertFalse(spaceSkeleton.contains("LazyVerticalStaggeredGrid("))
         assertFalse(spaceSkeleton.contains("rememberContentSkeletonPulse("))

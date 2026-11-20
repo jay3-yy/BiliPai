@@ -75,7 +75,13 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = settingsDestinationCopy(SettingsSearchTarget.INTERFACE_THEME).title,
         subtitle = settingsDestinationCopy(SettingsSearchTarget.INTERFACE_THEME).summary,
         section = "设置",
-        aliases = listOf("界面与主题", "外观与动画", "界面", "主题", "ui预设", "md3", "miuix", "字体", "dpi", "动态图标", "应用图标", "开屏", "开屏壁纸")
+        aliases = listOf(
+            "界面与主题", "外观与主题", "外观与动画", "外观设置", "外观", "界面", "主题",
+            "ui预设", "md3", "miuix", "字体", "dpi", "动态图标", "应用图标", "开屏", "开屏壁纸",
+            "文字粗细", "参与随机的壁纸", "图标", "皮肤", "动态取色", "自定义颜色", "主题色",
+            "动态颜色", "语言", "应用字体", "本地字体", "导入字体", "自定义字体", "ttf", "otf",
+            "界面缩放", "自定义壁纸", "相册壁纸", "material", "android", "安卓", "原生",
+        ),
     ),
     SettingsSearchEntry(
         settingId = "legacy.002",
@@ -149,7 +155,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = settingsDestinationCopy(SettingsSearchTarget.PRIVACY_PERMISSION).title,
         subtitle = settingsDestinationCopy(SettingsSearchTarget.PRIVACY_PERMISSION).summary,
         section = "设置",
-        aliases = listOf("隐私与权限", "我的回顾", "回顾", "阅读统计", "观看统计", "搜索框默认词", "搜索框推荐词", "默认搜索词", "一小时前搜索", "搜索提示", "个性化搜索推荐", "搜索推荐词", "推荐词", "搜索联想词", "搜索建议", "联想开关", "隐私", "无痕", "权限", "权限管理", "黑名单", "屏蔽", "拉黑")
+        aliases = listOf("隐私与权限", "阅读与观看统计", "阅读统计", "观看统计", "我的回顾", "回顾", "搜索框默认词", "搜索框推荐词", "默认搜索词", "一小时前搜索", "搜索提示", "个性化搜索推荐", "搜索推荐词", "推荐词", "搜索联想词", "搜索建议", "联想开关", "隐私", "无痕", "权限", "权限管理", "黑名单", "屏蔽", "拉黑")
     ),
     SettingsSearchEntry(
         settingId = "legacy.011",
@@ -200,46 +206,6 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         subtitle = settingsDestinationCopy(SettingsSearchTarget.ABOUT_SUPPORT).summary,
         section = "设置",
         aliases = listOf("SHA-256", "provenance", "安装包来源验证", "版本来源", "关于与支持", "帮助与关于", "关于", "支持", "版本", "更新", "开源", "发布渠道", "小贴士", "默认打开链接", "telegram", "twitter", "捐赠", "打赏")
-    ),
-    SettingsSearchEntry(
-        settingId = "legacy.013",
-        target = SettingsSearchTarget.APPEARANCE,
-        title = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
-        subtitle = "主题、字体、缩放、开屏与应用图标",
-        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
-        // 泛入口别名：具体子项词（主题色/hex/md3颜色/字体大小/dpi/开屏壁纸等）交由
-        // 更具体的子项条目承接，避免泛条目靠堆叠别名压过具体结果。
-        aliases = listOf(
-            "文字粗细",
-            "参与随机的壁纸",
-            "首页卡片淡入",
-            "外观",
-            "主题",
-            "图标",
-            "皮肤",
-            "动态取色",
-            "自定义颜色",
-            "主题色",
-            "动态颜色",
-            "语言",
-            "字体",
-            "应用字体",
-            "本地字体",
-            "导入字体",
-            "自定义字体",
-            "ttf",
-            "otf",
-            "界面缩放",
-            "开屏",
-            "自定义壁纸",
-            "相册壁纸",
-            "应用图标",
-            "md3",
-            "material",
-            "android",
-            "安卓",
-            "原生",
-        )
     ),
     SettingsSearchEntry(
         settingId = "legacy.014",
@@ -737,10 +703,12 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     SettingsSearchEntry(
         settingId = "legacy.045",
         target = SettingsSearchTarget.ANIMATION,
-        title = "动画、振动与玻璃效果",
-        subtitle = "页面动画、玻璃效果与振动反馈",
-        section = "动画与触感",
+        title = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).summary,
+        section = "设置",
         aliases = listOf(
+            "动画、振动与玻璃效果",
+            "动画与振动",
             "返回时模糊背景",
             "加载占位动画",
             "动画与触感",
@@ -1033,6 +1001,7 @@ internal fun resolveSettingsSearchResults(
                 "playback.comment_member_decorations_enabled" -> listOf("评论装扮", "个性装扮")
                 "playback.image_preview_long_press_save_enabled" -> listOf("图片长按保存", "长按保存图片")
                 "playback.video_info_default_expanded" -> listOf("简介默认展开")
+                "playback.sub_reply_threaded_enabled" -> listOf("评论树", "嵌套回复", "回复连线", "折叠分支")
                 "playback.sub_reply_loaded_count_enabled" -> listOf("楼中楼已加载数量", "已加载条数")
                 "playback.hide_interactive_command_danmaku" -> listOf("关注点赞弹幕", "关注弹幕", "点赞弹幕", "三连弹幕", "三连", "隐藏三连", "三连互动提示", "屏蔽互动提示")
                 else -> emptyList()

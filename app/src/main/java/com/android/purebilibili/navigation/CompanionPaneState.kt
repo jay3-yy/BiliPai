@@ -52,6 +52,12 @@ internal class CompanionPaneState(
 
     fun cancelDrag() { isDragging = false }
 
+    fun visibleMode(canSplit: Boolean, immersivePlayback: Boolean): CompanionPaneMode = when {
+        mode == CompanionPaneMode.Feed -> CompanionPaneMode.Feed
+        !canSplit || immersivePlayback -> CompanionPaneMode.Video
+        else -> mode
+    }
+
     fun restoreSplit() {
         isDragging = false
         if (mode == CompanionPaneMode.Split) splitFraction = defaultFeedFraction

@@ -1,8 +1,11 @@
 // 私信收件箱页面
 package com.android.purebilibili.feature.message
 
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.UserAvatarCornerMarkBadge
@@ -11,13 +14,12 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.store.MessageCenterPreferences
 import androidx.compose.foundation.layout.*
@@ -50,6 +52,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -94,6 +97,7 @@ fun InboxScreen(
     onBack: () -> Unit,
     onTopItemClick: (MessageCenterDestination) -> Unit,
     onSessionClick: (talkerId: Long, sessionType: Int, userName: String) -> Unit,
+    paneWidth: Dp,
     onOpenLink: (String) -> Unit = {},
     viewModel: InboxViewModel = viewModel()
 ) {
@@ -112,7 +116,7 @@ fun InboxScreen(
         com.android.purebilibili.core.store.MessageBadgeCleanState
             .clean(com.android.purebilibili.core.store.TokenManager.midCache ?: 0L)
     }
-    val outsideActionLimit = if (LocalConfiguration.current.screenWidthDp < 360) 0 else 2
+    val outsideActionLimit = if (paneWidth < 360.dp) 0 else 2
     val webThemeQuery = if (AppSurfaceTokens.surface().luminance() < 0.5f) "native.theme=2&night=1" else "native.theme=1&night=0"
     val disabledLikesFlow = remember(context) { MessageCenterPreferences.disabledLikes(context) }
     val disabledLikes by disabledLikesFlow.collectAsStateWithLifecycle(initialValue = false)
@@ -424,7 +428,7 @@ fun InboxScreen(
 private fun MessageCenterTopShortcutRow(
     items: List<MessageCenterTopItem>,
     onItemClick: (MessageCenterDestination) -> Unit
-) {
+) = NavigationControlMotionGroup {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -465,13 +469,23 @@ private fun MessageCenterShortcutCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val target = when (item.destination) {
+        MessageCenterDestination.ReplyMe -> BiliPaiNavKey.ReplyMe
+        MessageCenterDestination.AtMe -> BiliPaiNavKey.AtMe
+        MessageCenterDestination.LikeMe -> BiliPaiNavKey.LikeMe
+        MessageCenterDestination.SystemNotice -> BiliPaiNavKey.SystemNotice
+    }
+    val control = rememberSystemWindowNavigationControl(target, AppShapes.container(ContainerLevel.Card), onClick)
     val icon = when (item.destination) {
         MessageCenterDestination.ReplyMe -> androidx.compose.material.icons.Icons.Outlined.ChatBubbleOutline
         MessageCenterDestination.AtMe -> androidx.compose.material.icons.Icons.Outlined.AlternateEmail
         MessageCenterDestination.LikeMe -> androidx.compose.material.icons.Icons.Outlined.FavoriteBorder
         MessageCenterDestination.SystemNotice -> androidx.compose.material.icons.Icons.Outlined.NotificationsNone
     }
-    Column(modifier.appActionClickable(onClick = onClick).padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier.then(control.modifier).appActionClickable(onClick = control.onClick).padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Box {
             AppSurface(modifier = Modifier.size(44.dp), shape = CircleShape, color = AppSurfaceTokens.surfaceContainer()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { AppIcon(icon, item.title, tint = AppContentColors.accent(), modifier = Modifier.size(20.dp)) }
@@ -638,7 +652,7 @@ fun SessionListItem(
     AppSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = appActionWithFeedback(onClick), onLongClick = { showMenu = true })
+            .appCombinedClickable(onClick = appActionWithFeedback(onClick), onLongClick = { showMenu = true })
             .messageSecondaryClick { showMenu = true }
             .padding(horizontal = if (useGroupedListCards) 12.dp else 0.dp, vertical = if (useGroupedListCards) 3.dp else 0.dp),
         shape = if (useGroupedListCards) {

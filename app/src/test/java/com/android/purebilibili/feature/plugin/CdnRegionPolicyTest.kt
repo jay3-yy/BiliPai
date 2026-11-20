@@ -494,6 +494,77 @@ class CdnRegionPolicyTest {
     }
 
     @Test
+    fun `current test line moves ahead of finished lines when its live speed rises`() {
+        val finished = CdnSpeedResult(PlaybackCdnPreference.HW, 400_000, 30)
+        val waiting = CdnSpeedTestUpdate.Testing(
+            preference = PlaybackCdnPreference.BASE_URL,
+            tested = listOf(finished),
+            total = 2,
+            host = "base.bilivideo.com",
+        )
+        val faster = waiting.copy(downloaded = 32_768, bytesPerSecond = 600_000)
+
+        assertEquals(finished, rankCdnSpeedResults(waiting.tested + waiting.currentResult).first())
+        assertEquals(faster.currentResult, rankCdnSpeedResults(faster.tested + faster.currentResult).first())
+        assertEquals("base.bilivideo.com", faster.currentResult.host)
+    }
+
+    @Test
+    fun `speed and usage sort measure different properties of the same lines`() {
+        val base = CdnSpeedResult(PlaybackCdnPreference.BASE_URL, 200_000, 50, "base.bilivideo.com")
+        val hw = CdnSpeedResult(PlaybackCdnPreference.HW, 400_000, 30)
+        val cos = CdnSpeedResult(PlaybackCdnPreference.COS, 800_000, 60)
+        val failed = CdnSpeedResult(PlaybackCdnPreference.ALI, null, null)
+        val results = listOf(base, failed, hw, cos)
+        val completed = mapOf("base.bilivideo.com" to 10, requireNotNull(hw.host) to 3, requireNotNull(cos.host) to 3)
+
+        assertEquals(listOf(cos, hw, base, failed), rankCdnSpeedResults(results))
+        assertEquals(
+            listOf(base, cos, hw, failed),
+            rankCdnSpeedResults(results, CdnResultSort.MOST_USED, completed),
+        )
+    }
+
+    @Test
+    fun `automatic selection prefers the fastest measured safe line and retains the originals`() {
+        val measured = rankCdnSpeedResults(listOf(
+            CdnSpeedResult(PlaybackCdnPreference.HW, 400_000, 30),
+            CdnSpeedResult(PlaybackCdnPreference.ALI, null, null),
+            CdnSpeedResult(PlaybackCdnPreference.COS, 800_000, 60),
+        )).first().preference
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf(
+                "https://video.bilivideo.com/upgcxcode/1/v.m4s?os=mcdn&sign=a",
+                "https://backup.bilivideo.com/upgcxcode/1/v.m4s?sign=b%2Fc",
+            ),
+            audioUrls = listOf(
+                "https://video.bilivideo.com/upgcxcode/1/a.m4s?os=mcdn&sign=d",
+                "https://backup.bilivideo.com/upgcxcode/1/a.m4s?sign=e%2Ff",
+            ),
+        )
+
+        val auto = applyPlaybackCdnPreference(original, PlaybackCdnPreference.AUTO, measuredPreference = measured)
+        assertEquals("https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/1/v.m4s?sign=b%2Fc", auto.first().videoUrl)
+        assertEquals("https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/1/a.m4s?sign=e%2Ff", auto.first().audioUrl)
+        assertTrue(auto.containsAll(original))
+
+        val fixed = applyPlaybackCdnPreference(original, PlaybackCdnPreference.HW, measuredPreference = measured)
+        assertEquals(PlaybackCdnPreference.HW.host, hostFromCdnUrl(fixed.first().videoUrl))
+    }
+
+    @Test
+    fun `measured host does not override a non portable audio track`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://video.bilivideo.com/upgcxcode/1/v.m4s?sign=a"),
+            audioUrls = listOf("https://audio.bilivideo.com/v1/resource/audio?sign=b"),
+        )
+        val selected = applyPlaybackCdnPreference(
+            original, PlaybackCdnPreference.AUTO, measuredPreference = PlaybackCdnPreference.COS,
+        )
+        assertEquals(original, selected)
+    }
+
+    @Test
     fun `default preference promotes signed regular backup without rewriting tracks`() {
         val original = buildPlaybackCdnCandidates(
             videoUrls = listOf(

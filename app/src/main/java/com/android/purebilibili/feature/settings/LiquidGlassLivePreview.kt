@@ -2,11 +2,6 @@ package com.android.purebilibili.feature.settings
 
 import com.android.purebilibili.core.ui.AppContentColors
 
-import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import com.android.purebilibili.core.util.PickGalleryVisualMedia
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -43,6 +38,7 @@ import com.android.purebilibili.core.ui.components.AppSingleChoicePreference
 import com.android.purebilibili.core.ui.components.AppChoiceOption
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -57,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -72,6 +69,7 @@ import com.android.purebilibili.core.store.LiquidGlassAdvancedSettings
 import com.android.purebilibili.core.store.LiquidGlassMode
 import com.android.purebilibili.core.store.LiquidGlassReadabilityMode
 import com.android.purebilibili.core.store.resolveLiquidGlassAdvancedPreset
+import com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed
 import com.android.purebilibili.core.ui.components.AppSlider
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
@@ -104,6 +102,7 @@ internal fun LiquidGlassAdjustmentPanel(
     bottomBarItems: List<BottomNavItem>,
     bottomBarSearchEnabled: Boolean,
     onProgressCommitted: (Float) -> Unit,
+    onPickPreviewImage: () -> Unit,
     onPreviewImageChanged: (String?) -> Unit,
     onAdvancedSettingsCommitted: (LiquidGlassAdvancedSettings) -> Unit,
     onPresetCommitted: (LiquidGlassAdvancedPreset) -> Unit,
@@ -111,6 +110,7 @@ internal fun LiquidGlassAdjustmentPanel(
     onImportSettings: () -> Unit,
     onShareSettings: () -> Unit,
     isImportingSettings: Boolean,
+    advancedSettingSearchToken: Long?,
     modifier: Modifier = Modifier,
     alwaysShowAdvanced: Boolean = false,
 ) {
@@ -122,18 +122,6 @@ internal fun LiquidGlassAdjustmentPanel(
     val dockMotionFlow = remember(context) { LiquidGlassSettingsStore.observeDockMotionStyle(context) }
     val dockMotionStyle by dockMotionFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.STANDARD)
     val paletteScope = rememberCoroutineScope()
-    val previewImagePicker = rememberLauncherForActivityResult(
-        contract = PickGalleryVisualMedia(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        runCatching {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION,
-            )
-        }
-        onPreviewImageChanged(uri.toString())
-    }
     var previewProgress by remember(persistedProgress) {
         mutableFloatStateOf(persistedProgress.coerceIn(0f, 1f))
     }
@@ -150,7 +138,10 @@ internal fun LiquidGlassAdjustmentPanel(
         pageCount = { LiquidGlassPreviewArtwork.entries.size },
     )
     var presetMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    var advancedSettingsExpanded by rememberSaveable { mutableStateOf(false) }
+    var advancedSettingsExpanded by rememberSaveable { mutableStateOf(advancedSettingSearchToken != null) }
+    LaunchedEffect(advancedSettingSearchToken) {
+        if (advancedSettingSearchToken != null) advancedSettingsExpanded = true
+    }
     val tuning = remember(previewProgress, advancedSettings, readabilityMode) {
         resolveLiquidGlassTuning(previewProgress, advancedSettings, readabilityMode)
     }
@@ -318,20 +309,14 @@ internal fun LiquidGlassAdjustmentPanel(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppTextButton(
-                onClick = {
-                    previewImagePicker.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
-                },
-            ) {
-                Icon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_photo_library_24), contentDescription = null)
+            AppTextButton(onClick = onPickPreviewImage) {
+                Icon(rememberSettingsVector(R.drawable.ph_images_24, R.drawable.ms_photo_library_24), contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))
                 AppText(if (previewImageUri == null) "选择相册图片" else "更换图片")
             }
             if (previewImageUri != null) {
                 AppTextButton(onClick = { onPreviewImageChanged(null) }) {
-                    Icon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_restore_24), contentDescription = null)
+                    Icon(rememberSettingsVector(R.drawable.ph_arrow_u_down_left_24, R.drawable.ms_restore_24), contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
                     AppText("恢复默认")
                 }
@@ -463,7 +448,7 @@ internal fun LiquidGlassAdjustmentPanel(
                 onClick = onImportSettings,
                 enabled = !isImportingSettings,
             ) {
-                Icon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_file_download_24), contentDescription = null)
+                Icon(rememberSettingsVector(R.drawable.ph_file_arrow_down_24, R.drawable.ms_file_download_24), contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))
                 AppText(
                     text = if (isImportingSettings) "正在读取" else "导入他人设置",
@@ -476,7 +461,7 @@ internal fun LiquidGlassAdjustmentPanel(
                 onClick = onShareSettings,
                 enabled = !isImportingSettings,
             ) {
-                Icon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_share_24), contentDescription = null)
+                Icon(rememberSettingsVector(R.drawable.ph_share_network_24, R.drawable.ms_share_24), contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))
                 AppText(
                     text = "分享我的设置",
@@ -494,7 +479,7 @@ internal fun LiquidGlassAdjustmentPanel(
         if (!alwaysShowAdvanced) AppTextButton(
             onClick = { advancedSettingsExpanded = !advancedSettingsExpanded },
         ) {
-            Icon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_tune_24), contentDescription = null)
+            Icon(rememberSettingsVector(R.drawable.ph_sliders_24, R.drawable.ms_tune_24), contentDescription = null)
             Spacer(modifier = Modifier.width(6.dp))
             AppText(if (advancedSettingsExpanded) "收起高级调节" else "展开高级调节")
         }
@@ -622,7 +607,7 @@ internal fun LiquidGlassAdjustmentPanel(
                     },
                     enabled = advancedSettings.contentDistortion > 0.001f,
                 ) {
-                    Icon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_restore_24), contentDescription = null)
+                    Icon(rememberSettingsVector(R.drawable.ph_arrow_u_down_left_24, R.drawable.ms_restore_24), contentDescription = null)
                     Spacer(modifier = Modifier.width(6.dp))
                     AppText("关闭玻璃形变")
                 }
@@ -827,7 +812,11 @@ private fun LiquidGlassHomeSample(
     bottomBarSearchEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val backdropSource = rememberChromeBackdropSource()
+    // 调整控件仍在视口时，预览图可以已经滚出同一个列表项。
+    var previewInViewport by remember { mutableStateOf(true) }
+    val backdropSource = rememberChromeBackdropSource(
+        recordingEnabled = previewInViewport && LocalChromeBackdropRecordingAllowed.current,
+    )
     val backdrop = backdropSource.backdrop
     val tuning = remember(progress, advancedSettings, readabilityMode) {
         resolveLiquidGlassTuning(progress, advancedSettings, readabilityMode)
@@ -838,9 +827,11 @@ private fun LiquidGlassHomeSample(
     val adaptiveReadabilityEnabled = readabilityMode == LiquidGlassReadabilityMode.ADAPTIVE
     val topReadabilityState = rememberLiquidGlassAdaptiveReadabilityState(
         enabled = adaptiveReadabilityEnabled,
+        samplingAllowed = previewInViewport,
     )
     val bottomReadabilityState = rememberLiquidGlassAdaptiveReadabilityState(
         enabled = adaptiveReadabilityEnabled,
+        samplingAllowed = previewInViewport,
     )
     val topContentColor = rememberLiquidGlassAdaptiveContentColor(
         stableColor = contentColor,
@@ -878,6 +869,7 @@ private fun LiquidGlassHomeSample(
     Box(
         modifier = modifier
             .height(360.dp)
+            .onVisibilityChanged(minFractionVisible = 0f) { previewInViewport = it }
             .clip(sampleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .pointerInput(previewImageUri, previewArtwork, previewPanLimitPx) {
@@ -991,7 +983,7 @@ private fun LiquidGlassHomeSample(
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_search_24), contentDescription = null, tint = topContentColor)
+            Icon(rememberSettingsVector(R.drawable.ph_magnifying_glass_24, R.drawable.ms_search_24), contentDescription = null, tint = topContentColor)
             Spacer(modifier = Modifier.width(8.dp))
             AppText(
                 text = "搜索感兴趣的视频",
@@ -1075,7 +1067,7 @@ private fun LiquidGlassHomeSample(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_search_24),
+                        imageVector = rememberSettingsVector(R.drawable.ph_magnifying_glass_24, R.drawable.ms_search_24),
                         contentDescription = "底栏搜索",
                         tint = bottomContentColor,
                     )

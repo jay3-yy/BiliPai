@@ -7,19 +7,18 @@ import com.android.purebilibili.core.util.FormatUtils
 
 /**
  * UP 半屏预览在深/浅色下的表面色。
- * 浅色：干净 surface + 浅容器；深色：高对比 surfaceContainer，避免半透明糊底。
+ * 拖动手柄和资料区共用弹窗的表面底色。
  */
 internal data class UpPreviewSheetSurfaceColors(
     val sheetColor: Color,
     val scrimColor: Color,
-    val cardColor: Color,
+    val handleColor: Color,
     val titleColor: Color,
     val supportingColor: Color,
     val followFillColor: Color,
     val followContentColor: Color,
     val followingFillColor: Color,
     val followingContentColor: Color,
-    val enterSpaceColor: Color,
     val dividerColor: Color,
     val coverPlaceholderColor: Color,
 )
@@ -35,11 +34,7 @@ internal fun resolveUpPreviewSheetSurfaceColors(
             colorScheme.surface
         },
         scrimColor = Color.Black.copy(alpha = if (isDark) 0.55f else 0.4f),
-        cardColor = if (isDark) {
-            colorScheme.surfaceContainer
-        } else {
-            colorScheme.surfaceContainerLowest
-        },
+        handleColor = colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
         titleColor = colorScheme.onSurface,
         supportingColor = colorScheme.onSurfaceVariant.copy(alpha = if (isDark) 0.82f else 0.75f),
         followFillColor = colorScheme.primary,
@@ -50,30 +45,13 @@ internal fun resolveUpPreviewSheetSurfaceColors(
             colorScheme.surfaceContainerHigh
         },
         followingContentColor = colorScheme.onSurfaceVariant,
-        enterSpaceColor = colorScheme.primary,
         dividerColor = colorScheme.outlineVariant.copy(alpha = if (isDark) 0.5f else 0.65f),
         coverPlaceholderColor = colorScheme.surfaceVariant,
     )
 }
 
-internal fun resolveUpPreviewStatLine(
-    followerCount: Int?,
-    videoCount: Int?,
-    likeCount: Int?,
-): String {
-    val parts = buildList {
-        followerCount?.takeIf { it >= 0 }?.let {
-            add("${formatUpPreviewCount(it)}粉丝")
-        }
-        videoCount?.takeIf { it >= 0 }?.let {
-            add("${formatUpPreviewCount(it)}投稿")
-        }
-        likeCount?.takeIf { it >= 0 }?.let {
-            add("${formatUpPreviewCount(it)}获赞")
-        }
-    }
-    return parts.joinToString("  ")
-}
+internal fun formatUpPreviewStat(count: Int?): String =
+    count?.takeIf { it >= 0 }?.let(::formatUpPreviewCount) ?: "—"
 
 internal fun formatUpPreviewCount(count: Int): String = FormatUtils.formatStat(count.toLong())
 

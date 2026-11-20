@@ -8,9 +8,16 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
@@ -21,31 +28,52 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
-import com.android.purebilibili.feature.dynamic.resolveDynamicUserLiveBadgeLabel
+import com.android.purebilibili.feature.dynamic.shouldShowDynamicUserLiveBadge
 import kotlin.math.PI
 import kotlin.math.sin
 
+private val StaticLiveBarHeights = floatArrayOf(0.24f, 0.9f, 0.54f)
+
 @Composable
-fun DynamicUserLiveBadge(
-    modifier: Modifier = Modifier
+internal fun DynamicUserAvatarWithLiveBadge(
+    isLive: Boolean,
+    modifier: Modifier = Modifier,
+    avatar: @Composable BoxScope.() -> Unit,
 ) {
-    val color = AppContentColors.accent()
-    Row(
+    Column(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy((-8).dp),
+    ) {
+        Box(content = avatar)
+        if (shouldShowDynamicUserLiveBadge(isLive)) DynamicUserLiveBadge()
+    }
+}
+
+@Composable
+private fun DynamicUserLiveBadge(modifier: Modifier = Modifier) {
+    val contentColor = AppContentColors.onAccent()
+    Row(
+        modifier = modifier
+            .heightIn(min = 16.dp)
+            .background(AppContentColors.accent(), CircleShape)
+            .padding(horizontal = 3.dp, vertical = 1.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        DynamicLivePulseIndicator(color = color)
+        DynamicLivePulseIndicator(color = contentColor)
         AppText(
-            text = resolveDynamicUserLiveBadgeLabel(),
-            color = color,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
+            text = "直播中",
+            color = contentColor,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 13.sp),
             maxLines = 1,
             softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            tapToCopyEnabled = false,
         )
     }
 }
@@ -71,7 +99,7 @@ private fun DynamicLivePulseIndicator(
         null
     }
 
-    Canvas(modifier = modifier.size(width = 11.dp, height = 12.dp).then(animationGate.modifier)) {
+    Canvas(modifier = modifier.size(width = 10.dp, height = 9.dp).then(animationGate.modifier)) {
         drawDynamicLivePulseBars(
             progress = progress?.value,
             color = color,
@@ -87,13 +115,12 @@ private fun DrawScope.drawDynamicLivePulseBars(
     val gap = size.width * 0.14f
     val minHeight = size.height * 0.3f
     val availableHeight = size.height - minHeight
-    val staticFractions = floatArrayOf(0.4f, 0.72f, 0.5f)
 
     repeat(3) { index ->
         val heightFraction = progress?.let { value ->
             val phase = value * 2f * PI.toFloat() + index * 2.1f
             0.5f + 0.5f * sin(phase)
-        } ?: staticFractions[index]
+        } ?: StaticLiveBarHeights[index]
         val barHeight = minHeight + availableHeight * heightFraction
         drawRoundRect(
             color = color,

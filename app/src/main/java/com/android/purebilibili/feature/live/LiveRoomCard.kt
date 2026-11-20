@@ -5,9 +5,10 @@ import com.android.purebilibili.core.ui.AppContentColors
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -54,7 +55,7 @@ internal data class LiveRoomCardUiModel(
     val title: String,
     val coverUrl: String,
     val hostName: String,
-    val viewerCount: Int,
+    val viewerCount: Int?,
     val areaName: String,
     val viewerText: String = "",
     val feedback: List<com.android.purebilibili.data.model.response.LiveFeedbackGroup> = emptyList(),
@@ -92,7 +93,7 @@ internal fun LiveRoomCard(
             .fillMaxWidth()
             .then(containerTransition.modifier)
             .onSecondaryClick(onLongPress?.let { callback -> { _: Offset -> callback() } })
-            .combinedClickable(
+            .appCombinedClickable(
                 onClick = containerTransition.onClick,
                 onLongClick = onLongPress,
                 role = Role.Button
@@ -107,29 +108,25 @@ internal fun LiveRoomCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(metrics.coverAspectRatio)
-                    .then(
-                        if (
-                            enableSharedCoverTransition &&
-                            !containerTransition.enabled &&
-                            sharedTransitionScope != null &&
-                            animatedVisibilityScope != null
-                        ) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedElement(
-                                    sharedContentState = rememberSharedContentState(
-                                        key = liveCoverSharedElementKey(model.roomId),
-                                    ),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                )
-                            }
-                        } else {
-                            Modifier
-                        },
-                    ),
+            LiveRoomCover(
+                modifier = Modifier.fillMaxWidth(),
+                sharedElementModifier = if (
+                    enableSharedCoverTransition &&
+                    !containerTransition.enabled &&
+                    sharedTransitionScope != null &&
+                    animatedVisibilityScope != null
+                ) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            sharedContentState = rememberSharedContentState(
+                                key = liveCoverSharedElementKey(model.roomId),
+                            ),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    }
+                } else {
+                    Modifier
+                },
             ) {
                 AsyncImage(
                     model = model.coverUrl,
@@ -162,18 +159,23 @@ internal fun LiveRoomCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.width(AppSpacingTokens.Small))
-                    AppText(
-                        text = model.viewerText.ifBlank { "${formatLiveViewerCount(model.viewerCount)}人看过" },
-                        color = LiveStatusPalette.MediaContent,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            fontFeatureSettings = AppTypographyTokens.TabularNumerals
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 110.dp),
-                    )
+                    val viewerLabel = model.viewerText.ifBlank {
+                        model.viewerCount?.let { "${formatLiveViewerCount(it)}人看过" }.orEmpty()
+                    }
+                    if (viewerLabel.isNotEmpty()) {
+                        Spacer(Modifier.width(AppSpacingTokens.Small))
+                        AppText(
+                            text = viewerLabel,
+                            color = LiveStatusPalette.MediaContent,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                fontFeatureSettings = AppTypographyTokens.TabularNumerals
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 110.dp),
+                        )
+                    }
                 }
             }
             Column(
@@ -222,4 +224,16 @@ internal fun LiveRoomCard(
         }
     }
     }
+}
+
+@Composable
+internal fun LiveRoomCover(
+    modifier: Modifier = Modifier,
+    sharedElementModifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Box(
+        modifier = modifier.aspectRatio(LIVE_ROOM_COVER_ASPECT_RATIO).then(sharedElementModifier),
+        content = content,
+    )
 }

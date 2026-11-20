@@ -14,7 +14,7 @@ import kotlin.test.assertEquals
 
 class AppThemeEndpointPolicyTest {
     @Test
-    fun nativeMiuixKeepsGeneratedPairsAndDerivesDisabledControlsFromTheSamePalette() {
+    fun standardMiuixCustomColorsShareSelectionAndAccentAcrossMaterials() {
         for (dark in listOf(false, true)) {
             for (seed in listOf(Color(0xFFF36595), Color(0xFF34C759), Color.White, Color.Black)) {
                 val base = createBiliPaiStyleColorScheme(
@@ -24,13 +24,17 @@ class AppThemeEndpointPolicyTest {
                     base, AppUiStyle.MIUIX, Md3ColorSource.CUSTOM, dark,
                     customSeed = seed, liquidGlassEnabled = false,
                 )
+                val glass = resolveAppThemeEndpointPalette(
+                    base, AppUiStyle.MIUIX, Md3ColorSource.CUSTOM, dark,
+                    customSeed = seed, liquidGlassEnabled = true,
+                )
                 val colors = endpoint.miuix
                 assertEquals(base.primary, colors.primary)
                 assertEquals(base.onPrimary, colors.onPrimary)
                 assertEquals(base.primaryContainer, colors.primaryContainer)
                 assertEquals(base.onPrimaryContainer, colors.onPrimaryContainer)
-                assertEquals(base.secondaryContainer, colors.secondaryContainer)
-                assertEquals(base.onSecondaryContainer, colors.onSecondaryContainer)
+                assertEquals(colors.primaryContainer, colors.secondaryContainer)
+                assertEquals(colors.onPrimaryContainer, colors.onSecondaryContainer)
                 assertEquals(base.surface, colors.surface)
                 assertEquals(base.surfaceContainer, colors.surfaceContainer)
                 assertEquals(base.outlineVariant, colors.secondary)
@@ -45,8 +49,14 @@ class AppThemeEndpointPolicyTest {
                 assertEquals(base.surfaceContainerHigh, colors.sliderKeyPointForeground)
                 assertEquals(base.primary, endpoint.material.primary)
                 assertEquals(base.onPrimary, endpoint.material.onPrimary)
-                assertEquals(base.secondaryContainer, endpoint.material.secondaryContainer)
+                assertEquals(colors.secondaryContainer, endpoint.material.secondaryContainer)
+                assertEquals(colors.onSecondaryContainer, endpoint.material.onSecondaryContainer)
                 assertEquals(base.primary, endpoint.liquidAccent)
+                assertEquals(endpoint.liquidAccent, glass.liquidAccent)
+                assertEquals(colors.primaryContainer, glass.miuix.primaryContainer)
+                assertEquals(colors.onPrimaryContainer, glass.miuix.onPrimaryContainer)
+                assertEquals(colors.secondaryContainer, glass.material.secondaryContainer)
+                assertEquals(colors.onSecondaryContainer, glass.material.onSecondaryContainer)
             }
         }
     }

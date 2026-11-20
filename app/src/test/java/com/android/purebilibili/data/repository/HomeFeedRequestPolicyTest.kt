@@ -64,13 +64,33 @@ class HomeFeedRequestPolicyTest {
                 buildSignedHomePhoneFeedParams(0, "test-token", platform)
             }
         }
-        assertEquals(HomeFeedSource.HD, homeMobileFeedSource(TokenManager.ACCESS_TOKEN_PLATFORM_ANDROID_HD))
+    }
+
+    @Test
+    fun hdSigningUsesPhoneParametersAndOptionalAccessToken() {
+        val initial = buildSignedHomeHdCredentialFeedParams(0, null, timestampSec = 123L)
+        val next = buildSignedHomeHdCredentialFeedParams(1, "test-token", timestampSec = 124L)
+
+        assertEquals("android_i", initial["mobi_app"])
+        assertEquals("phone", initial["device"])
+        assertEquals("8430300", initial["build"])
+        assertEquals("2", initial["column"])
+        assertEquals("8", initial["flush"])
+        assertEquals("0", initial["idx"])
+        assertEquals("true", initial["pull"])
+        assertNull(initial["access_key"])
+        assertEquals(AppSignUtils.ANDROID_HD_APP_KEY, initial["appkey"])
+        assertNotNull(initial["sign"])
+        assertEquals("1", next["idx"])
+        assertEquals("false", next["pull"])
+        assertEquals("test-token", next["access_key"])
+        assertNotEquals(initial["sign"], next["sign"])
     }
 
     @Test
     fun unavailableMobileCredentialProducesWebOnlyResultAndNotice() {
         val web = listOf(VideoItem(bvid = "web"))
-        val page = mergeHomeFeedResults(Result.success(web), Result.failure(IllegalStateException("missing credential")), HomeFeedSource.MOBILE).getOrThrow()
+        val page = mergeHomeFeedResults(Result.success(web), Result.failure(IllegalStateException("missing credential"))).getOrThrow()
         assertEquals(web, page.videos)
         assertEquals(setOf(HomeFeedSource.WEB), page.sources)
         assertNotNull(page.notice)
@@ -80,29 +100,29 @@ class HomeFeedRequestPolicyTest {
     fun mergedFeedsDeduplicateAndKeepTheirActualSources() {
         val web = listOf(VideoItem(bvid = "shared"), VideoItem(bvid = "web"))
         val mobile = listOf(VideoItem(bvid = "phone"), VideoItem(bvid = "shared"))
-        val page = mergeHomeFeedResults(Result.success(web), Result.success(mobile), HomeFeedSource.MOBILE).getOrThrow()
+        val page = mergeHomeFeedResults(Result.success(web), Result.success(mobile)).getOrThrow()
         assertEquals(listOf("phone", "shared", "web"), page.videos.map { it.bvid })
         assertEquals(setOf(HomeFeedSource.WEB, HomeFeedSource.MOBILE), page.sources)
         assertNull(page.notice)
     }
 
     @Test
-    fun webFailureAndHdCompatibilityAreVisible() {
-        val mobile = Result.success(listOf(VideoItem(bvid = "hd")))
-        val fallback = mergeHomeFeedResults(Result.failure(IllegalStateException("web failed")), mobile, HomeFeedSource.HD).getOrThrow()
-        assertEquals(setOf(HomeFeedSource.HD), fallback.sources)
+    fun webFailureShowsMobileOnlyNotice() {
+        val mobile = Result.success(listOf(VideoItem(bvid = "mobile")))
+        val fallback = mergeHomeFeedResults(Result.failure(IllegalStateException("web failed")), mobile).getOrThrow()
+        assertEquals(setOf(HomeFeedSource.MOBILE), fallback.sources)
         assertTrue(fallback.notice.orEmpty().contains("网页端推荐不可用"))
-        val merged = mergeHomeFeedResults(Result.success(listOf(VideoItem(bvid = "web"))), mobile, HomeFeedSource.HD).getOrThrow()
-        assertTrue(merged.notice.orEmpty().contains("平板端"))
+        val merged = mergeHomeFeedResults(Result.success(listOf(VideoItem(bvid = "web"))), mobile).getOrThrow()
+        assertNull(merged.notice)
     }
 
     @Test
     fun emptyBranchesFailAndCancellationCannotBecomeFallback() {
         val empty = Result.success(emptyList<VideoItem>())
-        assertTrue(mergeHomeFeedResults(empty, empty, HomeFeedSource.MOBILE).isFailure)
+        assertTrue(mergeHomeFeedResults(empty, empty).isFailure)
         val cancelled = Result.failure<List<VideoItem>>(CancellationException("cancelled"))
         val videos = Result.success(listOf(VideoItem(bvid = "web")))
-        assertFailsWith<CancellationException> { mergeHomeFeedResults(videos, cancelled, HomeFeedSource.MOBILE) }
-        assertFailsWith<CancellationException> { mergeHomeFeedResults(cancelled, videos, HomeFeedSource.MOBILE) }
+        assertFailsWith<CancellationException> { mergeHomeFeedResults(videos, cancelled) }
+        assertFailsWith<CancellationException> { mergeHomeFeedResults(cancelled, videos) }
     }
 }

@@ -69,7 +69,7 @@ internal fun ProgressiveBlurComparisonPreviewEntry(
             .semantics { contentDescription = description },
     ) {
         AppIcon(
-            painter = painterResource(R.drawable.ms_play_circle_outline_24),
+            painter = painterResource(settingsIconResource(R.drawable.ph_play_circle_24, R.drawable.ms_play_circle_outline_24)),
             contentDescription = null,
             tint = AppContentColors.secondaryText(),
             modifier = Modifier.size(20.dp),

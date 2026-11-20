@@ -18,6 +18,9 @@ internal data class PageTransitionPreset(
 )
 
 internal fun resolvePageTransitionPreset(style: BiliPaiPredictiveBackAnimationStyle): PageTransitionPreset =
+    requireNotNull(pageTransitionPresetOrNull(style)) { "Not a page transition preset: $style" }
+
+internal fun pageTransitionPresetOrNull(style: BiliPaiPredictiveBackAnimationStyle): PageTransitionPreset? =
     when (style) {
         BiliPaiPredictiveBackAnimationStyle.FADE -> PageTransitionPreset(fades = true, offsetDp = 50f)
         BiliPaiPredictiveBackAnimationStyle.FADE_IN -> PageTransitionPreset(fades = true)
@@ -30,12 +33,15 @@ internal fun resolvePageTransitionPreset(style: BiliPaiPredictiveBackAnimationSt
         BiliPaiPredictiveBackAnimationStyle.LEFT_TO_RIGHT_FADE ->
             PageTransitionPreset(originX = -1f, fades = true, coveredPageMovement = true)
         BiliPaiPredictiveBackAnimationStyle.ZOOM -> PageTransitionPreset(fades = true, minimumScale = 0.92f)
-        else -> error("Not a page transition preset: $style")
+        else -> null
     }
 
+internal const val PAGE_PRESET_DURATION_MILLIS = 300
+internal const val PAGE_PRESET_BACK_COMMIT_MILLIS = 220
+
 internal val PagePresetMotion = NavMotion(
-    programmatic = NavSettleSpec.Tween(300, AppMotionEasing.Md3Standard),
-    commit = NavSettleSpec.Tween(220, AppMotionEasing.Md3Standard, matchReleaseVelocity = true),
+    programmatic = NavSettleSpec.Tween(PAGE_PRESET_DURATION_MILLIS, AppMotionEasing.Md3Standard),
+    commit = NavSettleSpec.Tween(PAGE_PRESET_BACK_COMMIT_MILLIS, AppMotionEasing.Md3Standard, matchReleaseVelocity = true),
     cancel = NavSettleSpec.Spring(stiffness = 1500f),
 )
 

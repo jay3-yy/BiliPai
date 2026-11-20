@@ -7,6 +7,7 @@ import com.android.purebilibili.core.ui.animation.liquidWobbleScaleY
 
 
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppInteractionColors
 
 import com.android.purebilibili.core.ui.resolveMatchedLiquidIndicatorHeightDp
 import com.android.purebilibili.core.ui.AppIconStyle
@@ -106,8 +107,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -363,27 +364,6 @@ internal data class MaterialDockedBottomBarItemColors(
     val unselectedIconColor: Color,
     val unselectedTextColor: Color
 )
-
-private data class NativeBottomBarSelectionColors(
-    val container: Color,
-    val content: Color,
-)
-
-/** 原生底栏选中态绑定当前主色，避免独立的次级色角色让指示器回到灰色。 */
-@Composable
-private fun rememberNativeBottomBarSelectionColors(): NativeBottomBarSelectionColors {
-    val accent = AppContentColors.accent()
-    val surface = AppSurfaceTokens.chromeBackground()
-    return remember(accent, surface) {
-        val container = com.android.purebilibili.core.theme.opaqueCompositeOver(
-            accent.copy(alpha = 0.14f), surface,
-        )
-        NativeBottomBarSelectionColors(
-            container = container,
-            content = com.android.purebilibili.core.theme.resolveCustomSelectionContentColor(accent, container),
-        )
-    }
-}
 
 internal fun resolveMaterialDockedBottomBarItemColors(
     themePrimary: Color,
@@ -2258,10 +2238,10 @@ fun FrostedBottomBar(
                     lastHomeClickMs = 0L
                     onHomeDoubleTap()
                 }
-                HomeSideBarClickAction.NAVIGATE -> onItemClick(item)
-            }
-            if (item == BottomNavItem.HOME) {
-                lastHomeClickMs = nowMs
+                HomeSideBarClickAction.NAVIGATE -> {
+                    lastHomeClickMs = if (item == BottomNavItem.HOME) nowMs else 0L
+                    onItemClick(item)
+                }
             }
             if (item == BottomNavItem.DYNAMIC) {
                 lastDynamicClickMs = nowMs
@@ -2448,11 +2428,11 @@ private fun MaterialBottomBar(
             blurIntensity = blurIntensity
         )
     }
-    val nativeSelectionColors = rememberNativeBottomBarSelectionColors()
+    val nativeSelectionColors = AppInteractionColors.rememberMaterialNavigationSelection()
     val dockedItemColors = resolveMaterialDockedBottomBarItemColors(
-        themePrimary = if (glassEnabled) AppContentColors.accent() else nativeSelectionColors.content,
+        themePrimary = if (glassEnabled) AppContentColors.accent() else nativeSelectionColors.contentColor,
         onSurfaceVariant = AppContentColors.secondaryText(),
-        secondaryContainer = if (glassEnabled) MaterialTheme.colorScheme.secondaryContainer else nativeSelectionColors.container,
+        secondaryContainer = if (glassEnabled) MaterialTheme.colorScheme.secondaryContainer else nativeSelectionColors.backgroundColor,
     )
     val skinDockedItemColors = resolveBottomBarSkinContentColors(
         selectedColor = uiSkinDecoration?.bottomSelectedTint
@@ -2492,7 +2472,6 @@ private fun MaterialBottomBar(
                     itemLabels
                 ),
                 searchEnabled = searchEnabled,
-                isFeedScrollInProgress = isFeedScrollInProgress,
                 collapseRequested = collapseLinkedDock,
                 onSearchClick = onSearchClick,
                 onSearchKeywordSubmit = onSearchKeywordSubmit,
@@ -2787,10 +2766,10 @@ private fun OfficialMd3FloatingToolbarContent(
     isTransitionRunning: Boolean = false,
     forceLowBlurBudget: Boolean = false,
 ) {
-    val selectionColors = rememberNativeBottomBarSelectionColors()
+    val selectionColors = AppInteractionColors.rememberMaterialNavigationSelection()
     val buttonColors = ButtonDefaults.filledTonalButtonColors(
-        containerColor = selectionColors.container,
-        contentColor = selectionColors.content,
+        containerColor = selectionColors.backgroundColor,
+        contentColor = selectionColors.contentColor,
     )
     val useBlur = blurEnabled && (hazeState != null || backdrop != null)
     val toolbarShape = MaterialTheme.shapes.extraLarge
@@ -2882,7 +2861,7 @@ private fun OfficialMd3FloatingToolbarContent(
                         )
                         val selectionContentColor by animateColorAsState(
                             targetValue = if (selected) {
-                                selectionColors.content
+                                selectionColors.contentColor
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
                             },
@@ -2906,7 +2885,7 @@ private fun OfficialMd3FloatingToolbarContent(
                                                     alpha = indicatorAlpha
                                                 }
                                                 .clip(CircleShape)
-                                                .background(selectionColors.container),
+                                                .background(selectionColors.backgroundColor),
                                         )
                                     }
                                     AppIcon(
@@ -3267,11 +3246,27 @@ private fun MiuixBottomBar(
             defaultWindowInsetsPadding = true,
             mode = displayMode
         ) {
+            val useNativeSelection = !sharedLiquidGlassEnabled && uiSkinDecoration == null
+            val selectedIndex = bottomBarVisibleItems.indexOf(currentItem)
+            val indicator = if (useNativeSelection && selectedIndex >= 0) {
+                rememberMiuixBottomBarSelection(
+                    selectedIndex = selectedIndex,
+                    itemCount = bottomBarVisibleItems.size,
+                    onSelected = { index ->
+                        performMaterialBottomBarTap(haptic = haptic) {
+                            onItemClick(bottomBarVisibleItems[index])
+                        }
+                    },
+                )
+            } else null
             val selectedItemColor = AppContentColors.selectionAccent(sharedLiquidGlassEnabled)
             val unselectedItemColor = AppContentColors.secondaryText()
             val dockedIndicatorColor = resolveDockedBottomBarIndicatorColor(
-                defaultColor = if (!sharedLiquidGlassEnabled) AppSurfaceTokens.selectionContainer()
-                    else MaterialTheme.colorScheme.secondaryContainer,
+                defaultColor = when {
+                    useNativeSelection -> AppInteractionColors.miuixNavigationBarIndicatorColor()
+                    !sharedLiquidGlassEnabled -> AppSurfaceTokens.selectionContainer()
+                    else -> MaterialTheme.colorScheme.secondaryContainer
+                },
                 hasUiSkinDecoration = uiSkinDecoration != null,
             )
         val skinItemColors = resolveBottomBarSkinContentColors(
@@ -3284,7 +3279,7 @@ private fun MiuixBottomBar(
                 skinTrimTint = uiSkinDecoration?.bottomTrimTint
             )
 
-            bottomBarVisibleItems.forEach { item ->
+            bottomBarVisibleItems.forEachIndexed { index, item ->
                 val itemLabel = resolveBottomNavItemLabel(item, itemLabels)
                 val skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = currentItem == item)
                 val reminderBadgeText = formatBottomBarDynamicReminderBadge(
@@ -3315,7 +3310,8 @@ private fun MiuixBottomBar(
                             iconStyle = sharedBarIconStyle
                         ),
                         label = itemLabel,
-                        colors = if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled() && uiSkinDecoration == null) {
+                        modifier = indicator?.itemModifier(index, dockedIndicatorColor) ?: Modifier,
+                        colors = if (useNativeSelection) {
                             MiuixNavigationBarDefaults.navigationBarItemColors()
                         } else MiuixNavigationBarDefaults.navigationBarItemColors(
                             unselectedContentColor = skinItemColors.unselectedColor,
@@ -3686,7 +3682,6 @@ private fun BiliPaiFloatingBottomBar(
             currentLabel = resolveBottomNavItemLabel(currentItem, itemLabels),
             animateNowPlayingPresence = animateNowPlayingPresence,
             searchEnabled = bottomBarSearchEnabled,
-            isFeedScrollInProgress = isFeedScrollInProgress,
             collapseRequested = collapseLinkedDock,
             onSearchClick = onSearchClick,
             onSearchKeywordSubmit = onSearchKeywordSubmit,
@@ -3703,7 +3698,7 @@ private fun BiliPaiFloatingBottomBar(
             hasUiSkinDecoration = uiSkinDecoration != null,
             nowPlayingContent = nowPlayingContent,
             modifier = modifier,
-            navigationContent = {
+            navigationContent = { allocatedWidth ->
                 BiliPaiFloatingBottomBarChrome(
                     currentItem = currentItem,
                     onItemClick = onItemClick,
@@ -3745,7 +3740,7 @@ private fun BiliPaiFloatingBottomBar(
                     pagerTargetPositionProvider = pagerTargetPositionProvider,
                     isPagerNavigatingProvider = isPagerNavigatingProvider,
                     uiSkinDecoration = uiSkinDecoration,
-                    embeddedDock = true,
+                    embeddedDockWidth = allocatedWidth,
                 )
             },
         )
@@ -3800,7 +3795,7 @@ private fun BiliPaiFloatingBottomBarChrome(
     currentItem: BottomNavItem,
     onItemClick: (BottomNavItem) -> Unit,
     modifier: Modifier = Modifier,
-    embeddedDock: Boolean = false,
+    embeddedDockWidth: Dp? = null,
     visibleItems: List<BottomNavItem>,
     itemLabels: Map<String, String> = emptyMap(),
     itemColorIndices: Map<String, Int> = emptyMap(),
@@ -3870,11 +3865,11 @@ private fun BiliPaiFloatingBottomBarChrome(
         !effectiveGlassEnabled && uiSkinDecoration == null
     val themedMd3Selection = LocalAppUiStyle.current == AppUiStyle.MATERIAL3 &&
         !effectiveGlassEnabled && uiSkinDecoration == null
-    val nativeSelectionColors = rememberNativeBottomBarSelectionColors()
+    val nativeSelectionColors = AppInteractionColors.rememberMaterialNavigationSelection()
     val baseSelectedColor = when {
         useNativeMiuixNavigation -> nativeNavigationColors?.selectedContent
             ?: top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurfaceContainer
-        themedMd3Selection -> nativeSelectionColors.content
+        themedMd3Selection -> nativeSelectionColors.contentColor
         else -> AppContentColors.selectionAccent(effectiveGlassEnabled)
     }
     val baseUnselectedColor = if (!effectiveGlassEnabled && (themedMiuixSelection || iconStyle == SharedFloatingBottomBarIconStyle.MATERIAL)) {
@@ -3983,10 +3978,9 @@ private fun BiliPaiFloatingBottomBarChrome(
         mode = floatingMode,
         hasUiSkinDecoration = uiSkinDecoration != null,
     )
-    // Share the theme-tinted selection fill with opaque top tabs and category rails.
     val themedIndicatorContainerColor = when {
-        themedMiuixSelection -> nativeNavigationColors?.selectedContainer ?: AppSurfaceTokens.selectionContainer()
-        themedMd3Selection -> nativeSelectionColors.container
+        themedMiuixSelection -> AppInteractionColors.miuixNavigationBarIndicatorColor()
+        themedMd3Selection -> nativeSelectionColors.backgroundColor
         else -> null
     }
     val floatingColors = FloatingBottomBarColors(
@@ -4045,18 +4039,11 @@ private fun BiliPaiFloatingBottomBarChrome(
 
     Box(
         modifier = modifier.fillMaxWidth(),
-        contentAlignment = Alignment.BottomCenter
+        contentAlignment = Alignment.BottomCenter,
     ) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    bottom = if (embeddedDock) 0.dp else AppSpacingTokens.ExtraLarge +
-                        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-                )
-        ) {
+        val chromeContent: @Composable BoxScope.(Dp) -> Unit = { containerWidth ->
             val searchLayoutState = rememberBiliPaiBottomBarSearchLayoutState(
-                containerWidth = maxWidth,
+                containerWidth = containerWidth,
                 itemCount = totalItems,
                 minEdgePadding = tuning.outerHorizontalPaddingDp.dp,
                 searchEnabled = searchLayoutReserved,
@@ -4064,7 +4051,7 @@ private fun BiliPaiFloatingBottomBarChrome(
                 labelMode = labelMode,
                 searchLayoutMode = bottomBarSearchLayoutMode,
                 hasUiSkinDecoration = uiSkinDecoration != null,
-                fillAllocatedDockWidth = embeddedDock,
+                fillAllocatedDockWidth = embeddedDockWidth != null,
                 nativeMiuixNavigation = useNativeMiuixNavigation,
                 glassMotionEnabled = effectiveGlassEnabled,
             )
@@ -4231,6 +4218,14 @@ private fun BiliPaiFloatingBottomBarChrome(
                             }
                         }
                         if (useNativeMiuixNavigation) {
+                            val indicatorColor = AppInteractionColors.miuixNavigationBarIndicatorColor()
+                            val indicator = if (isValidSelection) {
+                                rememberMiuixBottomBarSelection(
+                                    selectedIndex = selectedIndex,
+                                    itemCount = visibleItems.size,
+                                    onSelected = { index -> handleBottomBarItemClick(index, visibleItems[index]) },
+                                )
+                            } else null
                             val nativeShape = resolveSharedBottomBarCapsuleShape()
                             val nativeSurfaceColor = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.surfaceContainer
                             val useNativeBlur = blurEnabled && (miuixBackdrop != null || hazeState != null)
@@ -4262,15 +4257,16 @@ private fun BiliPaiFloatingBottomBarChrome(
                                 defaultWindowInsetsPadding = false,
                                 mode = resolveMd3BottomBarDisplayMode(labelMode).toAppPlatformNavigationDisplayMode(),
                             ) {
-                                visibleItems.forEach { item ->
+                                visibleItems.forEachIndexed { index, item ->
                                     val badgeText = formatBottomBarDynamicReminderBadge(
                                         if (shouldShowBottomBarDynamicReminderBadge(item, dynamicUnreadCount)) dynamicUnreadCount else 0,
                                     )
                                     AppPlatformNavigationBarItem(
                                         selected = currentItem == item,
-                                        onClick = { handleBottomBarItemClick(visibleItems.indexOf(item), item) },
+                                        onClick = { handleBottomBarItemClick(index, item) },
                                         icon = resolveSharedBottomBarIcon(item, currentItem == item, iconStyle),
                                         label = resolveBottomNavItemLabel(item, itemLabels),
+                                        modifier = indicator?.itemModifier(index, indicatorColor) ?: Modifier,
                                         badge = badgeText?.let { text ->
                                             { BottomBarReminderBadge(badgeText = text) }
                                         },
@@ -4475,6 +4471,19 @@ private fun BiliPaiFloatingBottomBarChrome(
                     liquidGlassTuning = liquidGlassTuning,
                     iconStyle = iconStyle
                 )
+            }
+        }
+        if (embeddedDockWidth != null) {
+            // 合并底栏已分配导航行宽度；只在独立底栏中通过约束取得窗口宽度。
+            Box(Modifier.fillMaxWidth()) { chromeContent(embeddedDockWidth) }
+        } else {
+            BoxWithConstraints(
+                Modifier.fillMaxWidth().padding(
+                    bottom = AppSpacingTokens.ExtraLarge +
+                        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding(),
+                ),
+            ) {
+                chromeContent(maxWidth)
             }
         }
     }
@@ -5094,32 +5103,34 @@ internal fun BiliPaiBottomBarSearchVisualContent(
         if (showFieldContent) {
             Spacer(modifier = Modifier.width(if (glassSearchVisuals) 4.dp else AppSpacingTokens.Small + AppSpacingTokens.Micro))
             if (interactive) {
-                BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = contentColor),
-                    cursorBrush = SolidColor(accentColor),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { submitWithFeedback() }),
-                    modifier = Modifier
-                        .focusRequester(focusRequester)
-                        .weight(1f)
-                        .graphicsLayer { alpha = fieldAlpha() },
-                    decorationBox = { innerTextField ->
-                        Box(contentAlignment = Alignment.CenterStart) {
-                            if (query.isBlank()) {
-                                AppText(
-                                    text = "搜索",
-                                    color = contentColor.copy(alpha = 0.45f),
-                                    maxLines = 1,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
+                com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = contentColor),
+                        cursorBrush = SolidColor(accentColor),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { submitWithFeedback() }),
+                        modifier = Modifier
+                            .focusRequester(focusRequester)
+                            .weight(1f)
+                            .graphicsLayer { alpha = fieldAlpha() },
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (query.isBlank()) {
+                                    AppText(
+                                        text = "搜索",
+                                        color = contentColor.copy(alpha = 0.45f),
+                                        maxLines = 1,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                innerTextField()
                             }
-                            innerTextField()
                         }
-                    }
-                )
+                    )
+                }
             } else {
                 Box(
                     modifier = Modifier

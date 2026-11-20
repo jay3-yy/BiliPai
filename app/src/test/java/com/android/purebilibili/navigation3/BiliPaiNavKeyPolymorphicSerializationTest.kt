@@ -1,14 +1,54 @@
 package com.android.purebilibili.navigation3
 
+import androidx.compose.runtime.saveable.SaverScope
+import androidx.compose.runtime.toMutableStateList
+import androidx.navigation3.runtime.NavBackStack
+import com.android.purebilibili.navigation.ScreenRoutes
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class BiliPaiNavKeyPolymorphicSerializationTest {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    @Test
+    fun argumentlessWindowRoutesCanBeSavedAsRootDestinations() {
+        val entries = listOf(
+            ScreenRoutes.Search.route to BiliPaiNavKey.Search(),
+            ScreenRoutes.LikedVideos.route to BiliPaiNavKey.LikedVideos(),
+        )
+        for ((route, expected) in entries) {
+            val stack = NavBackStack(listOf(legacyRouteToBiliPaiNavKey(route)).toMutableStateList())
+            val saved = with(BiliPaiNavBackStackSaver) { SaverScope { true }.save(stack) }
+
+            assertEquals(
+                listOf(expected),
+                assertNotNull(BiliPaiNavBackStackSaver.restore(assertNotNull(saved))).toList(),
+            )
+        }
+    }
+
+    @Test
+    fun savedRouteListRestoresIntoAndroidXStackAndRetainsItsWireFormat() {
+        val routes: List<BiliPaiNavKey> = listOf(
+            BiliPaiNavKey.MainHost,
+            BiliPaiNavKey.Search(keyword = "折叠屏", openId = 41L),
+            BiliPaiNavKey.VideoDetail(bvid = "BV1", cid = 2L, openId = 42L, resumePositionMs = 6500L),
+        )
+        val serializer = ListSerializer(BiliPaiNavKey.serializer())
+        val savedRoutes = json.encodeToString(serializer, routes)
+
+        val stack = assertNotNull(BiliPaiNavBackStackSaver.restore(savedRoutes))
+        assertEquals(routes, stack.toList())
+        assertEquals(routes.last(), stack.removeAt(stack.lastIndex))
+
+        val savedAfterBack = with(BiliPaiNavBackStackSaver) { SaverScope { true }.save(stack) }
+        assertEquals(routes.dropLast(1), json.decodeFromString(serializer, assertNotNull(savedAfterBack)))
+    }
 
     @Test
     fun dynamicCommentEntrySurvivesSavedBackStackRestoration() {

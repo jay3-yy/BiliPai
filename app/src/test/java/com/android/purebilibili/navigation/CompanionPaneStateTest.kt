@@ -6,6 +6,19 @@ import kotlin.test.assertTrue
 
 class CompanionPaneStateTest {
     @Test
+    fun windowResizeTemporarilyShowsVideoAloneAndRestoresCommittedSplit() {
+        val state = CompanionPaneState(0.38f)
+        state.selectFraction(0.48f, 1000f)
+
+        assertEquals(CompanionPaneMode.Video, state.visibleMode(canSplit = false, immersivePlayback = false))
+        assertEquals(CompanionPaneMode.Split, state.visibleMode(canSplit = true, immersivePlayback = false))
+        assertEquals(0.48f, state.measuredFeedFraction(1000f), 0.001f)
+
+        state.selectFraction(1f, 1000f)
+        assertEquals(CompanionPaneMode.Feed, state.visibleMode(canSplit = false, immersivePlayback = false))
+    }
+
+    @Test
     fun dragResizesLayoutAndCommitsMetadataOnlyOnRelease() {
         val state = CompanionPaneState(0.38f)
         state.beginDrag()

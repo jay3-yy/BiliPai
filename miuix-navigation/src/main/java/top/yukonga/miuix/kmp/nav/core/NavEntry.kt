@@ -17,7 +17,7 @@ import top.yukonga.miuix.kmp.nav.transition.NavRole
  * diffing (via [contentKey]), of [androidx.compose.runtime.movableContentOf] identity, and of
  * per-entry state scoping (saveable state / lifecycle / view-model).
  *
- * @param K the concrete [NavKey] subtype this entry renders.
+ * @param K the concrete route key type this entry renders.
  * @property contentKey value-stable identity used for diffing and for keeping composition identity
  *   stable across recompositions and reorderings. Defaults to the route key itself when the DSL
  *   caller does not supply one.
@@ -25,7 +25,7 @@ import top.yukonga.miuix.kmp.nav.transition.NavRole
  *   by the DSL). Empty by default.
  */
 @PublishedApi
-internal class NavEntry<K : NavKey>(
+internal class NavEntry<K : Any>(
     key: K,
     val contentKey: Any,
     metadata: Map<String, Any>,
@@ -41,7 +41,7 @@ internal class NavEntry<K : NavKey>(
      * and rendering the old key with the new lambda would show stale arguments or throw a
      * ClassCastException.
      */
-    private class Registration<K : NavKey>(
+    private class Registration<K : Any>(
         val key: K,
         val content: @Composable (K) -> Unit,
     )
@@ -87,6 +87,9 @@ internal class NavEntry<K : NavKey>(
     var presentation: NavPresentationState by mutableStateOf(
         NavPresentationState(role = NavRole.Top, isRemoving = false),
     )
+
+    internal fun withContent(content: @Composable (K) -> Unit): NavEntry<K> =
+        NavEntry(key, contentKey, metadata, content)
 
     /** Renders this entry's content with its typed key. */
     @Composable

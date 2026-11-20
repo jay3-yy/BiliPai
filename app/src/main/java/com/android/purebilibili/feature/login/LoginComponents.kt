@@ -890,60 +890,62 @@ fun ModernTextField(
 ) {
     val palette = rememberLoginPalette()
 
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        keyboardOptions = keyboardOptions,
-        visualTransformation = visualTransformation,
-        singleLine = true,
-        textStyle = MaterialTheme.typography.bodyLarge.copy(
-            color = palette.inputText,
-            fontWeight = FontWeight.Medium
-        ),
-        cursorBrush = SolidColor(palette.buttonFill),
-        modifier = modifier.fillMaxWidth(),
-        decorationBox = { innerTextField ->
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 54.dp)
-                    .clip(AppShapes.container(ContainerLevel.Dialog))
-                    .background(palette.inputFill)
-                    .border(1.dp, palette.inputStroke, AppShapes.container(ContainerLevel.Dialog))
-                    .padding(horizontal = 14.dp, vertical = 14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            keyboardOptions = keyboardOptions,
+            visualTransformation = visualTransformation,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                color = palette.inputText,
+                fontWeight = FontWeight.Medium
+            ),
+            cursorBrush = SolidColor(palette.buttonFill),
+            modifier = modifier.fillMaxWidth(),
+            decorationBox = { innerTextField ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 54.dp)
+                        .clip(AppShapes.container(ContainerLevel.Dialog))
+                        .background(palette.inputFill)
+                        .border(1.dp, palette.inputStroke, AppShapes.container(ContainerLevel.Dialog))
+                        .padding(horizontal = 14.dp, vertical = 14.dp)
                 ) {
-                    AppSurface(
-                        shape = CircleShape,
-                        color = palette.segmentTrack
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        AppIcon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = palette.inputIcon,
-                            modifier = Modifier
-                                .size(26.dp)
-                                .padding(5.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
-                    Box(modifier = Modifier.weight(1f)) {
-                        if (value.isEmpty()) {
-                            AppText(
-                                text = placeholder,
-                                color = palette.inputPlaceholder,
-                                style = MaterialTheme.typography.bodyMedium
+                        AppSurface(
+                            shape = CircleShape,
+                            color = palette.segmentTrack
+                        ) {
+                            AppIcon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = palette.inputIcon,
+                                modifier = Modifier
+                                    .size(26.dp)
+                                    .padding(5.dp)
                             )
                         }
-                        innerTextField()
+                        Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (value.isEmpty()) {
+                                AppText(
+                                    text = placeholder,
+                                    color = palette.inputPlaceholder,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            innerTextField()
+                        }
                     }
                 }
             }
-        }
-    )
+        )
+    }
 }
 
 @Composable

@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.download
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DownloadQueuePolicyTest {
@@ -91,26 +93,21 @@ class DownloadQueuePolicyTest {
     }
 
     @Test
-    fun workerCancellationFinishesOnlyForUserStableStates() {
+    fun networkBackoffReleasesSlotAndWakeupWaitsForCapacity() {
+        val failedAttempt = baseTask.copy(status = DownloadStatus.DOWNLOADING, workToken = "transfer", createdAt = 1L)
+        val queued = baseTask.copy(cid = 2L, status = DownloadStatus.QUEUED, createdAt = 2L)
+        val waiting = assertNotNull(failedAttempt.deferAutomaticRetry(nowMs = 10_000L))
+        assertEquals(listOf(queued.id), resolveNextQueuedDownloadTaskIds(listOf(waiting, queued), maxConcurrent = 1))
+        assertTrue(shouldPauseAllInclude(waiting))
+
+        assertNull(waiting.makeRetryReady("older-transfer"))
+        assertNull(waiting.copy(status = DownloadStatus.PAUSED).makeRetryReady("transfer"))
+        val ready = assertNotNull(waiting.makeRetryReady("transfer"))
+        val running = queued.copy(status = DownloadStatus.DOWNLOADING)
+        assertTrue(resolveNextQueuedDownloadTaskIds(listOf(ready, running), maxConcurrent = 1).isEmpty())
         assertEquals(
-            DownloadWorkerCancellationDecision.FINISH,
-            resolveDownloadWorkerCancellationDecision(null)
-        )
-        assertEquals(
-            DownloadWorkerCancellationDecision.FINISH,
-            resolveDownloadWorkerCancellationDecision(DownloadStatus.PAUSED)
-        )
-        assertEquals(
-            DownloadWorkerCancellationDecision.FINISH,
-            resolveDownloadWorkerCancellationDecision(DownloadStatus.COMPLETED)
-        )
-        assertEquals(
-            DownloadWorkerCancellationDecision.RETRY,
-            resolveDownloadWorkerCancellationDecision(DownloadStatus.DOWNLOADING)
-        )
-        assertEquals(
-            DownloadWorkerCancellationDecision.RETRY,
-            resolveDownloadWorkerCancellationDecision(DownloadStatus.PENDING)
+            listOf(ready.id),
+            resolveNextQueuedDownloadTaskIds(listOf(ready, running.copy(status = DownloadStatus.COMPLETED)), maxConcurrent = 1),
         )
     }
 

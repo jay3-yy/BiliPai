@@ -16,7 +16,7 @@ internal fun resolveResumableDownloadPlan(
     val safeExistingBytes = existingBytes.coerceAtLeast(0L)
     val safeTotalBytes = totalBytes.coerceAtLeast(0L)
 
-    if (safeTotalBytes > 0L && safeExistingBytes >= safeTotalBytes) {
+    if (safeTotalBytes > 0L && safeExistingBytes == safeTotalBytes) {
         return ResumableDownloadPlan(
             append = false,
             rangeStartBytes = safeTotalBytes,
@@ -26,7 +26,7 @@ internal fun resolveResumableDownloadPlan(
         )
     }
 
-    if (acceptsRanges && safeExistingBytes > 0L) {
+    if (acceptsRanges && safeExistingBytes > 0L && (safeTotalBytes == 0L || safeExistingBytes < safeTotalBytes)) {
         return ResumableDownloadPlan(
             append = true,
             rangeStartBytes = safeExistingBytes,

@@ -1139,11 +1139,15 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     fun getSplashAlignment(isTablet: Boolean) = SettingsManager.getSplashAlignment(getApplication(), isTablet)
 
+    fun getSplashScale(isTablet: Boolean) = SettingsManager.getSplashScale(getApplication(), isTablet)
+
     fun setAsSplashWallpaper(
         url: String,
         saveToGallery: Boolean = false,
         mobileBias: Float? = null,
         tabletBias: Float? = null,
+        mobileScale: Float? = null,
+        tabletScale: Float? = null,
         onComplete: () -> Unit = {}
     ) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -1179,6 +1183,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     SettingsManager.setSplashEnabled(context, true)
                     mobileBias?.let { SettingsManager.setSplashAlignment(context, isTablet = false, bias = it) }
                     tabletBias?.let { SettingsManager.setSplashAlignment(context, isTablet = true, bias = it) }
+                    mobileScale?.let { SettingsManager.setSplashScale(context, isTablet = false, scale = it) }
+                    tabletScale?.let { SettingsManager.setSplashScale(context, isTablet = true, scale = it) }
 
                     // 3. Save to Gallery if requested
                     if (saveToGallery) {
@@ -1208,6 +1214,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         uri: String,
         mobileBias: Float? = null,
         tabletBias: Float? = null,
+        mobileScale: Float? = null,
+        tabletScale: Float? = null,
         onComplete: () -> Unit = {}
     ) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -1220,6 +1228,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 SettingsManager.setSplashRandomEnabled(context, false)
                 mobileBias?.let { SettingsManager.setSplashAlignment(context, isTablet = false, bias = it) }
                 tabletBias?.let { SettingsManager.setSplashAlignment(context, isTablet = true, bias = it) }
+                mobileScale?.let { SettingsManager.setSplashScale(context, isTablet = false, scale = it) }
+                tabletScale?.let { SettingsManager.setSplashScale(context, isTablet = true, scale = it) }
 
                 withContext(Dispatchers.Main.immediate) {
                     _splashSaveState.value = WallpaperSaveState.Success

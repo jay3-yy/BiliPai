@@ -2,13 +2,16 @@ package com.android.purebilibili.feature.video.screen
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import com.android.purebilibili.core.ui.transition.normalizeSharedElementSourceRoute
 import com.android.purebilibili.core.util.CardPositionManager
+import kotlinx.coroutines.flow.first
 
 internal enum class VideoDetailEntryWorkPhase {
     Content,
@@ -23,14 +26,18 @@ internal suspend fun runVideoDetailEntryWorkHandoff(
     onCommentsReady: () -> Unit,
     onRelatedReady: () -> Unit,
     startPhase: VideoDetailEntryWorkPhase = VideoDetailEntryWorkPhase.Content,
+    bodyPlaced: State<Boolean>? = null,
+    playerPlaced: State<Boolean>? = null,
 ) {
     // A frame callback runs before composition/draw. Two boundaries give the preceding
     // phase a frame to render; a single boundary can batch both phases into one frame.
     if (startPhase < VideoDetailEntryWorkPhase.Playback) {
+        if (bodyPlaced != null) snapshotFlow { bodyPlaced.value }.first { it }
         repeat(2) { withFrameNanos { } }
         onPlaybackReady()
     }
     if (startPhase < VideoDetailEntryWorkPhase.Comments) {
+        if (playerPlaced != null) snapshotFlow { playerPlaced.value }.first { it }
         repeat(2) { withFrameNanos { } }
         onCommentsReady()
     }
@@ -45,13 +52,15 @@ internal fun rememberVideoDetailEntryWorkPhase(
     staggerWork: Boolean,
     contentReady: Boolean,
     isVisible: Boolean,
+    bodyPlaced: State<Boolean>?,
+    playerPlaced: State<Boolean>?,
 ): VideoDetailEntryWorkPhase {
     // Entry lifetime, not BVID lifetime: changing episode or returning from a child must
     // not close an already-open playback gate or replay the initial handoff.
     var phase by remember {
         mutableStateOf(if (staggerWork) VideoDetailEntryWorkPhase.Content else VideoDetailEntryWorkPhase.Related)
     }
-    LaunchedEffect(staggerWork, contentReady, isVisible) {
+    LaunchedEffect(staggerWork, contentReady, isVisible, bodyPlaced, playerPlaced) {
         if (!staggerWork) {
             phase = VideoDetailEntryWorkPhase.Related
             return@LaunchedEffect
@@ -68,6 +77,8 @@ internal fun rememberVideoDetailEntryWorkPhase(
             },
             onRelatedReady = { phase = VideoDetailEntryWorkPhase.Related },
             startPhase = phase,
+            bodyPlaced = bodyPlaced,
+            playerPlaced = playerPlaced,
         )
     }
     return phase

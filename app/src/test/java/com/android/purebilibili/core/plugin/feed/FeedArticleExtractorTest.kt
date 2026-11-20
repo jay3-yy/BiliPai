@@ -65,6 +65,23 @@ class FeedArticleExtractorTest {
     }
 
     @Test
+    fun `reading blocks preserve links with greater-than signs in quoted attributes`() {
+        val html = """
+            <article class="entry-content">
+                <p>这段正文介绍比较运算符，并用下方的链接给出进一步说明。</p>
+                <p><a title="x > y" href="/comparison?left=x&amp;right=y">比较示例</a></p>
+            </article>
+        """.trimIndent()
+        val article = assertNotNull(extractReadableArticle(html, "https://example.com/post"))
+
+        for (blocks in listOf(article.readingBlocks(), parseFeedHtml(html, article.url))) {
+            val link = blocks.filterIsInstance<FeedBlock.Paragraph>()
+                .flatMap { it.inlines }.filterIsInstance<FeedInline.Link>().single()
+            assertEquals(FeedInline.Link("比较示例", "https://example.com/comparison?left=x&right=y"), link)
+        }
+    }
+
+    @Test
     fun `hidden text and executable content are not retained`() {
         val html = """
             <article><p>可以正常阅读的文章正文，长度足以被识别成一篇简短的文章。</p>

@@ -41,12 +41,16 @@ fun feedBodyNeedsRemoteFetch(item: ParsedFeedItem): Boolean {
 fun extractArticleBody(pageHtml: String, baseUrl: String = ""): String? =
     extractReadableArticle(pageHtml, baseUrl)?.html
 
-data class ReadableArticle(
+data class ReadableArticle internal constructor(
     val url: String,
     val title: String,
     val author: String,
-    val html: String,
-)
+    private val content: Element,
+) {
+    val html: String get() = content.html()
+
+    internal fun readingBlocks(): List<FeedBlock> = parseFeedHtml(content, url)
+}
 
 fun extractReadableArticle(pageHtml: String, baseUrl: String): ReadableArticle? {
     if (pageHtml.isBlank() || pageHtml.length > 2 * 1024 * 1024) return null
@@ -100,7 +104,7 @@ fun extractReadableArticle(pageHtml: String, baseUrl: String): ReadableArticle? 
             ?: document.selectFirst("meta[property=og:title]")?.attr("content")?.takeIf { it.isNotBlank() }
             ?: document.title(),
         author = readable?.byline.orEmpty(),
-        html = content.html(),
+        content = content,
     )
 }
 

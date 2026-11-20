@@ -1,6 +1,7 @@
 package com.android.purebilibili.core.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.hapticfeedback.HapticFeedback
@@ -19,7 +20,7 @@ enum class AppHapticScene(val bit: Int, val title: String, val description: Stri
     PLAYER_SEEK(128, "播放进度与章节", "拖动播放进度、章节与继续观看操作"),
     VIDEO_ACTIONS(256, "视频互动操作", "点赞、投币、收藏、分享、长按三连与合集订阅"),
     REFRESH(512, "刷新与列表操作", "刷新、列表批量选择与下载操作"),
-    RESULTS(1024, "图片保存结果", "图片保存开始、成功或失败反馈");
+    RESULTS(1024, "图片保存与分享结果", "图片保存开始、保存与分享的成功或失败反馈");
 
     val settingId: String get() = "animation.haptic_scene.${name.lowercase()}"
 }
@@ -57,4 +58,11 @@ fun rememberAppHapticFeedback(scene: AppHapticScene): HapticFeedback {
         if (current is AppPolicyHapticFeedback) current.forScene(scene)
         else AppPolicyHapticFeedback(current, { latestConfig.value }, scene)
     }
+}
+
+/** 原生控件的隐式反馈也必须归属其功能场景。 */
+@Composable
+fun ProvideAppHapticScene(scene: AppHapticScene, content: @Composable () -> Unit) {
+    val haptic = rememberAppHapticFeedback(scene)
+    CompositionLocalProvider(LocalHapticFeedback provides haptic, content = content)
 }

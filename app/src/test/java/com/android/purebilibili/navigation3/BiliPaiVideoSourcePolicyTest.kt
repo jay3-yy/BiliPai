@@ -84,7 +84,7 @@ class BiliPaiVideoSourcePolicyTest {
         val source = resolveBiliPaiVideoSource(
             bvid = "BV1",
             explicitSourceRoute = null,
-            currentKey = BiliPaiNavKey.Search,
+            currentKey = BiliPaiNavKey.Search(),
             previousSourceRoute = null
         )
 

@@ -43,25 +43,25 @@ internal val LocalVideoSkeletonAnimationAllowed = staticCompositionLocalOf { tru
 fun ShimmerContainer(
     modifier: Modifier = Modifier,
     animated: Boolean = true,
-    sharedPulse: androidx.compose.runtime.State<Float>? = null,
     content: @Composable () -> Unit
 ) {
-    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
-        respectComponentMotion = false,
-    )
     val animationAllowed = animated && LocalVideoSkeletonAnimationAllowed.current
-    val pulse = if (animationAllowed) {
-        sharedPulse ?: LocalVideoSkeletonPulse.current ?: com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(
-            animated = animationGate.active,
+    val inheritedPulse = LocalVideoSkeletonPulse.current
+    val animationGate = if (animationAllowed && inheritedPulse == null) {
+        com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(respectComponentMotion = false)
+    } else null
+    val pulse = when {
+        !animationAllowed -> androidx.compose.runtime.rememberUpdatedState(Float.NaN)
+        inheritedPulse != null -> inheritedPulse
+        else -> com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(
+            animated = animationGate?.active == true,
         )
-    } else {
-        androidx.compose.runtime.rememberUpdatedState(Float.NaN)
     }
     CompositionLocalProvider(
         LocalVideoSkeletonPulse provides pulse,
         LocalVideoSkeletonAnimationAllowed provides animationAllowed,
     ) {
-        Box(modifier = modifier.then(animationGate.modifier)) {
+        Box(modifier = modifier.then(animationGate?.modifier ?: Modifier)) {
             content()
         }
     }
@@ -92,12 +92,10 @@ fun SkeletonCircle(size: Dp = 48.dp) {
 @Composable
 fun VideoDetailSkeleton(
     animated: Boolean = true,
-    sharedPulse: androidx.compose.runtime.State<Float>? = null,
 ) {
     ShimmerContainer(
         modifier = Modifier.fillMaxSize(),
         animated = animated,
-        sharedPulse = sharedPulse,
     ) {
         Column(
             modifier = Modifier
@@ -306,32 +304,44 @@ internal fun RelatedVideoGridRowSkeleton(
     modifier: Modifier = Modifier,
     cardPresentation: RelatedVideoCardLayout? = null,
 ) {
-    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
-    val pulse = rememberRelatedSkeletonSweepState(
-        animationGate.active && LocalVideoSkeletonAnimationAllowed.current,
-    )
+    val animationGate = if (LocalVideoSkeletonAnimationAllowed.current) {
+        com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    } else null
+    val inheritedPulse = LocalVideoSkeletonPulse.current
+    val pulse = when {
+        animationGate?.active != true -> androidx.compose.runtime.rememberUpdatedState(Float.NaN)
+        inheritedPulse != null -> inheritedPulse
+        else -> rememberRelatedSkeletonSweepState()
+    }
+    val rowModifier = modifier
+        .fillMaxWidth()
+        .then(animationGate?.modifier ?: Modifier)
+        .clearAndSetSemantics { }
+        .padding(horizontal = cardLayout.outerPaddingDp.dp, vertical = 2.dp)
+    val row: @Composable (RelatedVideoCardLayout) -> Unit = { presentation ->
+        RelatedVideoItemSkeleton(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+            coverAspectRatio = cardLayout.coverAspectRatio,
+            stacked = presentation == RelatedVideoCardLayout.STACKED,
+        )
+    }
     CompositionLocalProvider(LocalVideoSkeletonPulse provides pulse) {
-        BoxWithConstraints(
-            modifier = modifier
-                .fillMaxWidth()
-                .then(animationGate.modifier)
-                .clearAndSetSemantics { }
-                .padding(horizontal = cardLayout.outerPaddingDp.dp, vertical = 2.dp),
-        ) {
-            RelatedVideoItemSkeleton(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-                coverAspectRatio = cardLayout.coverAspectRatio,
-                stacked = (cardPresentation ?: resolveRelatedVideoCardLayout(maxWidth.value.toInt())) == RelatedVideoCardLayout.STACKED,
-            )
+        // 列表已经按栏宽解析卡片样式时，直接测量行内容。
+        if (cardPresentation != null) {
+            Box(modifier = rowModifier) { row(cardPresentation) }
+        } else {
+            BoxWithConstraints(modifier = rowModifier) {
+                row(resolveRelatedVideoCardLayout(maxWidth.value.toInt()))
+            }
         }
     }
 }
 
 /** 可见行共用帧时间作为扫光相位，移出视口后停止逐帧工作。 */
 @Composable
-private fun rememberRelatedSkeletonSweepState(active: Boolean): androidx.compose.runtime.State<Float> {
+private fun rememberRelatedSkeletonSweepState(): androidx.compose.runtime.State<Float> {
     val enabled = com.android.purebilibili.core.ui.skeleton.rememberSkeletonBreathingEnabled()
-    if (!active || !enabled) return androidx.compose.runtime.rememberUpdatedState(Float.NaN)
+    if (!enabled) return androidx.compose.runtime.rememberUpdatedState(Float.NaN)
     return androidx.compose.runtime.produceState(initialValue = Float.NaN) {
         while (true) {
             androidx.compose.animation.core.withInfiniteAnimationFrameNanos { frameTime ->

@@ -7,13 +7,50 @@ import kotlin.test.assertTrue
 
 class SettingsItemSearchPolicyTest {
     @Test
+    fun animationKeywordsLeadToSpecificSettings() {
+        val entries = mapOf(
+            "蓝雪女仆" to "animation.maid_lottie_animation_enabled",
+            "渐进模糊" to "animation.progressive_top_blur_enabled",
+            "顶栏磨砂" to "animation.header_blur_enabled",
+            "容器形变" to "animation.app_navigation_settings.settings_container_morph_enabled",
+            "页面切换动画" to "animation.page_transition_style",
+            "返回预览幅度" to "animation.back_preview_progress",
+            "缩放退出方向" to "animation.back_exit_direction",
+            "磨砂强度" to "animation.blur_intensity",
+        )
+        entries.forEach { (query, settingId) ->
+            val result = resolveSettingsSearchResults(query).first()
+            assertEquals(settingId, result.settingId, query)
+            assertEquals(BiliPaiNavKey.AnimationSettings, resolveSettingsSearchNavigation(result))
+        }
+    }
+
+    @Test
+    fun splashAnimationSearchLeadsToItsSwitchInAppearance() {
+        listOf("开屏图标动画", "启动动画").forEach { query ->
+            val result = resolveSettingsSearchResults(query).first()
+            assertEquals("appearance.splash_icon_animation_enabled", result.settingId)
+            assertEquals("appearance_splash_icon", result.focusId)
+            assertEquals(BiliPaiNavKey.AppearanceSettings, resolveSettingsSearchNavigation(result))
+        }
+    }
+
+    @Test
     fun textCopySearchOpensTextSettingsAndKeepsItsStableId() {
         val result = resolveSettingsSearchResults("点按文字复制").first()
         assertEquals("animation.global_text_tap_copy_enabled", result.settingId)
         assertEquals(SettingsSearchTarget.APPEARANCE, result.target)
         assertEquals("appearance_text_size", result.focusId)
-        assertEquals("设置 / 外观与动画 / 文字与大小", result.path)
+        assertEquals("设置 / 界面外观 / 文字与大小", result.path)
         assertEquals(BiliPaiNavKey.AppearanceSettings, resolveSettingsSearchNavigation(result))
+    }
+
+    @Test
+    fun liquidGlassSearchOpensTheIndependentAnimationPage() {
+        val result = resolveSettingsSearchResults("液态玻璃").first()
+        assertEquals("appearance.effective_liquid_glass_enabled", result.settingId)
+        assertEquals("设置 / 动效与反馈 / 液态玻璃与磨砂", result.path)
+        assertEquals(BiliPaiNavKey.AnimationSettings, resolveSettingsSearchNavigation(result))
     }
 
     @Test

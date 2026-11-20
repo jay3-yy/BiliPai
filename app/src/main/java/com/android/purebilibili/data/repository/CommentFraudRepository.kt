@@ -90,19 +90,18 @@ object CommentFraudRepository {
         context: Context = PureApplication.instance
     ): Result<CommentFraudStatus> = withContext(Dispatchers.IO) {
         try {
-            require(record.type == 1) { "当前仅支持视频评论可见性检查" }
             require(com.android.purebilibili.core.store.TokenManager.accountIdentity.value.mid == record.uid && record.uid > 0L) { "请切换到发布评论的账号" }
             Logger.d("CommentFraudRepo", "🔄 开始复检历史评论: rpid=${record.rpid}, oid=${record.oid}")
             val result = CommentRepository.checkCommentStatus(
                 aid = record.oid,
                 rpid = record.rpid,
                 rootId = record.root,
-                waitMs = 0L
+                type = record.type,
             )
 
             val newStatus = result.getOrThrow()
             val updatedRecord = record.copy(
-                status = newStatus.name,
+                status = if (newStatus == CommentFraudStatus.UNKNOWN) record.status else newStatus.name,
                 timestamp = System.currentTimeMillis()
             )
             getDao(context).insertOrUpdate(updatedRecord)

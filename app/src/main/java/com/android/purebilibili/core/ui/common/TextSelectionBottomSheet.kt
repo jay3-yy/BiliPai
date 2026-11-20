@@ -182,19 +182,21 @@ fun TextSelectionBottomSheet(
                     .padding(14.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                BasicTextField(
-                    value = textFieldValue,
-                    onValueChange = { textFieldValue = it },
-                    readOnly = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Normal
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                )
+                com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                    BasicTextField(
+                        value = textFieldValue,
+                        onValueChange = { textFieldValue = it },
+                        readOnly = true,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Normal
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(18.dp))

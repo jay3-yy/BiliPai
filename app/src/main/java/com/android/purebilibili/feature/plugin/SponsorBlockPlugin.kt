@@ -16,7 +16,7 @@ import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -1104,7 +1104,7 @@ private fun SponsorBlockRecordRow(record: SponsorBlockSkipRecord) {
             .fillMaxWidth()
             .clip(AppShapes.container(ContainerLevel.Card))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
-            .combinedClickable(
+            .appCombinedClickable(
                 onClick = {},
                 onLongClick = { showDetailDialog = true }
             )

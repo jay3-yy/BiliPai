@@ -31,6 +31,8 @@
       "home_hero_carousel_enabled": false,
       "ui_entrance_animation_enabled": false,
       "card_transition_enabled": false,
+      "card_removal_dissolve_enabled": true,
+      "card_removal_dissolve_quick": false,
       "video_transition_mode": "system_preferred",
       "live_surface_card_transition_enabled": false,
       "skeleton_breathing_enabled": false,

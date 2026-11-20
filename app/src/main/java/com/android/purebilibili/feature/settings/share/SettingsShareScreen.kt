@@ -44,11 +44,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.R
-import com.android.purebilibili.feature.settings.rememberThemeAwareSettingsIcon
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Report
-import top.yukonga.miuix.kmp.icon.extended.Tasks
 import com.android.purebilibili.feature.settings.SettingsPageScrollHost
+import com.android.purebilibili.feature.settings.rememberOriginalThemeAwareSettingsIcon
+import com.android.purebilibili.feature.settings.rememberSettingsVector
+import com.android.purebilibili.feature.settings.settingsIconResource
 import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
 import com.android.purebilibili.feature.settings.ui.settingsScrollContentPadding
 import com.android.purebilibili.core.ui.AppAlertDialog
@@ -58,6 +57,9 @@ import com.android.purebilibili.core.ui.components.AppPreferenceDivider
 import com.android.purebilibili.core.ui.components.AppPreferenceGroup
 import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
 import com.android.purebilibili.core.ui.components.AppSwitchPreference
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Report
+import top.yukonga.miuix.kmp.icon.extended.Tasks
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -134,7 +136,7 @@ fun SettingsShareScreen(
                 AppPreferenceGroup {
                     // 状态放 subtitle，避免右侧 value 窄列把长文案拆成「操作」单独一行。
                     AppPreference(
-                        icon = if (uiState.isBusy) com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_pending_fill_24) else com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_history_fill_24),
+                        icon = if (uiState.isBusy) rememberSettingsVector(R.drawable.ph_dots_three_circle_24, R.drawable.ms_pending_fill_24) else rememberSettingsVector(R.drawable.ph_clock_afternoon_24, R.drawable.ms_history_fill_24),
                         title = if (uiState.isBusy) "正在处理" else "最近状态",
                         subtitle = uiState.statusMessage ?: "尚未执行导入导出操作",
                         onClick = if (uiState.statusMessage != null) ({ viewModel.clearStatus() }) else null,
@@ -148,10 +150,7 @@ fun SettingsShareScreen(
                 AppPreferenceSectionTitle("说明")
                 AppPreferenceGroup {
                     AppPreference(
-                        icon = rememberThemeAwareSettingsIcon(
-                            materialSymbolResource = R.drawable.ms_task_alt_24,
-                            miuixIcon = MiuixIcons.Tasks,
-                        ),
+                        icon = rememberSettingsVector(R.drawable.ph_list_checks_24) { rememberOriginalThemeAwareSettingsIcon(R.drawable.ms_task_alt_24, MiuixIcons.Tasks) },
                         title = "包含的设置",
                         subtitle = "外观、播放、手势、弹幕和导航等不含隐私的设置",
                         onClick = null,
@@ -160,7 +159,7 @@ fun SettingsShareScreen(
                     )
                     AppPreferenceDivider(startIndent = 66.dp)
                     AppPreference(
-                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_lock_fill_24),
+                        icon = rememberSettingsVector(R.drawable.ph_lock_24, R.drawable.ms_lock_fill_24),
                         title = "不包含的设置",
                         subtitle = "账号、保存路径、云备份账号、隐私和设备专属配置",
                         onClick = null,
@@ -178,10 +177,7 @@ fun SettingsShareScreen(
                         subtitle = "附带安卓版本、界面风格和屏幕信息，便于排查问题；导入时不会应用",
                         checked = uiState.includeDeviceDebug,
                         onCheckedChange = viewModel::setIncludeDeviceDebug,
-                        icon = rememberThemeAwareSettingsIcon(
-                            materialSymbolResource = R.drawable.ms_report_24,
-                            miuixIcon = MiuixIcons.Report,
-                        ),
+                        icon = rememberSettingsVector(R.drawable.ph_flag_24) { rememberOriginalThemeAwareSettingsIcon(R.drawable.ms_report_24, MiuixIcons.Report) },
                         iconTint = AppContentColors.secondaryText(),
                     )
                 }
@@ -205,7 +201,7 @@ fun SettingsShareScreen(
                     )
                 } else                 AppPreferenceGroup {
                     AppPreference(
-                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_download_fill_24),
+                        icon = rememberSettingsVector(R.drawable.ph_download_simple_24, R.drawable.ms_download_fill_24),
                         title = "导出到文件",
                         subtitle = if (uiState.includeDeviceDebug) {
                             "保存设置文件，并附带设备排查信息"
@@ -224,7 +220,7 @@ fun SettingsShareScreen(
                     )
                     AppPreferenceDivider(startIndent = 66.dp)
                     AppPreference(
-                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_share_fill_24),
+                        icon = rememberSettingsVector(R.drawable.ph_share_network_24, R.drawable.ms_share_fill_24),
                         title = "分享导出文件",
                         subtitle = "生成设置文件后打开系统分享面板",
                         onClick = { viewModel.prepareShare() },
@@ -232,7 +228,7 @@ fun SettingsShareScreen(
                     )
                     AppPreferenceDivider(startIndent = 66.dp)
                     AppPreference(
-                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_upload_file_fill_24),
+                        icon = rememberSettingsVector(R.drawable.ph_file_arrow_up_24, R.drawable.ms_upload_file_fill_24),
                         title = "从文件导入",
                         subtitle = "先查看会修改哪些内容，确认后再应用",
                         onClick = { importLauncher.launch(arrayOf("application/json", "text/plain")) },
@@ -246,9 +242,7 @@ fun SettingsShareScreen(
                 AppPreferenceGroup {
                     if (com.android.purebilibili.core.theme.LocalAppUiStyle.current != com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3) {
                         AppPreference(
-                            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(
-                                com.android.purebilibili.R.drawable.ms_download_fill_24,
-                            ),
+                            icon = rememberSettingsVector(R.drawable.ph_archive_24, R.drawable.ms_download_fill_24),
                             title = "保存当前配置",
                             subtitle = "自定义名称，保存后可一键恢复",
                             onClick = {
@@ -277,8 +271,8 @@ fun SettingsShareScreen(
                         uiState.savedProfiles.forEach { profile ->
                             AppPreferenceDivider(startIndent = 66.dp)
                             AppPreference(
-                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(
-                                    com.android.purebilibili.R.drawable.ms_restore_24,
+                                icon = rememberSettingsVector(
+                                    settingsIconResource(R.drawable.ph_arrow_u_down_left_24, R.drawable.ms_restore_24),
                                 ),
                                 title = profile.name,
                                 subtitle = "点击立即恢复此配置",
@@ -294,7 +288,7 @@ fun SettingsShareScreen(
                 AppPreferenceSectionTitle("文件格式")
                 AppPreferenceGroup {
                     AppPreference(
-                        icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_data_object_fill_24),
+                        icon = rememberSettingsVector(R.drawable.ph_brackets_curly_24, R.drawable.ms_data_object_fill_24),
                         title = "设置包（JSON）",
                         subtitle = "通用文本格式，可直接查看，也可在 BiliPai 中导入",
                         value = "格式版本 v$SETTINGS_SHARE_SCHEMA_VERSION",

@@ -37,16 +37,6 @@ class VideoContentSectionPerformanceStructureTest {
     }
 
     @Test
-    fun videoContentSection_pagerAvoidsKeepingIntroAliveOnCommentTab() {
-        val source = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt"
-        )
-
-        assertTrue(source.contains("beyondViewportPageCount = resolveVideoDetailBeyondViewportPageCount("))
-        assertTrue(source.contains("selectedTabIndex = pagerState.currentPage"))
-    }
-
-    @Test
     fun videoContentSection_collapsesIntroCommentTabBarWithInterruptibleNestedScroll() {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt"

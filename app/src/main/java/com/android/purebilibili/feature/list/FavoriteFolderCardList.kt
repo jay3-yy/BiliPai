@@ -16,7 +16,7 @@ import androidx.compose.animation.fadeOut
 
 import androidx.compose.foundation.background
 import com.android.purebilibili.core.ui.components.appActionClickable
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
@@ -202,7 +202,7 @@ private fun FavoriteFolderCard(
             .heightIn(min = 96.dp)
             .clip(AppShapes.container(ContainerLevel.Card))
             .semantics { if (selectionMode) this.selected = selected }
-            .combinedClickable(onClick = appActionWithFeedback(onClick), onLongClick = onLongClick)
+            .appCombinedClickable(onClick = appActionWithFeedback(onClick), onLongClick = onLongClick)
             .padding(vertical = AppSpacingTokens.ExtraSmall),
         horizontalArrangement = Arrangement.Start,
     ) {

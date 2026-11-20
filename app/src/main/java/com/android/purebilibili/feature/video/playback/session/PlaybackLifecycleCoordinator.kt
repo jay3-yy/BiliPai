@@ -1,8 +1,55 @@
 package com.android.purebilibili.feature.video.playback.session
 
+import android.app.Activity
+import androidx.lifecycle.Lifecycle
 import androidx.media3.common.Player
 import com.android.purebilibili.feature.video.state.shouldRestorePlayerVolumeOnResume
 import com.android.purebilibili.feature.video.state.shouldResumeAfterLifecyclePause
+
+internal fun Activity?.isInMultiWindowPlaybackMode(): Boolean =
+    this != null && isInMultiWindowMode && !isInPictureInPictureMode
+
+/** A visible multi-window player can keep playing from STARTED until its window stops. */
+internal class PlaybackWindowLifecycle {
+    private var pauseDeferred = false
+    private var pauseDelivered = false
+
+    fun playbackEvent(event: Lifecycle.Event, isInMultiWindow: Boolean): Lifecycle.Event? =
+        when (event) {
+            Lifecycle.Event.ON_PAUSE -> {
+                pauseDeferred = isInMultiWindow
+                if (pauseDeferred) null else {
+                    pauseDelivered = true
+                    event
+                }
+            }
+            Lifecycle.Event.ON_STOP -> {
+                if (pauseDeferred) {
+                    pauseDeferred = false
+                    pauseDelivered = true
+                    Lifecycle.Event.ON_PAUSE
+                } else {
+                    event
+                }
+            }
+            Lifecycle.Event.ON_START -> {
+                // A split window can become visible and stop again without ever receiving RESUME.
+                pauseDeferred = isInMultiWindow
+                if (pauseDelivered && isInMultiWindow) {
+                    pauseDelivered = false
+                    Lifecycle.Event.ON_RESUME
+                } else {
+                    event
+                }
+            }
+            Lifecycle.Event.ON_RESUME -> {
+                pauseDeferred = false
+                pauseDelivered = false
+                event
+            }
+            else -> event
+        }
+}
 
 internal data class PlaybackPauseDecision(
     val shouldContinuePlayback: Boolean,

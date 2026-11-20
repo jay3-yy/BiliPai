@@ -391,13 +391,9 @@ internal fun resolveVideoPlayerSectionTarget(
     val normalizedRouteCover = routeCoverUrl.trim()
     // 竖屏流滑到非路由片后，必须优先用该片封面；否则横屏过渡会闪路由首个视频封面。
     val resolvedCoverUrl = when {
-        resolvedBvid != normalizedRouteBvid && normalizedSwitchedCover.isNotEmpty() ->
-            normalizedSwitchedCover
-        resolvedBvid == normalizedRouteBvid && normalizedRouteCover.isNotEmpty() ->
-            normalizedRouteCover
-        normalizedSwitchedCover.isNotEmpty() -> normalizedSwitchedCover
+        resolvedBvid != normalizedRouteBvid -> normalizedSwitchedCover
         normalizedRouteCover.isNotEmpty() -> normalizedRouteCover
-        else -> ""
+        else -> normalizedSwitchedCover
     }
     val sharedElementBvid = normalizedRouteBvid.ifBlank { resolvedBvid }
     return VideoPlayerSectionTarget(

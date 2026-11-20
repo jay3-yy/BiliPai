@@ -85,10 +85,9 @@ class DynamicLayoutPolicyTest {
     }
 
     @Test
-    fun `dynamic user live badge uses themed text label`() {
+    fun `dynamic user live badge only appears for live authors`() {
         assertEquals(true, shouldShowDynamicUserLiveBadge(isLive = true))
         assertEquals(false, shouldShowDynamicUserLiveBadge(isLive = false))
-        assertEquals("直播", resolveDynamicUserLiveBadgeLabel())
     }
 
     @Test

@@ -4,7 +4,7 @@ import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.core.ui.AppContentColors
 
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -141,7 +142,12 @@ fun LiveEmoticonPanel(
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val pager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { packages.size.coerceAtLeast(1) })
     Column(Modifier.fillMaxWidth().height(visualSpec.emoticonListMaxHeightDp.dp)) {
-        com.android.purebilibili.core.ui.components.AppHorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
+        com.android.purebilibili.core.ui.components.AppHorizontalPager(
+            state = pager,
+            userScrollEnabled = false,
+            modifier = Modifier.weight(1f)
+                .verticalPriorityHorizontalPagerSwipe(pager),
+        ) { page ->
             val pkg = packages.getOrNull(page)
             val emotes = pkg?.items.orEmpty()
             if (emotes.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -188,7 +194,7 @@ private fun LiveEmoticonGridCell(
     onClick: () -> Unit
 ) {
     var showPreview by remember { mutableStateOf(false) }
-    Box(Modifier.combinedClickable(enabled = enabled, onClick = onClick, onLongClick = { showPreview = true })) {
+    Box(Modifier.appCombinedClickable(enabled = enabled, onClick = onClick, onLongClick = { showPreview = true })) {
     AppSurface(
         color = AppSurfaceTokens.cardContainer(),
         shape = AppShapes.container(ContainerLevel.Chip),
@@ -284,7 +290,12 @@ fun LiveDmBlockSheet(
                                 isScrollInProgressProvider = { pager.isScrollInProgress },
                                 modifier = Modifier.fillMaxWidth(),
                             )
-                            com.android.purebilibili.core.ui.components.AppHorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
+                            com.android.purebilibili.core.ui.components.AppHorizontalPager(
+                                state = pager,
+                                userScrollEnabled = false,
+                                modifier = Modifier.weight(1f)
+                                    .verticalPriorityHorizontalPagerSwipe(pager),
+                            ) { page ->
                                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
                                     if (page == 0) LiveKeywordSection(shieldInfo, isLoggedIn) { pendingKeyword = it }
                                     else LiveShieldUserSection(shieldInfo, isLoggedIn) { pendingUser = it }

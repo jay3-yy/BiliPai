@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">BiliPai</string>
+    <string name="video_link_part_unavailable">無法開啟連結指定的分 P</string>
 
     <string name="common_back">返回</string>
     <string name="keyboard_shortcut_group_app">應用快捷鍵</string>
@@ -18,6 +19,7 @@
     <string name="keyboard_shortcut_player_seek_long_keys">Shift+← / Shift+→</string>
     <string name="keyboard_shortcut_player_volume">音量增 / 減</string>
     <string name="keyboard_shortcut_player_volume_keys">↑ / ↓</string>
+    <string name="player_exit_fullscreen">退出全螢幕</string>
     <string name="keyboard_shortcut_player_fullscreen">全螢幕切換</string>
     <string name="keyboard_shortcut_player_fullscreen_keys">F / Enter</string>
     <string name="keyboard_shortcut_player_mute">靜音切換</string>
@@ -46,9 +48,13 @@
     <string name="common_refresh">重新整理</string>
 
     <string name="settings_title">設定</string>
-    <string name="appearance_settings_title">外觀設定</string>
     <string name="playback_settings_title">播放設定</string>
-    <string name="animation_effects_title">動畫與觸感</string>
+    <string name="animation_effects_title">動態效果與回饋</string>
+    <string name="settings_category_appearance_title">介面外觀</string>
+    <string name="settings_category_appearance_summary">介面風格、主題、文字大小和圖示</string>
+    <string name="settings_category_animation_summary">頁面動態效果、震動回饋和液態玻璃</string>
+    <string name="animation_glass_section_title">液態玻璃與磨砂</string>
+    <string name="animation_glass_share_text">BiliPai 液態玻璃設定，可在「%1$s &gt; %2$s」中匯入。</string>
     <string name="icon_settings_title">應用圖示</string>
     <string name="bottom_bar_management_title">導航設定</string>
     <string name="permission_management_title">權限管理</string>
@@ -142,7 +148,7 @@
     <string name="settings_search_placeholder">搜尋設定功能</string>
     <string name="settings_search_results_title">搜尋結果</string>
     <string name="settings_search_empty_title">未找到符合項目</string>
-    <string name="settings_search_empty_subtitle">試試其他關鍵字</string>
+    <string name="settings_search_empty_subtitle">部分設定可能尚未收錄。可以試試其他關鍵字，或在設定分類中查找。</string>
     <string name="app_language_restart_dialog_title">重新啟動應用以套用語言</string>
     <string name="app_language_restart_dialog_message">語言設定會在應用重新啟動後生效，是否現在重新啟動？</string>
     <string name="app_language_restart_dialog_confirm">立即重啟</string>
@@ -183,4 +189,6 @@
     <string name="companion_show_video">僅顯示影片</string>
     <string name="video_companion_title">大螢幕影片分欄</string>
     <string name="video_companion_summary">大螢幕下從各頁面開啟影片時保留來源頁，可拖曳調整寬度或切換單欄</string>
+    <string name="message_select_conversation">選擇一個對話</string>
+    <string name="message_close_conversation">關閉對話</string>
 </resources>

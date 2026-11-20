@@ -15,7 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,8 +44,10 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,9 +56,11 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.currentStateAsState
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppIcons
 import androidx.compose.ui.unit.constrainHeight
@@ -71,6 +76,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.compose.material.icons.outlined.Home
+
+private const val TopShortcutButtonSizeDp = 34
 
 /**
  * Shared Android PiliPlus HeaderControl for inline/fullscreen and portrait/landscape.
@@ -140,6 +147,8 @@ fun TopControlBar(
     followStatusKnown: Boolean = false,
     onFollowClick: () -> Unit = {},
     extraActions: (@Composable () -> Unit)? = null,
+    topShortcut: (@Composable () -> Unit)? = null,
+    onTopShortcutCapacityChanged: ((Boolean) -> Unit)? = null,
 ) {
     val policy = resolveTopControlBarLayoutPolicy(
         isPortrait = isPortrait,
@@ -204,10 +213,13 @@ fun TopControlBar(
                 hasTitle = hasTitle,
                 allowSeparateTitleRow = isFullscreen,
                 alignEdgesToTop = showPortraitAuthor,
+                shortcut = topShortcut,
+                shortcutWidth = TopShortcutButtonSizeDp.dp + buttonSpacing,
+                onShortcutCapacityChanged = onTopShortcutCapacityChanged,
                 left = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(buttonSpacing)) {
                         HeaderIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回", onBack, iconSize = if (glass) 15 else 20)
-                        if (!simplifiedPortrait && policy.showHome && onHomeClick != null) {
+                        if (onHomeClick != null) {
                             HeaderIcon(Icons.Outlined.Home, "返回首页", onHomeClick)
                         }
                     }
@@ -501,12 +513,13 @@ internal fun PortraitEngagementRail(
     onLike: () -> Unit,
     onTriple: () -> Unit,
     onCoin: () -> Unit,
-    onComment: () -> Unit,
+    onComment: (() -> Unit)?,
     onFavorite: () -> Unit,
     onQuickFavorite: () -> Unit,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
     shareMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
+    whiteFilledIcons: Boolean = false,
 ) {
     val triplePress = rememberPiliHeaderTriplePressState()
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
@@ -525,34 +538,42 @@ internal fun PortraitEngagementRail(
         ) {
             Box(Modifier.likeBurstAnchor()) {
                 PortraitRailAction(
-                    icon = if (likeStatusKnown && isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                    icon = if (whiteFilledIcons || (likeStatusKnown && isLiked)) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
                     label = "点赞", onClick = onLike,
                     active = likeStatusKnown && isLiked,
+                    whiteFilledIcon = whiteFilledIcons,
                     gestureModifier = gesture, progress = triplePress.progress,
                     count = likeCount,
                     reserveCountSpace = true,
                 )
             }
+            if (onComment != null) {
+                PortraitRailAction(
+                    icon = if (whiteFilledIcons) Icons.Filled.ChatBubble else Icons.Outlined.Forum,
+                    label = "评论", onClick = onComment,
+                    count = commentCount,
+                    reserveCountSpace = true,
+                )
+            }
             PortraitRailAction(
-                icon = Icons.Outlined.Forum, label = "评论", onClick = onComment,
-                count = commentCount,
-                reserveCountSpace = true,
-            )
-            PortraitRailAction(
-                icon = AppIcons.BiliCoin, label = "投币", onClick = onCoin,
+                icon = if (whiteFilledIcons) ImageVector.vectorResource(R.drawable.ic_portrait_coin_filled_24) else AppIcons.BiliCoin,
+                label = "投币", onClick = onCoin,
                 active = isCoined, progress = triplePress.progress,
+                whiteFilledIcon = whiteFilledIcons,
                 count = coinCount, reserveCountSpace = true,
             )
             PortraitRailAction(
-                icon = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                icon = if (whiteFilledIcons || isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
                 label = "收藏", onClick = onFavorite, active = isFavorited,
+                whiteFilledIcon = whiteFilledIcons,
                 onLongClick = onQuickFavorite, modifier = Modifier.favoriteFolderMenuSource(),
                 progress = triplePress.progress,
                 count = favoriteCount,
                 reserveCountSpace = true,
             )
             PortraitRailAction(
-                icon = Icons.Outlined.Share, label = "分享", onClick = onShare,
+                icon = if (whiteFilledIcons) ImageVector.vectorResource(R.drawable.ms_share_fill_24) else Icons.Outlined.Share,
+                label = "分享", onClick = onShare,
                 count = shareCount, reserveCountSpace = true,
                 modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onShare) } ?: Modifier,
             )
@@ -569,6 +590,7 @@ private fun PortraitRailAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     active: Boolean = false,
+    whiteFilledIcon: Boolean = false,
     count: Long? = null,
     reserveCountSpace: Boolean = false,
     onLongClick: (() -> Unit)? = null,
@@ -589,7 +611,8 @@ private fun PortraitRailAction(
                     onClick(action = { feedbackClick(); true })
                 }
             }
-            .then(gestureModifier ?: Modifier.combinedClickable(
+            .then(gestureModifier ?: Modifier.appCombinedClickable(
+                longPressScene = com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS,
                 role = Role.Button, onClick = feedbackClick, onLongClick = onLongClick,
             ))
             .padding(vertical = 4.dp),
@@ -608,9 +631,16 @@ private fun PortraitRailAction(
             AppIcon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (active) accent else Color.White,
+                tint = if (active && !whiteFilledIcon) accent else Color.White,
                 modifier = Modifier.size(26.dp),
             )
+            if (active && whiteFilledIcon) {
+                Canvas(
+                    Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 4.dp).size(5.dp),
+                ) {
+                    drawCircle(accent)
+                }
+            }
         }
         if (count != null) {
             AppText(
@@ -643,26 +673,44 @@ private fun PiliHeaderSlots(
     left: @Composable () -> Unit,
     right: @Composable () -> Unit,
     title: @Composable () -> Unit,
+    shortcut: (@Composable () -> Unit)?,
+    shortcutWidth: Dp,
+    onShortcutCapacityChanged: ((Boolean) -> Unit)?,
 ) {
     Layout(
         content = {
             Box { left() }
             Box { right() }
             if (hasTitle) Box { title() }
+            if (onShortcutCapacityChanged != null) {
+                Box(
+                    modifier = Modifier.onSizeChanged { onShortcutCapacityChanged(it.width > 0) },
+                    contentAlignment = Alignment.CenterStart,
+                ) { shortcut?.invoke() }
+            }
         },
         modifier = Modifier.fillMaxWidth(),
     ) { measurables, constraints ->
         val natural = Constraints(maxHeight = constraints.maxHeight)
         val leftPlaceable = measurables[0].measure(natural)
         val rightPlaceable = measurables[1].measure(natural)
-        val edgeWidth = leftPlaceable.width + rightPlaceable.width
-        val width = constraints.maxWidth
-        val scale = if (edgeWidth > width) width.toFloat() / edgeWidth else 1f
         // 至少为八个标题字及材质内边距留出空间，避免标题退化成竖长窄条。
         val minimumTitleWidth = 128.sp.roundToPx() + 34.dp.roundToPx()
+        val width = constraints.maxWidth
+        val baseEdgeWidth = leftPlaceable.width + rightPlaceable.width
+        val shortcutPlaceable = if (onShortcutCapacityChanged != null) {
+            val slotWidth = shortcutWidth.roundToPx()
+            // 按未缩放的实际控件宽度预留位置，快捷键不挤压现有按钮或标题。
+            val availableWidth = width - baseEdgeWidth - (if (hasTitle) minimumTitleWidth else 0)
+            val measuredWidth = if (availableWidth >= slotWidth) slotWidth else 0
+            measurables[if (hasTitle) 3 else 2].measure(natural.copy(minWidth = measuredWidth, maxWidth = measuredWidth))
+                .takeIf { shortcut != null && measuredWidth > 0 }
+        } else null
+        val edgeWidth = baseEdgeWidth + (shortcutPlaceable?.width ?: 0)
+        val scale = if (edgeWidth > width) width.toFloat() / edgeWidth else 1f
         val separateTitleRow = hasTitle && allowSeparateTitleRow &&
             width - edgeWidth < minimumTitleWidth
-        val edgeHeight = maxOf(leftPlaceable.height, rightPlaceable.height)
+        val edgeHeight = maxOf(leftPlaceable.height, rightPlaceable.height, shortcutPlaceable?.height ?: 0)
         val titleRowGap = if (separateTitleRow) 4.dp.roundToPx() else 0
         val titlePlaceable = if (hasTitle) measurables[2].measure(
             Constraints(
@@ -687,6 +735,10 @@ private fun PiliHeaderSlots(
             } else {
                 leftPlaceable.placeRelative(0, if (alignEdgesToTop) 0 else (rowHeight - leftPlaceable.height) / 2)
                 rightPlaceable.placeRelative(width - rightPlaceable.width, if (alignEdgesToTop) 0 else (rowHeight - rightPlaceable.height) / 2)
+                shortcutPlaceable?.placeRelative(
+                    width - rightPlaceable.width - shortcutPlaceable.width,
+                    if (alignEdgesToTop) 0 else (rowHeight - shortcutPlaceable.height) / 2,
+                )
             }
             titlePlaceable?.placeRelative(
                 if (separateTitleRow) 0 else leftPlaceable.width,
@@ -751,6 +803,11 @@ private fun HeaderIcon(
 }
 
 @Composable
+internal fun PlayerTopShortcutButton(icon: ImageVector, title: String, onClick: () -> Unit) {
+    HeaderIcon(icon, title, onClick, buttonSizeDp = TopShortcutButtonSizeDp)
+}
+
+@Composable
 internal fun PlayerQuickSeekForwardButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     HeaderButton(description = "快进90秒", onClick = onClick, modifier = modifier) {
         AppText(text = "+90s", color = Color.White, fontSize = 11.sp, maxLines = 1, tapToCopyEnabled = false)
@@ -788,7 +845,8 @@ private fun HeaderButton(
                         onClick(action = { feedbackClick(); true })
                     }
                 }
-                .then(gestureModifier ?: Modifier.combinedClickable(
+                .then(gestureModifier ?: Modifier.appCombinedClickable(
+                    longPressScene = com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS,
                     role = Role.Button, onClick = feedbackClick, onLongClick = onLongClick,
                 )),
             contentAlignment = Alignment.Center,

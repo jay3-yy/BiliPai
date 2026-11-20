@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_history_transfer">匯入／匯出歷史紀錄</string>
+    <string name="search_history_copy">匯出至剪貼簿</string>
+    <string name="search_history_save">匯出檔案至本機</string>
+    <string name="search_history_input">輸入</string>
+    <string name="search_history_paste">從剪貼簿匯入</string>
+    <string name="search_history_open">從本機檔案匯入</string>
+    <string name="search_history_input_title">輸入搜尋記錄</string>
+    <string name="search_history_json">搜尋記錄 JSON</string>
+    <string name="search_history_preview">預覽</string>
+    <string name="search_history_import_title">匯入搜尋記錄？</string>
+    <string name="search_history_replace">將以 %1$d 筆記錄取代目前的搜尋記錄。</string>
+    <string name="search_history_import_confirm">取代並匯入</string>
+    <string name="search_history_invalid">格式無效，請提供由非空搜尋詞組成的 JSON 陣列。</string>
+    <string name="search_history_clipboard_empty">剪貼簿中沒有可匯入的文字。</string>
+    <string name="search_history_imported">搜尋記錄已匯入</string>
+    <string name="search_history_copied">搜尋記錄已複製</string>
+    <string name="search_history_exported">搜尋記錄已匯出</string>
+    <string name="search_history_import_failed">搜尋記錄匯入失敗</string>
+    <string name="search_history_export_failed">搜尋記錄匯出失敗</string>
+</resources>

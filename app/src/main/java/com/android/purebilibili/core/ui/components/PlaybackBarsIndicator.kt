@@ -30,8 +30,8 @@ internal fun PlaybackBarsIndicator(
     modifier: Modifier = Modifier,
 ) {
     // 预加载页面仍在组合中；只有当前页面且音柱进入视口时才运行循环。
-    val animationGate = rememberDecorativeAnimationGate()
-    val animate = isPlaying && animationGate.active
+    val animationGate = if (isPlaying) rememberDecorativeAnimationGate() else null
+    val animate = animationGate?.active == true
     val phase = if (animate) {
         rememberInfiniteTransition(label = "playbackBars").animateFloat(
             initialValue = 0f,
@@ -40,7 +40,7 @@ internal fun PlaybackBarsIndicator(
             label = "playbackBarsPhase",
         )
     } else null
-    Canvas(modifier.size(width = 14.dp, height = 16.dp).then(animationGate.modifier).semantics {
+    Canvas(modifier.size(width = 14.dp, height = 16.dp).then(animationGate?.modifier ?: Modifier).semantics {
         this.contentDescription = contentDescription
     }) {
         val progress = phase?.value ?: 0f

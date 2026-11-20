@@ -7,6 +7,8 @@ import kotlin.math.sqrt
 internal const val THANOS_LONGEVITY = 1.5f
 internal const val THANOS_TIME_SCALE = 1.15f
 internal const val THANOS_TAIL_SECONDS = 0.9f
+internal const val THANOS_DURATION_SECONDS = THANOS_LONGEVITY + THANOS_TAIL_SECONDS
+internal const val THANOS_QUICK_TIME_SCALE = THANOS_DURATION_SECONDS / 0.7f
 internal const val THANOS_PARTICLE_STRIDE_BYTES = 28
 
 internal fun supportsThanosGlVersion(glEsVersion: Int): Boolean = glEsVersion >= 0x30000
@@ -47,7 +49,7 @@ internal fun shouldNotifyParticleAnimationComplete(
 
 // Begin UI reflow only during the final 180 ms; particle simulation remains unchanged.
 internal const val THANOS_REFLOW_OVERLAP_SECONDS = 0.18f
-internal fun shouldBeginThanosReflow(currentTimeSec: Float): Boolean {
-    val end = THANOS_LONGEVITY + THANOS_TAIL_SECONDS
-    return currentTimeSec >= end - THANOS_REFLOW_OVERLAP_SECONDS * THANOS_TIME_SCALE
-}
+internal fun shouldBeginThanosReflow(
+    currentTimeSec: Float,
+    timeScale: Float = THANOS_TIME_SCALE,
+): Boolean = currentTimeSec >= THANOS_DURATION_SECONDS - THANOS_REFLOW_OVERLAP_SECONDS * timeScale

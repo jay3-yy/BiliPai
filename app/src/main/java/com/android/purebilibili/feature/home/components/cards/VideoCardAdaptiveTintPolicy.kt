@@ -1,13 +1,17 @@
 package com.android.purebilibili.feature.home.components.cards
 
 import com.android.purebilibili.core.ui.wallpaper.WallpaperReadabilityProfile
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
 
 /**
  * 全局壁纸调色板数据结构
@@ -31,6 +35,12 @@ val LocalWallpaperPalette = staticCompositionLocalOf<WallpaperPalette?> { null }
  */
 val LocalHomeCardDynamicTintEnabled = staticCompositionLocalOf { false }
 val LocalHomeCardFrostedGlassEnabled = staticCompositionLocalOf { false }
+
+@Composable
+@ReadOnlyComposable
+internal fun isGlobalWallpaperVisibleForHomeCard(): Boolean =
+    LocalGlobalWallpaperBackdropVisible.current && LocalHomeCardFrostedGlassEnabled.current &&
+        LocalGlobalWallpaperBackdropSource.current != null
 
 /**
  * CompositionLocal 提供实时滚动 Tick（在 DrawPhase 中按需读取，零重组实现 120fps 极速刷新）

@@ -12,6 +12,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -24,12 +25,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.purebilibili.core.store.HomeBarHideType
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.feature.home.components.HomeHeader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -42,6 +45,37 @@ class HomeScrollLayoutUiRegressionTest {
     val rule = createComposeRule()
 
     private var hostCompositions = 0
+
+    @Test
+    fun collapsedTabsRemoveChannelTargetsAndRestoreSelectionOnReveal() {
+        val collapsed = mutableStateOf(false)
+        val selected = mutableIntStateOf(0)
+        rule.setContent {
+            CompositionLocalProvider(LocalAppUiStyle provides AppUiStyle.MATERIAL3) {
+                MaterialTheme {
+                    HomeHeader(
+                        headerOffsetProvider = { 0f },
+                        isHeaderCollapseEnabled = false,
+                        user = UserState(),
+                        onAvatarClick = {},
+                        onSettingsClick = {},
+                        onSearchClick = {},
+                        topCategories = listOf("推荐频道", "生活频道"),
+                        topCategoryKeys = listOf("recommend", "life"),
+                        categoryIndex = selected.intValue,
+                        onCategorySelected = { selected.intValue = it },
+                        topTabsCollapsed = collapsed.value,
+                    )
+                }
+            }
+        }
+        rule.onNodeWithText("生活频道").assertIsDisplayed()
+        rule.runOnIdle { collapsed.value = true }
+        rule.onNodeWithText("生活频道").assertDoesNotExist()
+        rule.runOnIdle { collapsed.value = false }
+        rule.onNodeWithText("生活频道").assertIsDisplayed().performClick()
+        rule.runOnIdle { assertEquals(1, selected.intValue) }
+    }
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Test

@@ -4,7 +4,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
@@ -66,7 +68,7 @@ class FoldableAdaptiveInfoInstrumentedTest {
     }
 
     @Test
-    fun publishedHorizontalHinge_isExposedAsInnerTabletopDisplay() {
+    fun horizontalHingeUpdatesPostureAsWindowUnfoldsAndLeavesInnerDisplay() {
         setAdaptiveInfoContent()
         windowLayoutInfoPublisherRule.overrideWindowLayoutInfo(
             TestWindowLayoutInfo(
@@ -83,18 +85,14 @@ class FoldableAdaptiveInfoInstrumentedTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag(ADAPTIVE_INFO_TAG)
             .assertTextEquals("Inner:Tabletop:true")
-    }
 
-    @Test
-    fun publishedFlatHinge_isExposedAsInnerFlatDisplay() {
-        setAdaptiveInfoContent()
         windowLayoutInfoPublisherRule.overrideWindowLayoutInfo(
             TestWindowLayoutInfo(
                 listOf(
                     FoldingFeature(
                         activity = composeRule.activity,
                         state = FLAT,
-                        orientation = VERTICAL,
+                        orientation = HORIZONTAL,
                         size = 0,
                     )
                 )
@@ -103,6 +101,10 @@ class FoldableAdaptiveInfoInstrumentedTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag(ADAPTIVE_INFO_TAG)
             .assertTextEquals("Inner:Flat:false")
+
+        windowLayoutInfoPublisherRule.overrideWindowLayoutInfo(TestWindowLayoutInfo(emptyList()))
+        composeRule.onNodeWithTag(ADAPTIVE_INFO_TAG)
+            .assert(hasText(":None:false", substring = true))
     }
 
     @Test

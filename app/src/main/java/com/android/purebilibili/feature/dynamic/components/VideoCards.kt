@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
 import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
@@ -233,7 +234,7 @@ fun VideoCardLarge(
 
     Column(
         modifier = modifier
-            .videoCardSourceAnchor(sourceIdentity, coverShape)
+            .videoCardSourceAnchor(sourceIdentity, coverShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
             .then(nativeCardSnapshot.modifier)
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates
@@ -339,11 +340,16 @@ private fun VideoCardLargeCover(
                     )
                 )
         ) {
+            val playIconSize = 50.dp
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .padding(start = AppSpacingTokens.Small + AppSpacingTokens.Micro, end = AppSpacingTokens.Small, bottom = AppSpacingTokens.Small),
+                    .padding(
+                        start = AppSpacingTokens.Small,
+                        end = playIconSize + AppSpacingTokens.Small + AppSpacingTokens.ExtraSmall,
+                        bottom = AppSpacingTokens.ExtraSmall,
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (archive.duration_text.isNotBlank()) {
@@ -363,16 +369,19 @@ private fun VideoCardLargeCover(
                     playText = archive.stat.play,
                     danmakuText = archive.stat.danmaku,
                     contentColor = MediaContrastPalette.Foreground,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-
-                AppIcon(
-                    painter = painterResource(R.drawable.ic_pili_tv_play),
-                    contentDescription = "播放视频",
-                    tint = AppContentColors.accent(),
-                    modifier = Modifier.size(50.dp),
+                    singleLine = true,
                 )
             }
+
+            AppIcon(
+                painter = painterResource(R.drawable.ic_pili_tv_play),
+                contentDescription = "播放视频",
+                tint = AppContentColors.accent(),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = AppSpacingTokens.Small, bottom = AppSpacingTokens.Small)
+                    .size(playIconSize),
+            )
         }
         }
     }

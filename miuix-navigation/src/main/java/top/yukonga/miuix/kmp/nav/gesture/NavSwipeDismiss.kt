@@ -129,7 +129,8 @@ fun Modifier.navSwipeDismiss(
  * settles but publishes no context). [externalGestureOwnership] is an even/odd generation token:
  * odd means another source (such as system predictive back) currently owns the gesture, and every
  * ownership change advances the value. A pointer sequence latches any generation change so queued
- * work cannot resume after a fast external start+finish cycle.
+ * work cannot resume after a fast external start+finish cycle. [isSequenceCurrent] ties the drag
+ * and its release settle to the routes that were present at pointer down.
  */
 @Suppress("ktlint:compose:modifier-composed-check")
 internal fun Modifier.navSwipeDismissImpl(
@@ -140,6 +141,7 @@ internal fun Modifier.navSwipeDismissImpl(
     motion: NavMotion,
     settleSink: NavSettleSink?,
     externalGestureOwnership: () -> Long = { 0L },
+    isSequenceCurrent: () -> Boolean = { true },
     onCommit: () -> Unit,
     onCancel: () -> Unit,
     onGesture: (NavGesture?) -> Unit,
@@ -149,6 +151,7 @@ internal fun Modifier.navSwipeDismissImpl(
     val scope = rememberCoroutineScope()
     val currentMotion = rememberUpdatedState(motion)
     val currentExternalGestureOwnership = rememberUpdatedState(externalGestureOwnership)
+    val currentIsSequenceCurrent = rememberUpdatedState(isSequenceCurrent)
     val currentOnCommit = rememberUpdatedState(onCommit)
     val currentOnCancel = rememberUpdatedState(onCancel)
     val currentOnGesture = rememberUpdatedState(onGesture)
@@ -180,18 +183,20 @@ internal fun Modifier.navSwipeDismissImpl(
 
             val down = awaitFirstDown(requireUnconsumed = false)
             val initialExternalOwnership = currentExternalGestureOwnership.value()
+            val isCurrent = currentIsSequenceCurrent.value
             var sequenceJob: Job? = null
-            var blockedByExternalGesture = false
-            fun externalGestureOwnsSequence(): Boolean {
-                if (!blockedByExternalGesture && (
+            var interrupted = false
+            fun sequenceInterrupted(): Boolean {
+                if (!interrupted && (
                         initialExternalOwnership and 1L != 0L ||
-                            currentExternalGestureOwnership.value() != initialExternalOwnership
+                            currentExternalGestureOwnership.value() != initialExternalOwnership ||
+                            !isCurrent()
                         )
                 ) {
-                    blockedByExternalGesture = true
+                    interrupted = true
                     sequenceJob?.cancel()
                 }
-                return blockedByExternalGesture
+                return interrupted
             }
 
             // Tracks pointer position over time for an accurate instantaneous release velocity. Sampled
@@ -208,7 +213,7 @@ internal fun Modifier.navSwipeDismissImpl(
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Final)
                 val change = event.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
-                if (externalGestureOwnsSequence()) return@awaitEachGesture
+                if (sequenceInterrupted()) return@awaitEachGesture
                 if (event.changes.count { it.pressed } > 1) {
                     arbitrator.cancel()
                     return@awaitEachGesture
@@ -267,14 +272,14 @@ internal fun Modifier.navSwipeDismissImpl(
             // rejects a NaN anchor): a NaN written into the driving float would be unrecoverable. ---
             var anchor = Float.NaN
             sequenceScope.launch {
-                if (externalGestureOwnsSequence()) return@launch
+                if (sequenceInterrupted()) return@launch
                 animatedTop.stop()
-                if (externalGestureOwnsSequence()) return@launch
+                if (sequenceInterrupted()) return@launch
                 anchor = topIndex - animatedTop.value
                 val initialFingerProgress = initialDismissTravelPx / extent
                 if (initialFingerProgress > 0f) {
                     animatedTop.snapToFinger(topIndex = topIndex, progress = initialFingerProgress, anchor = anchor)
-                    if (externalGestureOwnsSequence()) return@launch
+                    if (sequenceInterrupted()) return@launch
                     currentOnGesture.value(
                         NavGesture(
                             progress = anchoredProgress(anchor = anchor, fingerProgress = initialFingerProgress).coerceAtLeast(0f),
@@ -293,7 +298,7 @@ internal fun Modifier.navSwipeDismissImpl(
             var forceCancel = false
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
-                if (externalGestureOwnsSequence()) return@awaitEachGesture
+                if (sequenceInterrupted()) return@awaitEachGesture
                 val change = event.changes.firstOrNull { it.id == down.id }
                 if (forceCancel || event.changes.any { it.id != down.id && it.pressed } || change == null) {
                     forceCancel = true
@@ -319,9 +324,9 @@ internal fun Modifier.navSwipeDismissImpl(
                     // Pre-anchor event (stop() above still unwinding a mid-flight settle): drop it.
                     // At most the first 1-2 events on desktop/web; the first executed snap still
                     // lands exactly on the sampled anchor, so the zero-jump grab is preserved.
-                    if (externalGestureOwnsSequence() || anchor.isNaN()) return@launch
+                    if (sequenceInterrupted() || anchor.isNaN()) return@launch
                     animatedTop.snapToFinger(topIndex = topIndex, progress = fingerProgress, anchor = anchor)
-                    if (externalGestureOwnsSequence()) return@launch
+                    if (sequenceInterrupted()) return@launch
                     // Published inside the driver coroutine so the anchor is always the sampled one.
                     currentOnGesture.value(
                         NavGesture(
@@ -334,7 +339,7 @@ internal fun Modifier.navSwipeDismissImpl(
                 }
             }
 
-            if (externalGestureOwnsSequence()) return@awaitEachGesture
+            if (sequenceInterrupted()) return@awaitEachGesture
 
             // --- Release: velocity-first / position-fallback, velocity-continuous spring handoff. ---
             // If the finger lifted before the anchor coroutine ran (claim -> immediate lift), fall
@@ -371,7 +376,7 @@ internal fun Modifier.navSwipeDismissImpl(
                 } else {
                     currentOnCommit.value()
                     scope.launch {
-                        if (externalGestureOwnsSequence()) return@launch
+                        if (sequenceInterrupted()) return@launch
                         // Seed the governing commit curve with the release velocity. The
                         // no-overshoot floor applies only while the commit spec keeps overshoot
                         // clamped (the default): even a critically damped spring crosses its
@@ -403,7 +408,7 @@ internal fun Modifier.navSwipeDismissImpl(
                 // kept, preserving the snap -> spring velocity continuity; it points away from the cancel
                 // target, so it can never cross it (no bounce, no overshoot floor needed on this branch).
                 scope.launch {
-                    if (externalGestureOwnsSequence()) return@launch
+                    if (sequenceInterrupted()) return@launch
                     val settleBody: suspend (onFrame: (() -> Unit)?) -> Unit = { onFrame ->
                         animatedTop.settleCancel(
                             target = topIndex.toFloat(),
@@ -419,7 +424,7 @@ internal fun Modifier.navSwipeDismissImpl(
                     } else {
                         settleBody(null)
                     }
-                    if (externalGestureOwnsSequence()) return@launch
+                    if (sequenceInterrupted()) return@launch
                     // The gesture context stays frozen through the settle (no pivot snap at lift)
                     // and is released only now, with the entry back at rest.
                     currentOnGesture.value(null)

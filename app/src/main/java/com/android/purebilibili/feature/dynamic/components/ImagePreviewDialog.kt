@@ -88,7 +88,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -102,6 +105,8 @@ import com.android.purebilibili.core.ui.setWindowNavigationBarColor
 import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
 import com.android.purebilibili.core.ui.rememberAppLikeIcon
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isFinite
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.media3.common.Player
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -119,7 +124,6 @@ import com.android.purebilibili.core.ui.motion.emphasizedExitTween
 import com.android.purebilibili.core.ui.motion.interactiveSnapSpring
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.rememberHapticFeedback
 import java.io.File
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigationevent.NavigationEventInfo
@@ -193,6 +197,7 @@ private data class ImagePreviewOverlayRequest(
     val defaultTextVisible: Boolean,
     val onImageLongPress: ((String) -> Unit)?,
     val publicContent: Boolean = false,
+    val sourcePageMotion: ImagePreviewPageMotion?,
     val onDismiss: () -> Unit
 )
 
@@ -331,7 +336,7 @@ private object ImagePreviewOverlayController {
 }
 
 @Composable
-fun ImagePreviewDialog(
+internal fun ImagePreviewDialog(
     images: List<String>,
     initialIndex: Int,
     livePhotoVideos: Map<String, String> = emptyMap(),
@@ -343,10 +348,11 @@ fun ImagePreviewDialog(
     defaultTextVisible: Boolean = true,
     onImageLongPress: ((String) -> Unit)? = null,
     publicContent: Boolean = false,
+    sourcePageMotion: ImagePreviewPageMotion? = null,
     onDismiss: () -> Unit
 ) {
     val latestOnDismiss by rememberUpdatedState(onDismiss)
-    val requestToken = remember(images, initialIndex, sourceRect, sourceRects, sourceKey, sourceCornerRadiusDp, livePhotoVideos, publicContent) { System.nanoTime() }
+    val requestToken = remember(images, initialIndex, sourceRect, sourceRects, sourceKey, sourceCornerRadiusDp, livePhotoVideos, publicContent, sourcePageMotion) { System.nanoTime() }
 
     DisposableEffect(requestToken) {
         ImagePreviewOverlayController.show(
@@ -354,6 +360,7 @@ fun ImagePreviewDialog(
                 token = requestToken,
                 images = images,
                 publicContent = publicContent,
+                sourcePageMotion = sourcePageMotion,
                 livePhotoVideos = livePhotoVideos,
                 initialIndex = initialIndex,
                 sourceRect = sourceRect,
@@ -375,6 +382,14 @@ fun ImagePreviewDialog(
 @Composable
 fun ImagePreviewOverlayHost(
     modifier: Modifier = Modifier
+) {
+    ImagePreviewOverlayHost(modifier, pageMotion = null)
+}
+
+@Composable
+internal fun ImagePreviewOverlayHost(
+    modifier: Modifier,
+    pageMotion: ImagePreviewPageMotion?
 ) {
     val activeRequest by ImagePreviewOverlayController.request.collectAsStateWithLifecycle()
     activeRequest?.let { request ->
@@ -416,6 +431,7 @@ fun ImagePreviewOverlayHost(
                     textContent = request.textContent,
                     defaultTextVisible = request.defaultTextVisible,
                     onImageLongPress = request.onImageLongPress,
+                    pageMotion = request.sourcePageMotion ?: pageMotion,
                     dismissRequestCount = dismissRequestCount,
                     onDismiss = {
                         ImagePreviewOverlayController.dismiss(request.token)
@@ -444,6 +460,7 @@ private fun ImagePreviewOverlayContent(
     defaultTextVisible: Boolean = true,
     onImageLongPress: ((String) -> Unit)? = null,
     publicContent: Boolean = false,
+    pageMotion: ImagePreviewPageMotion?,
     dismissRequestCount: Int = 0,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -452,7 +469,7 @@ private fun ImagePreviewOverlayContent(
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val scope = rememberCoroutineScope()
-    val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.RESULTS)
+    val haptic = com.android.purebilibili.core.util.rememberVisibleHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.RESULTS)
     val shareIcon = rememberAppShareIcon()
     val likeIcon = rememberAppLikeIcon()
     val likeFilledIcon = rememberAppLikeFilledIcon()
@@ -734,8 +751,12 @@ private fun ImagePreviewOverlayContent(
         normalizeImageUrl(images.getOrNull(pagerState.currentPage) ?: "")
     }
 
+    var previewOriginOnScreen by remember { mutableStateOf(Offset.Zero) }
     BoxWithConstraints(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize().onGloballyPositioned { coordinates ->
+            val originOnScreen = coordinates.localToScreen(Offset.Zero)
+            if (originOnScreen.isFinite) previewOriginOnScreen = originOnScreen
+        }
     ) {
             val constraints = this
             val fullWidth = constraints.maxWidth
@@ -769,6 +790,31 @@ private fun ImagePreviewOverlayContent(
             fun dismissRemainingProgress(): Float =
                 (animateTrigger.value / dismissStartProgress.coerceAtLeast(0.001f)).coerceIn(0f, 1f)
 
+            fun currentPageScale(): Float {
+                if (pageMotion == null || reducePreviewMotion) return 1f
+                val dragY = if (isDismissing) dismissOffsetYPx else verticalDismissOffsetYPx
+                val progress = if (isDismissing) {
+                    dismissStartProgress * dismissRemainingProgress()
+                } else {
+                    currentTransitionProgress()
+                }
+                return resolveImagePreviewPageScale(progress, dragY, fullHeightPx)
+            }
+
+            if (pageMotion != null) {
+                val latestPageScale by rememberUpdatedState<() -> Float>({ currentPageScale() })
+                DisposableEffect(pageMotion) {
+                    pageMotion.readScale = { latestPageScale() }
+                    onDispose { pageMotion.readScale = null }
+                }
+            }
+
+            fun mapSourceRect(
+                source: androidx.compose.ui.geometry.Rect,
+                pageScale: Float = currentPageScale(),
+            ): androidx.compose.ui.geometry.Rect =
+                pageMotion?.mapSourceRect(source, pageScale, previewOriginOnScreen) ?: source
+
             val currentSourceRect = sourceRectForPage(pagerState.currentPage)
             val shouldUseRectAnim = currentSourceRect != null && !pagerState.isScrollInProgress
             val previewSurfaceRect = remember(constraints.maxWidth, constraints.maxHeight) {
@@ -793,19 +839,20 @@ private fun ImagePreviewOverlayContent(
                 // dismiss 起飞时已冻结源 rect,动画中途不再跟读(防切页改道)。
                 val source = (if (isDismissing) dismissSourceRect else currentSourceRect)
                     ?: return null
+                val mappedSource = mapSourceRect(source)
                 return if (isDismissing) {
                     val start = dismissImageDisplayRect ?: previewSurfaceRect
                     val normalizedProgress = (progress / dismissStartProgress.coerceAtLeast(0.001f))
                         .coerceIn(0f, 1f)
                     resolveImagePreviewDismissRectFrame(
                         transitionProgress = normalizedProgress,
-                        sourceRect = source,
+                        sourceRect = mappedSource,
                         displayedImageRect = start
                     )?.rect
                 } else {
                     resolveImagePreviewOpenRect(
                         transitionProgress = progress,
-                        sourceRect = source,
+                        sourceRect = mappedSource,
                         previewSurfaceRect = previewSurfaceRect
                     )
                 }
@@ -856,13 +903,15 @@ private fun ImagePreviewOverlayContent(
                     )
                 }
                 dismissTargetImageScale = fillScale
-                dismissStartImageScale = (fillScale + (1f - fillScale) * startProgress) * dragFrame.scale
+                val startFillScale = fillScale * currentPageScale()
+                dismissStartImageScale =
+                    (startFillScale + (1f - startFillScale) * startProgress) * dragFrame.scale
                 dismissImageContentRect = currentImageDisplayRect
                 dismissStartCornerRadiusDp = resolveImagePreviewPresentedCornerRadiusDp(
                     visualProgress = startProgress,
                     verticalDragProgress = dragFrame.progress,
                     hasSourceRect = shouldUseRectAnim,
-                    sourceCornerRadiusDp = sourceCornerRadiusDp,
+                    sourceCornerRadiusDp = sourceCornerRadiusDp * currentPageScale(),
                 )
                 dismissFallbackScale = resolveImagePreviewTransitionFrame(
                     rawProgress = startProgress,
@@ -893,7 +942,7 @@ private fun ImagePreviewOverlayContent(
                         initialVelocity = resolveImagePreviewDismissProgressVelocity(
                             velocityY = initialVelocityY,
                             startRect = dismissImageDisplayRect,
-                            targetRect = dismissSourceRect,
+                            targetRect = dismissSourceRect?.let { mapSourceRect(it, pageScale = 1f) },
                             containerHeightPx = fullHeightPx,
                             startProgress = startProgress,
                         ),
@@ -1056,12 +1105,14 @@ private fun ImagePreviewOverlayContent(
                     val presentedCornerRadius = if (isDismissing) resolveImagePreviewDismissCornerRadiusDp(
                         remainingProgress = dismissRemainingProgress(),
                         startCornerRadiusDp = dismissStartCornerRadiusDp,
-                        targetCornerRadiusDp = if (dismissSourceRect != null) sourceCornerRadiusDp else 0f,
+                        targetCornerRadiusDp = if (dismissSourceRect != null) {
+                            sourceCornerRadiusDp * currentPageScale()
+                        } else 0f,
                     ) else resolveImagePreviewPresentedCornerRadiusDp(
                         visualProgress = progress,
                         verticalDragProgress = if (isDismissing) 0f else dragFrame.progress,
                         hasSourceRect = shouldUseRectAnim,
-                        sourceCornerRadiusDp = sourceCornerRadiusDp
+                        sourceCornerRadiusDp = sourceCornerRadiusDp * currentPageScale()
                     )
                     if (flightRect != null) {
                         val baseScaleX = (flightRect.width / size.width).coerceAtLeast(0.01f)
@@ -1113,22 +1164,23 @@ private fun ImagePreviewOverlayContent(
                             if (flightRect != null) {
                                 val baseScaleX = (flightRect.width / size.width).coerceAtLeast(0.01f)
                                 val baseScaleY = (flightRect.height / size.height).coerceAtLeast(0.01f)
-                                val sourceFillScale = currentSourceRect
-                                    ?.let { source ->
-                                        (currentImageDisplayRect ?: openingSeedRect)
-                                            ?.takeIf { it.width > 0f && it.height > 0f }
-                                            ?.let { displayed ->
-                                                maxOf(
-                                                    source.width / displayed.width,
-                                                    source.height / displayed.height
-                                                )
-                                            }
-                                    }
-                                    ?: maxOf(baseScaleX, baseScaleY)
+                                val pageScale = currentPageScale()
                                 val imageScale = if (isDismissing) {
-                                    dismissTargetImageScale +
-                                        (dismissStartImageScale - dismissTargetImageScale) * dismissRemainingProgress()
+                                    val targetScale = dismissTargetImageScale * pageScale
+                                    targetScale + (dismissStartImageScale - targetScale) * dismissRemainingProgress()
                                 } else {
+                                    val sourceFillScale = currentSourceRect
+                                        ?.let { source ->
+                                            (currentImageDisplayRect ?: openingSeedRect)
+                                                ?.takeIf { it.width > 0f && it.height > 0f }
+                                                ?.let { displayed ->
+                                                    maxOf(
+                                                        source.width / displayed.width,
+                                                        source.height / displayed.height
+                                                    ) * pageScale
+                                                }
+                                        }
+                                        ?: maxOf(baseScaleX, baseScaleY)
                                     sourceFillScale + (1f - sourceFillScale) * currentTransitionProgress().coerceIn(0f, 1f)
                                 }
                                 scaleX = imageScale / baseScaleX
@@ -1962,11 +2014,10 @@ private fun ImagePreviewOverlayContent(
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (isLivePhotoEnabled) {
-                                    LivePhotoIcon(tint = Color.White)
-                                } else {
-                                    LivePhotoOffIcon(tint = Color.White.copy(alpha = 0.8f))
-                                }
+                                LivePhotoIcon(
+                                    enabled = isLivePhotoEnabled,
+                                    tint = Color.White.copy(alpha = if (isLivePhotoEnabled) 1f else 0.8f),
+                                )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 AppText(
                                     text = if (isLivePhotoEnabled) "实况" else "实况已关",
@@ -2006,11 +2057,7 @@ private fun ImagePreviewOverlayContent(
                                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            if (isLivePhotoEnabled) {
-                                                LivePhotoOffIcon(tint = Color.White)
-                                            } else {
-                                                LivePhotoIcon(tint = Color.White)
-                                            }
+                                            LivePhotoIcon(enabled = !isLivePhotoEnabled)
                                             Spacer(modifier = Modifier.width(10.dp))
                                             AppText(
                                                 text = if (isLivePhotoEnabled) "关闭实况" else "开启实况",
@@ -3010,53 +3057,45 @@ suspend fun saveLivePhotoVideoToGallery(context: android.content.Context, videoU
 }
 
 @Composable
-private fun LivePhotoIcon(
+internal fun LivePhotoIcon(
+    enabled: Boolean,
     modifier: Modifier = Modifier,
-    tint: Color = Color.White
+    tint: Color = Color.White,
 ) {
     androidx.compose.foundation.Canvas(modifier = modifier.size(16.dp)) {
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val outerRadius = size.minDimension / 2f - 1.5f
-        val innerRadius = outerRadius * 0.46f
+        val unit = size.minDimension / 16f
+        val ringStroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.1f * unit)
         drawCircle(
             color = tint,
-            radius = outerRadius,
-            center = center,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8f)
+            radius = 4.8f * unit,
+            style = ringStroke,
         )
         drawCircle(
             color = tint,
-            radius = innerRadius,
-            center = center
+            radius = 2.15f * unit,
+            style = ringStroke,
         )
-    }
-}
 
-@Composable
-private fun LivePhotoOffIcon(
-    modifier: Modifier = Modifier,
-    tint: Color = Color.White
-) {
-    androidx.compose.foundation.Canvas(modifier = modifier.size(16.dp)) {
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val outerRadius = size.minDimension / 2f - 1.5f
-        val innerRadius = outerRadius * 0.46f
-        drawCircle(
-            color = tint,
-            radius = outerRadius,
-            center = center,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8f)
-        )
-        drawCircle(
-            color = tint,
-            radius = innerRadius,
-            center = center
-        )
-        drawLine(
-            color = tint,
-            start = Offset(2f, size.height - 2f),
-            end = Offset(size.width - 2f, 2f),
-            strokeWidth = 1.8f
-        )
+        val dotCount = 16
+        val dotOrbit = 7f * unit
+        repeat(dotCount) { index ->
+            val angle = index * (2 * PI / dotCount)
+            drawCircle(
+                color = tint,
+                radius = 0.55f * unit,
+                center = center + Offset(cos(angle).toFloat() * dotOrbit, sin(angle).toFloat() * dotOrbit),
+            )
+        }
+
+        if (!enabled) {
+            val slashOffset = Offset(5.6f * unit, -5.6f * unit)
+            drawLine(
+                color = tint,
+                start = center - slashOffset,
+                end = center + slashOffset,
+                strokeWidth = 1.25f * unit,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
+        }
     }
 }

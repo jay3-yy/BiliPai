@@ -17,13 +17,12 @@ class DownloadTaskPresentationPolicyTest {
     }
 
     @Test
-    fun identicalEpisodeLabel_doesNotDuplicateTitle() {
-        val task = baseTask.copy(
-            title = "系列课程",
-            episodeLabel = "系列课程"
-        )
-
-        assertNull(resolveDownloadTaskSecondaryText(task))
+    fun episodeLabelAlreadyInStoredTitle_isNotRepeatedBelowIt() {
+        val episodeLabel = "P2 第二集"
+        for (title in listOf(episodeLabel, "系列课程 - $episodeLabel", "系列课程 · $episodeLabel")) {
+            val task = baseTask.copy(title = title, episodeLabel = episodeLabel)
+            assertNull(resolveDownloadTaskSecondaryText(task), title)
+        }
     }
 
     @Test

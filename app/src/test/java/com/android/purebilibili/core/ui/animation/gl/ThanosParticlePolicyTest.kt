@@ -56,4 +56,12 @@ class ThanosParticlePolicyTest {
         assertTrue(abs((end - threshold) / THANOS_TIME_SCALE - 0.18f) < 0.001f)
     }
 
+    @Test
+    fun `quick reflow starts 180 ms before particles finish`() {
+        assertFalse(shouldBeginThanosReflow(0.51f * THANOS_QUICK_TIME_SCALE, THANOS_QUICK_TIME_SCALE))
+        assertTrue(shouldBeginThanosReflow(0.53f * THANOS_QUICK_TIME_SCALE, THANOS_QUICK_TIME_SCALE))
+        assertFalse(shouldNotifyParticleAnimationComplete(false, 0.69f * THANOS_QUICK_TIME_SCALE, THANOS_DURATION_SECONDS))
+        assertTrue(shouldNotifyParticleAnimationComplete(false, 0.71f * THANOS_QUICK_TIME_SCALE, THANOS_DURATION_SECONDS))
+    }
+
 }

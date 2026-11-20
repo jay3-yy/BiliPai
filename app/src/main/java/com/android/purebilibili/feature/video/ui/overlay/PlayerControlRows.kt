@@ -1,6 +1,6 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -156,7 +156,7 @@ internal fun PlayerControlIconAction(
                 modifier = Modifier.fillMaxSize().semantics {
                     contentDescription = description
                     this.selected = selected
-                }.combinedClickable(role = Role.Button, onClick = appActionWithFeedback(onClick), onLongClick = onLongClick),
+                }.appCombinedClickable(role = Role.Button, onClick = appActionWithFeedback(onClick), onLongClick = onLongClick),
                 contentAlignment = Alignment.Center,
             ) {
                 AppIcon(
@@ -187,7 +187,7 @@ internal fun PlayerControlTextAction(
                 modifier = Modifier.height(height).semantics {
                     contentDescription = description
                     this.selected = selected
-                }.combinedClickable(role = Role.Button, onClick = appActionWithFeedback(onClick))
+                }.appCombinedClickable(role = Role.Button, onClick = appActionWithFeedback(onClick))
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center,
             ) {

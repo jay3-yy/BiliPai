@@ -13,7 +13,6 @@ import androidx.compose.ui.window.DialogProperties
  * 内容型窗口 Dialog 的平板安全尺寸策略。
  *
  * 关闭平台默认宽度后自行限宽居中，避免大屏上被拉成过宽或异常竖条。
- * 与 [com.android.purebilibili.core.ui.components.resolveAppSliderDialogLayoutPolicy] 同一套约定。
  */
 @Immutable
 data class AppContentDialogLayoutPolicy(

@@ -4,6 +4,7 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
@@ -32,6 +33,8 @@ internal fun BindPlayerAmbient(
     firstFrameReady: Boolean,
     statusBar: Boolean,
     diagnosticLogging: Boolean,
+    statusBarCollapseProgress: State<Float>? = null,
+    statusBarFrame: MutableState<ImageBitmap?>? = null,
 ) {
     val context = LocalContext.current
     val presentation = LocalAmbientPresentation.current ?: return
@@ -94,7 +97,13 @@ internal fun BindPlayerAmbient(
     val motionAllowed = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
         !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
     val visualActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
-    val surfaceObservationActive = visualActive && motionAllowed && foreground && !excluded && (glowAllowed || statusBar)
+    val statusBarExpanded = remember(statusBarCollapseProgress) {
+        derivedStateOf { (statusBarCollapseProgress?.value ?: 0f) <= 0f }
+    }
+    val statusBarSampling = statusBar && statusBarExpanded.value
+    val latestStatusBarSampling = rememberUpdatedState(statusBarSampling)
+    val surfaceObservationActive = visualActive && motionAllowed && foreground && !excluded &&
+        (glowAllowed || statusBarSampling)
     DisposableEffect(surface, surfaceObservationActive) {
         val texture = (surface as? TextureView)?.takeIf { surfaceObservationActive }
         val observer = texture?.viewTreeObserver
@@ -110,14 +119,22 @@ internal fun BindPlayerAmbient(
         visualActive && foreground && !excluded && !transitioning && navigationSettled()
     }
     LaunchedEffect(player) {
-        snapshotFlow { recoveryReady.value() }.collect { ready ->
-            if (ready) {
+        var wasReady = false
+        var wasStatusBarSampling = false
+        snapshotFlow { recoveryReady.value() to latestStatusBarSampling.value }.collect { (ready, sampling) ->
+            if (ready && !wasReady) {
                 refresh++
                 presentation.requiredRefresh = refresh
+            } else if (ready && sampling && !wasStatusBarSampling) {
+                // 恢复展开后，暂停中的视频也要按新尺寸取一帧。
+                refresh++
             }
+            wasReady = ready
+            wasStatusBarSampling = sampling
         }
     }
-    val active = surfaceAvailable && visualActive && foreground && !excluded && !transitioning && firstFrameReady && (glowAllowed || statusBar)
+    val active = surfaceAvailable && visualActive && foreground && !excluded && !transitioning &&
+        firstFrameReady && (glowAllowed || statusBarSampling)
     LaunchedEffect(seekSettlesAt) {
         seekReady = false
         delay((seekSettlesAt - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(0L))
@@ -147,12 +164,21 @@ internal fun BindPlayerAmbient(
         presentation.aspectRatio = width.coerceAtLeast(1).toFloat() / height.coerceAtLeast(1)
     }
     // Navigation progress is deliberately read inside the loop/draw provider, not high-frequency composition.
-    LaunchedEffect(controller, surface, identity, quality, width, height, surfaceGeneration, textureIdentity) {
+    LaunchedEffect(controller, surface, identity, quality, width, height, surfaceGeneration, textureIdentity, statusBarFrame) {
         controller.invalidate()
         // Visibility changes pause the loop through its policy, retaining the source and final
         // frame. Only a new surface/media session clears captured content.
         if (surface is SurfaceView || surface is TextureView) {
-            controller.run(ViewAmbientFrameSource(surface), width, height) { latestPolicy.value() }
+            controller.run(
+                ViewAmbientFrameSource(surface),
+                width,
+                height,
+                onFrame = statusBarFrame?.let { frame ->
+                    { sample: ImageBitmap? ->
+                        if (latestStatusBarSampling.value) frame.value = sample
+                    }
+                },
+            ) { latestPolicy.value() }
         }
     }
     DisposableEffect(presentation, controller, bindingOwner) {

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="sub_reply_thread_expand">
+        <item quantity="one">Show %d reply</item>
+        <item quantity="other">Show %d replies</item>
+    </plurals>
+    <string name="sub_reply_thread_collapse">Hide replies</string>
+</resources>

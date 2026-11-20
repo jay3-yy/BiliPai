@@ -202,6 +202,31 @@ class DynamicScreenStatePolicyTest {
     }
 
     @Test
+    fun `author category searches the next page before any result is visible`() {
+        assertTrue(
+            shouldLoadMoreDynamicFeed(
+                furthestVisibleItemIndex = 1,
+                totalItemsCount = 7,
+                allowAutomaticLoadMore = true,
+                isLoading = false,
+                hasMore = true,
+                isSelectedUserFeedEmpty = true,
+            )
+        )
+        assertFalse(
+            shouldLoadMoreDynamicFeed(
+                furthestVisibleItemIndex = 1,
+                totalItemsCount = 7,
+                allowAutomaticLoadMore = true,
+                isLoading = false,
+                hasMore = true,
+                error = "请求超时",
+                isSelectedUserFeedEmpty = true,
+            )
+        )
+    }
+
+    @Test
     fun `dynamic feed does not load more when pagination is unavailable`() {
         assertFalse(
             shouldLoadMoreDynamicFeed(

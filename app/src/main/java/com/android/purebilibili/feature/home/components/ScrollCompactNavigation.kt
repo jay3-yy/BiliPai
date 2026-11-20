@@ -23,7 +23,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
-import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import dev.chrisbanes.haze.HazeState
 import top.yukonga.miuix.kmp.blur.Backdrop
 import kotlin.math.roundToInt
@@ -54,7 +54,7 @@ internal fun ScrollCompactNavigation(
     onExpand: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    val reduceMotion = rememberSystemReduceMotion() ||
+    val reduceMotion = LocalSystemReduceMotion.current ||
         !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
     val progress = animateFloatAsState(
         targetValue = if (compact) 1f else 0f,
@@ -104,13 +104,13 @@ internal fun ScrollCompactNavigation(
         Box(
             Modifier
                 .layout { measurable, _ ->
-                    val width = resolveScrollCompactExtent(expandedWidthPx, buttonSizePx, progress.value)
-                    val height = resolveScrollCompactExtent(expandedHeightPx, buttonSizePx, progress.value)
+                    val amount = progress.value
+                    if (amount <= 0f) return@layout layout(expandedWidthPx, expandedHeightPx) {}
+                    val width = resolveScrollCompactExtent(expandedWidthPx, buttonSizePx, amount)
+                    val height = resolveScrollCompactExtent(expandedHeightPx, buttonSizePx, amount)
                     val placeable = measurable.measure(Constraints.fixed(width, height))
                     layout(expandedWidthPx, expandedHeightPx) {
-                        if (progress.value > 0f) {
-                            placeable.placeRelative(0, (expandedHeightPx - height) / 2)
-                        }
+                        placeable.placeRelative(0, (expandedHeightPx - height) / 2)
                     }
                 }
                 .graphicsLayer { alpha = progress.value.coerceIn(0f, 1f) }

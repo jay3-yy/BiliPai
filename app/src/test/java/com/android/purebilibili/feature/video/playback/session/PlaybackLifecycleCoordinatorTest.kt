@@ -1,11 +1,43 @@
 package com.android.purebilibili.feature.video.playback.session
 
+import androidx.lifecycle.Lifecycle.Event
 import androidx.media3.common.Player
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PlaybackLifecycleCoordinatorTest {
+
+    @Test
+    fun splitScreenPlaybackFollowsVisibilityWithoutRequiringFocus() {
+        val lifecycle = PlaybackWindowLifecycle()
+
+        assertNull(lifecycle.playbackEvent(Event.ON_PAUSE, isInMultiWindow = true))
+        assertEquals(Event.ON_PAUSE, lifecycle.playbackEvent(Event.ON_STOP, isInMultiWindow = false))
+        assertEquals(Event.ON_RESUME, lifecycle.playbackEvent(Event.ON_START, isInMultiWindow = true))
+        assertEquals(Event.ON_PAUSE, lifecycle.playbackEvent(Event.ON_STOP, isInMultiWindow = false))
+    }
+
+    @Test
+    fun splitScreenWindowCanStopBeforeItsFirstResume() {
+        val lifecycle = PlaybackWindowLifecycle()
+
+        assertEquals(Event.ON_START, lifecycle.playbackEvent(Event.ON_START, isInMultiWindow = true))
+        assertEquals(Event.ON_PAUSE, lifecycle.playbackEvent(Event.ON_STOP, isInMultiWindow = true))
+        assertEquals(Event.ON_RESUME, lifecycle.playbackEvent(Event.ON_START, isInMultiWindow = true))
+    }
+
+    @Test
+    fun regainingSplitScreenFocusClearsDeferredPause() {
+        val lifecycle = PlaybackWindowLifecycle()
+
+        assertNull(lifecycle.playbackEvent(Event.ON_PAUSE, isInMultiWindow = true))
+        assertEquals(Event.ON_RESUME, lifecycle.playbackEvent(Event.ON_RESUME, isInMultiWindow = true))
+        assertEquals(Event.ON_PAUSE, lifecycle.playbackEvent(Event.ON_PAUSE, isInMultiWindow = false))
+        assertEquals(Event.ON_STOP, lifecycle.playbackEvent(Event.ON_STOP, isInMultiWindow = false))
+    }
 
     @Test
     fun returnIntent_keepsManualPauseAcrossSuspensionAndPlayerRecreation() {

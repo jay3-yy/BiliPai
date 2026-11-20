@@ -13,6 +13,7 @@ import com.android.purebilibili.core.util.Logger
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
@@ -49,6 +50,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -77,6 +79,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import com.android.purebilibili.core.ui.findHostActivity
 import com.android.purebilibili.core.ui.rememberVisualWorkActive
@@ -203,13 +206,11 @@ private fun MiniPlayerSessionOverlay(
     }
     val adaptiveDimensions = remember(miniPlayerManager.videoAspectRatio, miniPlayerWidthDp, layoutPolicy,
         configuration.screenWidthDp, configuration.screenHeightDp) {
-        resolveAdaptiveMiniPlayerDimensions(
+        layoutPolicy.dimensionsForWindow(
             videoAspectRatio = miniPlayerManager.videoAspectRatio,
-            currentWidthDp = miniPlayerWidthDp.coerceIn(resizeBounds.minWidthDp, resizeBounds.maxWidthDp),
-            defaultHeightDp = layoutPolicy.miniPlayerHeightDp.toFloat(),
-            maxWidthDp = (configuration.screenWidthDp - layoutPolicy.outerPaddingDp * 2).coerceAtLeast(1).toFloat(),
-            maxHeightDp = (configuration.screenHeightDp - layoutPolicy.outerPaddingDp * 2 -
-                layoutPolicy.dragTopInsetDp - layoutPolicy.dragBottomInsetDp).coerceAtLeast(1).toFloat(),
+            widthDp = miniPlayerWidthDp.coerceIn(resizeBounds.minWidthDp, resizeBounds.maxWidthDp),
+            screenWidthDp = configuration.screenWidthDp,
+            screenHeightDp = configuration.screenHeightDp,
         )
     }
     val miniPlayerAspectRatio = adaptiveDimensions.aspectRatio
@@ -298,6 +299,37 @@ private fun MiniPlayerSessionOverlay(
     //  [修复] 在退出动画期间保持旧 Player 引用，防止画面跳变
     // 当 isMiniMode 为 false (正在退出) 时，不再更新 player，保持最后一帧画面
     val rawPlayer = miniPlayerManager.player
+    val miniPlayerMotion = LocalVideoMiniPlayerMotion.current
+    val navigationHandoff = miniPlayerMotion?.handoff?.takeIf {
+        it.player === rawPlayer && it.commitPose != null && !suppressContentForPip
+    }
+    val enteredViaNavigationMorph = remember { navigationHandoff != null }
+    var retainedHandoff by remember { mutableStateOf(navigationHandoff) }
+    val landingVideo = remember { miniPlayerManager.currentBvid to miniPlayerManager.currentCid }
+    val landingCover = retainedHandoff?.takeIf {
+        it.player === rawPlayer && landingVideo.first == miniPlayerManager.currentBvid &&
+            landingVideo.second == miniPlayerManager.currentCid
+    }
+    val awaitingMorphLanding = navigationHandoff != null && !navigationHandoff.landed
+    val landingCoverAlpha = if (landingCover != null) remember(landingCover) { Animatable(1f) } else null
+    DisposableEffect(landingCover) {
+        onDispose { landingCover?.stopObservingFirstFrame() }
+    }
+    LaunchedEffect(landingCover, navigationHandoff, visualWorkActive, suppressContentForPip, reduceMotion) {
+        val cover = landingCover
+        if (cover == null || (!cover.landed && navigationHandoff == null) ||
+            !visualWorkActive || suppressContentForPip || reduceMotion
+        ) {
+            retainedHandoff = null
+            return@LaunchedEffect
+        }
+        snapshotFlow {
+            cover.firstFrameRendered && miniPlayerMotion?.handoff !== cover
+        }.first { it }
+        withFrameNanos { }
+        landingCoverAlpha?.animateTo(0f, iosMorphTween(80))
+        retainedHandoff = null
+    }
     var player by remember { mutableStateOf(rawPlayer) }
 
     SideEffect {
@@ -617,7 +649,30 @@ private fun MiniPlayerSessionOverlay(
     val latestBeginPositionDrag by rememberUpdatedState(::beginPositionDrag)
     val latestFinishPositionDrag by rememberUpdatedState(::finishPositionDrag)
     val latestClampMiniPlayer by rememberUpdatedState(::clampCurrentOffset)
-    val latestExpand by rememberUpdatedState(onExpandClick)
+    val fullscreenDisplay = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.displayContext
+    val fullscreenOrientationPolicy = com.android.purebilibili.core.util.resolvePlayerWindowOrientationPolicy(fullscreenDisplay)
+    val animateFullscreenExpansion = visualWorkActive && !reduceMotion && !suppressContentForPip &&
+        configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT &&
+        !fullscreenDisplay.isInMultiWindowMode && !fullscreenOrientationPolicy.isTabletopPosture &&
+        !fullscreenOrientationPolicy.usesInWindowFullscreen &&
+        (android.os.Build.VERSION.SDK_INT < 36 ||
+            fullscreenDisplay.smallestScreenWidthDp < com.android.purebilibili.core.util.LARGE_SCREEN_SMALLEST_WIDTH_DP)
+    val onExpand by rememberUpdatedState(onExpandClick)
+    val latestExpand by rememberUpdatedState<() -> Unit> {
+        val view = playerViewRef[0]
+        val bounds = cardCoordinates[0]?.takeIf { it.isAttached }?.boundsInWindow()
+        val started = animateFullscreenExpansion && !miniPlayerManager.isLiveMode &&
+            view != null && bounds != null && !bounds.isEmpty && miniPlayerMotion?.expandFullscreen(
+                view = view,
+                card = MiniPlayerMotionTarget(bounds, with(density) { shellVisual.cardCornerRadiusDp.dp.toPx() }),
+                isCurrent = {
+                    miniPlayerManager.isMiniMode && miniPlayerManager.miniPlayerSessionId == sessionId &&
+                        view.player === miniPlayerManager.player && playerViewRef[0] === view
+                },
+                onExpand = { onExpand() },
+            ) == true
+        if (!started) onExpand()
+    }
 
     LaunchedEffect(
         miniPlayerWidthPx,
@@ -687,7 +742,9 @@ private fun MiniPlayerSessionOverlay(
         iosMorphTween(MINI_PLAYER_VISIBILITY_DURATION_MILLIS)
     val visibilityFadeSpec: FiniteAnimationSpec<Float> =
         iosMorphTween(if (reduceMotion) 160 else MINI_PLAYER_VISIBILITY_DURATION_MILLIS)
-    val enterTransition = if (reduceMotion) {
+    val enterTransition = if (enteredViaNavigationMorph) {
+        EnterTransition.None
+    } else if (reduceMotion) {
         fadeIn(animationSpec = visibilityFadeSpec)
     } else {
         (when (cardPosition) {
@@ -800,13 +857,22 @@ private fun MiniPlayerSessionOverlay(
                     .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
                     .width(miniPlayerWidth)
                     .height(miniPlayerHeight)
-                    .onGloballyPositioned { cardCoordinates[0] = it }
+                    .onGloballyPositioned { coordinates ->
+                        cardCoordinates[0] = coordinates
+                        if (navigationHandoff != null) {
+                            val bounds = coordinates.boundsInWindow()
+                            if (!bounds.isEmpty) navigationHandoff.target = MiniPlayerMotionTarget(
+                                bounds = bounds,
+                                cornerRadiusPx = with(density) { miniPlayerCornerRadius.toPx() },
+                            )
+                        }
+                    }
                     .graphicsLayer {
                         val progress = stashProgress.value
                         transformOrigin = TransformOrigin(0f, 0f)
                         scaleX = 1f + (layoutPolicy.stashedWidthDp / miniPlayerWidthDpEffective - 1f) * progress
                         scaleY = 1f + (layoutPolicy.stashedHeightDp / miniPlayerHeightDp - 1f) * progress
-                        alpha = if (contentHidden) 0f else (1f - progress * 1.6f).coerceIn(0f, 1f)
+                        alpha = if (contentHidden || awaitingMorphLanding) 0f else (1f - progress * 1.6f).coerceIn(0f, 1f)
                     }
                     .shadow(
                         shellVisual.cardShadowDp.dp,
@@ -859,7 +925,7 @@ private fun MiniPlayerSessionOverlay(
             ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // 视频画面
-                player?.let { exoPlayer ->
+                player?.takeUnless { awaitingMorphLanding }?.let { exoPlayer ->
                     val useTextureSurface = com.android.purebilibili.feature.video.ui.components.rememberCompatibleVideoTextureSurface(
                         exoPlayer, miniPlayerManager.cachedUiState?.currentQuality ?: 0,
                     )
@@ -868,6 +934,7 @@ private fun MiniPlayerSessionOverlay(
                         factory = { ctx ->
                             com.android.purebilibili.feature.video.ui.components.createVideoPlayerView(ctx, useTextureSurface).apply {
                                 playerViewRef[0] = this
+                                landingCover?.observeFirstFrame()
                                 this.player = exoPlayer
                                 useController = false
                                 setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
@@ -909,6 +976,18 @@ private fun MiniPlayerSessionOverlay(
                             }
                     )
                     }
+                }
+
+                if (landingCover?.landed == true) {
+                    Image(
+                        bitmap = landingCover.image,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
+                            .clip(miniPlayerShape)
+                            .graphicsLayer { alpha = landingCoverAlpha?.value ?: 1f }
+                            .onGloballyPositioned { landingCover.destinationCoverLaidOut = true },
+                    )
                 }
 
                 player?.let { currentPlayer ->

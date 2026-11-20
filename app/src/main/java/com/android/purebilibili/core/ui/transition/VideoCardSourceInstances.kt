@@ -4,6 +4,7 @@ import android.graphics.Rect as AndroidRect
 import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -33,8 +34,11 @@ internal class VideoCardSourceInstance(
     val shape: Shape,
     val density: Density,
     val layoutDirection: LayoutDirection,
+    val sharedSource: com.android.purebilibili.navigation3.NavigationSharedContainerSource? = null,
+    val returnHandledByOwner: Boolean = false,
 ) {
     var coordinates: LayoutCoordinates? = null
+    val returnLanding = if (returnHandledByOwner) null else sharedSource?.origin?.returnLanding ?: NavigationReturnLanding()
 
     fun boundsInRoot(): Rect? = coordinates?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
 
@@ -82,6 +86,21 @@ internal fun sameVideoCardBounds(first: Rect, second: Rect): Boolean =
 /** 返回只测量打开时的实例；同视频的新组合不能接替落点。 */
 internal class VideoCardSourceAnchor(source: VideoCardSourceInstance) {
     private val reference = WeakReference(source)
+
+    fun requestReturnLanding() {
+        reference.get()?.takeIf { VideoCardSourceInstances.isAttached(it) }?.returnLanding?.request()
+    }
+    fun prepareSharedFallback(target: com.android.purebilibili.navigation3.BiliPaiNavKey): Boolean {
+        val source = reference.get()?.takeIf { VideoCardSourceInstances.isAttached(it) } ?: return false
+        val shared = source.sharedSource ?: return false
+        if (!shared.activate(target)) return false
+        com.android.purebilibili.navigation3.SystemWindowControlNeighbors.linkShared(this, shared.origin)
+        return true
+    }
+
+    fun hasCoordinates(coordinates: LayoutCoordinates?): Boolean = coordinates != null &&
+        reference.get()?.let { VideoCardSourceInstances.isAttached(it) && it.coordinates === coordinates } == true
+
     fun belongsToWindow(decor: View): Boolean = reference.get()?.let {
         VideoCardSourceInstances.isAttached(it) && it.view.rootView === decor.rootView
     } == true
@@ -114,13 +133,23 @@ internal object VideoCardSourceInstances {
         clickedSource = sources.singleOrNull {
             it.bvid == bvid && it.view.hasWindowFocus() &&
                 it.boundsInRoot()?.let { actual -> sameVideoCardBounds(actual, bounds) } == true
-        }?.let { WeakReference(it) }
+        }?.let {
+            it.returnLanding?.clear()
+            WeakReference(it)
+        }
     }
 
     fun takeAnchor(bvid: String): VideoCardSourceAnchor? {
         val source = clickedSource?.get()
         clickedSource = null
         return source?.takeIf { it.bvid == bvid && it in sources }?.let(::VideoCardSourceAnchor)
+    }
+
+    fun hasClickedAnchor(bvid: String): Boolean =
+        clickedSource?.get()?.let { it.bvid == bvid && it in sources } == true
+
+    fun clearClickedAnchor(bvid: String) {
+        if (clickedSource?.get()?.bvid == bvid) clickedSource = null
     }
 
     fun isAttached(source: VideoCardSourceInstance): Boolean = source in sources
@@ -133,17 +162,40 @@ internal fun Modifier.videoCardSourceAnchor(
     shape: Shape,
     // 导航内容外的横条显式启用；页面卡片仍沿用原有导航作用域开关。
     enabled: Boolean = LocalVideoCardSourceTrackingEnabled.current,
+    sharedSource: com.android.purebilibili.navigation3.NavigationSharedContainerSource? = null,
+    drawSharedContent: Boolean = true,
+    returnHandledByOwner: Boolean = false,
+    landingStyle: NavigationReturnLandingStyle = NavigationReturnLandingStyle.CONTROL,
+    onPositioned: ((LayoutCoordinates) -> Unit)? = null,
 ): Modifier {
-    if (!enabled || bvid.isBlank()) return this
+    if (!enabled || bvid.isBlank()) return if (onPositioned == null) this else onPlaced(onPositioned)
     val view = LocalView.current
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
-    val source = remember(bvid, view, shape, density, direction) {
-        VideoCardSourceInstance(bvid, view, shape, density, direction)
+    val fallback = sharedSource ?: com.android.purebilibili.navigation3.rememberNavigationSharedContainerSource(bvid)
+    val source = remember(bvid, view, shape, density, direction, fallback, returnHandledByOwner) {
+        VideoCardSourceInstance(bvid, view, shape, density, direction, fallback, returnHandledByOwner)
+    }
+    if (fallback != null) {
+        SideEffect { fallback.origin.returnLandingHandledByOwner = returnHandledByOwner }
     }
     DisposableEffect(source) {
         VideoCardSourceInstances.attach(source)
-        onDispose { VideoCardSourceInstances.detach(source) }
+        onDispose {
+            source.returnLanding?.clear()
+            VideoCardSourceInstances.detach(source)
+        }
     }
-    return onPlaced { source.coordinates = it }
+    return onPlaced {
+        source.coordinates = it
+        onPositioned?.invoke(it)
+    }.navigationReturnLanding(
+        source.returnLanding,
+        style = landingStyle,
+        sharedBoundsReleased = fallback?.origin?.sharedBounds == null,
+        isSourceVisible = { source.coordinates.isVisibleReturnLanding() },
+    ).then(
+        if (drawSharedContent) com.android.purebilibili.navigation3.navigationSharedContainerSourceModifier(fallback, shape)
+        else Modifier,
+    )
 }

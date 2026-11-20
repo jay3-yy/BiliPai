@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.search
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.android.purebilibili.core.database.AppDatabase
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.data.model.response.SearchArticleItem
@@ -28,6 +29,7 @@ import com.android.purebilibili.data.repository.SearchUpOrder
 import com.android.purebilibili.data.repository.SearchUserType
 import com.android.purebilibili.data.repository.toggleSearchDurationSelection
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +38,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class SearchUiState(
     val query: String = "",
@@ -218,7 +221,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     ))
     val uiState = _uiState.filteredSearchContent(viewModelScope)
 
-    private val searchDao = AppDatabase.getDatabase(application).searchHistoryDao()
+    private val database = AppDatabase.getDatabase(application)
+    private val searchDao = database.searchHistoryDao()
     
     //  防抖任务
     private var discoverSectionEnabled = true
@@ -835,6 +839,22 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             } catch (e: Throwable) {
                 com.android.purebilibili.core.util.Logger.e("SearchVM", "Failed to save search history", e)
             }
+        }
+    }
+
+    internal suspend fun exportHistory(): String {
+        val keywords = searchDao.getKeywords()
+        return withContext(Dispatchers.Default) { encodeSearchHistory(keywords) }
+    }
+
+    internal suspend fun replaceHistory(keywords: List<String>) {
+        val newestTimestamp = System.currentTimeMillis()
+        val entries = keywords.mapIndexed { index, keyword ->
+            SearchHistory(keyword = keyword, timestamp = newestTimestamp - index)
+        }
+        database.withTransaction {
+            searchDao.clearAll()
+            searchDao.insertAll(entries)
         }
     }
 

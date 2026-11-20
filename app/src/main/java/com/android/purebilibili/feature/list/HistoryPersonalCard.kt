@@ -11,7 +11,7 @@ import coil3.request.crossfade
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -169,6 +169,7 @@ internal fun HistoryPersonalCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     stacked: Boolean = false,
+    matchRowHeight: Boolean = false,
 ) {
     val video = item.videoItem
     val context = LocalContext.current
@@ -304,6 +305,7 @@ internal fun HistoryPersonalCard(
     if (stacked) {
         PersonalMediaCardFrame(
             stacked = true,
+            stackedSupportingContentAtBottom = matchRowHeight,
             selected = selected,
             modifier = modifier
                 .then(contentContainer?.modifier ?: transition.shellModifier)
@@ -356,7 +358,7 @@ internal fun HistoryPersonalCard(
             .clip(coverShape)
             .then(transition.nativeCardSnapshot.modifier)
             .wallpaperAwareMediaCardBackground(AppSurfaceTokens.cardContainer(), coverShape)
-            .combinedClickable(
+            .appCombinedClickable(
                 onClick = triggerClick,
                 onLongClick = onLongClick,
             )

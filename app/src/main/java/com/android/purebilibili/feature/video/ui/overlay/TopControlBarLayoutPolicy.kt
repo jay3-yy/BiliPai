@@ -2,7 +2,6 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 /** 播放器顶栏按窗口方向与全屏状态选择操作。 */
 internal data class TopControlBarLayoutPolicy(
-    val showHome: Boolean,
     val showTitle: Boolean,
     val showStatus: Boolean,
     val showAudio: Boolean,
@@ -27,7 +26,6 @@ internal fun resolveTopControlBarLayoutPolicy(
     isUgc: Boolean = true,
     showFullscreenActionItems: Boolean = true,
 ): TopControlBarLayoutPolicy = TopControlBarLayoutPolicy(
-    showHome = !isPortrait || !isFullscreen,
     showTitle = isFullscreen || (!horizontalScreen && !isPortrait),
     showStatus = !isPortrait && (isFullscreen || !horizontalScreen),
     showAudio = !isFileSource && !isFullscreen && isUgc,

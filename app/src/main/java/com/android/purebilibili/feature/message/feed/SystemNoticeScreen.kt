@@ -16,7 +16,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppText
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.runtime.*
 import com.android.purebilibili.feature.message.*
 import com.android.purebilibili.data.repository.MessageManagementRepository
@@ -256,7 +256,7 @@ fun SystemNoticeScreen(
                             ) { item ->
                                 val annotatedContent = rememberSystemNoticeAnnotatedContent(item.content)
                                 MessageFeedCard(modifier = Modifier.fillMaxWidth().animateItem()
-                                    .combinedClickable(onClick = {}, onLongClick = { pendingDelete = item.id })
+                                    .appCombinedClickable(onClick = {}, onLongClick = { pendingDelete = item.id })
                                     .messageSecondaryClick { pendingDelete = item.id }) {
                                     Column(
                                         modifier = Modifier.padding(14.dp),

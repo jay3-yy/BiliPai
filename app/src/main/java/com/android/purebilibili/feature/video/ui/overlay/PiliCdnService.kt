@@ -6,6 +6,7 @@ import java.net.URLEncoder
 
 /** PiliPlus CDNService order, labels and host policies, not aliases for current candidates. */
 enum class PiliCdnService(val label: String, val host: String? = null) {
+    AUTO("自动优选"),
     BASE("基础URL（不推荐）"), BACKUP("备用URL"),
     ALI("ali（阿里云）", "upos-sz-mirrorali.bilivideo.com"),
     ALIB("alib（阿里云）", "upos-sz-mirroralib.bilivideo.com"),
@@ -48,7 +49,7 @@ internal fun selectPiliCdnUrl(urls: List<String>, service: PiliCdnService): Stri
             !com.android.purebilibili.feature.plugin.isRiskyCdnUrl(it)
         } ?: candidates.first()
     }
-    if (service == PiliCdnService.BACKUP) {
+    if (service == PiliCdnService.BACKUP || service == PiliCdnService.AUTO) {
         val normalized = com.android.purebilibili.feature.plugin
             .normalizePlaybackCdnCandidates(
                 candidates.map { url ->

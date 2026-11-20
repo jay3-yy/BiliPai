@@ -773,84 +773,88 @@ fun AppOutlinedTextField(
         ) {
             if (labelText == null) label?.invoke()
             val resolvedLabel = labelText ?: placeholderText.orEmpty()
-            MiuixTextField(
-                value = value,
-                onValueChange = onValueChange,
-                // focusRequester 需要落在真正可聚焦的输入框上；外层 Column 只承担布局
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
-                label = resolvedLabel,
-                useLabelAsPlaceholder = labelText == null && !placeholderText.isNullOrEmpty(),
-                enabled = enabled,
-                readOnly = readOnly,
-                textStyle = textStyle,
-                keyboardOptions = keyboardOptions,
-                keyboardActions = keyboardActions,
-                leadingIcon = if (prefix == null) leadingIcon else {
-                    {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            leadingIcon?.invoke()
-                            prefix()
+            com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                MiuixTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    // focusRequester 需要落在真正可聚焦的输入框上；外层 Column 只承担布局
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
+                    label = resolvedLabel,
+                    useLabelAsPlaceholder = labelText == null && !placeholderText.isNullOrEmpty(),
+                    enabled = enabled,
+                    readOnly = readOnly,
+                    textStyle = textStyle,
+                    keyboardOptions = keyboardOptions,
+                    keyboardActions = keyboardActions,
+                    leadingIcon = if (prefix == null) leadingIcon else {
+                        {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                leadingIcon?.invoke()
+                                prefix()
+                            }
                         }
-                    }
-                },
-                trailingIcon = if (suffix == null) trailingIcon else {
-                    {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            suffix()
-                            trailingIcon?.invoke()
-                        }
-                    }
-                },
-                singleLine = singleLine,
-                maxLines = maxLines,
-                minLines = minLines,
-                visualTransformation = visualTransformation,
-                interactionSource = interactionSource,
-                colors = MiuixTextFieldDefaults.textFieldColors(
-                    backgroundColor = miuixContainerColor
-                        ?: MiuixTheme.colorScheme.secondaryContainer,
-                    borderColor = if (isError) {
-                        AppContentColors.error()
-                    } else {
-                        MiuixTheme.colorScheme.primary
                     },
-                ),
-                // Miuix TextField 没有 Shape 参数，只能用圆角半径近似胶囊形
-                cornerRadius = miuixCornerRadius ?: MiuixTextFieldDefaults.CornerRadius,
-            )
+                    trailingIcon = if (suffix == null) trailingIcon else {
+                        {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                suffix()
+                                trailingIcon?.invoke()
+                            }
+                        }
+                    },
+                    singleLine = singleLine,
+                    maxLines = maxLines,
+                    minLines = minLines,
+                    visualTransformation = visualTransformation,
+                    interactionSource = interactionSource,
+                    colors = MiuixTextFieldDefaults.textFieldColors(
+                        backgroundColor = miuixContainerColor
+                            ?: MiuixTheme.colorScheme.secondaryContainer,
+                        borderColor = if (isError) {
+                            AppContentColors.error()
+                        } else {
+                            MiuixTheme.colorScheme.primary
+                        },
+                    ),
+                    // Miuix TextField 没有 Shape 参数，只能用圆角半径近似胶囊形
+                    cornerRadius = miuixCornerRadius ?: MiuixTextFieldDefaults.CornerRadius,
+                )
+            }
             supportingText?.invoke()
         }
         return
     }
     val resolvedLabel = label ?: labelText?.let { text -> { Text(text) } }
     val resolvedPlaceholder = placeholder ?: placeholderText?.let { text -> { Text(text) } }
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier.then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
-        enabled = enabled,
-        readOnly = readOnly,
-        textStyle = textStyle,
-        label = resolvedLabel,
-        placeholder = resolvedPlaceholder,
-        leadingIcon = leadingIcon,
-        trailingIcon = trailingIcon,
-        prefix = prefix,
-        suffix = suffix,
-        supportingText = supportingText,
-        isError = isError,
-        visualTransformation = visualTransformation,
-        keyboardOptions = keyboardOptions,
-        keyboardActions = keyboardActions,
-        singleLine = singleLine,
-        maxLines = maxLines,
-        minLines = minLines,
-        interactionSource = interactionSource,
-        shape = shape,
-        colors = colors,
-    )
+    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = modifier.then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier),
+            enabled = enabled,
+            readOnly = readOnly,
+            textStyle = textStyle,
+            label = resolvedLabel,
+            placeholder = resolvedPlaceholder,
+            leadingIcon = leadingIcon,
+            trailingIcon = trailingIcon,
+            prefix = prefix,
+            suffix = suffix,
+            supportingText = supportingText,
+            isError = isError,
+            visualTransformation = visualTransformation,
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            singleLine = singleLine,
+            maxLines = maxLines,
+            minLines = minLines,
+            interactionSource = interactionSource,
+            shape = shape,
+            colors = colors,
+        )
+    }
 }
 
 @Composable
@@ -931,10 +935,12 @@ fun AppDropdownMenuItem(
     val menuModifier = modifier.glassMenuItem(enabled, dismissOnClick, feedbackClick).glassMenuSelectedItem(selected == true)
     val menuClick = { if (glassScope != null) glassScope.dispatch(feedbackClick, dismissOnClick) else feedbackClick() }
     val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
-    // 原生窗口使用菜单专用间距与选中反馈；其他材质保留各自条目布局。
-    if (glassScope == null && com.android.purebilibili.core.ui.isMiuixNonGlassEnabled() &&
-        LocalAppThemeConfig.current.nativeMiuixPopupsEnabled
-    ) {
+    val nativeMiuix = glassScope == null && com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()
+    // 窗口菜单与非玻璃备用菜单使用同一份默认内边距，显式传入的内边距继续生效。
+    val rowPadding = if (nativeMiuix && contentPadding == MenuDefaults.DropdownMenuItemContentPadding) {
+        PaddingValues(horizontal = DropdownDefaults.InsideHorizontalPadding, vertical = DropdownDefaults.MiddleVerticalPadding)
+    } else contentPadding
+    if (nativeMiuix && LocalAppThemeConfig.current.nativeMiuixPopupsEnabled) {
         AppNativeDropdownMenuItem(
             text = text,
             onClick = menuClick,
@@ -943,9 +949,7 @@ fun AppDropdownMenuItem(
             trailingIcon = trailingIcon,
             enabled = enabled,
             selected = selected,
-            contentPadding = if (contentPadding == MenuDefaults.DropdownMenuItemContentPadding) {
-                PaddingValues(horizontal = DropdownDefaults.InsideHorizontalPadding, vertical = DropdownDefaults.MiddleVerticalPadding)
-            } else contentPadding,
+            contentPadding = rowPadding,
             interactionSource = resolvedInteractionSource,
         )
         return
@@ -962,7 +966,7 @@ fun AppDropdownMenuItem(
             androidx.compose.foundation.layout.Row(
                 modifier = Modifier
                     .heightIn(min = AppChromeSizeTokens.CompactRowMinHeightDp.dp)
-                    .padding(contentPadding),
+                    .padding(rowPadding),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {

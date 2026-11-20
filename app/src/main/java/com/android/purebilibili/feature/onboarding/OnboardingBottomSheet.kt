@@ -4,6 +4,7 @@ package com.android.purebilibili.feature.onboarding
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
 import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.animation.core.Animatable
@@ -164,10 +165,11 @@ fun OnboardingBottomSheet(
                     // 注意：不再作为 Haze 源，而是作为 Haze 的 Child 的内容
                     HorizontalPager(
                         state = pagerState,
+                        userScrollEnabled = false,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
-                            // .haze(state = hazeState) //  移除旧的 Haze 源，因为现在它是全局 Haze 的一部分
+                            .verticalPriorityHorizontalPagerSwipe(pagerState),
                     ) { page ->
                         when (page) {
                             // 传入局部 Haze 状态给内部组件使用 (如果需要)

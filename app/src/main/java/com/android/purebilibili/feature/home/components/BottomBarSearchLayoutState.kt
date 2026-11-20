@@ -55,21 +55,31 @@ internal fun rememberBiliPaiBottomBarSearchLayoutState(
         hasUiSkinDecoration = hasUiSkinDecoration,
         nativeMiuixNavigation = nativeMiuixNavigation,
     )
-    val resolvedSearchLayout = resolveBiliPaiBottomBarSearchLayout(
-        containerWidth = containerWidth,
-        itemCount = itemCount,
-        minEdgePadding = minEdgePadding,
-        searchEnabled = searchEnabled,
-        searchExpanded = searchExpanded,
-        labelMode = labelMode,
-        cornerRadius = targetDockHeight / 2,
-        searchLayoutMode = searchLayoutMode
-    )
-    // Embedded navigation receives its final width from LinkedBottomDock. Applying
-    // preferred widths and outer margins again would inset only the lower capsule.
+    // 合并底栏已经预留搜索占位并分配导航宽度；内层不再计算一遍独立底栏的首选宽度。
     val targetSearchLayout = if (fillAllocatedDockWidth && !searchEnabled) {
-        resolvedSearchLayout.copy(dockWidth = containerWidth)
-    } else resolvedSearchLayout
+        BiliPaiBottomBarSearchLayout(
+            dockWidth = containerWidth,
+            searchWidth = AppSpacingTokens.None,
+            gap = AppSpacingTokens.None,
+            minimumIndicatorWidth = AppSpacingTokens.None,
+            indicatorReferenceWidth = resolveBiliPaiBottomBarItemSlotWidth(
+                dockWidth = containerWidth,
+                horizontalPadding = resolveBiliPaiFloatingBottomBarContentPadding(),
+                itemCount = itemCount,
+            ),
+        )
+    } else {
+        resolveBiliPaiBottomBarSearchLayout(
+            containerWidth = containerWidth,
+            itemCount = itemCount,
+            minEdgePadding = minEdgePadding,
+            searchEnabled = searchEnabled,
+            searchExpanded = searchExpanded,
+            labelMode = labelMode,
+            cornerRadius = targetDockHeight / 2,
+            searchLayoutMode = searchLayoutMode,
+        )
+    }
     val emptySize = remember { mutableStateOf(AppSpacingTokens.None) }
     if (!searchEnabled) {
         val dockWidth = animateDpAsState(

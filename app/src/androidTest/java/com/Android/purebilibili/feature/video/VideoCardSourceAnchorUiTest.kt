@@ -17,10 +17,16 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
+import com.android.purebilibili.core.ui.LocalSharedTransitionEnabled
+import com.android.purebilibili.core.ui.transition.LocalSystemVideoCardCaptureEnabled
+import com.android.purebilibili.core.ui.transition.NativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSourceTrackingEnabled
 import com.android.purebilibili.core.ui.transition.VideoCardSourceInstances
+import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
+import com.android.purebilibili.core.util.CardPositionManager
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Rule
@@ -58,22 +64,47 @@ class VideoCardSourceAnchorUiTest {
     }
 
     @Test
-    fun partiallyVisibleCardKeepsItsCompleteSourceAnchor() {
+    fun partiallyVisibleCardKeepsCompleteSystemSourceWithInAppMorphDisabled() {
         var bounds: Rect? = null
+        lateinit var snapshot: NativeVideoCardSnapshotController
+        val bvid = "BV1partial"
         compose.setContent {
-            CompositionLocalProvider(LocalVideoCardSourceTrackingEnabled provides true) {
+            CompositionLocalProvider(
+                LocalSharedTransitionEnabled provides false,
+                LocalSystemVideoCardCaptureEnabled provides true,
+                LocalVideoCardSourceTrackingEnabled provides true,
+            ) {
+                snapshot = rememberNativeVideoCardSnapshotController(bvid)
                 Box(Modifier.size(120.dp, 80.dp).clipToBounds()) {
                     Box(Modifier.offset(y = 40.dp).size(120.dp, 90.dp)
-                        .videoCardSourceAnchor("BV1partial", RoundedCornerShape(12.dp))
+                        .videoCardSourceAnchor(bvid, RoundedCornerShape(12.dp))
+                        .then(snapshot.modifier)
                         .onGloballyPositioned { bounds = it.videoCardSourceBoundsInRoot() })
                 }
             }
         }
         compose.runOnIdle {
-            VideoCardSourceInstances.recordClick("BV1partial", requireNotNull(bounds))
-            val anchor = requireNotNull(VideoCardSourceInstances.takeAnchor("BV1partial"))
-            assertNull(anchor.boundsInRoot())
-            org.junit.Assert.assertEquals(bounds, anchor.boundsInRoot(allowPartial = true))
+            try {
+                CardPositionManager.recordVideoCardPosition(
+                    bvid = bvid,
+                    sourceRoute = "home",
+                    bounds = requireNotNull(bounds),
+                    screenWidth = 360f,
+                    screenHeight = 640f,
+                )
+                snapshot.capture()
+                val anchor = requireNotNull(VideoCardSourceInstances.takeAnchor(bvid))
+                assertNull(anchor.boundsInRoot())
+                assertEquals(bounds, anchor.boundsInRoot(allowPartial = true))
+                val fullBounds = requireNotNull(anchor.bounds(windowCoordinates = true, allowPartial = true))
+                val layer = requireNotNull(CardPositionManager.nativeCardLayerForOwner(
+                    CardPositionManager.lastClickedVideoPixelOwner,
+                ))
+                assertEquals(fullBounds.width(), layer.size.width)
+                assertEquals(fullBounds.height(), layer.size.height)
+            } finally {
+                CardPositionManager.clear()
+            }
         }
     }
 

@@ -16,9 +16,8 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.DanmakuSettings
 import com.android.purebilibili.core.store.resolveDanmakuSettingsScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import androidx.compose.ui.platform.LocalContext
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.feature.bangumi.BangumiOverlayUnsupportedAction
 import com.android.purebilibili.data.model.response.Page
@@ -39,6 +38,8 @@ import com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo
 import com.android.purebilibili.feature.video.ui.overlay.VideoPlayerOverlay
 import com.android.purebilibili.feature.video.ui.overlay.VideoPlayerOverlayState
 import com.android.purebilibili.feature.video.ui.overlay.VideoPlayerOverlayActions
+import com.android.purebilibili.feature.video.ui.overlay.observeVideoPlayerProgress
+import com.android.purebilibili.feature.video.ui.overlay.rememberPlayerProgressSamplingActive
 import com.android.purebilibili.feature.video.playback.audio.AudioQualityOption
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.playback.session.PlaybackSeekSessionState
@@ -150,16 +151,22 @@ internal fun BangumiPlayerOverlayHost(
     var seekSession by remember(player, epId, bvid, cid) {
         mutableStateOf(PlaybackSeekSessionState())
     }
-    LaunchedEffect(player, epId, bvid, cid) {
-        while (isActive) {
-            if (seekSession.isSliderMoving || seekSession.pendingSeekPositionMs != null) {
-                seekSession = syncPlaybackSeekSession(
-                    state = seekSession,
-                    playbackPositionMs = player.currentPosition,
-                    hasPlaybackResumedAfterPendingSeek = player.isPlaying || !player.playWhenReady,
-                )
-            }
-            delay(100L)
+    val samplingActive = rememberPlayerProgressSamplingActive()
+    val seekNeedsSync = seekSession.isSliderMoving || seekSession.pendingSeekPositionMs != null
+    LaunchedEffect(player, epId, bvid, cid, samplingActive, seekNeedsSync) {
+        if (!samplingActive || !seekNeedsSync) return@LaunchedEffect
+        observeVideoPlayerProgress(
+            player = player,
+            videoDuration = 0L,
+            pollingIntervalMs = 100L,
+            pollWhilePaused = true,
+        ) { progress ->
+            seekSession = syncPlaybackSeekSession(
+                state = seekSession,
+                playbackPositionMs = progress.current,
+                hasPlaybackResumedAfterPendingSeek = player.isPlaying || !player.playWhenReady,
+                playbackEnded = player.playbackState == Player.STATE_ENDED,
+            )
         }
     }
 

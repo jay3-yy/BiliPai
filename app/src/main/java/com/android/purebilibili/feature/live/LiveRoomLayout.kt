@@ -34,6 +34,7 @@ internal fun LiveRoomLayout(
     player: @Composable () -> Unit,
     interaction: @Composable (overVideo: Boolean, includeFooter: Boolean) -> Unit,
     inputFooter: @Composable () -> Unit,
+    superChat: (@Composable () -> Unit)? = null,
 ) {
     val headerBackdrop = if (!isFullscreen && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
         com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource(recordingBackground = Color.Black)
@@ -57,7 +58,16 @@ internal fun LiveRoomLayout(
                         Box(Modifier.weight(1f).fillMaxWidth()) { player() }
                     }
                 },
-                secondaryContent = if (!isFullscreen) ({ interaction(false, true) }) else null,
+                secondaryContent = if (!isFullscreen) ({
+                    if (superChat == null) {
+                        interaction(false, true)
+                    } else {
+                        Column(Modifier.fillMaxSize()) {
+                            superChat()
+                            Box(Modifier.weight(1f).fillMaxWidth()) { interaction(false, true) }
+                        }
+                    }
+                }) else null,
             )
         } else {
             // 播放器固定在同一组合位置；横竖屏和全屏只改变测量及放置，不释放视频输出。
@@ -76,6 +86,7 @@ internal fun LiveRoomLayout(
                     Box(Modifier.clipToBounds()) { player() }
                     Box { if (showInteraction) interaction(vertical, !vertical) }
                     Box { if (vertical && !isFullscreen) inputFooter() }
+                    Box { superChat?.invoke() }
                 },
             ) { measurables, constraints ->
                 val width = constraints.maxWidth
@@ -107,20 +118,29 @@ internal fun LiveRoomLayout(
                     !showInteraction -> 0
                     split -> availableHeight
                     vertical -> (availableHeight * 0.32f).toInt()
-                    else -> (availableHeight - playerHeight).coerceAtLeast(0)
+                    else -> availableHeight - playerHeight
                 }
-                val chatPlaceable = measurables[2].measure(Constraints.fixed(chatWidth, chatHeight))
+                val chatY = when {
+                    split -> top
+                    vertical -> (height - footerHeight - LIVE_CHAT_INPUT_GAP_DP.dp.roundToPx() - chatHeight).coerceAtLeast(top)
+                    else -> top + playerHeight
+                }
+                val superChatPlaceable = measurables[4].measure(
+                    Constraints(
+                        maxWidth = chatWidth,
+                        maxHeight = if (vertical) chatY - top else chatHeight,
+                    ),
+                )
+                val chatInset = if (vertical) 0 else superChatPlaceable.height
+                val chatPlaceable = measurables[2].measure(Constraints.fixed(chatWidth, chatHeight - chatInset))
                 val footerPlaceable = measurables[3].measure(Constraints.fixed(width, footerHeight))
                 layout(width, height) {
                     headerPlaceable.place(0, 0)
                     playerPlaceable.place(splitLeft, top)
                     val chatX = if (split) splitLeft + playerWidth else 0
-                    val chatY = when {
-                        split -> top
-                        vertical -> (height - footerHeight - LIVE_CHAT_INPUT_GAP_DP.dp.roundToPx() - chatHeight).coerceAtLeast(top)
-                        else -> top + playerHeight
-                    }
-                    chatPlaceable.place(chatX, chatY)
+                    val superChatY = if (vertical) chatY - superChatPlaceable.height else chatY
+                    superChatPlaceable.place(chatX, superChatY)
+                    chatPlaceable.place(chatX, chatY + chatInset)
                     footerPlaceable.place(0, height - footerHeight)
                 }
             }

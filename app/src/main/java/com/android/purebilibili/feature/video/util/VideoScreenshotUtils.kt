@@ -280,6 +280,7 @@ internal suspend fun captureSurfaceViewBitmap(
     // PixelCopy 无法取消；取消后的位图由结果回调回收，避免回收仍在写入的目标。
 }
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 private suspend fun captureSurfaceViewAmbientBitmap(
     surfaceView: SurfaceView,
     targetWidth: Int,
@@ -300,7 +301,7 @@ private suspend fun captureSurfaceViewAmbientBitmap(
                     return@request
                 }
                 if (result == PixelCopy.SUCCESS) {
-                    continuation.resume(bitmap)
+                    continuation.resume(bitmap, onCancellation = { bitmap.recycle() })
                 } else {
                     bitmap.recycle()
                     continuation.resume(null)

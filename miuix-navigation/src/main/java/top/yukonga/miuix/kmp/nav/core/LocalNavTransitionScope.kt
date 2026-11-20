@@ -5,6 +5,7 @@ package top.yukonga.miuix.kmp.nav.core
 
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
+import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 
 /**
@@ -23,3 +24,7 @@ public val LocalNavTransitionScope: ProvidableCompositionLocal<NavTransitionScop
                 "NavDisplay entry.",
         )
     }
+
+/** This entry's transition, retained by the renderer through its exit. */
+public val LocalNavEntryTransition: ProvidableCompositionLocal<NavTransition?> =
+    compositionLocalOf { null }

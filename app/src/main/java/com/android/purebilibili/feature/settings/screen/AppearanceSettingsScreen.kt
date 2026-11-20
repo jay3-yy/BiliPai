@@ -71,6 +71,7 @@ import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
 import com.android.purebilibili.core.store.HomeWallpaperEffectScope
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.SettingsIconGlyphs
 import com.android.purebilibili.core.store.ThemeModeRoleOverrides
 import com.android.purebilibili.core.store.ThemeRoleOverrides
 import coil3.compose.AsyncImage
@@ -118,7 +119,6 @@ fun AppearanceSettingsScreen(
     onBack: () -> Unit,
     onNavigateToIconSettings: () -> Unit = {},
     contentMode: AppearanceSettingsContentMode = AppearanceSettingsContentMode.APPEARANCE,
-    onAnimationClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -131,7 +131,7 @@ fun AppearanceSettingsScreen(
     var pendingLanguageRestart by remember { mutableStateOf<AppLanguage?>(null) }
     val backLabel = stringResource(R.string.common_back)
     val screenTitle = when (contentMode) {
-        AppearanceSettingsContentMode.APPEARANCE -> stringResource(R.string.appearance_settings_title)
+        AppearanceSettingsContentMode.APPEARANCE -> stringResource(SettingsRootCategory.APPEARANCE_THEME.titleResource())
         AppearanceSettingsContentMode.HOME -> context.getString(R.string.appearance_home_and_dynamic_title)
     }
     val restartDialogTitle = stringResource(R.string.app_language_restart_dialog_title)
@@ -179,7 +179,6 @@ fun AppearanceSettingsScreen(
     ) {
         CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides effectiveLiquidGlassEnabled) {
             AppearanceSettingsContent(
-                onAnimationClick = onAnimationClick,
                 state = state,
                 onNavigateToIconSettings = onNavigateToIconSettings,
                 contentMode = contentMode,
@@ -245,7 +244,6 @@ fun AppearanceSettingsContent(
     viewModel: SettingsViewModel,
     context: android.content.Context,
     onAppLanguageChange: (AppLanguage) -> Unit,
-    onAnimationClick: () -> Unit = {},
 ) {
     val homeConfiguration = rememberSettingsHomeConfiguration()
     val themeConfiguration = rememberSettingsThemeConfiguration()
@@ -299,6 +297,11 @@ fun AppearanceSettingsContent(
             AppSegmentOption(AppSingleChoicePresentation.CENTERED_DIALOG, context.getString(R.string.appearance_display_choice_dialog)),
         )
     }
+    val settingsIconGlyphOptions = remember(context) {
+        SettingsIconGlyphs.entries.map { glyphs ->
+            AppSegmentOption(glyphs, context.getString(glyphs.labelResId))
+        }
+    }
     val listState = rememberLazyListState()
     val focusRequest by SettingsSearchFocusController.request.collectAsStateWithLifecycle()
     // Animation Trigger
@@ -308,13 +311,20 @@ fun AppearanceSettingsContent(
     val windowSizeClass = LocalWindowSizeClass.current
     val isTablet = windowSizeClass.isTablet
     val sectionKeys = when (contentMode) {
-        AppearanceSettingsContentMode.APPEARANCE -> listOf("appearance_display_mode", "appearance_theme_color", "appearance_text_size", "appearance_splash_icon", "content_image_display", "appearance_language")
-        AppearanceSettingsContentMode.HOME -> listOf("home_list", "home_wallpaper", "home_recommendation", "home_browsing")
-    }.flatMap { listOf(it + "_title", it) }
+        AppearanceSettingsContentMode.APPEARANCE -> listOf(
+            "appearance_display_mode_title", "appearance_display_mode",
+            "appearance_theme_color_title", "appearance_theme_color", "appearance_theme_home_preview",
+            "appearance_text_size_title", "appearance_text_size",
+            "appearance_splash_icon_title", "appearance_splash_icon",
+            "content_image_display_title", "content_image_display",
+            "appearance_language_title", "appearance_language",
+        )
+        AppearanceSettingsContentMode.HOME -> homeSettingsScrollItemKeys
+    }
     SettingsSectionFocusEffect(
         listState = listState,
         target = if (contentMode == AppearanceSettingsContentMode.HOME) SettingsSearchTarget.HOME_FEED else SettingsSearchTarget.APPEARANCE,
-        sectionKeys = if (contentMode == AppearanceSettingsContentMode.APPEARANCE) sectionKeys else sectionKeys + "home_options",
+        sectionKeys = sectionKeys,
         legacyKeys = mapOf(
             SettingsSearchFocusIds.APPEARANCE_THEME to "appearance_display_mode_title",
             "appearance.dark_theme_schedule" to "appearance_theme_color",
@@ -506,8 +516,12 @@ fun AppearanceSettingsContent(
             )
         } else storedThemeRoleOverrides
     }
-    val showOnlineCount by remember(context) { SettingsManager.getShowCardOnlineCount(context) }
-        .collectAsStateWithLifecycle(initialValue = false)
+    val showOnlineCount = if (contentMode == AppearanceSettingsContentMode.HOME) {
+        remember(context) { SettingsManager.getShowCardOnlineCount(context) }
+            .collectAsStateWithLifecycle(initialValue = false).value
+    } else {
+        false
+    }
     val showProfileEditButton by remember(context) { SettingsManager.getShowProfileEditButton(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val effectiveLiquidGlassEnabled = resolveHomeChromeLiquidGlassEnabled(
@@ -645,7 +659,7 @@ fun AppearanceSettingsContent(
                             )
                         }
 
-                        // 液态玻璃总开关与玻璃材质条目已集中在「动画与触感」页的玻璃分组,
+                        // 液态玻璃总开关与玻璃材质条目位于「动效与反馈」页的玻璃分组。
                         // 这里只保留与玻璃无关的显示样式条目。
 
                         SettingsItemAnchor("appearance.app_list_item_style") {
@@ -699,6 +713,32 @@ fun AppearanceSettingsContent(
                             AppPreferenceDivider()
                         }
 
+                        SettingsItemAnchor(SETTINGS_ICON_GLYPHS_SETTING_ID) {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.SETTINGS_ICON_GLYPHS),
+                                title = settingItemTitle(SETTINGS_ICON_GLYPHS_SETTING_ID, context),
+                                subtitle = context.getString(R.string.appearance_settings_icon_glyphs_summary),
+                                options = settingsIconGlyphOptions,
+                                selectedValue = themeConfiguration.settingsIconGlyphs,
+                                optionLeading = { glyphs ->
+                                    AppIcon(
+                                        imageVector = rememberSettingsVector(
+                                            resolveSettingsIconResource(SettingsIconRole.NAVIGATION, glyphs),
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                },
+                                onSelectionChange = { glyphs ->
+                                    scope.launch {
+                                        SettingsManager.setSettingsIconGlyphs(context, glyphs)
+                                    }
+                                },
+                            )
+                        }
+
+                        AppPreferenceDivider()
+
                         SettingsItemAnchor("appearance.single_choice_presentation") {
                             SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.CHOICE_MENU_STYLE),
@@ -717,18 +757,6 @@ fun AppearanceSettingsContent(
                                         )
                                     }
                                 },
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsNavigationContainerOrigin(
-                            target = com.android.purebilibili.navigation3.BiliPaiNavKey.AnimationSettings,
-                            onClick = onAnimationClick,
-                            first = false,
-                        ) { open ->
-                            AppPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.ANIMATION),
-                                title = context.getString(R.string.appearance_animation_glass_title),
-                                onClick = open,
                             )
                         }
                     }
@@ -1024,7 +1052,7 @@ fun AppearanceSettingsContent(
                                 if (!state.seedPaletteStyle.enabled) {
                                     AppPreferenceDivider()
                                     ThemePresetChoiceSetting(
-                                        icon = rememberMaterialSymbol(R.drawable.ms_brightness_medium_24),
+                                        icon = rememberSettingsVector(R.drawable.ph_sun_dim_24, R.drawable.ms_brightness_medium_24),
                                         title = context.getString(R.string.appearance_color_contrast_title),
                                         subtitle = resolveColorContrastSubtitle(state.colorContrast),
                                         selectedValue = state.colorContrast,
@@ -1199,7 +1227,7 @@ fun AppearanceSettingsContent(
                                                                     contentAlignment = Alignment.Center
                                                                 ) {
                                                                     AppIcon(
-                                                                        com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_check_24),
+                                                                        rememberSettingsVector(R.drawable.ph_check_24, R.drawable.ms_check_24),
                                                                         contentDescription = null,
                                                                         tint = swatch.primary,
                                                                         modifier = Modifier.size(12.dp)
@@ -1626,7 +1654,7 @@ fun AppearanceSettingsContent(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             AppIcon(
-                                                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_photo_24),
+                                                rememberSettingsVector(R.drawable.ph_image_24, R.drawable.ms_photo_24),
                                                 contentDescription = null,
                                                 tint = AppContentColors.secondaryText(),
                                                 modifier = Modifier.size(24.dp)
@@ -1651,7 +1679,7 @@ fun AppearanceSettingsContent(
                                 }
 
                                 AppIcon(
-                                    com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+                                    rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
                                     contentDescription = null,
                                     tint = AppContentColors.secondaryText().copy(alpha = 0.5f),
                                     modifier = Modifier.size(16.dp)
@@ -1708,372 +1736,375 @@ fun AppearanceSettingsContent(
                     AppPreferenceSectionTitle(context.getString(R.string.home_settings_section_list))
                 }
             }
-            item(key = "home_list") {
-                Box(modifier = Modifier.entrance()) {
-                    AppPreferenceGroup {
-                        val displayMode = state.displayMode
-                        val currentDisplayMode = DisplayMode.entries
-                            .firstOrNull { it.value == displayMode }
+            // 标题负责页面入场，滚动到卡片中段时直接显示。
+            item(key = "home_list", contentType = "settings_preference_group") {
+                AppPreferenceGroup(segment = AppPreferenceGroupSegment.FIRST) {
+                    val displayMode = state.displayMode
+                    val currentDisplayMode = DisplayMode.entries
+                        .firstOrNull { it.value == displayMode }
+                    SettingsSingleChoicePreference(
+                        title = context.getString(R.string.home_settings_display_style_title),
+                        subtitle = context.getString(when (currentDisplayMode) {
+                            DisplayMode.DoubleGrid -> R.string.home_settings_display_mode_grid_desc
+                            DisplayMode.SingleColumn -> R.string.home_settings_display_mode_single_desc
+                            null -> R.string.home_settings_display_style_summary
+                        }),
+                        options = DisplayMode.entries.map { mode ->
+                            AppSegmentOption(mode.value, context.getString(when (mode) {
+                                DisplayMode.DoubleGrid -> R.string.home_settings_display_mode_grid
+                                DisplayMode.SingleColumn -> R.string.home_settings_display_mode_single
+                            }))
+                        },
+                        selectedValue = displayMode,
+                        optionLeading = { value -> SettingsOptionPreviewThumb(SettingsOptionPreview.Feed(
+                            columns = if (value == DisplayMode.SingleColumn.value) 1 else 2,
+                            horizontalCards = value == DisplayMode.SingleColumn.value,
+                        )) },
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_FEED),
+                        iconTint = displayModeTint,
+                        onSelectionChange = viewModel::setDisplayMode,
+                    )
+
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_CUSTOMIZATION_SETTING_ID) {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.GRID_COLUMNS),
+                            title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_CUSTOMIZATION_SETTING_ID, context),
+                            subtitle = context.getString(R.string.home_settings_grid_customization_summary),
+                            checked = homeConfiguration.gridColumnCustomizationEnabled,
+                            onCheckedChange = { scope.launch { SettingsManager.setGridColumnCustomizationEnabled(context, it) } },
+                        )
+                    }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.pinch_to_change_grid_columns_enabled") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PINCH_GRID_COLUMNS),
+                            title = com.android.purebilibili.feature.settings.settingItemTitle("appearance.pinch_to_change_grid_columns_enabled", context),
+                            subtitle = context.getString(R.string.home_settings_pinch_columns_summary),
+                            checked = pinchToChangeGridColumnsEnabled,
+                            enabled = homeConfiguration.gridColumnCustomizationEnabled,
+                            onCheckedChange = { scope.launch { SettingsManager.setPinchToChangeGridColumnsEnabled(context, it) } },
+                        )
+                    }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_SHARE_SETTING_ID) {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.GRID_SHARE_COLUMNS),
+                            title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_SHARE_SETTING_ID, context),
+                            subtitle = context.getString(R.string.home_settings_grid_share_summary),
+                            checked = homeConfiguration.gridColumnsSharedAcrossPages,
+                            enabled = homeConfiguration.gridColumnCustomizationEnabled,
+                            onCheckedChange = { scope.launch { SettingsManager.setGridColumnsSharedAcrossPages(context, it) } },
+                        )
+                    }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_COMPACT_SETTING_ID) {
                         SettingsSingleChoicePreference(
-                            title = context.getString(R.string.home_settings_display_style_title),
-                            subtitle = context.getString(when (currentDisplayMode) {
-                                DisplayMode.DoubleGrid -> R.string.home_settings_display_mode_grid_desc
-                                DisplayMode.SingleColumn -> R.string.home_settings_display_mode_single_desc
-                                null -> R.string.home_settings_display_style_summary
-                            }),
-                            options = DisplayMode.entries.map { mode ->
-                                AppSegmentOption(mode.value, context.getString(when (mode) {
-                                    DisplayMode.DoubleGrid -> R.string.home_settings_display_mode_grid
-                                    DisplayMode.SingleColumn -> R.string.home_settings_display_mode_single
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.COMPACT_GRID_COLUMNS),
+                            title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_COMPACT_SETTING_ID, context),
+                            subtitle = context.getString(R.string.home_settings_grid_default_summary),
+                            enabled = homeConfiguration.gridColumnCustomizationEnabled,
+                            options = (0..4).map { count ->
+                                AppSegmentOption(
+                                    value = count,
+                                    label = if (count == 0) context.getString(R.string.home_settings_grid_columns_auto)
+                                    else context.getString(R.string.home_settings_grid_columns_count, count),
+                                )
+                            },
+                            selectedValue = homeConfiguration.gridColumnCountCompact,
+                            optionLeading = { value -> SettingsOptionPreviewThumb(SettingsOptionPreview.Feed(columns = value)) },
+                            onSelectionChange = { count -> scope.launch { SettingsManager.setGridColumnCountCompact(context, count) } },
+                        )
+                    }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_WIDE_PORTRAIT_SETTING_ID) {
+                        SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.WIDE_PORTRAIT_GRID_COLUMNS),
+                            title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_WIDE_PORTRAIT_SETTING_ID, context),
+                            subtitle = context.getString(R.string.home_settings_grid_wide_portrait_summary),
+                            enabled = homeConfiguration.gridColumnCustomizationEnabled,
+                            options = (0..7).map { count ->
+                                AppSegmentOption(
+                                    value = count,
+                                    label = if (count == 0) context.getString(R.string.home_settings_grid_columns_auto)
+                                    else context.getString(R.string.home_settings_grid_columns_count, count),
+                                )
+                            },
+                            selectedValue = homeConfiguration.gridColumnCountWidePortrait,
+                            optionLeading = { value -> SettingsOptionPreviewThumb(SettingsOptionPreview.Feed(columns = value)) },
+                            onSelectionChange = { count -> scope.launch { SettingsManager.setGridColumnCountWidePortrait(context, count) } },
+                        )
+                    }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.grid_column_count") {
+                        SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.WIDE_GRID_COLUMNS),
+                            title = com.android.purebilibili.feature.settings.settingItemTitle("appearance.grid_column_count", context),
+                            subtitle = context.getString(R.string.home_settings_grid_wide_landscape_summary),
+                            enabled = homeConfiguration.gridColumnCustomizationEnabled,
+                            options = (0..7).map { count ->
+                                AppSegmentOption(
+                                    value = count,
+                                    label = if (count == 0) context.getString(R.string.home_settings_grid_columns_auto)
+                                    else context.getString(R.string.home_settings_grid_columns_count, count),
+                                )
+                            },
+                            selectedValue = homeConfiguration.gridColumnCount,
+                            optionLeading = { value -> SettingsOptionPreviewThumb(SettingsOptionPreview.Feed(columns = value)) },
+                            onSelectionChange = { count -> scope.launch { SettingsManager.setGridColumnCount(context, count) } },
+                        )
+                    }
+                    if (isTablet && state.displayMode == 0) {
+                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                        SettingsItemAnchor("appearance.home_feed_card_width_preset") {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_CARD_WIDTH),
+                                title = context.getString(R.string.home_settings_card_width_title),
+                                subtitle = if (homeConfiguration.gridColumnCustomizationEnabled && homeConfiguration.effectiveGridColumnCountForWindow(windowSizeClass) > 0) {
+                                    context.getString(R.string.home_settings_card_width_current, homeConfiguration.effectiveGridColumnCountForWindow(windowSizeClass))
+                                } else {
+                                    context.getString(R.string.home_settings_card_width_auto)
+                                },
+                                options = resolveHomeFeedCardWidthPresetSegmentOptions().map { option ->
+                                    option.copy(label = context.getString(when (option.value) {
+                                        HomeFeedCardWidthPreset.AUTO -> R.string.home_settings_card_width_auto_option
+                                        HomeFeedCardWidthPreset.COMPACT -> R.string.home_settings_card_width_compact
+                                        HomeFeedCardWidthPreset.BALANCED -> R.string.home_settings_card_width_balanced
+                                        HomeFeedCardWidthPreset.WIDE -> R.string.home_settings_card_width_wide
+                                        HomeFeedCardWidthPreset.ULTRA_WIDE -> R.string.home_settings_card_width_ultra_wide
+                                    }))
+                                },
+                                selectedValue = state.homeFeedCardWidthPreset,
+                                onSelectionChange = viewModel::setHomeFeedCardWidthPreset,
+                            )
+                        }
+                    }
+                }
+            }
+            item(key = HOME_LIST_CARD_ITEMS, contentType = "settings_preference_group") {
+                AppPreferenceGroup(segment = AppPreferenceGroupSegment.MIDDLE) {
+                    SettingsItemAnchor("appearance.full_video_card_content_visible") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.FULL_VIDEO_CARD_CONTENT),
+                            title = context.getString(R.string.home_settings_full_card_title),
+                            subtitle = context.getString(
+                                if (fullVideoCardContentVisible) R.string.home_settings_full_card_on
+                                else R.string.home_settings_full_card_off,
+                            ),
+                            checked = fullVideoCardContentVisible,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setFullVideoCardContentVisible(context, it)
+                                }
+                            },
+                            iconTint = AppContentColors.secondaryText()
+                        )
+                    }
+
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.home_feed_card_style") {
+                        SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_COVER_RATIO),
+                            title = context.getString(R.string.home_settings_card_ratio_title),
+                            subtitle = context.getString(when (homeFeedCardStyle) {
+                                HomeFeedCardStyle.CURRENT -> R.string.home_settings_card_ratio_current
+                                HomeFeedCardStyle.OFFICIAL -> R.string.home_settings_card_ratio_official
+                                HomeFeedCardStyle.BILIPAI -> R.string.home_settings_card_ratio_bilipai
+                            }) + context.getString(R.string.home_settings_card_ratio_sync),
+                            options = HomeFeedCardStyle.entries.map {
+                                AppSegmentOption(it, context.getString(when (it) {
+                                    HomeFeedCardStyle.CURRENT -> R.string.appearance_home_card_ratio_current_label
+                                    HomeFeedCardStyle.OFFICIAL -> R.string.appearance_home_card_ratio_official_label
+                                    HomeFeedCardStyle.BILIPAI -> R.string.appearance_home_card_ratio_bilipai_label
                                 }))
                             },
-                            selectedValue = displayMode,
-                            optionLeading = { value -> SettingsOptionPreviewThumb(SettingsOptionPreview.Feed(
-                                columns = if (value == DisplayMode.SingleColumn.value) 1 else 2,
-                                horizontalCards = value == DisplayMode.SingleColumn.value,
-                            )) },
-                            icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_FEED),
-                            iconTint = displayModeTint,
-                            onSelectionChange = viewModel::setDisplayMode,
-                        )
-
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_CUSTOMIZATION_SETTING_ID) {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.GRID_COLUMNS),
-                                title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_CUSTOMIZATION_SETTING_ID, context),
-                                subtitle = context.getString(R.string.home_settings_grid_customization_summary),
-                                checked = homeConfiguration.gridColumnCustomizationEnabled,
-                                onCheckedChange = { scope.launch { SettingsManager.setGridColumnCustomizationEnabled(context, it) } },
-                            )
-                        }
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.pinch_to_change_grid_columns_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.PINCH_GRID_COLUMNS),
-                                title = com.android.purebilibili.feature.settings.settingItemTitle("appearance.pinch_to_change_grid_columns_enabled", context),
-                                subtitle = context.getString(R.string.home_settings_pinch_columns_summary),
-                                checked = pinchToChangeGridColumnsEnabled,
-                                enabled = homeConfiguration.gridColumnCustomizationEnabled,
-                                onCheckedChange = { scope.launch { SettingsManager.setPinchToChangeGridColumnsEnabled(context, it) } },
-                            )
-                        }
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_SHARE_SETTING_ID) {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.GRID_SHARE_COLUMNS),
-                                title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_SHARE_SETTING_ID, context),
-                                subtitle = context.getString(R.string.home_settings_grid_share_summary),
-                                checked = homeConfiguration.gridColumnsSharedAcrossPages,
-                                enabled = homeConfiguration.gridColumnCustomizationEnabled,
-                                onCheckedChange = { scope.launch { SettingsManager.setGridColumnsSharedAcrossPages(context, it) } },
-                            )
-                        }
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_COMPACT_SETTING_ID) {
-                            SettingsSingleChoicePreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.COMPACT_GRID_COLUMNS),
-                                title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_COMPACT_SETTING_ID, context),
-                                subtitle = context.getString(R.string.home_settings_grid_default_summary),
-                                enabled = homeConfiguration.gridColumnCustomizationEnabled,
-                                options = (0..4).map { count ->
-                                    AppSegmentOption(
-                                        value = count,
-                                        label = if (count == 0) context.getString(R.string.home_settings_grid_columns_auto)
-                                        else context.getString(R.string.home_settings_grid_columns_count, count),
-                                    )
-                                },
-                                selectedValue = homeConfiguration.gridColumnCountCompact,
-                                optionLeading = { value -> SettingsOptionPreviewThumb(SettingsOptionPreview.Feed(columns = value)) },
-                                onSelectionChange = { count -> scope.launch { SettingsManager.setGridColumnCountCompact(context, count) } },
-                            )
-                        }
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_WIDE_PORTRAIT_SETTING_ID) {
-                            SettingsSingleChoicePreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.WIDE_PORTRAIT_GRID_COLUMNS),
-                                title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_WIDE_PORTRAIT_SETTING_ID, context),
-                                subtitle = context.getString(R.string.home_settings_grid_wide_portrait_summary),
-                                enabled = homeConfiguration.gridColumnCustomizationEnabled,
-                                options = (0..7).map { count ->
-                                    AppSegmentOption(
-                                        value = count,
-                                        label = if (count == 0) context.getString(R.string.home_settings_grid_columns_auto)
-                                        else context.getString(R.string.home_settings_grid_columns_count, count),
-                                    )
-                                },
-                                selectedValue = homeConfiguration.gridColumnCountWidePortrait,
-                                optionLeading = { value -> SettingsOptionPreviewThumb(SettingsOptionPreview.Feed(columns = value)) },
-                                onSelectionChange = { count -> scope.launch { SettingsManager.setGridColumnCountWidePortrait(context, count) } },
-                            )
-                        }
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.grid_column_count") {
-                            SettingsSingleChoicePreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.WIDE_GRID_COLUMNS),
-                                title = com.android.purebilibili.feature.settings.settingItemTitle("appearance.grid_column_count", context),
-                                subtitle = context.getString(R.string.home_settings_grid_wide_landscape_summary),
-                                enabled = homeConfiguration.gridColumnCustomizationEnabled,
-                                options = (0..7).map { count ->
-                                    AppSegmentOption(
-                                        value = count,
-                                        label = if (count == 0) context.getString(R.string.home_settings_grid_columns_auto)
-                                        else context.getString(R.string.home_settings_grid_columns_count, count),
-                                    )
-                                },
-                                selectedValue = homeConfiguration.gridColumnCount,
-                                optionLeading = { value -> SettingsOptionPreviewThumb(SettingsOptionPreview.Feed(columns = value)) },
-                                onSelectionChange = { count -> scope.launch { SettingsManager.setGridColumnCount(context, count) } },
-                            )
-                        }
-                        if (isTablet && state.displayMode == 0) {
-                            AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                            SettingsItemAnchor("appearance.home_feed_card_width_preset") {
-                                SettingsSingleChoicePreference(
-                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_CARD_WIDTH),
-                                    title = context.getString(R.string.home_settings_card_width_title),
-                                    subtitle = if (homeConfiguration.gridColumnCustomizationEnabled && homeConfiguration.effectiveGridColumnCountForWindow(windowSizeClass) > 0) {
-                                        context.getString(R.string.home_settings_card_width_current, homeConfiguration.effectiveGridColumnCountForWindow(windowSizeClass))
-                                    } else {
-                                        context.getString(R.string.home_settings_card_width_auto)
-                                    },
-                                    options = resolveHomeFeedCardWidthPresetSegmentOptions().map { option ->
-                                        option.copy(label = context.getString(when (option.value) {
-                                            HomeFeedCardWidthPreset.AUTO -> R.string.home_settings_card_width_auto_option
-                                            HomeFeedCardWidthPreset.COMPACT -> R.string.home_settings_card_width_compact
-                                            HomeFeedCardWidthPreset.BALANCED -> R.string.home_settings_card_width_balanced
-                                            HomeFeedCardWidthPreset.WIDE -> R.string.home_settings_card_width_wide
-                                            HomeFeedCardWidthPreset.ULTRA_WIDE -> R.string.home_settings_card_width_ultra_wide
-                                        }))
-                                    },
-                                    selectedValue = state.homeFeedCardWidthPreset,
-                                    onSelectionChange = viewModel::setHomeFeedCardWidthPreset,
-                                )
+                            selectedValue = homeFeedCardStyle,
+                            onSelectionChange = {
+                                scope.launch {
+                                    SettingsManager.setHomeFeedCardStyle(context, it)
+                                }
                             }
-                        }
+                        )
+                    }
 
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.full_video_card_content_visible") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.FULL_VIDEO_CARD_CONTENT),
-                                title = context.getString(R.string.home_settings_full_card_title),
-                                subtitle = context.getString(
-                                    if (fullVideoCardContentVisible) R.string.home_settings_full_card_on
-                                    else R.string.home_settings_full_card_off,
-                                ),
-                                checked = fullVideoCardContentVisible,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        SettingsManager.setFullVideoCardContentVisible(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.home_feed_card_style") {
-                            SettingsSingleChoicePreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_COVER_RATIO),
-                                title = context.getString(R.string.home_settings_card_ratio_title),
-                                subtitle = context.getString(when (homeFeedCardStyle) {
-                                    HomeFeedCardStyle.CURRENT -> R.string.home_settings_card_ratio_current
-                                    HomeFeedCardStyle.OFFICIAL -> R.string.home_settings_card_ratio_official
-                                    HomeFeedCardStyle.BILIPAI -> R.string.home_settings_card_ratio_bilipai
-                                }) + context.getString(R.string.home_settings_card_ratio_sync),
-                                options = HomeFeedCardStyle.entries.map {
-                                    AppSegmentOption(it, context.getString(when (it) {
-                                        HomeFeedCardStyle.CURRENT -> R.string.appearance_home_card_ratio_current_label
-                                        HomeFeedCardStyle.OFFICIAL -> R.string.appearance_home_card_ratio_official_label
-                                        HomeFeedCardStyle.BILIPAI -> R.string.appearance_home_card_ratio_bilipai_label
-                                    }))
-                                },
-                                selectedValue = homeFeedCardStyle,
-                                onSelectionChange = {
-                                    scope.launch {
-                                        SettingsManager.setHomeFeedCardStyle(context, it)
-                                    }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.compact_video_stats_on_cover") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_CARD_STATS_COMPACT),
+                            title = settingItemTitle("appearance.compact_video_stats_on_cover"),
+                            subtitle = if (compactVideoStatsOnCover) {
+                                context.getString(R.string.appearance_home_compact_stats_on)
+                            } else {
+                                context.getString(R.string.appearance_home_compact_stats_off)
+                            },
+                            checked = compactVideoStatsOnCover,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setCompactVideoStatsOnCover(context, it)
                                 }
-                            )
-                        }
+                            },
+                            iconTint = AppContentColors.secondaryText()
+                        )
+                    }
 
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.compact_video_stats_on_cover") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_CARD_STATS_COMPACT),
-                                title = settingItemTitle("appearance.compact_video_stats_on_cover"),
-                                subtitle = if (compactVideoStatsOnCover) {
-                                    context.getString(R.string.appearance_home_compact_stats_on)
-                                } else {
-                                    context.getString(R.string.appearance_home_compact_stats_off)
-                                },
-                                checked = compactVideoStatsOnCover,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        SettingsManager.setCompactVideoStatsOnCover(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.home_duration_style") {
-                            SettingsSingleChoicePreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_DURATION_BADGES),
-                                title = settingItemTitle("appearance.home_duration_style"),
-                                subtitle = context.getString(R.string.appearance_home_duration_subtitle),
-                                options = HomeDurationStyle.entries.map {
-                                    AppSegmentOption(it, context.getString(when (it) {
-                                        HomeDurationStyle.OUTSIDE_COVER -> R.string.appearance_home_duration_outside
-                                        HomeDurationStyle.OVERLAY_TEXT_ONLY -> R.string.appearance_home_duration_overlay
-                                        HomeDurationStyle.HIDDEN -> R.string.appearance_home_duration_hidden
-                                    }))
-                                },
-                                selectedValue = homeDurationStyle,
-                                onSelectionChange = {
-                                    scope.launch {
-                                        SettingsManager.setHomeDurationStyle(context, it)
-                                    }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.home_duration_style") {
+                        SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_DURATION_BADGES),
+                            title = settingItemTitle("appearance.home_duration_style"),
+                            subtitle = context.getString(R.string.appearance_home_duration_subtitle),
+                            options = HomeDurationStyle.entries.map {
+                                AppSegmentOption(it, context.getString(when (it) {
+                                    HomeDurationStyle.OUTSIDE_COVER -> R.string.appearance_home_duration_outside
+                                    HomeDurationStyle.OVERLAY_TEXT_ONLY -> R.string.appearance_home_duration_overlay
+                                    HomeDurationStyle.HIDDEN -> R.string.appearance_home_duration_hidden
+                                }))
+                            },
+                            selectedValue = homeDurationStyle,
+                            onSelectionChange = {
+                                scope.launch {
+                                    SettingsManager.setHomeDurationStyle(context, it)
                                 }
-                            )
-                        }
+                            }
+                        )
+                    }
 
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.home_publish_time_visible") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.TIME_STATUS),
-                                title = settingItemTitle("appearance.home_publish_time_visible"),
-                                subtitle = if (homePublishTimeVisible) {
-                                    context.getString(R.string.appearance_home_publish_on)
-                                } else {
-                                    context.getString(R.string.appearance_home_publish_off)
-                                },
-                                checked = homePublishTimeVisible,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        SettingsManager.setHomePublishTimeVisible(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.home_publish_time_visible") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.TIME_STATUS),
+                            title = settingItemTitle("appearance.home_publish_time_visible"),
+                            subtitle = if (homePublishTimeVisible) {
+                                context.getString(R.string.appearance_home_publish_on)
+                            } else {
+                                context.getString(R.string.appearance_home_publish_off)
+                            },
+                            checked = homePublishTimeVisible,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setHomePublishTimeVisible(context, it)
+                                }
+                            },
+                            iconTint = AppContentColors.secondaryText()
+                        )
+                    }
 
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.home_up_avatars_visible") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_UP_AVATAR),
-                                title = settingItemTitle("appearance.home_up_avatars_visible"),
-                                subtitle = if (homeUpAvatarsVisible) {
-                                    context.getString(R.string.appearance_home_avatars_on)
-                                } else {
-                                    context.getString(R.string.appearance_home_avatars_off)
-                                },
-                                checked = homeUpAvatarsVisible,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        SettingsManager.setHomeUpAvatarsVisible(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.home_up_avatars_visible") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_UP_AVATAR),
+                            title = settingItemTitle("appearance.home_up_avatars_visible"),
+                            subtitle = if (homeUpAvatarsVisible) {
+                                context.getString(R.string.appearance_home_avatars_on)
+                            } else {
+                                context.getString(R.string.appearance_home_avatars_off)
+                            },
+                            checked = homeUpAvatarsVisible,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setHomeUpAvatarsVisible(context, it)
+                                }
+                            },
+                            iconTint = AppContentColors.secondaryText()
+                        )
+                    }
 
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.home_up_badges_visible") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_UP_BADGES),
-                                title = settingItemTitle("appearance.home_up_badges_visible"),
-                                subtitle = if (homeUpBadgesVisible) {
-                                    context.getString(R.string.appearance_home_badges_on)
-                                } else {
-                                    context.getString(R.string.appearance_home_badges_off)
-                                },
-                                checked = homeUpBadgesVisible,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        SettingsManager.setHomeUpBadgesVisible(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.home_up_badges_visible") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_UP_BADGES),
+                            title = settingItemTitle("appearance.home_up_badges_visible"),
+                            subtitle = if (homeUpBadgesVisible) {
+                                context.getString(R.string.appearance_home_badges_on)
+                            } else {
+                                context.getString(R.string.appearance_home_badges_off)
+                            },
+                            checked = homeUpBadgesVisible,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setHomeUpBadgesVisible(context, it)
+                                }
+                            },
+                            iconTint = AppContentColors.secondaryText()
+                        )
+                    }
+                }
+            }
+            item(key = HOME_LIST_REFRESH_ITEMS, contentType = "settings_preference_group") {
+                AppPreferenceGroup(segment = AppPreferenceGroupSegment.LAST) {
+                    com.android.purebilibili.feature.settings.RecommendRetentionPreference()
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.home_refresh_tip_visible") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_REFRESH_TIP),
+                            title = settingItemTitle("appearance.home_refresh_tip_visible"),
+                            subtitle = if (homeRefreshTipVisible) {
+                                context.getString(R.string.appearance_home_refresh_tip_on)
+                            } else {
+                                context.getString(R.string.appearance_home_refresh_tip_off)
+                            },
+                            checked = homeRefreshTipVisible,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setHomeRefreshTipVisible(context, it)
+                                }
+                            },
+                            iconTint = AppContentColors.secondaryText()
+                        )
+                    }
 
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        com.android.purebilibili.feature.settings.RecommendRetentionPreference()
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.home_refresh_tip_visible") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_REFRESH_TIP),
-                                title = settingItemTitle("appearance.home_refresh_tip_visible"),
-                                subtitle = if (homeRefreshTipVisible) {
-                                    context.getString(R.string.appearance_home_refresh_tip_on)
-                                } else {
-                                    context.getString(R.string.appearance_home_refresh_tip_off)
-                                },
-                                checked = homeRefreshTipVisible,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        SettingsManager.setHomeRefreshTipVisible(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.refresh_locator_duration") {
+                        SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.REFRESH_LOCATOR_DURATION),
+                            title = settingItemTitle("appearance.refresh_locator_duration"),
+                            subtitle = "首页与动态的定位按钮可拖动，松手后记住位置并重新计时",
+                            options = listOf(3, 5, 10, 30, 60, 0).map {
+                                AppSegmentOption(it, if (it == 0) "不自动收起" else "$it 秒")
+                            },
+                            selectedValue = homeConfiguration.refreshLocatorDurationSeconds,
+                            onSelectionChange = { seconds ->
+                                scope.launch {
+                                    SettingsManager.setRefreshLocatorDurationSeconds(context, seconds)
+                                }
+                            },
+                        )
+                    }
 
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.refresh_locator_duration") {
-                            SettingsSingleChoicePreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.REFRESH_LOCATOR_DURATION),
-                                title = settingItemTitle("appearance.refresh_locator_duration"),
-                                subtitle = "首页与动态的定位按钮可拖动，松手后记住位置并重新计时",
-                                options = listOf(3, 5, 10, 30, 60, 0).map {
-                                    AppSegmentOption(it, if (it == 0) "不自动收起" else "$it 秒")
-                                },
-                                selectedValue = homeConfiguration.refreshLocatorDurationSeconds,
-                                onSelectionChange = { seconds ->
-                                    scope.launch {
-                                        SettingsManager.setRefreshLocatorDurationSeconds(context, seconds)
-                                    }
-                                },
-                            )
-                        }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.home_refresh_undo_visible") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_REFRESH_UNDO),
+                            title = settingItemTitle("appearance.home_refresh_undo_visible"),
+                            subtitle = context.getString(R.string.appearance_home_refresh_undo),
+                            checked = homeRefreshUndoVisible,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    SettingsManager.setHomeRefreshUndoVisible(context, enabled)
+                                }
+                            },
+                            iconTint = AppContentColors.secondaryText()
+                        )
+                    }
 
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.home_refresh_undo_visible") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_REFRESH_UNDO),
-                                title = settingItemTitle("appearance.home_refresh_undo_visible"),
-                                subtitle = context.getString(R.string.appearance_home_refresh_undo),
-                                checked = homeRefreshUndoVisible,
-                                onCheckedChange = { enabled ->
-                                    scope.launch {
-                                        SettingsManager.setHomeRefreshUndoVisible(context, enabled)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
-                        SettingsItemAnchor("appearance.show_online_count") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_ONLINE_COUNT),
-                                title = settingItemTitle("appearance.show_online_count"),
-                                subtitle = if (showOnlineCount) {
-                                    context.getString(R.string.appearance_home_online_on)
-                                } else {
-                                    context.getString(R.string.appearance_home_online_off)
-                                },
-                                checked = showOnlineCount,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        SettingsManager.setShowCardOnlineCount(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.show_online_count") {
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_ONLINE_COUNT),
+                            title = settingItemTitle("appearance.show_online_count"),
+                            subtitle = if (showOnlineCount) {
+                                context.getString(R.string.appearance_home_online_on)
+                            } else {
+                                context.getString(R.string.appearance_home_online_off)
+                            },
+                            checked = showOnlineCount,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setShowCardOnlineCount(context, it)
+                                }
+                            },
+                            iconTint = AppContentColors.secondaryText()
+                        )
                     }
                 }
             }
@@ -2156,7 +2187,7 @@ fun AppearanceSettingsContent(
                             }
 
                             AppIcon(
-                                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+                                rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
                                 contentDescription = null,
                                 tint = AppContentColors.secondaryText().copy(alpha = 0.5f),
                                 modifier = Modifier.size(16.dp)
@@ -2267,7 +2298,7 @@ fun AppearanceSettingsContent(
                             }
                         }
 
-                        // 「卡片背景模糊」已并入「动画与触感」页的液态玻璃与磨砂分组。
+                        // 「卡片背景模糊」位于「动效与反馈」页的液态玻璃与磨砂分组。
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.home_card_dynamic_tint_enabled") {
                             AppSwitchPreference(
@@ -2465,7 +2496,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.show_profile_edit_button") {
                             AppSwitchPreference(
-                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_edit_note_24),
+                                icon = rememberSettingsVector(R.drawable.ph_note_pencil_24, R.drawable.ms_edit_note_24),
                                 title = settingItemTitle("appearance.show_profile_edit_button"),
                                 subtitle = if (showProfileEditButton) {
                                     context.getString(R.string.appearance_profile_edit_on)

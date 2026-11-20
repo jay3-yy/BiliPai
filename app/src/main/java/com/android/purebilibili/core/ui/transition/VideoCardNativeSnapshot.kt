@@ -1,6 +1,7 @@
 package com.android.purebilibili.core.ui.transition
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +19,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+
+// 系统窗口在应用内使用共享容器回退时仍需完整卡片像素，特别是部分可见的来源。
+internal val LocalSystemVideoCardCaptureEnabled = compositionLocalOf { false }
+
+@Composable
+internal fun videoCardSourceCaptureEnabled(): Boolean =
+    LocalSharedTransitionEnabled.current || LocalSystemVideoCardCaptureEnabled.current
 
 internal const val VIDEO_CARD_FLYING_OVERLAY_COVER_DEPTH = 0.001f
 
@@ -298,9 +306,8 @@ internal fun rememberNativeVideoCardSnapshotController(
     key: Any,
     enabled: Boolean = true,
 ): NativeVideoCardSnapshotController {
-    // Shared card-morph work only, across materials: disabling transitions must also skip
-    // layer allocation, recording and capture. Native MD3/Miuix card layout stays untouched.
-    if (!enabled || !LocalSharedTransitionEnabled.current) {
+    // 玻璃、MD3 和 Miuix 共用像素捕获门控，各材质布局独立。
+    if (!enabled || !videoCardSourceCaptureEnabled()) {
         return DisabledNativeVideoCardSnapshotController
     }
     val layer = rememberNativeVideoCardLayer()

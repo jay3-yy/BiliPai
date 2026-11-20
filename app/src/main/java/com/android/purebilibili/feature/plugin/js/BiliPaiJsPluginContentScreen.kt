@@ -8,7 +8,7 @@ import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.ui.AppContentColors
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -607,7 +607,7 @@ private fun BiliPaiJsPosterCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(AppShapes.container(ContainerLevel.Card))
-            .combinedClickable(
+            .appCombinedClickable(
                 enabled = item.isPlayable || canOpenDetail || imageCandidates.isNotEmpty(),
                 onClick = { if (item.isPlayable) onPlay() else onOpen() },
                 onLongClick = {
@@ -748,7 +748,7 @@ private fun BiliPaiJsMediaItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(AppShapes.container(ContainerLevel.Field))
-            .combinedClickable(
+            .appCombinedClickable(
                 enabled = item.isPlayable || canOpenDetail || imageCandidates.isNotEmpty(),
                 onClick = { if (item.isPlayable) onPlay() else onOpen() },
                 onLongClick = {

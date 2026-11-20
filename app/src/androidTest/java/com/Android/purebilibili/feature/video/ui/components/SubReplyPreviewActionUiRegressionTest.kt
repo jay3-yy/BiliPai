@@ -134,7 +134,7 @@ class SubReplyPreviewActionUiRegressionTest {
     }
 
     @Test
-    fun tappingMentionOrUrlInPreview_opensThatReplyFloorInsteadOfLeavingThread() {
+    fun tappingMentionOrUrlInPreviewOpensItsDestination() {
         val openedThreads = mutableListOf<Pair<Long, Long>>()
         val openedSpaces = mutableListOf<String>()
         val openedUrls = mutableListOf<String>()
@@ -156,14 +156,44 @@ class SubReplyPreviewActionUiRegressionTest {
         tapCharacter(child.content.message, "@目标用户")
         tapCharacter(child.content.message, "https://example.com")
         rule.runOnIdle {
-            assertEquals(listOf(100L to 301L, 100L to 301L), openedThreads)
-            assertTrue(openedSpaces.isEmpty())
-            assertTrue(openedUrls.isEmpty())
+            assertTrue(openedThreads.isEmpty())
+            assertEquals(listOf("99"), openedSpaces)
+            assertEquals(listOf("https://example.com"), openedUrls)
         }
     }
 
     @Test
-    fun previewSearchKeywordsStayPlainWhileFullCommentsKeepSearchLinks() {
+    fun tappingReportedVideoLinkInPreview_opensTheShortLink() {
+        val shortUrl = "https://b23.tv/8ln6bYc"
+        val title = "Windows微信更新后，几乎无法触屏使用了"
+        val content = ReplyContent(
+            message = shortUrl,
+            urls = mapOf(shortUrl to ReplyContentUrl(title = title)),
+        )
+        val child = mentionReply().copy(content = content)
+        val openedUrls = mutableListOf<String>()
+        val openedThreads = mutableListOf<Long>()
+        rule.setContent {
+            MaterialTheme {
+                ReplyItemView(
+                    item = reply(total = 1, loaded = 1).copy(replies = listOf(child)),
+                    onClick = {},
+                    onSubClick = { _, target -> openedThreads += target },
+                    onAvatarClick = {},
+                    onUrlClick = { openedUrls += it },
+                )
+            }
+        }
+
+        tapCharacter(title, "触屏")
+        rule.runOnIdle {
+            assertEquals(listOf(shortUrl), openedUrls)
+            assertTrue(openedThreads.isEmpty())
+        }
+    }
+
+    @Test
+    fun previewAndFullCommentsOpenSearchKeywords() {
         val searchUrl = "https://search.bilibili.com/all?keyword=%E5%8E%9F%E7%A5%9E"
         val videoUrl = "https://www.bilibili.com/video/BV1xx411c7mD"
         val content = ReplyContent(
@@ -203,13 +233,11 @@ class SubReplyPreviewActionUiRegressionTest {
             return results.single()
         }
 
-        val previewLayout = layoutOf("回复者1: 聊聊原神")
+        val previewLayout = layoutOf("回复者1: 聊聊")
         val previewText = previewLayout.layoutInput.text
         val keywordStart = previewText.text.indexOf("原神")
         val keywordEnd = keywordStart + "原神".length
-        assertTrue(previewText.getLinkAnnotations(keywordStart, keywordEnd).isEmpty())
-        assertTrue(previewText.spanStyles.none { it.start < keywordEnd && it.end > keywordStart })
-        assertTrue(previewLayout.placeholderRects.isEmpty())
+        assertEquals(1, previewText.getLinkAnnotations(keywordStart, keywordEnd).size)
         val mentionStart = previewText.text.indexOf("@目标用户")
         assertEquals(1, previewText.getLinkAnnotations(mentionStart, mentionStart + 5).size)
         val videoStart = previewText.text.indexOf("参考视频")
@@ -222,11 +250,11 @@ class SubReplyPreviewActionUiRegressionTest {
         assertTrue(fullText.spanStyles.any { it.start <= fullKeywordStart && it.end > fullKeywordStart })
         assertEquals(1, fullLayout.placeholderRects.size)
 
-        tapCharacter("回复者1: 聊聊原神", "原神")
+        tapCharacter("回复者1: 聊聊", "原神")
         tapCharacter("完整评论：", "原神")
         rule.runOnIdle {
-            assertEquals(listOf(100L to 301L), openedThreads)
-            assertEquals(listOf(searchUrl), openedUrls)
+            assertTrue(openedThreads.isEmpty())
+            assertEquals(listOf(searchUrl, searchUrl), openedUrls)
         }
     }
 

@@ -226,6 +226,8 @@ fun BottomControlBar(
     danmakuEnabled: Boolean = true,
     onDanmakuToggle: () -> Unit = {},
     onSendDanmakuClick: () -> Unit = {},
+    showFullscreenSpeedAction: Boolean = true,
+    showFullscreenQualityAction: Boolean = true,
 ) {
     val glass = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     // 玻璃时间和文字胶囊对齐圆形按钮；MD3、Miuix 保留原生 30dp 控件高度。
@@ -334,6 +336,7 @@ fun BottomControlBar(
                     subtitleControlState = subtitleControlState,
                     onSubtitleClick = { localMenu = PlayerControlAnchor.SUBTITLE },
                     subtitleModifier = anchor(PlayerControlAnchor.SUBTITLE, "player_subtitle_action"),
+                    onExitFullscreen = onToggleFullscreen,
                     modifier = Modifier.fillMaxWidth().testTag("player_control_row"),
                 )
             }
@@ -495,11 +498,13 @@ fun BottomControlBar(
                                 modifier = anchor(PlayerControlAnchor.SUBTITLE, "player_subtitle_action"),
                             )
                         }
-                        PlayerControlTextAction(
-                            height = controlContentHeight,
-                            text = "${currentSpeed}X", description = "倍速", onClick = onSpeedClick,
-                            modifier = anchor(PlayerControlAnchor.SPEED, "player_speed_action"),
-                        )
+                        if (!isFullscreen || showFullscreenSpeedAction) {
+                            PlayerControlTextAction(
+                                height = controlContentHeight,
+                                text = "${currentSpeed}X", description = "倍速", onClick = onSpeedClick,
+                                modifier = anchor(PlayerControlAnchor.SPEED, "player_speed_action"),
+                            )
+                        }
                         // 竖屏详情入口共用同一动作，玻璃与原生只由按钮材质决定外观。
                         if (!isFullscreen && LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT) {
                             onPortraitFullscreen?.let { enterPortrait ->
@@ -510,7 +515,9 @@ fun BottomControlBar(
                                 )
                             }
                         }
-                        if (!showInlineQuality && (simplifiedPortrait || showExtendedOptions) && currentQualityLabel.isNotEmpty()) {
+                        if (!showInlineQuality && showFullscreenQualityAction &&
+                            (simplifiedPortrait || showExtendedOptions) && currentQualityLabel.isNotEmpty()
+                        ) {
                             PlayerControlTextAction(
                                 height = controlContentHeight,
                                 text = currentQualityLabel, description = "画质", onClick = onQualityClick,

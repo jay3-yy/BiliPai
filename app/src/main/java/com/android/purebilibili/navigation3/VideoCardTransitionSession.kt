@@ -6,12 +6,18 @@ import com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.util.VideoCardPixelOwner
 
+internal data class VideoCardSourceGeometry(
+    val card: Rect?,
+    val cover: Rect?,
+    val info: Rect?,
+)
+
 /**
  * A click-time snapshot of the source card used for the complete detail round trip.
  *
- * Feed state is intentionally not consulted after this object is created. Lists can refresh,
- * reorder or leave composition while a detail page is open; using their mutable click globals
- * at return time can otherwise redirect the whole-card morph to a different card.
+ * Return geometry is refreshed only through the captured source anchor. The click-time
+ * measurements preserve the card's internal proportions, and the anchor identifies the same
+ * card even when the list refreshes or the viewport changes.
  */
 internal data class VideoCardTransitionSession(
     val bvid: String,
@@ -37,6 +43,9 @@ internal data class VideoCardTransitionSession(
     val sourcePixelOwner: VideoCardPixelOwner? = null,
     val sourceAnchor: com.android.purebilibili.core.ui.transition.VideoCardSourceAnchor? = null,
     val hasCompleteSourcePixels: Boolean = false,
+    // Keep the measured proportions when the source is temporarily outside the resized viewport.
+    private val recordedGeometry: VideoCardSourceGeometry =
+        VideoCardSourceGeometry(cardBounds, coverBounds, infoBounds),
 ) {
     val sourceInstanceId: Long?
         get() = sourcePixelOwner?.sourceInstanceId
@@ -56,7 +65,7 @@ internal data class VideoCardTransitionSession(
 
     /** 封面和信息面保持卡片内的实测相对位置，不重新按宽高比猜测布局。 */
     internal fun withReturnBounds(current: Rect?, fullyVisible: Boolean = true): VideoCardTransitionSession {
-        val original = cardBounds
+        val original = recordedGeometry.card
         if (current == null || original == null || original.width <= 0f || original.height <= 0f) {
             return copy(cardBounds = null, coverBounds = null, infoBounds = null, cardFullyVisible = false)
         }
@@ -66,8 +75,12 @@ internal data class VideoCardTransitionSession(
             current.left + (right - original.left) * current.width / original.width,
             current.top + (bottom - original.top) * current.height / original.height,
         )
-        return copy(cardBounds = current, coverBounds = coverBounds?.relocate(),
-            infoBounds = infoBounds?.relocate(), cardFullyVisible = fullyVisible)
+        return copy(
+            cardBounds = current,
+            coverBounds = recordedGeometry.cover?.relocate(),
+            infoBounds = recordedGeometry.info?.relocate(),
+            cardFullyVisible = fullyVisible,
+        )
     }
 
     companion object {

@@ -28,8 +28,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import com.android.purebilibili.core.util.PickMultipleGalleryVisualMedia
 import com.android.purebilibili.core.plugin.skin.LocalUiSkinState
-import androidx.compose.animation.core.MutableTransitionState
-import com.android.purebilibili.core.ui.rememberAppBottomSheetMotion
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -75,7 +73,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.ui.AppPredictiveDialog as Dialog
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogProperties
@@ -312,31 +310,16 @@ fun CommentInputDialog(
 
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
-    val sheetMotion = rememberAppBottomSheetMotion()
-    val inputVisibility = remember { MutableTransitionState(false) }
-    var dismissRequested by remember { mutableStateOf(false) }
-    val latestOnDismiss by rememberUpdatedState(onDismiss)
+    var dismissRequested by remember(draftKey, visible) { mutableStateOf(false) }
     val inputActive = visible && !dismissRequested
-    LaunchedEffect(visible, draftKey) {
-        dismissRequested = false
-        inputVisibility.targetState = visible
-    }
-    LaunchedEffect(inputActive) {
-        inputVisibility.targetState = inputActive
-    }
-    // Keep the native window mounted until the actual sheet inside it finishes exiting.
-    // External closure (including send success) follows the same path without a second callback.
-    LaunchedEffect(inputVisibility.isIdle, inputVisibility.currentState, dismissRequested, draftKey) {
-        if (inputVisibility.isIdle && !inputVisibility.currentState && dismissRequested) {
-            latestOnDismiss()
-        }
+    val panelMotion = rememberInputPanelMotion(inputActive) {
+        if (dismissRequested) onDismiss()
     }
     val dismissDialog: () -> Unit = {
-        if (!dismissRequested) {
+        if (visible && !dismissRequested) {
             keyboardController?.hide()
             focusManager.clearFocus(force = true)
             dismissRequested = true
-            inputVisibility.targetState = false
         }
     }
     var imagePickerDraftKey by rememberSaveable { mutableStateOf<String?>(null) }
@@ -408,16 +391,17 @@ fun CommentInputDialog(
     }
 
 
-    if (inputVisibility.currentState || inputVisibility.targetState) {
+    if (panelMotion.mounted) {
         Dialog(
             onDismissRequest = dismissDialog,
             properties = DialogProperties(
-                dismissOnBackPress = true,
+                dismissOnBackPress = inputActive,
                 dismissOnClickOutside = true,
                 usePlatformDefaultWidth = false, // 允许全宽
                 decorFitsSystemWindows = false   // 沉浸式：内容延伸到状态栏/导航栏下
             )
         ) {
+            InputPanelBackHandler(panelMotion, inputActive, dismissDialog)
             val dialogView = LocalView.current
             DisposableEffect(dialogView) {
                 // 窗口挂载时关闭系统动画，IME 更新不能反复提交窗口属性。
@@ -478,12 +462,7 @@ fun CommentInputDialog(
                     .then(if (inputExpanded) Modifier.statusBarsPadding() else Modifier),
                 onDismissRequest = dismissDialog,
             ) {
-                AnimatedVisibility(
-                    visibleState = inputVisibility,
-                    enter = sheetMotion.contentEnter,
-                    exit = sheetMotion.contentExit,
-                    label = "commentInputSheet",
-                ) {
+                Box(Modifier.inputPanelMotion(panelMotion), propagateMinConstraints = true) {
                     // 输入区域
                     AppSurface(
                         modifier = modifier
@@ -543,7 +522,7 @@ fun CommentInputDialog(
                                         readOnly = showEmojiPanel,
                                         autoShowKeyboard = shouldAutoShowCommentKeyboard(
                                             // 先完成面板入场，再由 IME 推起，避免滑入与键盘位移叠加。
-                                            inputActive && inputVisibility.isIdle && inputVisibility.currentState,
+                                            inputActive && panelMotion.isOpen,
                                             canInputComment && !isSending,
                                             showEmojiPanel,
                                         ),

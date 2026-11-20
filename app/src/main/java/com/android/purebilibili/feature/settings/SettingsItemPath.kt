@@ -10,7 +10,6 @@ internal fun settingItemPath(item: PlaybackSettingItem): String {
     }
     val page = when {
         item.page == SettingsRootCategory.PLAYER_DIAGNOSTICS -> "问题排查"
-        item.target == SettingsSearchTarget.ANIMATION -> "动画与触感"
         item.target == SettingsSearchTarget.PLAYBACK -> "播放设置"
         else -> null
     }
@@ -34,7 +33,7 @@ internal fun settingItemPath(item: PlaybackSettingItem): String {
         "home_recommendation" -> "内容与推荐流"
         "home_browsing" -> "浏览交互与手势"
         "home_options" -> "推荐与动态"
-        "animation_page" -> "动画与振动"
+        "animation_page" -> "页面动画"
         "animation_card" -> "过渡动画"
         "animation_glass" -> "液态玻璃与磨砂"
         "navigation_behavior" -> "导航行为"

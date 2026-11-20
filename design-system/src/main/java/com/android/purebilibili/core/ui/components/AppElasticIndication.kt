@@ -13,14 +13,14 @@ import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.ui.node.DrawModifierNode
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 
-/** Kyant interactive buttons use their light instead of a second ripple indication. */
-private object ElasticLightIndication : IndicationNodeFactory {
-    override fun create(interactionSource: InteractionSource): DelegatableNode = LightOnlyNode()
+/** For controls that draw their own feedback or hand off directly to a transition. */
+object AppNoClickIndication : IndicationNodeFactory {
+    override fun create(interactionSource: InteractionSource): DelegatableNode = NoClickIndicationNode()
     override fun equals(other: Any?) = other === this
     override fun hashCode() = javaClass.hashCode()
 }
 
-private class LightOnlyNode : Modifier.Node(), DrawModifierNode {
+private class NoClickIndicationNode : Modifier.Node(), DrawModifierNode {
     override fun ContentDrawScope.draw() = drawContent()
 }
 
@@ -29,7 +29,7 @@ private class LightOnlyNode : Modifier.Node(), DrawModifierNode {
 fun ProvideAppElasticFeedback(enabled: Boolean = true, content: @Composable () -> Unit) {
     if (enabled && LocalComponentMotionEnabled.current) {
         CompositionLocalProvider(
-            LocalIndication provides ElasticLightIndication,
+            LocalIndication provides AppNoClickIndication,
             LocalRippleConfiguration provides null,
             content = content,
         )

@@ -18,9 +18,9 @@ class SettingsSearchUiPolicyTest {
     }
 
     @Test
-    fun materialSearchResults_useMaterialSymbolResources() {
-        assertEquals(R.drawable.ms_play_circle_24, resolveSettingsEntryVisual(SettingsSearchTarget.PLAYBACK).iconResId)
-        assertEquals(R.drawable.ms_cloud_upload_24, resolveSettingsEntryVisual(SettingsSearchTarget.WEBDAV_BACKUP).iconResId)
-        assertEquals(R.drawable.ms_home_24, resolveSettingsEntryVisual(SettingsSearchTarget.HOME_FEED).iconResId)
+    fun materialSearchResults_useSharedSettingsVectors() {
+        assertEquals(R.drawable.ph_play_circle_24, resolveSettingsEntryVisual(SettingsSearchTarget.PLAYBACK).iconResId)
+        assertEquals(R.drawable.ph_cloud_arrow_up_24, resolveSettingsEntryVisual(SettingsSearchTarget.WEBDAV_BACKUP).iconResId)
+        assertEquals(R.drawable.ph_house_24, resolveSettingsEntryVisual(SettingsSearchTarget.HOME_FEED).iconResId)
     }
 }

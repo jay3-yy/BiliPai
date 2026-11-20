@@ -1,28 +1,13 @@
 package com.android.purebilibili.feature.download
 
 import androidx.media3.common.Player
+import com.android.purebilibili.core.store.FullscreenMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class OfflineVideoPlaybackPolicyTest {
-
-    @Test
-    fun horizontalVideo_startsFullscreenByDefault() {
-        assertTrue(
-            resolveOfflineVideoStartFullscreen(
-                isAudioOnly = false,
-                isVerticalVideo = false
-            )
-        )
-    }
-
-    @Test
-    fun audioOnlyAndVerticalVideo_doNotStartFullscreen() {
-        assertFalse(resolveOfflineVideoStartFullscreen(isAudioOnly = true, isVerticalVideo = false))
-        assertFalse(resolveOfflineVideoStartFullscreen(isAudioOnly = false, isVerticalVideo = true))
-    }
 
     @Test
     fun landscapeNaturalCover_entersAndExitsOfflineFullscreenWithoutRotation() {
@@ -58,6 +43,27 @@ class OfflineVideoPlaybackPolicyTest {
                 usesInWindowFullscreen = false,
             )
         )
+    }
+
+    @Test
+    fun offlinePhoneFullscreenHonorsOrientationPreference() {
+        val cases = listOf(
+            Triple(FullscreenMode.AUTO, true, OfflineRequestedOrientationMode.Portrait),
+            Triple(FullscreenMode.NONE, false, OfflineRequestedOrientationMode.KeepCurrent),
+            Triple(FullscreenMode.VERTICAL, false, OfflineRequestedOrientationMode.Portrait),
+            Triple(FullscreenMode.HORIZONTAL, true, OfflineRequestedOrientationMode.SensorLandscape),
+        )
+        for ((mode, verticalVideo, orientation) in cases) {
+            assertEquals(
+                orientation,
+                resolveOfflineRequestedOrientationMode(
+                    isFullscreen = true,
+                    usesInWindowFullscreen = false,
+                    fullscreenMode = mode,
+                    isVerticalVideo = verticalVideo,
+                ),
+            )
+        }
     }
 
     @Test

@@ -1,7 +1,18 @@
 package com.android.purebilibili.navigation
 
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
+import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.navigation3.BiliPaiNavKey
+
+internal val BilibiliNavigationTarget.Video.needsPageCid: Boolean
+    get() = cid == 0L && page > 0
+
+internal suspend fun BilibiliNavigationTarget.Video.resolvePageCid(): BilibiliNavigationTarget.Video? {
+    if (!needsPageCid) return this
+    val info = VideoRepository.getVideoInfoOnly(videoId).getOrNull() ?: return null
+    val part = info.pages.firstOrNull { it.page == page && it.cid > 0L } ?: return null
+    return copy(cid = part.cid)
+}
 
 // 链接分发只构造目的地并调用宿主回调；返回栈、切页与视频过渡仍由导航宿主管理。
 internal fun dispatchNativeLinkNavigation(
@@ -14,9 +25,11 @@ internal fun dispatchNativeLinkNavigation(
 ): Boolean {
     when (target) {
         is BilibiliNavigationTarget.Video -> {
-            if (target.commentRootRpid > 0L || target.commentTargetRpid > 0L) {
+            if (target.commentRootRpid > 0L || target.commentTargetRpid > 0L || target.hasPlaybackLocation) {
                 onKey(BiliPaiNavKey.VideoDetail(
                     bvid = target.videoId,
+                    cid = target.cid,
+                    linkStartPositionMs = target.startPositionMs,
                     commentRootRpid = target.commentRootRpid,
                     commentTargetRpid = target.commentTargetRpid,
                 ))
@@ -42,6 +55,10 @@ internal fun dispatchNativeLinkNavigation(
             ))
         }
         is BilibiliNavigationTarget.Search -> onSearch(target.keyword)
+        is BilibiliNavigationTarget.Topic -> onKey(BiliPaiNavKey.TopicDetail(target.topicId))
+        is BilibiliNavigationTarget.FavoriteFolder -> onKey(
+            BiliPaiNavKey.SeasonSeriesDetail("favorite", target.mediaId, target.ownerMid)
+        )
         is BilibiliNavigationTarget.Space -> {
             if (target.mid <= 0L) return false
             onKey(BiliPaiNavKey.Space(target.mid))
@@ -91,6 +108,7 @@ internal fun dispatchMessageLinkNavigation(
     onVideoRoute: (route: String, sourceRoute: String?) -> Unit,
     onKey: (BiliPaiNavKey) -> Unit,
     onRoute: (String) -> Unit,
+    onShortLink: ((String) -> Unit)? = null,
 ) {
     when (val action = resolveMessageLinkNavigationAction(rawLink)) {
         is MessageLinkNavigationAction.Video -> {
@@ -109,10 +127,13 @@ internal fun dispatchMessageLinkNavigation(
         }
         is MessageLinkNavigationAction.VideoComment -> {
             onVideoRoute(
-                VideoRoute.createRoute(
+                VideoRoute.resolveVideoRoutePath(
                     bvid = action.videoId,
-                    cid = 0L,
-                    coverUrl = "",
+                    cid = action.cid,
+                    encodedCover = "",
+                    startAudio = false,
+                    autoPortrait = false,
+                    linkStartPositionMs = action.startPositionMs,
                     commentRootRpid = action.rootReplyId,
                     commentTargetRpid = action.targetReplyId
                 ),
@@ -156,12 +177,15 @@ internal fun dispatchMessageLinkNavigation(
         is MessageLinkNavigationAction.ArticleCollection -> {
             onKey(BiliPaiNavKey.ArticleCollection(action.collectionId))
         }
+        is MessageLinkNavigationAction.Destination -> onKey(action.key)
         is MessageLinkNavigationAction.Article -> {
             onKey(BiliPaiNavKey.ArticleDetail(action.articleId, commentRootRpid = action.rootReplyId, commentTargetRpid = action.targetReplyId))
         }
         is MessageLinkNavigationAction.Web -> {
             val url = action.url.trim()
-            if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
+            if (onShortLink != null && isBilibiliShortWebLink(url)) {
+                onShortLink(url)
+            } else if (url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true)) {
                 onKey(BiliPaiNavKey.Web(url))
             }
         }

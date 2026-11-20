@@ -123,7 +123,7 @@ fun PortraitFullscreenOverlay(
     onCoinClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onFavoriteLongClick: () -> Unit = {},
-    onCommentClick: () -> Unit = {},
+    onCommentClick: (() -> Unit)? = null,
     onShareClick: () -> Unit = {},
 
     // 关注状态 (Follow status)

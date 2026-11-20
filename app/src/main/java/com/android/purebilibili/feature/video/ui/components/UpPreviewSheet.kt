@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.ScrollableDefaults
@@ -12,9 +13,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,10 +22,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
@@ -44,9 +44,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -57,19 +59,23 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiUtils
+import com.android.purebilibili.core.ui.AppDialogBackState
+import com.android.purebilibili.core.ui.AppDialogPredictiveBackHandler
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.videoCardTitleMaxLines
 import com.android.purebilibili.core.ui.videoCardTitleOverflow
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
@@ -89,7 +95,7 @@ import java.util.concurrent.TimeUnit
  * 竖屏详情点 UP 头像：半屏预览（关注 / 进入空间 / 近期投稿网格）。
  * 深浅色走 [resolveUpPreviewSheetSurfaceColors]。
  *
- * [onVisibilityProgressChange]：1=完全展开（播放器应上缩），0=收起；下拉时跟手回位。
+ * [onVisibilityProgressChange]：1=完全展开（播放器应上缩），0=收起；下拉和返回时跟手回位。
  */
 @Composable
 fun UpPreviewSheet(
@@ -124,15 +130,9 @@ fun UpPreviewSheet(
                 .take(12)
         )
     }
-    var resolvedFollower by remember(owner.mid, followerCount) {
-        mutableStateOf(followerCount)
-    }
-    var resolvedVideoCount by remember(owner.mid, videoCount) {
-        mutableStateOf(videoCount)
-    }
-    var resolvedLikeCount by remember(owner.mid, likeCount) {
-        mutableStateOf(likeCount)
-    }
+    var fetchedFollower by remember(owner.mid) { mutableStateOf<Int?>(null) }
+    var fetchedVideoCount by remember(owner.mid) { mutableStateOf<Int?>(null) }
+    var fetchedLikeCount by remember(owner.mid) { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(visible, owner.mid) {
         if (!visible || owner.mid <= 0L) return@LaunchedEffect
@@ -165,7 +165,7 @@ fun UpPreviewSheet(
                             .map { it.toUpPreviewVideoItem() }
                         if (list.isNotEmpty()) nextVideos = list
                         val count = videoResp.data?.page?.count
-                        if (count != null && count > 0) nextVideoCount = count
+                        if (count != null && count >= 0) nextVideoCount = count
                     }
                 }
                 val relation = NetworkModule.spaceApi.getRelationStat(owner.mid)
@@ -188,14 +188,26 @@ fun UpPreviewSheet(
         }
         if (fetched != null) {
             fetched.videos?.let { videos = it }
-            fetched.videoCount?.let { resolvedVideoCount = it }
-            fetched.follower?.let { resolvedFollower = it }
-            fetched.likes?.let { resolvedLikeCount = it }
+            fetched.follower?.let { fetchedFollower = it }
+            fetched.videoCount?.let { fetchedVideoCount = it }
+            fetched.likes?.let { fetchedLikeCount = it }
         }
         loading = false
     }
 
-    com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = visible) { onDismiss() }
+    val back = remember(owner.mid) { AppDialogBackState() }
+    AppDialogPredictiveBackHandler(
+        state = back,
+        enabled = visible,
+        windowScoped = false,
+        animateCompletion = false,
+        // 关闭动画从当前手势位置继续，重新打开时才清除手势位移。
+        retainPreview = { true },
+        onBackCompleted = onDismiss,
+    )
+    LaunchedEffect(visible, back) {
+        if (visible) back.reset()
+    }
 
     // Header + grid share one LazyVerticalGrid so the top band is not a dead zone.
     val gridState = rememberLazyGridState()
@@ -210,7 +222,11 @@ fun UpPreviewSheet(
     val latestSheetMotion by rememberUpdatedState(sheetMotion)
     val latestVisible by rememberUpdatedState(visible)
     val latestOnDismiss by rememberUpdatedState(onDismiss)
-    val hostVisibilityProgress by animateFloatAsState(
+    val sheetOffsetPx = {
+        val dragOffset = sheetDragOffsetPx
+        dragOffset + (maxSheetDragPx - dragOffset) * back.progress
+    }
+    val hostVisibilityProgress = animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(durationMillis = if (visible) {
             sheetMotion.contentEnterFadeDurationMillis
@@ -219,17 +235,19 @@ fun UpPreviewSheet(
         }),
         label = "upPreviewHostVisibility",
     )
-    val presentationProgress = resolveUpPreviewSheetVisibilityProgress(
-        hostVisible = visible,
-        hostVisibilityProgress = hostVisibilityProgress,
-        sheetDragOffsetPx = sheetDragOffsetPx,
-        sheetHeightPx = maxSheetDragPx,
-    )
     val latestOnVisibilityProgressChange by rememberUpdatedState(onVisibilityProgressChange)
-    LaunchedEffect(presentationProgress) {
-        latestOnVisibilityProgressChange(presentationProgress)
+    LaunchedEffect(visible, back, maxSheetDragPx) {
+        snapshotFlow {
+            resolveUpPreviewSheetVisibilityProgress(
+                hostVisible = visible,
+                hostVisibilityProgress = hostVisibilityProgress.value,
+                sheetDragOffsetPx = sheetOffsetPx(),
+                sheetHeightPx = maxSheetDragPx,
+            )
+        }.collect { latestOnVisibilityProgressChange(it) }
     }
     val sheetNestedScrollConnection = remember(
+        owner.mid,
         dismissThresholdPx,
         maxSheetDragPx,
     ) {
@@ -305,17 +323,11 @@ fun UpPreviewSheet(
     androidx.compose.runtime.DisposableEffect(owner.mid) {
         onDispose { settleJob?.cancel() }
     }
-    // Ensure progress clears after fully hidden (host animation finished).
-    LaunchedEffect(visible, hostVisibilityProgress) {
-        if (!visible && hostVisibilityProgress <= 0.001f) {
-            latestOnVisibilityProgressChange(0f)
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .zIndex(if (visible || hostVisibilityProgress > 0.001f) 8f else 0f),
+            .clipToBounds()
+            .zIndex(if (visible || hostVisibilityProgress.value > 0.001f) 8f else 0f),
         contentAlignment = Alignment.BottomCenter,
     ) {
         AnimatedVisibility(
@@ -326,6 +338,7 @@ fun UpPreviewSheet(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .graphicsLayer { alpha = 1f - back.progress }
                     .background(colors.scrimColor)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -344,14 +357,14 @@ fun UpPreviewSheet(
             // (Surface shape alone can still let grid content paint square edges under shadow).
             AppSurface(
                 modifier = Modifier
+                    .widthIn(max = 600.dp)
                     .fillMaxWidth()
                     .height(sheetHeightDp)
                     .clip(sheetShape)
                     .nestedScroll(sheetNestedScrollConnection)
-                    .graphicsLayer { translationY = sheetDragOffsetPx },
+                    .graphicsLayer { translationY = sheetOffsetPx() },
                 shape = sheetShape,
                 color = colors.sheetColor,
-                tonalElevation = 6.dp,
                 shadowElevation = 12.dp,
             ) {
                 val bottomPad = WindowInsets.navigationBars
@@ -382,12 +395,13 @@ fun UpPreviewSheet(
                             owner = owner,
                             isFollowing = isFollowing,
                             followStatusKnown = followStatusKnown,
-                            followerCount = resolvedFollower,
-                            videoCount = resolvedVideoCount,
-                            likeCount = resolvedLikeCount,
+                            followerCount = fetchedFollower ?: followerCount,
+                            videoCount = fetchedVideoCount ?: videoCount,
+                            likeCount = fetchedLikeCount ?: likeCount,
                             colors = colors,
                             onFollowClick = onFollowClick,
                             onEnterSpace = { onEnterSpace(owner.mid) },
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
 
@@ -478,7 +492,6 @@ private data class UpPreviewFetchResult(
     val likes: Int?,
 )
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun UpPreviewSheetHeader(
     owner: Owner,
@@ -492,120 +505,102 @@ private fun UpPreviewSheetHeader(
     onEnterSpace: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    val followClick = rememberFollowActionWithConfirmation(
+        targetKey = owner.mid,
+        userName = owner.name,
+        isFollowing = isFollowing,
+        onFollowClick = onFollowClick,
+    )
+    val useNeutralFollow = !followStatusKnown || isFollowing
+    val actionPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+
+    Column(modifier = modifier) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(96.dp)
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            colors.followFillColor.copy(alpha = 0.28f),
-                            colors.sheetColor,
-                        )
-                    )
-                )
+                .align(Alignment.CenterHorizontally)
+                .padding(top = 8.dp, bottom = 10.dp)
+                .size(width = 36.dp, height = 4.dp)
+                .background(colors.handleColor, CircleShape)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
+            AsyncImage(
+                model = FormatUtils.fixImageUrl(owner.face),
+                contentDescription = null,
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 8.dp)
-                    .size(width = 36.dp, height = 4.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(colors.supportingColor.copy(alpha = 0.35f))
+                    .background(colors.coverPlaceholderColor),
+                contentScale = ContentScale.Crop,
+            )
+            Spacer(Modifier.width(12.dp))
+            AppText(
+                text = owner.name.ifBlank { "UP主" },
+                color = colors.titleColor,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
         }
 
-        FlowRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(top = 4.dp, bottom = 12.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
+            UpPreviewStat("粉丝", followerCount, colors, Modifier.weight(1f))
+            UpPreviewStat("投稿", videoCount, colors, Modifier.weight(1f))
+            UpPreviewStat("获赞", likeCount, colors, Modifier.weight(1f))
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AppButton(
+                onClick = followClick,
                 modifier = Modifier
                     .weight(1f)
-                    .widthIn(min = 160.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AsyncImage(
-                    model = FormatUtils.fixImageUrl(owner.face),
-                    contentDescription = "UP主头像",
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(colors.coverPlaceholderColor),
-                    contentScale = ContentScale.Crop,
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    AppText(
-                        text = owner.name.ifBlank { "UP主" },
-                        color = colors.titleColor,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    AppText(
-                        text = resolveUpPreviewStatLine(
-                            followerCount = followerCount,
-                            videoCount = videoCount,
-                            likeCount = likeCount,
-                        ).ifBlank { " " },
-                        color = colors.supportingColor,
-                        style = MaterialTheme.typography.bodySmall,
-                        overflow = TextOverflow.Visible,
-                    )
-                }
-            }
-            AppSurface(
-                modifier = Modifier.clickable(
-                    onClickLabel = if (followStatusKnown) null else "重新确认状态并关注",
-                    onClick = rememberFollowActionWithConfirmation(
-                        targetKey = owner.mid,
-                        userName = owner.name,
-                        isFollowing = isFollowing,
-                        onFollowClick = onFollowClick,
-                    ),
-                ),
+                    .heightIn(min = 48.dp)
+                    .semantics {
+                        if (!followStatusKnown) onClick(label = "重新确认状态并关注", action = null)
+                    },
                 shape = CircleShape,
-                color = if (!followStatusKnown || isFollowing) {
-                    colors.followingFillColor
-                } else {
-                    colors.followFillColor
-                },
+                containerColor = if (useNeutralFollow) colors.followingFillColor else colors.followFillColor,
+                contentColor = if (useNeutralFollow) colors.followingContentColor else colors.followContentColor,
+                contentPadding = actionPadding,
             ) {
                 AppText(
-                    text = if (!followStatusKnown) "待确认" else if (isFollowing) "已关注" else "+ 关注",
-                    maxLines = 1,
-                    softWrap = false,
-                    color = if (!followStatusKnown || isFollowing) {
-                        colors.followingContentColor
-                    } else {
-                        colors.followContentColor
+                    text = when {
+                        !followStatusKnown -> "待确认"
+                        isFollowing -> "已关注"
+                        else -> "+ 关注"
                     },
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    tapToCopyEnabled = false,
                 )
             }
-            AppText(
-                text = "进入空间  >",
-                maxLines = 1,
-                softWrap = false,
-                color = colors.enterSpaceColor,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier
-                    .clip(AppShapes.container(ContainerLevel.Field))
-                    .clickable(onClick = onEnterSpace)
-                    .padding(horizontal = 6.dp, vertical = 8.dp),
-            )
+            AppButton(
+                onClick = onEnterSpace,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                shape = CircleShape,
+                containerColor = Color.Transparent,
+                contentColor = colors.titleColor,
+                border = BorderStroke(1.dp, colors.dividerColor),
+                contentPadding = actionPadding,
+            ) {
+                AppText(
+                    text = "进入空间",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Medium,
+                    tapToCopyEnabled = false,
+                )
+            }
         }
 
         Box(
@@ -614,7 +609,34 @@ private fun UpPreviewSheetHeader(
                 .height(1.dp)
                 .background(colors.dividerColor)
         )
-        Spacer(Modifier.height(4.dp))
+    }
+}
+
+@Composable
+private fun UpPreviewStat(
+    label: String,
+    count: Int?,
+    colors: UpPreviewSheetSurfaceColors,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.semantics(mergeDescendants = true) {},
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        AppText(
+            text = formatUpPreviewStat(count),
+            color = colors.titleColor,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        AppText(
+            text = label,
+            color = colors.supportingColor,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+        )
     }
 }
 

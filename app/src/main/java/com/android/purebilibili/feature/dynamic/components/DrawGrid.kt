@@ -32,12 +32,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
 import com.android.purebilibili.core.ui.components.PageAwareAsyncImage
 import coil3.imageLoader
 import com.android.purebilibili.data.model.response.DrawItem
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.R
 
 /**
  *  图片九宫格V2（支持GIF + 点击预览）
@@ -246,10 +248,10 @@ private fun DrawGridImage(
             }
         }
 
-        // 实况与长图徽标（Live 标记位于右上角）
+        // 实况与长图徽标
         val isLive = !item.live_url.isNullOrBlank()
         if (isLive) {
-            Box(
+            Row(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(AppSpacingTokens.ExtraSmall)
@@ -260,10 +262,13 @@ private fun DrawGridImage(
                     .padding(
                         horizontal = AppSpacingTokens.Small,
                         vertical = AppSpacingTokens.Micro
-                    )
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
+                LivePhotoIcon(enabled = true, tint = MediaContrastPalette.Foreground)
                 AppText(
-                    "Live",
+                    stringResource(R.string.dynamic_live_photo_badge),
                     color = MediaContrastPalette.Foreground,
                     fontSize = MaterialTheme.typography.labelSmall.fontSize,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold

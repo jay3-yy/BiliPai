@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppInteractionColors
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
@@ -111,7 +112,7 @@ private fun ThemePreviewTopBar(modifier: Modifier = Modifier, expanded: Boolean 
             horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
         ) {
             AppIcon(
-                imageVector = rememberMaterialSymbol(R.drawable.ms_search_24),
+                imageVector = rememberSettingsVector(R.drawable.ms_search_24),
                 contentDescription = null,
                 tint = searchContent,
                 modifier = Modifier.size(16.dp),
@@ -131,7 +132,7 @@ private fun ThemePreviewTopBar(modifier: Modifier = Modifier, expanded: Boolean 
             contentAlignment = Alignment.Center,
         ) {
             AppIcon(
-                imageVector = rememberMaterialSymbol(R.drawable.ms_person_24),
+                imageVector = rememberSettingsVector(R.drawable.ms_person_24),
                 contentDescription = null,
                 tint = AppSurfaceTokens.onPrimaryContainer(),
                 modifier = Modifier.size(18.dp),
@@ -184,10 +185,14 @@ private fun ThemePreviewBottomBar(
     onSelected: ((Int) -> Unit)? = null,
 ) {
     val nativeMiuix = isMiuixNonGlassEnabled()
-    val navigationColors = com.android.purebilibili.core.ui.AppInteractionColors.nativeNavigation(
+    val navigationColors = AppInteractionColors.nativeNavigation(
         com.android.purebilibili.core.ui.AppNavigationColorRole.BAR,
     )
-    val selectedContainer = navigationColors?.selectedContainer ?: AppSurfaceTokens.selectionContainer()
+    val selectedContainer = if (nativeMiuix) {
+        AppInteractionColors.miuixNavigationBarIndicatorColor()
+    } else {
+        AppSurfaceTokens.selectionContainer()
+    }
     val selectedContent = navigationColors?.selectedContent ?: AppSurfaceTokens.primary()
     val idleContent = navigationColors?.unselectedContent ?: AppContentColors.secondaryText()
     Row(

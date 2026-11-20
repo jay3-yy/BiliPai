@@ -181,7 +181,8 @@ fun resolveAudioQualityControlPresentation(
     return AudioQualityControlPresentation(
         label = label,
         showHiResBadge = selectedOption?.isHiRes == true,
-        showDolbyBadge = selectedOption?.isDolby == true
+        showDolbyBadge = selectedOption?.isDolby == true,
+        currentLabel = selectedOption?.takeIf { it.kind != null }?.label?.takeIf { it.isNotBlank() },
     )
 }
 

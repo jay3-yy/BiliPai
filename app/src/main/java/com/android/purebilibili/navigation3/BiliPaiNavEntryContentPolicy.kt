@@ -23,6 +23,8 @@ internal enum class BiliPaiNavEntryContentRole {
     LOGIN_ACTIVITY_SETTINGS,
     MESSAGE_NOTIFICATION_SETTINGS,
     PLUGINS_SETTINGS,
+    PLUGIN_CENTER_DETAIL,
+    CONTENT_FILTER_HISTORY,
     JS_PLUGIN_CONTENT,
     EXTERNAL_MEDIA,
     BOTTOM_BAR_SETTINGS,
@@ -88,8 +90,7 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         BiliPaiNavKey.Home -> BiliPaiNavEntryContentRole.HOME
         BiliPaiNavKey.ListenVideo -> BiliPaiNavEntryContentRole.LISTEN_VIDEO
         BiliPaiNavKey.Dynamic -> BiliPaiNavEntryContentRole.DYNAMIC
-        is BiliPaiNavKey.Search,
-        BiliPaiNavKey.Search -> BiliPaiNavEntryContentRole.SEARCH
+        is BiliPaiNavKey.Search -> BiliPaiNavEntryContentRole.SEARCH
         BiliPaiNavKey.SearchTrending -> BiliPaiNavEntryContentRole.SEARCH_TRENDING
         is BiliPaiNavKey.TopicDetail -> BiliPaiNavEntryContentRole.TOPIC_DETAIL
         BiliPaiNavKey.Settings -> BiliPaiNavEntryContentRole.SETTINGS
@@ -107,6 +108,10 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         BiliPaiNavKey.LoginActivitySettings -> BiliPaiNavEntryContentRole.LOGIN_ACTIVITY_SETTINGS
         BiliPaiNavKey.MessageNotificationSettings -> BiliPaiNavEntryContentRole.MESSAGE_NOTIFICATION_SETTINGS
         is BiliPaiNavKey.PluginsSettings -> BiliPaiNavEntryContentRole.PLUGINS_SETTINGS
+        is BiliPaiNavKey.BuiltinPluginSettings,
+        is BiliPaiNavKey.JsonPluginEditor,
+        BiliPaiNavKey.PluginSkinCatalog -> BiliPaiNavEntryContentRole.PLUGIN_CENTER_DETAIL
+        BiliPaiNavKey.ContentFilterHistory -> BiliPaiNavEntryContentRole.CONTENT_FILTER_HISTORY
         is BiliPaiNavKey.JsPluginContent -> BiliPaiNavEntryContentRole.JS_PLUGIN_CONTENT
         is BiliPaiNavKey.ExternalMedia -> BiliPaiNavEntryContentRole.EXTERNAL_MEDIA
         BiliPaiNavKey.BottomBarSettings -> BiliPaiNavEntryContentRole.BOTTOM_BAR_SETTINGS
@@ -122,11 +127,11 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         is BiliPaiNavKey.PersonalRecapUps -> BiliPaiNavEntryContentRole.PERSONAL_RECAP_UPS
         BiliPaiNavKey.History -> BiliPaiNavEntryContentRole.HISTORY
         is BiliPaiNavKey.HistorySearch -> BiliPaiNavEntryContentRole.HISTORY
-        BiliPaiNavKey.Favorite -> BiliPaiNavEntryContentRole.FAVORITE
+        BiliPaiNavKey.Favorite,
+        is BiliPaiNavKey.FavoritePgc -> BiliPaiNavEntryContentRole.FAVORITE
         BiliPaiNavKey.FavoriteSubscribed -> BiliPaiNavEntryContentRole.FAVORITE
         is BiliPaiNavKey.FavoriteSearch -> BiliPaiNavEntryContentRole.FAVORITE
-        is BiliPaiNavKey.LikedVideos,
-        BiliPaiNavKey.LikedVideos -> BiliPaiNavEntryContentRole.LIKED_VIDEOS
+        is BiliPaiNavKey.LikedVideos -> BiliPaiNavEntryContentRole.LIKED_VIDEOS
         BiliPaiNavKey.WatchLater -> BiliPaiNavEntryContentRole.WATCH_LATER
         is BiliPaiNavKey.WatchLaterSearch -> BiliPaiNavEntryContentRole.WATCH_LATER
         BiliPaiNavKey.Onboarding -> BiliPaiNavEntryContentRole.ONBOARDING

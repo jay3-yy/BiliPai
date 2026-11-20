@@ -143,7 +143,13 @@ internal class AmbientFrameController(
     private var generation = 0L
     fun invalidate() { generation++; presentation.clear() }
 
-    suspend fun run(source: AmbientFrameSource, width: Int, height: Int, policy: () -> AmbientRunPolicy) {
+    suspend fun run(
+        source: AmbientFrameSource,
+        width: Int,
+        height: Int,
+        onFrame: ((ImageBitmap?) -> Unit)? = null,
+        policy: () -> AmbientRunPolicy,
+    ) {
         val session = ++generation
         sessionMutex.withLock {
             val analyzer = AmbientFrameAnalyzer()
@@ -174,6 +180,7 @@ internal class AmbientFrameController(
                             delay(2000)
                             lastRefresh = -1
                             presentation.clear()
+                            onFrame?.invoke(null)
                         } else {
                             // Surface 暂不可用（全屏切换重建中）：短间隔重试，避免模糊条回落黑底后
                             // 还要等满一个采样周期才恢复。
@@ -248,10 +255,12 @@ internal class AmbientFrameController(
                             if (generation != session || !policy().active || policy().refreshGeneration != config.refreshGeneration) continue
                             oldCurrent.copy(glow = blended.asImageBitmap())
                         } else oldCurrent
-                        presentation.current = AmbientRenderFrame(raw.asImageBitmap(), result.asImageBitmap(), clock(),
+                        val rawFrame = raw.asImageBitmap()
+                        presentation.current = AmbientRenderFrame(rawFrame, result.asImageBitmap(), clock(),
                             if (config.refreshGeneration != lastRefresh) 48L else analyzer.transitionMs,
                             config.refreshGeneration, capturedBounds,
                             contentBoundsInWindow = contentBounds)
+                        onFrame?.invoke(rawFrame)
                         presentation.failureFadeAt = null
                         failures = 0; frames++
                         lastRefresh = config.refreshGeneration

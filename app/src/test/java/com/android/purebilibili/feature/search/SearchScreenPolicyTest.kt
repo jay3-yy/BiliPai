@@ -12,43 +12,6 @@ class SearchScreenPolicyTest {
 
 
     @Test
-    fun resetSearchScroll_onlyWhenShowingNonBlankResults() {
-        assertTrue(
-            shouldResetSearchResultScroll(
-                searchSessionId = 1L,
-                showResults = true,
-                lastResetSessionId = 0L
-            )
-        )
-        assertFalse(
-            shouldResetSearchResultScroll(
-                searchSessionId = 0L,
-                showResults = true,
-                lastResetSessionId = 0L
-            )
-        )
-        assertFalse(
-            shouldResetSearchResultScroll(
-                searchSessionId = 2L,
-                showResults = false,
-                lastResetSessionId = 1L
-            )
-        )
-    }
-
-    @Test
-    fun resetSearchScroll_preservesPositionWhenReturningFromVideoDetail() {
-        assertFalse(
-            shouldResetSearchResultScroll(
-                searchSessionId = 2L,
-                showResults = true,
-                lastResetSessionId = 0L,
-                isReturningFromVideoDetail = true,
-            )
-        )
-    }
-
-    @Test
     fun backToTopButton_onlyShowsAfterResultListScrollsPastThreshold() {
         assertFalse(
             shouldShowSearchBackToTop(

@@ -62,6 +62,7 @@ internal fun AicuRoute(
     initialCategory: AicuCategory,
     onBack: () -> Unit,
     onOpenTarget: (BiliPaiNavKey) -> Unit,
+    onOpenLink: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val factory = remember(context.applicationContext) {
@@ -129,6 +130,7 @@ internal fun AicuRoute(
         onAccept = model::acceptDisclaimer,
         onRetryConsent = { model.initialize(uid, initialCategory) },
         onLoadTrending = model::loadTrending,
+        onOpenLink = onOpenLink,
         onOpenRecord = { record ->
             aicuNativeTarget(state.category, record)?.let { target ->
                 model.cancelQuery()
@@ -169,6 +171,7 @@ internal fun AicuScreen(
     onRetryConsent: () -> Unit,
     onLoadTrending: () -> Unit,
     onOpenRecord: (AicuRecord) -> Unit,
+    onOpenLink: (String) -> Unit,
     onCopyRecord: (AicuRecord) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -248,7 +251,14 @@ internal fun AicuScreen(
                             val records = state.page?.records.orEmpty()
                             val showRoom = state.category == AicuCategory.LIVE_DANMAKU && (index == 0 || records[index - 1].groupKey != record.groupKey)
                             if (showRoom) AppText("${record.roomName.ifBlank { "直播间 ${record.roomId}" }} · ${record.upName}", modifier = Modifier.padding(vertical = 8.dp))
-                            AicuRecordCard(record, state.category, emoteMap, { onOpenRecord(record) }, { onCopyRecord(record) })
+                            AicuRecordCard(
+                                record = record,
+                                category = state.category,
+                                emoteMap = emoteMap,
+                                onOpen = { onOpenRecord(record) },
+                                onOpenLink = onOpenLink,
+                                onCopy = { onCopyRecord(record) },
+                            )
                         }
                         if (loadedPage != null) item("pagination") {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -455,6 +465,7 @@ private fun AicuRecordCard(
     category: AicuCategory,
     emoteMap: Map<String, String>,
     onOpen: () -> Unit,
+    onOpenLink: (String) -> Unit,
     onCopy: () -> Unit,
 ) {
     val target = remember(category, record) { aicuNativeTarget(category, record) }
@@ -472,6 +483,7 @@ private fun AicuRecordCard(
                 fontSize = MaterialTheme.typography.bodyLarge.fontSize,
                 color = AppContentColors.primaryText(),
                 emoteMap = emoteMap,
+                onUrlClick = onOpenLink,
             )
             if (target != null && category == AicuCategory.COMMENT && (record.objectType == 12 || (record.rank == 2 && record.rootId.toLongOrNull() == null))) {
                 AppText("缺少完整评论定位信息，将打开原内容。", style = MaterialTheme.typography.bodySmall)

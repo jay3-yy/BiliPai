@@ -106,8 +106,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.CommentFraudStatus
-import com.android.purebilibili.data.repository.resolveCommentFraudLightMessage
-import com.android.purebilibili.data.repository.shouldShowCommentFraudResultDialog
 import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.Player
 import androidx.lifecycle.compose.LocalLifecycleOwner

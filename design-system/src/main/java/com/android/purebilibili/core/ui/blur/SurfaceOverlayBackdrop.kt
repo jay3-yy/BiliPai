@@ -12,11 +12,13 @@ import top.yukonga.miuix.kmp.blur.Backdrop
 /** 背景采样与可见遮色按绘制顺序合成；不捕获按钮、文字或玻璃自身。 */
 class SurfaceOverlayBackdrop(
     private val content: Backdrop?,
-    private val surfaceColor: Color,
+    private val surfaceColor: () -> Color,
 ) : Backdrop {
+    constructor(content: Backdrop?, surfaceColor: Color) : this(content, { surfaceColor })
+
     override val isCoordinatesDependent: Boolean get() = content?.isCoordinatesDependent == true
-    override val offsetResidualX: Float get() = if (surfaceColor.alpha >= 1f) 0f else content?.offsetResidualX ?: 0f
-    override val offsetResidualY: Float get() = if (surfaceColor.alpha >= 1f) 0f else content?.offsetResidualY ?: 0f
+    override val offsetResidualX: Float get() = if (surfaceColor().alpha >= 1f) 0f else content?.offsetResidualX ?: 0f
+    override val offsetResidualY: Float get() = if (surfaceColor().alpha >= 1f) 0f else content?.offsetResidualY ?: 0f
 
     override fun DrawScope.drawBackdrop(
         density: Density,
@@ -24,11 +26,12 @@ class SurfaceOverlayBackdrop(
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
         downscaleFactor: Int,
     ) {
+        val color = surfaceColor()
         // 完全遮挡时不再绘制底层内容，保持采样与实色顶栏一致。
-        if (surfaceColor.alpha < 1f && content != null) {
+        if (color.alpha < 1f && content != null) {
             with(content) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
         }
-        drawRect(surfaceColor)
+        drawRect(color)
     }
 }
 

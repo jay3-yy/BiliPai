@@ -15,7 +15,8 @@ internal data class AppUpdateDownloadState(
     val totalBytes: Long = 0L,
     val filePath: String? = null,
     val errorMessage: String? = null,
-    val checksumProvided: Boolean = false
+    val checksumProvided: Boolean = false,
+    val usedGitHubFallback: Boolean = false,
 )
 
 internal fun startAppUpdateDownload(totalBytes: Long): AppUpdateDownloadState {

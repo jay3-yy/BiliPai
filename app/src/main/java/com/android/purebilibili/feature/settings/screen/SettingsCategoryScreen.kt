@@ -6,7 +6,6 @@ import com.android.purebilibili.feature.settings.SettingsNavDestination
 import com.android.purebilibili.feature.settings.SettingsRootCategory
 import com.android.purebilibili.feature.settings.SettingsScreen
 import com.android.purebilibili.feature.settings.SettingsViewModel
-import dev.chrisbanes.haze.HazeState
 
 @Composable
 fun SettingsCategoryScreen(
@@ -17,7 +16,6 @@ fun SettingsCategoryScreen(
     onOpenSourceLicensesClick: () -> Unit,
     onAppearanceClick: () -> Unit = {},
     onHomeClick: () -> Unit = {},
-    onAnimationClick: () -> Unit = {},
     onPlaybackClick: () -> Unit = {},
     onPermissionClick: () -> Unit = {},
     onSpacePrivacyClick: () -> Unit = {},
@@ -33,7 +31,6 @@ fun SettingsCategoryScreen(
     onReplayOnboardingClick: () -> Unit = {},
     onCategoryClick: (SettingsRootCategory) -> Unit = {},
     onSearchOpen: () -> Unit = {},
-    mainHazeState: HazeState? = null,
     forceSinglePaneContent: Boolean = false,
 ) {
     SettingsScreen(
@@ -43,7 +40,6 @@ fun SettingsCategoryScreen(
         onOpenSourceLicensesClick = onOpenSourceLicensesClick,
         onAppearanceClick = onAppearanceClick,
         onHomeClick = onHomeClick,
-        onAnimationClick = onAnimationClick,
         onPlaybackClick = onPlaybackClick,
         onPermissionClick = onPermissionClick,
         onSpacePrivacyClick = onSpacePrivacyClick,
@@ -60,7 +56,6 @@ fun SettingsCategoryScreen(
         onCategoryClick = onCategoryClick,
         onSearchOpen = onSearchOpen,
         destination = SettingsNavDestination.Category(category),
-        mainHazeState = mainHazeState,
         forceSinglePaneContent = forceSinglePaneContent,
     )
 }

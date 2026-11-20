@@ -49,17 +49,18 @@ internal fun AnimatedVideoListItem(
     useLookaheadBounds: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val animateItemBounds = useLookaheadBounds && enabled &&
+        LocalAppThemeConfig.current.uiEntranceAnimationEnabled
     Box(modifier = modifier) {
-        if (!useLookaheadBounds) {
-            // Deletable cards own their collapse animation. Keep lazy placement outside
-            // that subtree, without a Lookahead node that can be disposed mid-measure.
+        if (!animateItemBounds) {
+            // 只有实际做尺寸形变的卡片才需要预测布局；可删除的卡片自己负责收起。
             Box(content = content)
             return@Box
         }
         LookaheadScope {
             // Unlike animateContentSize, animateBounds also interpolates the child's constraints,
             // so covers resize gradually when a grid cell's fixed width changes.
-            Box(modifier = Modifier.videoListBoundsAnimation(this, enabled), content = content)
+            Box(modifier = Modifier.videoListBoundsAnimation(this), content = content)
         }
     }
 }

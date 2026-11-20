@@ -1,26 +1,23 @@
 package com.android.purebilibili.feature.settings
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppSurfaceTokens
-import com.android.purebilibili.core.ui.components.rememberAdaptiveListVisualCapabilities
 import com.android.purebilibili.core.ui.components.AppPreferenceGroupPresentation
 import com.android.purebilibili.core.ui.components.LocalAppPreferenceGroupPresentation
 import com.android.purebilibili.core.ui.components.adaptivePreferenceGroupContainerColor
+import com.android.purebilibili.core.ui.components.rememberAdaptiveListVisualCapabilities
+import com.android.purebilibili.core.ui.transition.isVisibleReturnLanding
+import com.android.purebilibili.core.ui.transition.navigationReturnLanding
 import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.settingsSharedContainerBounds
 
-/** 只捕获可导航的设置行，开关、编辑器和弹窗不经过该入口。 */
+/** 仅登记实际点击的设置行，开关、编辑器和弹窗保持原有操作。 */
 @Composable
 internal fun SettingsNavigationContainerOrigin(
     target: BiliPaiNavKey?,
@@ -28,18 +25,14 @@ internal fun SettingsNavigationContainerOrigin(
     first: Boolean = true,
     last: Boolean = true,
     flatGroup: Boolean = false,
-    content: @Composable (() -> Unit) -> Unit,
+    content: @Composable (Modifier, () -> Unit) -> Unit,
 ) {
     val sources = LocalSettingsContainerSources.current
     val owner = LocalSettingsContainerOwner.current
     if (sources == null || owner == null || target == null || target == owner) {
-        content(onClick)
+        content(Modifier, onClick)
         return
     }
-    val anchor = remember(target, sources, owner) {
-        sources.sources[target]?.takeIf { it.owner == owner }?.anchor ?: SettingsContainerAnchor()
-    }
-    val layer = rememberGraphicsLayer()
     val isFlatGroup = flatGroup ||
         LocalAppPreferenceGroupPresentation.current == AppPreferenceGroupPresentation.FLAT
     val color = if (isFlatGroup) {
@@ -47,38 +40,36 @@ internal fun SettingsNavigationContainerOrigin(
     } else {
         adaptivePreferenceGroupContainerColor()
     }
-    val density = LocalDensity.current
-    val groupRadius = rememberAdaptiveListVisualCapabilities().componentSpec.groupCornerRadiusDp
-    val radius = if (isFlatGroup) 0f else with(density) { groupRadius.dp.toPx() }
+    val origin = remember(target, sources, owner) {
+        sources.sources[target]?.takeIf { it.owner == owner } ?: SettingsSharedContainerOrigin(owner, color)
+    }
+    val radius = if (isFlatGroup) 0.dp else
+        rememberAdaptiveListVisualCapabilities().componentSpec.groupCornerRadiusDp.dp
     SideEffect {
-        sources.sources[target]?.takeIf { it.anchor === anchor }?.let { source ->
-            source.layer = layer
-            source.color = color
+        origin.color = color
+        origin.topRadius = if (first) radius else 0.dp
+        origin.bottomRadius = if (last) radius else 0.dp
+    }
+    DisposableEffect(origin) {
+        onDispose {
+            origin.coordinates = null
+            origin.available = false
+            origin.returnLanding.clear()
         }
     }
-    DisposableEffect(anchor) {
-        onDispose { anchor.detach() }
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .onGloballyPositioned(anchor::update)
-            .drawWithContent {
-                layer.record { this@drawWithContent.drawContent() }
-                anchor.recorded = true
-                if (sources.sources[target]?.takeIf { it.anchor === anchor }?.returnInFlight?.invoke() != true) {
-                    drawLayer(layer)
-                }
-            },
+    content(
+        Modifier
+            .onGloballyPositioned {
+                origin.coordinates = it
+                origin.available = sources.isAvailable(it)
+            }
+            .navigationReturnLanding(origin.returnLanding, sharedBoundsReleased = origin.sharedBounds == null) {
+                origin.coordinates.isVisibleReturnLanding()
+            }
+            .then(settingsSharedContainerBounds(origin.sharedBounds)),
     ) {
-        content {
-            sources.capture(
-                target, owner, anchor, layer, color,
-                topRadius = if (first) radius else 0f,
-                bottomRadius = if (last) radius else 0f,
-            )
-            onClick()
-        }
+        sources.capture(target, origin)
+        onClick()
     }
 }
 

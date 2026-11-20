@@ -51,7 +51,6 @@ internal fun resolveSettingsContainerFrame(
     val geometry = if (springDriven) open else if (returning) {
         1f - AppMotionEasing.M1Standard.transform(1f - open)
     } else AppMotionEasing.M1Standard.transform(open)
-    val fadeStart = if (returning) 0.6f else 0.2f
     // 官方导航弹簧越过终点时，只在来源尺寸附近收敛，避免用页面尺寸放大微小过冲。
     val landingScale = if (springDriven && returning) 1f + (1f + relativeDepth).coerceAtMost(0f) else 1f
     val bounds = lerp(source, destination, geometry)
@@ -59,9 +58,14 @@ internal fun resolveSettingsContainerFrame(
     return SettingsContainerFrame(
         bounds = Rect(bounds.center - androidx.compose.ui.geometry.Offset(halfSize.width, halfSize.height),
             bounds.center + androidx.compose.ui.geometry.Offset(halfSize.width, halfSize.height)),
-        contentAlpha = ((open - fadeStart) / 0.2f).coerceIn(0f, 1f),
+        contentAlpha = resolveSettingsContainerContentAlpha(open, returning),
         cornerFraction = 1f - geometry,
     )
+}
+
+internal fun resolveSettingsContainerContentAlpha(open: Float, returning: Boolean): Float {
+    val fadeStart = if (returning) 0.6f else 0.2f
+    return ((open - fadeStart) / 0.2f).coerceIn(0f, 1f)
 }
 
 /** 来源必须属于紧邻的父 entry，防止搜索或其他页面复用同名目的地的旧来源。 */

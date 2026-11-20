@@ -222,27 +222,42 @@ internal fun BangumiCommentPanel(
                 floatingHeaderContentPaddingPx = visibleHeaderHeight,
                 onSearchClick = { showSearch = true },
             )
-            // 所有材质共用标题显隐；排序 dock 由视频详情滚动隐藏设置控制。
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .offset { IntOffset(0, topContentInsetPx().roundToInt()) }
-                    .videoContentHeight(visibleHeaderHeight)
-                    .graphicsLayer { clip = true }
-                    .then(if (floatingHeader) Modifier else Modifier.background(MaterialTheme.colorScheme.surface)),
-            ) {
+            if (progressiveHeaderEnabled || solidHeaderEnabled) {
+                // 渐变从标签顶部开始，延伸到排序栏的可见底边，整段只采样评论列表。
+                // 原生标签在分页外，传入的顶部占位为 0，渐变从排序栏开始。
                 Box(
-                    modifier = Modifier.matchParentSize()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .videoContentHeight { topContentInsetPx() + visibleHeaderHeight() }
                         .biliPaiProgressiveTopBlur(
                             backdrop = backdrop,
                             enabled = progressiveHeaderEnabled,
-                            surfaceColor = androidx.compose.ui.graphics.Color.Transparent,
                         )
                         .topSolidProgressiveFade(
                             surfaceColor = MaterialTheme.colorScheme.surface,
                             enabled = solidHeaderEnabled,
                         ),
                 )
+            }
+            // 所有材质共用标题显隐；排序 dock 由视频详情滚动隐藏设置控制。
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(0, topContentInsetPx().roundToInt()) }
+                    .then(
+                        if (hideSortDock || !liquidGlassEnabled) {
+                            Modifier
+                                .videoContentHeight(visibleHeaderHeight)
+                                .graphicsLayer {
+                                    // 玻璃排序胶囊展开时允许形变溢出，滚动收起才裁剪可见高度。
+                                    clip = !liquidGlassEnabled || visibleHeaderHeight() < commentHeaderHeightPx.floatValue
+                                }
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .then(if (floatingHeader) Modifier else Modifier.background(MaterialTheme.colorScheme.surface)),
+            ) {
                 VideoCommentFloatingHeader(
                     count = state.replyCount,
                     sortMode = state.sortMode,

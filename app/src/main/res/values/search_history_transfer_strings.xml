@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_history_transfer">导入/导出历史记录</string>
+    <string name="search_history_copy">导出至剪贴板</string>
+    <string name="search_history_save">导出文件至本地</string>
+    <string name="search_history_input">输入</string>
+    <string name="search_history_paste">从剪贴板导入</string>
+    <string name="search_history_open">从本地文件导入</string>
+    <string name="search_history_input_title">输入搜索历史</string>
+    <string name="search_history_json">搜索历史 JSON</string>
+    <string name="search_history_preview">预览</string>
+    <string name="search_history_import_title">导入搜索历史？</string>
+    <string name="search_history_replace">将用 %1$d 条记录替换当前搜索历史。</string>
+    <string name="search_history_import_confirm">替换并导入</string>
+    <string name="search_history_invalid">格式无效，请提供由非空搜索词组成的 JSON 数组。</string>
+    <string name="search_history_clipboard_empty">剪贴板中没有可导入的文本。</string>
+    <string name="search_history_imported">搜索历史已导入</string>
+    <string name="search_history_copied">搜索历史已复制</string>
+    <string name="search_history_exported">搜索历史已导出</string>
+    <string name="search_history_import_failed">搜索历史导入失败</string>
+    <string name="search_history_export_failed">搜索历史导出失败</string>
+</resources>

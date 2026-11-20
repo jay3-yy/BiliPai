@@ -9,9 +9,14 @@ enum class SettingsRootCategory(
     val searchTarget: SettingsSearchTarget,
 ) {
     APPEARANCE_THEME(
-        title = "外观与动画",
-        subtitle = "主题、文字大小、图标、动画与振动",
+        title = "界面外观",
+        subtitle = "界面风格、主题、文字大小和图标",
         searchTarget = SettingsSearchTarget.INTERFACE_THEME,
+    ),
+    ANIMATION_HAPTICS(
+        title = "动效与反馈",
+        subtitle = "页面动效、振动反馈和液态玻璃",
+        searchTarget = SettingsSearchTarget.ANIMATION,
     ),
     PLAYBACK_QUALITY(
         title = "播放设置",
@@ -58,7 +63,7 @@ enum class SettingsRootCategory(
 
     @Deprecated("仅用于恢复旧版本保存的设置导航状态")
     APPEARANCE_INTERACTION(
-        title = "外观与主题",
+        title = "界面外观",
         subtitle = "界面风格、主题、字体与图标",
         searchTarget = SettingsSearchTarget.INTERFACE_THEME,
     ),
@@ -88,12 +93,13 @@ internal fun canonicalSettingsRootCategory(category: SettingsRootCategory): Sett
         SettingsRootCategory.VIDEO_DECODER -> SettingsRootCategory.PLAYBACK_QUALITY
         SettingsRootCategory.MESSAGE_NOTIFICATION -> SettingsRootCategory.PRIVACY_PERMISSION
         SettingsRootCategory.PLAYER_DIAGNOSTICS -> SettingsRootCategory.SYSTEM_ABOUT
-        SettingsRootCategory.GLASS_ADVANCED -> SettingsRootCategory.APPEARANCE_THEME
+        SettingsRootCategory.GLASS_ADVANCED -> SettingsRootCategory.ANIMATION_HAPTICS
         else -> category
     }
 
 internal fun resolveSettingsRootCategoryOrder(): List<SettingsRootCategory> = listOf(
     SettingsRootCategory.APPEARANCE_THEME,
+    SettingsRootCategory.ANIMATION_HAPTICS,
     SettingsRootCategory.PLAYBACK_QUALITY,
     SettingsRootCategory.HOME_RECOMMENDATION,
     SettingsRootCategory.NAVIGATION_INTERACTION,
@@ -129,8 +135,7 @@ internal fun resolveSettingsRootCategoryForSearchTarget(
     SettingsSearchTarget.BLOCKED_LIST,
     SettingsSearchTarget.MESSAGE_NOTIFICATION -> SettingsRootCategory.PRIVACY_PERMISSION
 
-    // 动画与触感页的导航父级是外观设置,搜索归属保持一致
-    SettingsSearchTarget.ANIMATION -> SettingsRootCategory.APPEARANCE_THEME
+    SettingsSearchTarget.ANIMATION -> SettingsRootCategory.ANIMATION_HAPTICS
 
     SettingsSearchTarget.DATA_BACKUP,
     SettingsSearchTarget.SETTINGS_SHARE,

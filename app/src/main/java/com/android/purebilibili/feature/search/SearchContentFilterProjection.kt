@@ -24,7 +24,10 @@ internal fun StateFlow<SearchUiState>.filteredSearchContent(scope: CoroutineScop
             val users = usersCache.getOrPut(type) { ContentListProjection() }.project(page.upResults, rules) { up ->
                 if (rules.blocksUser(up.mid)) null else {
                 val nested = up.res?.filterNot {
-                    rules.blocksVideo(it.title, it.mid, surface = com.android.purebilibili.core.store.ContentVideoSurface.SEARCH)
+                    !rules.keepsVideo(
+                        it.bvid, it.id, it.title, it.mid, it.author,
+                        com.android.purebilibili.core.store.ContentVideoSurface.SEARCH,
+                    )
                 }
                 if (nested == up.res) up else up.copy(res = nested)
                 }

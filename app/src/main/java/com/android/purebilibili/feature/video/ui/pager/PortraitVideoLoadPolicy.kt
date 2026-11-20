@@ -325,6 +325,7 @@ internal fun resolvePortraitPlaybackCdnUrls(
     targetQuality: Int = PORTRAIT_PLAYBACK_TARGET_QUALITY,
     cdnPlugin: PlaybackCdnPlugin?,
     preference: PlaybackCdnPreference = PlaybackCdnPreference.DEFAULT,
+    measuredPreference: PlaybackCdnPreference? = com.android.purebilibili.feature.plugin.CdnSpeedTest.recommendedPreference(),
 ): PortraitPlaybackStreamUrls {
     // Discovery can select a different quality (or codec) than the preference.
     // Only take backups from that exact URL's track, never from the requested tier.
@@ -348,6 +349,7 @@ internal fun resolvePortraitPlaybackCdnUrls(
         candidates = rewrite?.candidates ?: buildPlaybackCdnCandidates(rawVideoUrls, rawAudioUrls),
         preference = preference,
         pluginApplied = rewrite != null,
+        measuredPreference = measuredPreference,
     ).firstOrNull()
     return streamUrls.copy(
         videoUrl = selected?.videoUrl ?: streamUrls.videoUrl,

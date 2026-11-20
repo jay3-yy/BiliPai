@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_history_transfer">Import or export search history</string>
+    <string name="search_history_copy">Export to clipboard</string>
+    <string name="search_history_save">Export to a local file</string>
+    <string name="search_history_input">Enter manually</string>
+    <string name="search_history_paste">Import from clipboard</string>
+    <string name="search_history_open">Import from a local file</string>
+    <string name="search_history_input_title">Enter search history</string>
+    <string name="search_history_json">Search history JSON</string>
+    <string name="search_history_preview">Preview</string>
+    <string name="search_history_import_title">Import search history?</string>
+    <string name="search_history_replace">Replace your current search history with %1$d entries.</string>
+    <string name="search_history_import_confirm">Replace and import</string>
+    <string name="search_history_invalid">Invalid format. Use a JSON array of nonblank search terms.</string>
+    <string name="search_history_clipboard_empty">The clipboard has no text to import.</string>
+    <string name="search_history_imported">Search history imported</string>
+    <string name="search_history_copied">Search history copied</string>
+    <string name="search_history_exported">Search history exported</string>
+    <string name="search_history_import_failed">Could not import search history</string>
+    <string name="search_history_export_failed">Could not export search history</string>
+</resources>

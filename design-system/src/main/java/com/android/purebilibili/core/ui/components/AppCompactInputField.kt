@@ -52,77 +52,81 @@ fun AppCompactInputField(
     }
     if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
         // 原生输入框自行测量文字与边距，不把玻璃输入框的固定高度或胶囊形状带入此分支。
-        top.yukonga.miuix.kmp.basic.TextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = modifier.heightIn(min = height).focusRequester(requester),
-            label = placeholder,
-            useLabelAsPlaceholder = true,
-            readOnly = readOnly,
-            singleLine = singleLine,
-            maxLines = maxLines,
-            interactionSource = interactionSource,
-            keyboardOptions = keyboardOptions,
-            keyboardActions = keyboardActions,
-            leadingIcon = leadingIcon,
-            trailingIcon = trailingIcon,
-            colors = top.yukonga.miuix.kmp.basic.TextFieldDefaults.textFieldColors(
-                backgroundColor = if (containerColor == AppSurfaceTokens.searchContainer()) {
-                    top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.secondaryContainer
-                } else containerColor,
-            ),
-        )
+        com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+            top.yukonga.miuix.kmp.basic.TextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = modifier.heightIn(min = height).focusRequester(requester),
+                label = placeholder,
+                useLabelAsPlaceholder = true,
+                readOnly = readOnly,
+                singleLine = singleLine,
+                maxLines = maxLines,
+                interactionSource = interactionSource,
+                keyboardOptions = keyboardOptions,
+                keyboardActions = keyboardActions,
+                leadingIcon = leadingIcon,
+                trailingIcon = trailingIcon,
+                colors = top.yukonga.miuix.kmp.basic.TextFieldDefaults.textFieldColors(
+                    backgroundColor = if (containerColor == AppSurfaceTokens.searchContainer()) {
+                        top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.secondaryContainer
+                    } else containerColor,
+                ),
+            )
+        }
         return
     }
     val textColor = AppContentColors.primaryText()
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier
-            .heightIn(min = height)
-            .clip(shape)
-            .background(containerColor)
-            .focusRequester(requester),
-        readOnly = readOnly,
-        singleLine = singleLine,
-        maxLines = maxLines,
-        textStyle = MaterialTheme.typography.bodyMedium.copy(color = textColor),
-        cursorBrush = SolidColor(AppContentColors.accent()),
-        interactionSource = interactionSource,
-        keyboardOptions = keyboardOptions,
-        keyboardActions = keyboardActions,
-        decorationBox = { innerTextField ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = height)
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (leadingIcon != null) {
-                    Box(Modifier.size(height), contentAlignment = Alignment.Center) { leadingIcon() }
-                }
-                Box(
-                    modifier = Modifier.weight(1f).padding(vertical = 8.dp),
-                    contentAlignment = Alignment.CenterStart,
+    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = modifier
+                .heightIn(min = height)
+                .clip(shape)
+                .background(containerColor)
+                .focusRequester(requester),
+            readOnly = readOnly,
+            singleLine = singleLine,
+            maxLines = maxLines,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = textColor),
+            cursorBrush = SolidColor(AppContentColors.accent()),
+            interactionSource = interactionSource,
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            decorationBox = { innerTextField ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = height)
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (value.isEmpty()) {
-                        AppText(
-                            placeholder,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = AppContentColors.secondaryText(),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                    if (leadingIcon != null) {
+                        Box(Modifier.size(height), contentAlignment = Alignment.Center) { leadingIcon() }
                     }
-                    innerTextField()
+                    Box(
+                        modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        if (value.isEmpty()) {
+                            AppText(
+                                placeholder,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = AppContentColors.secondaryText(),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        innerTextField()
+                    }
+                    if (trailingIcon != null) {
+                        Box(Modifier.size(height), contentAlignment = Alignment.Center) { trailingIcon() }
+                    }
                 }
-                if (trailingIcon != null) {
-                    Box(Modifier.size(height), contentAlignment = Alignment.Center) { trailingIcon() }
-                }
-            }
-        },
-    )
+            },
+        )
+    }
 }
 
 /** 保留原生输入框的布局与配色，同时允许调用方持有光标和选区。 */
@@ -152,75 +156,79 @@ fun AppCompactInputField(
     }
     if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
         // 原生输入框自行测量文字与边距，不把玻璃输入框的固定高度或胶囊形状带入此分支。
-        top.yukonga.miuix.kmp.basic.TextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = modifier.heightIn(min = height).focusRequester(requester),
-            label = placeholder,
-            useLabelAsPlaceholder = true,
-            readOnly = readOnly,
-            singleLine = singleLine,
-            maxLines = maxLines,
-            interactionSource = interactionSource,
-            keyboardOptions = keyboardOptions,
-            keyboardActions = keyboardActions,
-            leadingIcon = leadingIcon,
-            trailingIcon = trailingIcon,
-            colors = top.yukonga.miuix.kmp.basic.TextFieldDefaults.textFieldColors(
-                backgroundColor = if (containerColor == AppSurfaceTokens.searchContainer()) {
-                    top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.secondaryContainer
-                } else containerColor,
-            ),
-        )
+        com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+            top.yukonga.miuix.kmp.basic.TextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = modifier.heightIn(min = height).focusRequester(requester),
+                label = placeholder,
+                useLabelAsPlaceholder = true,
+                readOnly = readOnly,
+                singleLine = singleLine,
+                maxLines = maxLines,
+                interactionSource = interactionSource,
+                keyboardOptions = keyboardOptions,
+                keyboardActions = keyboardActions,
+                leadingIcon = leadingIcon,
+                trailingIcon = trailingIcon,
+                colors = top.yukonga.miuix.kmp.basic.TextFieldDefaults.textFieldColors(
+                    backgroundColor = if (containerColor == AppSurfaceTokens.searchContainer()) {
+                        top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.secondaryContainer
+                    } else containerColor,
+                ),
+            )
+        }
         return
     }
     val textColor = AppContentColors.primaryText()
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier
-            .heightIn(min = height)
-            .clip(shape)
-            .background(containerColor)
-            .focusRequester(requester),
-        readOnly = readOnly,
-        singleLine = singleLine,
-        maxLines = maxLines,
-        textStyle = MaterialTheme.typography.bodyMedium.copy(color = textColor),
-        cursorBrush = SolidColor(AppContentColors.accent()),
-        interactionSource = interactionSource,
-        keyboardOptions = keyboardOptions,
-        keyboardActions = keyboardActions,
-        decorationBox = { innerTextField ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = height)
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (leadingIcon != null) {
-                    Box(Modifier.size(height), contentAlignment = Alignment.Center) { leadingIcon() }
-                }
-                Box(
-                    modifier = Modifier.weight(1f).padding(vertical = 8.dp),
-                    contentAlignment = Alignment.CenterStart,
+    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = modifier
+                .heightIn(min = height)
+                .clip(shape)
+                .background(containerColor)
+                .focusRequester(requester),
+            readOnly = readOnly,
+            singleLine = singleLine,
+            maxLines = maxLines,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = textColor),
+            cursorBrush = SolidColor(AppContentColors.accent()),
+            interactionSource = interactionSource,
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
+            decorationBox = { innerTextField ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = height)
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (value.text.isEmpty()) {
-                        AppText(
-                            placeholder,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = AppContentColors.secondaryText(),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                    if (leadingIcon != null) {
+                        Box(Modifier.size(height), contentAlignment = Alignment.Center) { leadingIcon() }
                     }
-                    innerTextField()
+                    Box(
+                        modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        if (value.text.isEmpty()) {
+                            AppText(
+                                placeholder,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = AppContentColors.secondaryText(),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        innerTextField()
+                    }
+                    if (trailingIcon != null) {
+                        Box(Modifier.size(height), contentAlignment = Alignment.Center) { trailingIcon() }
+                    }
                 }
-                if (trailingIcon != null) {
-                    Box(Modifier.size(height), contentAlignment = Alignment.Center) { trailingIcon() }
-                }
-            }
-        },
-    )
+            },
+        )
+    }
 }

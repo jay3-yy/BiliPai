@@ -30,14 +30,6 @@ class AudioNowPlayingBarMotionPolicyTest {
     }
 
     @Test
-    fun sourceCannotOpenUntilLayoutAndImeAreSettled() {
-        assertFalse(canOpenAudioNowPlayingBarSource(layoutStable = false))
-        assertFalse(canOpenAudioNowPlayingBarSource(layoutStable = true, imeSettled = false))
-        assertFalse(canOpenAudioNowPlayingBarSource(layoutStable = true, sharedTransitionRunning = true))
-        assertTrue(canOpenAudioNowPlayingBarSource(layoutStable = true))
-    }
-
-    @Test
     fun sourceBarUsesOneSharedGeometryTimeline() {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/audio/screen/AudioNowPlayingBar.kt"

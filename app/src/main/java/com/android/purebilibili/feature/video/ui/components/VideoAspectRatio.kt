@@ -133,6 +133,74 @@ internal fun shouldUseFillMaxPlayerViewport(aspectRatio: VideoAspectRatio): Bool
 }
 
 /**
+ * Media3 1.11.1's internal Compose surface sync workaround only runs on SDK 34 (`== 34`).
+ * On Android 14–17+ (API 34+), resizing or reattaching a Compose-hosted [SurfaceView]
+ * (e.g. tablet companion split-pane -> fullscreen) can leave the BLAST SurfaceControl transform
+ * stuck at the previous pane bounds unless we synchronize Draw + RenderThread position updates
+ * via [android.window.SurfaceSyncGroup] and explicitly invalidate the [SurfaceView].
+ */
+internal fun shouldRunComposeSurfaceSyncWorkaround(
+    sdkInt: Int,
+    isSurfaceView: Boolean,
+): Boolean = sdkInt >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE && isSurfaceView
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private fun invalidatePlayerSurfaceHierarchy(playerView: androidx.media3.ui.PlayerView) {
+    val contentFrame = playerView.findViewById<android.view.View>(
+        androidx.media3.ui.R.id.exo_content_frame,
+    )
+    playerView.videoSurfaceView?.invalidate()
+    contentFrame?.invalidate()
+    playerView.invalidate()
+    (playerView.parent as? android.view.View)?.invalidate()
+}
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private class ComposeSurfaceSyncCoordinator(
+    private val playerView: androidx.media3.ui.PlayerView,
+) {
+    private var pendingPost: Runnable? = null
+
+    fun requestSync() {
+        val surfaceView = playerView.videoSurfaceView as? android.view.SurfaceView ?: return
+        if (!shouldRunComposeSurfaceSyncWorkaround(android.os.Build.VERSION.SDK_INT, true)) return
+        if (!surfaceView.isAttachedToWindow) return
+
+        invalidatePlayerSurfaceHierarchy(playerView)
+        if (pendingPost != null) return
+        val runnable = Runnable {
+            pendingPost = null
+            val currentSurface = playerView.videoSurfaceView as? android.view.SurfaceView ?: return@Runnable
+            if (!playerView.isAttachedToWindow || !currentSurface.isAttachedToWindow) return@Runnable
+            invalidatePlayerSurfaceHierarchy(playerView)
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return@Runnable
+            val rootSurfaceControl = currentSurface.rootSurfaceControl ?: return@Runnable
+            val syncGroup = android.window.SurfaceSyncGroup("bilipai-compose-surface-sync")
+            if (syncGroup.add(rootSurfaceControl, Runnable {})) {
+                rootSurfaceControl.applyTransactionOnDraw(android.view.SurfaceControl.Transaction())
+                syncGroup.markSyncReady()
+            }
+        }
+        pendingPost = runnable
+        playerView.post(runnable)
+    }
+
+    fun completeAndClear() {
+        pendingPost?.let(playerView::removeCallbacks)
+        pendingPost = null
+    }
+}
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private fun obtainComposeSurfaceSyncCoordinator(
+    playerView: androidx.media3.ui.PlayerView,
+): ComposeSurfaceSyncCoordinator {
+    val tagId = com.android.purebilibili.R.id.video_player_viewport_refresh_controller
+    return (playerView.getTag(tagId) as? PlayerViewportRefreshController)?.surfaceSyncCoordinator
+        ?: ComposeSurfaceSyncCoordinator(playerView)
+}
+
+/**
  * Apply the selected ratio. Recovery runs after Compose layout: remeasure the native children
  * against the current viewport instead of relying on another AndroidView parent traversal.
  */
@@ -172,8 +240,10 @@ internal fun applyPlayerViewResizeMode(
             playerView.left, playerView.top,
             playerView.left + viewportWidth, playerView.top + viewportHeight,
         )
+        obtainComposeSurfaceSyncCoordinator(playerView).requestSync()
+    } else {
+        invalidatePlayerSurfaceHierarchy(playerView)
     }
-    playerView.invalidate()
 }
 
 private fun forcePlayerViewportLayout(view: android.view.View) {
@@ -209,17 +279,61 @@ private class PlayerViewportRefreshController(
         val player: androidx.media3.common.Player?,
     )
 
+    val surfaceSyncCoordinator = ComposeSurfaceSyncCoordinator(playerView)
     private var requested: Request? = null
     private var completed: Request? = null
     private var pending: Runnable? = null
     private var pendingPreDraw: androidx.core.view.OneShotPreDrawListener? = null
+    private var observedSurfaceView: android.view.SurfaceView? = null
+    private val surfaceLayoutListener = android.view.View.OnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+        if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop ||
+            left != oldLeft || top != oldTop
+        ) {
+            surfaceSyncCoordinator.requestSync()
+        }
+    }
+    private val surfaceHolderCallback = object : android.view.SurfaceHolder.Callback {
+        override fun surfaceCreated(holder: android.view.SurfaceHolder) {
+            val req = requested
+            if (req != null && playerView.isAttachedToWindow) {
+                completed = null
+                enqueue(req, retry = false)
+            } else {
+                surfaceSyncCoordinator.requestSync()
+            }
+        }
+
+        override fun surfaceChanged(holder: android.view.SurfaceHolder, format: Int, width: Int, height: Int) {
+            surfaceSyncCoordinator.requestSync()
+        }
+
+        override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
+            surfaceSyncCoordinator.completeAndClear()
+        }
+    }
 
     init {
         playerView.addOnAttachStateChangeListener(this)
         playerView.addOnLayoutChangeListener(this)
+        attachSurfaceObserverIfNeeded()
+    }
+
+    private fun attachSurfaceObserverIfNeeded() {
+        val currentSurfaceView = playerView.videoSurfaceView as? android.view.SurfaceView
+        if (observedSurfaceView === currentSurfaceView) return
+        observedSurfaceView?.let { old ->
+            old.removeOnLayoutChangeListener(surfaceLayoutListener)
+            old.holder.removeCallback(surfaceHolderCallback)
+        }
+        observedSurfaceView = currentSurfaceView
+        currentSurfaceView?.let { sv ->
+            sv.addOnLayoutChangeListener(surfaceLayoutListener)
+            sv.holder.addCallback(surfaceHolderCallback)
+        }
     }
 
     fun schedule(mode: Int, width: Int, height: Int, videoWidth: Int, videoHeight: Int) {
+        attachSurfaceObserverIfNeeded()
         val request = Request(mode, width, height, videoWidth, videoHeight, playerView.player)
         if (requested == request && (pending != null || pendingPreDraw != null)) return
         // Pager callers may omit expected dimensions: do not cache those as a known
@@ -275,6 +389,7 @@ private class PlayerViewportRefreshController(
         pending = null
         pendingPreDraw?.removeListener()
         pendingPreDraw = null
+        surfaceSyncCoordinator.completeAndClear()
     }
 
     fun cancel() {
@@ -288,7 +403,9 @@ private class PlayerViewportRefreshController(
         left: Int, top: Int, right: Int, bottom: Int,
         oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int,
     ) {
+        attachSurfaceObserverIfNeeded()
         if (right - left == oldRight - oldLeft && bottom - top == oldBottom - oldTop) return
+        surfaceSyncCoordinator.requestSync()
         val request = requested ?: return
         completed = null
         // 原生布局回调只触发恢复，不能覆盖 Compose 已提交的目标视口。
@@ -306,7 +423,11 @@ private class PlayerViewportRefreshController(
     }
 
     override fun onViewAttachedToWindow(view: android.view.View) {
-        requested?.let { enqueue(it, retry = false) }
+        attachSurfaceObserverIfNeeded()
+        requested?.let {
+            completed = null
+            enqueue(it, retry = false)
+        }
     }
 }
 

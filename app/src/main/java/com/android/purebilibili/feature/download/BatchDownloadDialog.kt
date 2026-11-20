@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.android.purebilibili.core.ui.components.AppOutlinedButton
 import com.android.purebilibili.core.ui.components.AppRadioButton
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.rememberCoroutineScope
@@ -48,7 +49,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun BatchDownloadDialog(
     title: String,
@@ -61,8 +62,11 @@ internal fun BatchDownloadDialog(
     isLoadingCandidates: Boolean = false,
     failedExpansionCount: Int = 0,
     onRetryExpansion: () -> Unit = {},
+    groupPartsByVideo: Boolean = false,
+    candidateLoadNotice: String? = null,
 ) {
     var selectionOverrides by remember { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+    var collapsedVideos by remember { mutableStateOf<Set<String>>(emptySet()) }
     val workingCandidates = candidates.map { candidate ->
         candidate.copy(selected = selectionOverrides[candidate.id] ?: candidate.selected)
     }
@@ -128,7 +132,12 @@ internal fun BatchDownloadDialog(
                     Spacer(modifier = Modifier.height(8.dp))
                 }
 
-                Row(
+                candidateLoadNotice?.let { message ->
+                    AppText(message, style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                androidx.compose.foundation.layout.FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -175,59 +184,37 @@ internal fun BatchDownloadDialog(
                         .fillMaxWidth()
                         .heightIn(max = candidateListMaxHeight)
                 ) {
-                    items(workingCandidates, key = { it.id }) { candidate ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = !isLoadingCandidates) {
-                                    updateCandidates(workingCandidates.map {
-                                        if (it.id == candidate.id) it.copy(selected = !it.selected) else it
-                                    })
-                                }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            AppCheckbox(
-                                enabled = !isLoadingCandidates,
-                                checked = candidate.selected,
-                                onCheckedChange = { checked ->
-                                    updateCandidates(workingCandidates.map {
-                                        if (it.id == candidate.id) it.copy(selected = checked) else it
-                                    })
-                                }
-                            )
-                            Column(
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                AppText(
-                                    text = candidate.label,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                AppText(
-                                    text = candidate.title,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = AppContentColors.secondaryText(),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            if (candidate.id in downloadedIds) {
-                                Box(
-                                    modifier = Modifier
-                                        .background(
-                                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                            shape = AppShapes.container(ContainerLevel.Pill)
-                                        )
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
+                    val groups = if (groupPartsByVideo) workingCandidates.groupBy { it.bvid }.values
+                    else listOf(workingCandidates)
+                    for (group in groups) {
+                        val video = group.firstOrNull()
+                        if (groupPartsByVideo && group.size > 1 && video != null) {
+                            item(key = "parts:${video.bvid}") {
+                                val collapsed = video.bvid in collapsedVideos
+                                AppTextButton(onClick = {
+                                    collapsedVideos = if (collapsed) collapsedVideos - video.bvid
+                                    else collapsedVideos + video.bvid
+                                }) {
                                     AppText(
-                                        text = "已存在",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = AppContentColors.secondaryText()
+                                        "${if (collapsed) "展开" else "收起"} ${video.title} · ${group.size} P",
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
+                            }
+                        }
+                        if (!groupPartsByVideo || video == null || video.bvid !in collapsedVideos || group.size == 1) {
+                            items(group, key = { it.id }) { candidate ->
+                                CandidateRow(
+                                    candidate = candidate,
+                                    enabled = !isLoadingCandidates,
+                                    exists = candidate.id in downloadedIds,
+                                    onCheckedChange = { checked ->
+                                        updateCandidates(workingCandidates.map {
+                                            if (it.id == candidate.id) it.copy(selected = checked) else it
+                                        })
+                                    },
+                                )
                             }
                         }
                     }
@@ -295,6 +282,50 @@ internal fun BatchDownloadDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CandidateRow(
+    candidate: BatchDownloadCandidate,
+    enabled: Boolean,
+    exists: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onCheckedChange(!candidate.selected) }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppCheckbox(
+            enabled = enabled,
+            checked = candidate.selected,
+            onCheckedChange = onCheckedChange,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            AppText(candidate.label, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (candidate.label != candidate.title) {
+                AppText(
+                    candidate.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppContentColors.secondaryText(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (exists) {
+            AppText(
+                "已存在",
+                style = MaterialTheme.typography.labelSmall,
+                color = AppContentColors.secondaryText(),
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, AppShapes.container(ContainerLevel.Pill))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
         }
     }
 }

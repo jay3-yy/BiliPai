@@ -118,7 +118,7 @@ class BiliPaiPredictiveBackAnimationPolicyTest {
 
         assertFalse(
             shouldActivateVideoDetailPlaybackSession(
-                currentKey = BiliPaiNavKey.Search,
+                currentKey = BiliPaiNavKey.Search(),
                 detailKey = coveredVideo,
                 isImmediateBackPreview = true,
                 activateBackPreviewPlayback = false,
@@ -126,7 +126,7 @@ class BiliPaiPredictiveBackAnimationPolicyTest {
         )
         assertFalse(
             shouldActivateVideoDetailPlaybackSession(
-                currentKey = BiliPaiNavKey.Search,
+                currentKey = BiliPaiNavKey.Search(),
                 detailKey = coveredVideo,
                 isImmediateBackPreview = true,
                 activateBackPreviewPlayback = true,

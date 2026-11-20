@@ -49,10 +49,6 @@ fun AppLazyColumn(
                 (LocalListAuxiliaryWorkAllowed.current && !state.isScrollInProgress),
         ) {
             LazyColumn(
-                modifier = rememberAppScrollToTopFeedbackModifier(
-                    state = state, overscrollEffect = overscrollEffect,
-                    enabled = userScrollEnabled, reverseLayout = reverseLayout,
-                ),
                 state = state, contentPadding = contentPadding, reverseLayout = reverseLayout,
                 verticalArrangement = verticalArrangement, horizontalAlignment = horizontalAlignment,
                 flingBehavior = flingBehavior, userScrollEnabled = userScrollEnabled,
@@ -92,10 +88,6 @@ fun AppLazyVerticalGrid(
                 (LocalListAuxiliaryWorkAllowed.current && !state.isScrollInProgress),
         ) {
             LazyVerticalGrid(
-                modifier = rememberAppScrollToTopFeedbackModifier(
-                    state = state, overscrollEffect = overscrollEffect,
-                    enabled = userScrollEnabled, reverseLayout = reverseLayout,
-                ),
                 columns = columns, state = state, contentPadding = contentPadding,
                 reverseLayout = reverseLayout, verticalArrangement = verticalArrangement,
                 horizontalArrangement = horizontalArrangement, flingBehavior = flingBehavior,

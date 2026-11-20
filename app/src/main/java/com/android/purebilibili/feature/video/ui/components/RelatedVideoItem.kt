@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
 import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
@@ -251,9 +252,7 @@ fun RelatedVideoItem(
     val cardCoordinatesRef = remember { object { var value: LayoutCoordinates? = null } }
     val coverCoordinatesRef = remember { object { var value: LayoutCoordinates? = null } }
     val infoCoordinatesRef = remember { object { var value: LayoutCoordinates? = null } }
-    val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(
-        video.bvid, enabled = sharedTransitionEnabled,
-    )
+    val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(video.bvid)
     // 透明横卡只由封面自身裁剪圆角；整行及共享转场外框不能再切掉封面左侧。
     val cardShape = androidx.compose.ui.graphics.RectangleShape
     val cardCornerRadiusDp = 0
@@ -343,7 +342,7 @@ fun RelatedVideoItem(
             .onGloballyPositioned { coordinates ->
                 cardCoordinatesRef.value = coordinates
             }
-            .videoCardSourceAnchor(video.bvid, cardShape)
+            .videoCardSourceAnchor(video.bvid, cardShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
             .then(nativeCardSnapshot.modifier)
             .clip(cardShape)
             .clickable(onClick = triggerRelatedVideoClick)

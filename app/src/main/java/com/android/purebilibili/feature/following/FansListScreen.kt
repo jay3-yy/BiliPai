@@ -1,9 +1,14 @@
 package com.android.purebilibili.feature.following
 
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.People
@@ -72,26 +77,39 @@ private fun FansListContent(
             item { AppText(state.total?.let { "共 $it 位粉丝" } ?: "粉丝数量待加载", modifier = Modifier.padding(16.dp)) }
             state.operationMessage?.let { message -> item(key = "operation_message") { AppText(message, Modifier.padding(16.dp)) } }
             items(state.users, key = { it.mid }) { user ->
+                val userControl = rememberSystemWindowNavigationControl(
+                    BiliPaiNavKey.Space(user.mid),
+                    AppShapes.container(ContainerLevel.Card),
+                ) {
+                    onUserClick(user.mid)
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onUserClick(user.mid) }
+                        .clickable(onClick = userControl.onClick)
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    AsyncImage(
-                        model = user.face,
-                        contentDescription = "${user.uname}的头像",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(48.dp).clip(CircleShape),
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        AppText(user.uname, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        if (user.sign.isNotBlank()) {
-                            AppText(user.sign, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Row(
+                        modifier = Modifier.weight(1f).then(userControl.modifier),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        AsyncImage(
+                            model = user.face,
+                            contentDescription = "${user.uname}的头像",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(48.dp).clip(CircleShape),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            AppText(user.uname, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (user.sign.isNotBlank()) {
+                                AppText(user.sign, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
+
                     if (state.canManage && user.mid != state.identity.mid) {
                         AppWindowActionMenu(groups = listOf(listOf(
                             AppWindowAction(label = "查看粉丝", icon = Icons.Outlined.People, onClick = { onFansClick(user.mid) }),

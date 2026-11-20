@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.util.animateScrollWhileActive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
@@ -20,8 +21,8 @@ import org.junit.Test
 class HomeFeedReturnFeedbackUiTest {
     @get:Rule val rule = createComposeRule()
 
-    @Test fun regularGridRoutesAnimatedAndAtomicReturns() = checkReturns(regular = true)
-    @Test fun waterfallRoutesAnimatedAndAtomicReturns() = checkReturns(regular = false)
+    @Test fun regularGridAnimatesToTopAndSettles() = checkReturns(regular = true)
+    @Test fun waterfallAnimatesToTopAndSettles() = checkReturns(regular = false)
 
     private fun checkReturns(regular: Boolean) {
         lateinit var state: HomeFeedGridState
@@ -36,41 +37,40 @@ class HomeFeedReturnFeedbackUiTest {
             }
         }
         rule.waitForIdle()
-        for (animated in listOf(true, false)) {
-            rule.mainClock.autoAdvance = true
-            rule.runOnIdle { scope.launch { state.scrollToItem(16) } }
-            rule.waitForIdle()
-            rule.runOnIdle { assertTrue(state.firstVisibleItemIndex > 0) }
-            rule.mainClock.autoAdvance = false
-            var completed = false
-            rule.runOnIdle {
-                scope.launch {
-                    if (animated) state.animateScrollToTop(fast = true)
-                    else {
-                        state.scrollToItem(0)
-                        state.notifyAppScrollToTop()
-                    }
-                    completed = true
+        rule.runOnIdle { scope.launch { state.scrollToItem(6) } }
+        rule.waitForIdle()
+        val start = rule.runOnIdle { state.firstVisibleItemIndex }
+        assertTrue(start > 0)
+        rule.mainClock.autoAdvance = false
+
+        var completed = false
+        rule.runOnIdle {
+            scope.launch {
+                animateScrollWhileActive(isActive = { true }) {
+                    state.animateScrollToItem(0)
                 }
+                completed = true
             }
-            var frames = 0
-            while (!rule.runOnIdle { completed } && frames++ < 240) {
-                rule.mainClock.advanceTimeByFrame()
-                rule.waitForIdle()
-            }
-            rule.runOnIdle {
-                assertTrue(completed)
-                assertEquals(0, state.firstVisibleItemIndex)
-                assertEquals(0, state.firstVisibleItemScrollOffset)
-            }
-            rule.mainClock.advanceTimeBy(64)
-            rule.waitForIdle()
-            val viewportTop = top("viewport")
-            assertTrue("Return feedback must reach the rendered native grid", top("card-0") > viewportTop)
-            rule.mainClock.advanceTimeBy(1_000)
-            rule.waitForIdle()
-            assertEquals(viewportTop, top("card-0"), 0.1f)
         }
+        var scrolledThroughIntermediateItems = false
+        var frames = 0
+        while (!rule.runOnIdle { completed } && frames++ < 240) {
+            rule.mainClock.advanceTimeByFrame()
+            rule.waitForIdle()
+            scrolledThroughIntermediateItems = scrolledThroughIntermediateItems ||
+                rule.runOnIdle { state.firstVisibleItemIndex in 1 until start }
+        }
+        rule.runOnIdle {
+            assertTrue(completed)
+            assertTrue(scrolledThroughIntermediateItems)
+            assertEquals(0, state.firstVisibleItemIndex)
+            assertEquals(0, state.firstVisibleItemScrollOffset)
+        }
+        val viewportTop = top("viewport")
+        assertEquals(viewportTop, top("card-0"), 0.1f)
+        rule.mainClock.advanceTimeBy(64)
+        rule.waitForIdle()
+        assertEquals(viewportTop, top("card-0"), 0.1f)
     }
 
     private fun top(tag: String): Float =

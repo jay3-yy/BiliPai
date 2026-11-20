@@ -24,6 +24,9 @@ object AppChromeSizeTokens {
     const val MiuixNativeCompactCornerRadiusDp = 10
     const val MiuixNativeTabHeightDp = 42
     const val MiuixNativeTabCornerRadiusDp = 12
+    // BasicComponent 的原生行高和首尾操作间距。
+    const val MiuixPreferenceRowMinHeightDp = 56
+    const val MiuixPreferenceActionGapDp = 8
     // Compact liquid docks keep the home bottom-bar rest fill (48/64).
     const val BottomBarMatchedSegmentedControlHeightDp = 40
     const val BottomBarMatchedSegmentedIndicatorHeightDp = 30

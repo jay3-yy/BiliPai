@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.outlined.ClosedCaptionOff
+import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.runtime.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
@@ -25,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.constrainHeight
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.feature.video.ui.components.NativeDanmakuToggleButton
@@ -164,6 +167,7 @@ internal fun PortraitPlaybackControls(
     subtitleControlState: SubtitleControlUiState,
     onSubtitleClick: () -> Unit,
     subtitleModifier: Modifier,
+    onExitFullscreen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val glass = LocalPlayerControlGlassEnabled.current
@@ -258,22 +262,38 @@ internal fun PortraitPlaybackControls(
         content = {
             Box { playback() }
             Box { tools() }
+            AppIconButton(
+                onClick = onExitFullscreen,
+                modifier = Modifier
+                    .size(width = 40.dp, height = 48.dp)
+                    .testTag("player_fullscreen_toggle"),
+            ) {
+                AppIcon(
+                    imageVector = Icons.Outlined.FullscreenExit,
+                    contentDescription = stringResource(R.string.player_exit_fullscreen),
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
         },
     ) { measurables, constraints ->
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val playbackGroup = measurables[0].measure(loose)
+        val exitAction = measurables[2].measure(loose)
+        val toolsEnd = constraints.maxWidth - exitAction.width
+        val playbackGroup = measurables[0].measure(loose.copy(maxWidth = toolsEnd))
         val gap = 4.dp.roundToPx()
-        // 播放与时间固定，工具区使用剩余宽度并在窄窗口横向滚动，始终保持单行居中。
+        // 退出按钮固定在末端，窄窗口只滚动中间的工具区。
         val toolsGroup = measurables[1].measure(loose.copy(
-            maxWidth = (constraints.maxWidth - playbackGroup.width - gap).coerceAtLeast(0),
+            maxWidth = (toolsEnd - playbackGroup.width - gap).coerceAtLeast(0),
         ))
-        val height = constraints.constrainHeight(maxOf(playbackGroup.height, toolsGroup.height))
+        val height = constraints.constrainHeight(maxOf(playbackGroup.height, toolsGroup.height, exitAction.height))
         layout(constraints.maxWidth, height) {
             playbackGroup.placeRelative(0, (height - playbackGroup.height) / 2)
             toolsGroup.placeRelative(
-                constraints.maxWidth - toolsGroup.width,
+                toolsEnd - toolsGroup.width,
                 (height - toolsGroup.height) / 2,
             )
+            exitAction.placeRelative(toolsEnd, (height - exitAction.height) / 2)
         }
     }
 }

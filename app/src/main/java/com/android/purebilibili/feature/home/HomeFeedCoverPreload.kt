@@ -5,7 +5,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalContext
 import coil3.ImageLoader
@@ -16,7 +20,6 @@ import com.android.purebilibili.core.util.BackgroundLane
 import com.android.purebilibili.core.util.backgroundImagePreload
 import com.android.purebilibili.core.util.homeCoverDecodePolicy
 import com.android.purebilibili.data.model.response.VideoItem
-import com.android.purebilibili.feature.home.components.cards.LocalHomeCardDynamicTintEnabled
 import com.android.purebilibili.feature.home.components.cards.warmHomeCardCoverTint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
@@ -98,6 +101,7 @@ private data class HomeCoverPreloadSample(
  * @param aheadCount 兼容参数：`<= 0` 时整条泵关闭，张数不再由它决定。
  * @param isScrolling 额外的滚动来源（首页 pager 的拖动等）。**不得**进入 [LaunchedEffect] 的 key。
  * @param imageLoader 测试注入用。
+ * @param warmCoverTint 当前卡片的信息区使用封面配色时，近场预取完成后预热代表色。
  */
 @Composable
 internal fun HomeFeedCoverPreload(
@@ -113,14 +117,17 @@ internal fun HomeFeedCoverPreload(
     aheadCount: Int,
     isScrolling: State<Boolean>? = null,
     imageLoader: ImageLoader? = null,
+    warmCoverTint: Boolean = false,
 ) {
     val context = LocalContext.current
     val loader = imageLoader ?: context.imageLoader
     // ledger 放在效果之外：省流开关、旋转、数据刷新都会重建效果，但"已经预取过"是跨效果的既成事实。
     val ledger = remember { HomeCoverPrefetchLedger() }
-    // 跟随取色开关：关闭时预取不应顺手去算颜色（白烧 CPU）；它是 staticCompositionLocalOf，
-    // 因此必须进 LaunchedEffect 的 key —— 开关切换后由新效果接管，旧的 pass 立刻停下。
-    val warmTint = LocalHomeCardDynamicTintEnabled.current
+    // 配色来源切换时只取消取色子任务，图片预取继续消费当前窗口。
+    val tintScope = if (warmCoverTint && allowed && !isDataSaverActive && aheadCount > 0) {
+        key(videos, requestSpec, loader) { rememberCoroutineScope() }
+    } else null
+    val latestTintScope by rememberUpdatedState(tintScope)
 
     LaunchedEffect(
         context,
@@ -133,7 +140,6 @@ internal fun HomeFeedCoverPreload(
         isLowRamDevice,
         isMeteredNetwork,
         aheadCount,
-        warmTint,
     ) {
         // 兜底判断：调用方的 allowed 已含省流条件，这里再判一次，避免上游漏传时省流形同虚设。
         if (!allowed || isDataSaverActive || aheadCount <= 0) return@LaunchedEffect
@@ -177,8 +183,7 @@ internal fun HomeFeedCoverPreload(
                         inFlight = inFlight,
                         context = context,
                         loader = loader,
-                        warmTint = warmTint,
-                        warmScope = this@coroutineScope,
+                        tintScope = { latestTintScope },
                     )
                 }
             }
@@ -249,8 +254,7 @@ private suspend fun preloadHomeCover(
     inFlight: MutableSet<String>,
     context: Context,
     loader: ImageLoader,
-    warmTint: Boolean,
-    warmScope: CoroutineScope,
+    tintScope: () -> CoroutineScope?,
 ) {
     val video = videos[index]
     val source = resolveHomeCoverImageSource(video, false, requestSpec)
@@ -267,8 +271,8 @@ private suspend fun preloadHomeCover(
         if (result is SuccessResult) {
             ledger.recordPrefetched(source.cacheKey)
             // 取色挂在页面效果作用域，不阻塞下一张封面；过期窗口不再追加预热。
-            if (warmTint && lane == BackgroundLane.NEAR && isCurrent()) {
-                warmScope.launch {
+            if (lane == BackgroundLane.NEAR && isCurrent()) {
+                tintScope()?.launch {
                     warmHomeCardCoverTint(context, source.cacheKey, source.url)
                 }
             }

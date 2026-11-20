@@ -1263,16 +1263,18 @@ internal fun shouldCommitSmoothCoverReveal(
  * - **自动播放开启时永远 false**：进场封面只靠首帧 / smooth reveal，不得用 manual-start 逻辑
  *   把 PlayerView 藏掉；否则合集换片 halt 或重进详情时 `playWhenReady` 短暂为 false 会永久卡住封面。
  * - 关闭自动播放且用户尚未点播：整段 CoverFirst。
+ * - 当前媒体已播放：暂停时仍交给播放器显示真实画面和进度。
  * - 用户已点播：仅在尚未真正起播（!playWhenReady 且进度仍在片头）时继续垫封面。
  */
 internal fun shouldKeepCoverForManualStart(
     playWhenReady: Boolean,
     currentPositionMs: Long,
     autoPlayEnabled: Boolean = true,
-    hasManualStartPlaybackIntent: Boolean = false
+    hasManualStartPlaybackIntent: Boolean = false,
+    hasPlayedCurrentMedia: Boolean = false,
 ): Boolean {
     // 自动连播：禁止 manual-start 垫封面与 INVISIBLE surface，否则首帧事件永不来。
-    if (autoPlayEnabled) return false
+    if (autoPlayEnabled || hasPlayedCurrentMedia) return false
     if (!hasManualStartPlaybackIntent) return true
     if (playWhenReady) return false
     return currentPositionMs <= 0L

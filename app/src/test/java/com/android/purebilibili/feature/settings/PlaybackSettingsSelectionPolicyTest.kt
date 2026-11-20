@@ -45,45 +45,6 @@ class PlaybackSettingsSelectionPolicyTest {
     }
 
     @Test
-    fun `playback interaction and fullscreen blocks should be split into scene composables`() {
-        val source = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt"
-        )
-
-        assertTrue(source.contains("private fun PlaybackInteractionSettingsSection("))
-        assertTrue(source.contains("private fun PlaybackFullscreenGestureSettingsSection("))
-        val contentBlock = source
-            .substringAfter("fun PlaybackSettingsContent(")
-            .substringBefore("private fun PlaybackInteractionSettingsSection(")
-        assertTrue(source.contains("底部视频入口"))
-        assertTrue(source.contains("setAudioNowPlayingBarEnabled(context, it)"))
-        assertTrue(source.contains("点底部视频入口听视频"))
-        assertTrue(source.contains("setAudioNowPlayingBarOpensAudioMode(context, it)"))
-        assertTrue(contentBlock.contains("AppPreferenceSectionTitle(\"互动与评论\")"))
-        assertTrue(contentBlock.contains("AppPreferenceSectionTitle(\"全屏与手势\")"))
-        assertTrue(contentBlock.contains("PlaybackInteractionSettingsSection("))
-        assertTrue(contentBlock.contains("PlaybackFullscreenGestureSettingsSection("))
-    }
-
-
-    @Test
-    fun `fullscreen gesture section should own its setting state collection`() {
-        val source = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt"
-        )
-
-        val contentBlock = source
-            .substringAfter("fun PlaybackSettingsContent(")
-            .substringBefore("private fun PlaybackInteractionSettingsSection(")
-
-        assertTrue(source.contains("private fun PlaybackFullscreenGestureSettingsSection(\n    context: Context"))
-        assertTrue(contentBlock.contains("PlaybackFullscreenGestureSettingsSection(context = context)"))
-        assertFalse(contentBlock.contains("getFullscreenMode(context)"))
-        assertFalse(contentBlock.contains("getAppGestureScreenshotEnabled(context)"))
-        assertFalse(contentBlock.contains("getPortraitPlayerCollapseMode(context)"))
-    }
-
-    @Test
     fun `interaction section should own playback and comment setting state collection`() {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt"

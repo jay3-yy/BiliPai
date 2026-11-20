@@ -244,6 +244,7 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
                         onRefresh = {},
                         onOpenComposer = {},
                         onUserClick = {},
+                        onUrlClick = {},
                         subReplyState = state.value,
                         onRefreshSubReplies = {},
                         onThreadCommentLike = onLike,

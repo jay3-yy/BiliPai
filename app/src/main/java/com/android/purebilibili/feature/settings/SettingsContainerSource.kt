@@ -4,7 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -126,9 +125,6 @@ internal class SettingsContainerSources {
         )
     }
 }
-
-internal val LocalSettingsContainerSources = staticCompositionLocalOf<SettingsContainerSources?> { null }
-internal val LocalSettingsContainerOwner = staticCompositionLocalOf<BiliPaiNavKey?> { null }
 
 /** 内容卡片有完整录制像素时允许部分可见；设置行保留完整可见要求。 */
 internal fun resolveSettingsContainerCaptureBounds(

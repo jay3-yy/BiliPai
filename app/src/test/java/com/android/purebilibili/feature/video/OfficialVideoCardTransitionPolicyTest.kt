@@ -17,7 +17,6 @@ class OfficialVideoCardTransitionPolicyTest {
                     metadata = "int", oplusSdkWindow = oplusSdkWindow,
                     preparingToFinish = false, motionEnabled = true,
                     sourceAvailable = sourceAvailable,
-                    preferSystemPredictiveBack = true,
                 ))
             }
         }
@@ -31,7 +30,6 @@ class OfficialVideoCardTransitionPolicyTest {
             preparingToFinish = true,
             motionEnabled = true,
             sourceAvailable = true,
-            preferSystemPredictiveBack = true,
         ))
         assertEquals(ViewAnimationType.VIEW_ANIM_DEFAULT, plan.backAnimType)
         assertTrue(plan.useSourceBounds)
@@ -45,7 +43,7 @@ class OfficialVideoCardTransitionPolicyTest {
             val plan = requireNotNull(resolveOfficialVideoCardReturnPlan(
                 metadata = "int", oplusSdkWindow = oplusSdkWindow,
                 preparingToFinish = true, motionEnabled = true,
-                sourceAvailable = false, preferSystemPredictiveBack = false,
+                sourceAvailable = false,
             ))
             assertEquals(ViewAnimationType.VIEW_ANIM_FOLLOW_SYSTEM, plan.backAnimType)
             assertFalse(plan.useSourceBounds)
@@ -60,44 +58,26 @@ class OfficialVideoCardTransitionPolicyTest {
             preparingToFinish = true,
             motionEnabled = false,
             sourceAvailable = true,
-            preferSystemPredictiveBack = true,
         ))
         assertEquals(ViewAnimationType.VIEW_ANIM_NONE, plan.backAnimType)
         assertFalse(plan.useSourceBounds)
     }
 
     @Test
-    fun systemPredictiveReturnPrefersCardTargetAndKeepsMotionPolicy() {
-        val supported = "int|VIEW_ANIM_DEFAULT,VIEW_ANIM_FOLLOW_SYSTEM,VIEW_ANIM_NONE|Back animation type"
-        assertEquals(
-            ViewAnimationType.VIEW_ANIM_DEFAULT,
-            resolveOfficialReturnAnimType(supported, true, true, preferSystemPredictiveBack = true),
-        )
-        assertEquals(
-            ViewAnimationType.VIEW_ANIM_DEFAULT,
-            resolveOfficialReturnAnimType(supported, true, true, preferSystemPredictiveBack = false),
-        )
-        assertEquals(
-            ViewAnimationType.VIEW_ANIM_NONE,
-            resolveOfficialReturnAnimType(supported, false, true, preferSystemPredictiveBack = true),
-        )
-        assertEquals(
-            ViewAnimationType.VIEW_ANIM_DEFAULT,
-            resolveOfficialReturnAnimType(
-                "int|VIEW_ANIM_DEFAULT|Back animation type", true, true, preferSystemPredictiveBack = true,
-            ),
-        )
-        assertNull(resolveOfficialReturnAnimType(null, true, true, preferSystemPredictiveBack = true))
-        assertEquals(
-            ViewAnimationType.VIEW_ANIM_FOLLOW_SYSTEM,
-            resolveOfficialReturnAnimType(
-                "int|VIEW_ANIM_FOLLOW_SYSTEM|Back animation type", true, true, preferSystemPredictiveBack = true,
-            ),
-        )
-        assertEquals(
-            ViewAnimationType.VIEW_ANIM_FOLLOW_SYSTEM,
-            resolveOfficialReturnAnimType(supported, true, false, preferSystemPredictiveBack = true),
-        )
+    fun validCardTargetPreservesOpeningBackTypeWhenDefaultIsNotWritable() {
+        val metadata = "int|VIEW_ANIM_FOLLOW_SYSTEM|Back animation type"
+        val plan = requireNotNull(resolveOfficialVideoCardReturnPlan(
+            metadata = metadata,
+            oplusSdkWindow = false,
+            preparingToFinish = true,
+            motionEnabled = true,
+            sourceAvailable = true,
+        ))
+        assertNull(plan.backAnimType)
+        assertTrue(plan.useSourceBounds)
+        assertEquals(ViewAnimationType.VIEW_ANIM_FOLLOW_SYSTEM, resolveOfficialReturnAnimType(
+            metadata, motionEnabled = true, sourceAvailable = false,
+        ))
     }
 
     @Test

@@ -103,7 +103,7 @@ sealed class SpaceUiState {
         val hasLoadedComics: Boolean = false,
         val comicError: String? = null,
         val bangumiItems: List<FollowBangumiItem> = emptyList(),
-        val bangumiTotal: Int = 0,
+        val bangumiTotal: Int? = null,
         val bangumiPage: Int = 1,
         val isLoadingBangumi: Boolean = false,
         val hasMoreBangumi: Boolean = true,

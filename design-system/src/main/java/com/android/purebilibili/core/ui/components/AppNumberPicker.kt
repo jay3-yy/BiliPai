@@ -32,17 +32,23 @@ fun AppNumberPicker(
     range: IntRange = 0..59,
     label: String = "分钟",
 ) {
+    val changeWithFeedback = appValueChangeWithFeedback<Int>(
+        scene = com.android.purebilibili.core.ui.AppHapticScene.ADJUSTMENT,
+        onValueChange = onValueChange,
+    )
     if (LocalAppUiStyle.current == AppUiStyle.MIUIX) {
         Column(modifier = modifier) {
             AppText(label)
-            NumberPicker(
-                value = value.coerceIn(range),
-                onValueChange = onValueChange,
-                range = range,
-                visibleItemCount = 3,
-                wrapAround = false,
-                modifier = Modifier.heightIn(min = 135.dp),
-            )
+            com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.ADJUSTMENT) {
+                NumberPicker(
+                    value = value.coerceIn(range),
+                    onValueChange = onValueChange,
+                    range = range,
+                    visibleItemCount = 3,
+                    wrapAround = false,
+                    modifier = Modifier.heightIn(min = 135.dp),
+                )
+            }
         }
     } else {
         var input by remember { mutableStateOf(value.toString()) }
@@ -52,33 +58,35 @@ fun AppNumberPicker(
             lastEditedValue = value
         }
         Column(modifier = modifier) {
-            OutlinedTextField(
-                value = input,
-                onValueChange = { raw ->
-                    if (raw.all(Char::isDigit)) {
-                        val parsed = if (raw.isEmpty() && 0 in range) 0 else raw.toIntOrNull()
-                        if (parsed != null && parsed in range) {
-                            input = raw
-                            lastEditedValue = parsed
-                            onValueChange(parsed)
+            com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { raw ->
+                        if (raw.all(Char::isDigit)) {
+                            val parsed = if (raw.isEmpty() && 0 in range) 0 else raw.toIntOrNull()
+                            if (parsed != null && parsed in range) {
+                                input = raw
+                                lastEditedValue = parsed
+                                onValueChange(parsed)
+                            }
                         }
-                    }
-                },
-                label = { Text(label) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.widthIn(min = 96.dp).onFocusChanged {
-                    if (!it.isFocused) input = value.toString()
-                },
-            )
+                    },
+                    label = { Text(label) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.widthIn(min = 96.dp).onFocusChanged {
+                        if (!it.isFocused) input = value.toString()
+                    },
+                )
+            }
             Row {
                 TextButton(
                     enabled = value > range.first,
-                    onClick = { onValueChange((value - 1).coerceIn(range)) },
+                    onClick = { changeWithFeedback((value - 1).coerceIn(range)) },
                 ) { Text("−", style = MaterialTheme.typography.titleLarge) }
                 TextButton(
                     enabled = value < range.last,
-                    onClick = { onValueChange((value + 1).coerceIn(range)) },
+                    onClick = { changeWithFeedback((value + 1).coerceIn(range)) },
                 ) { Text("+", style = MaterialTheme.typography.titleLarge) }
             }
         }

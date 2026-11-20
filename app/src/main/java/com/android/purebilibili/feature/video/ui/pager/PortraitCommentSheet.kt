@@ -21,7 +21,8 @@ fun PortraitCommentSheet(
     maxTimestampMs: Long? = null,
     onRootCommentClick: () -> Unit = {},
     onReplyClick: (ReplyItem) -> Unit = {},
-    onUserClick: (Long) -> Unit
+    onUserClick: (Long) -> Unit,
+    onOpenBilibiliLink: ((String) -> Unit)? = null,
 ) {
     if (!active) return
 
@@ -48,6 +49,7 @@ fun PortraitCommentSheet(
         maxTimestampMs = maxTimestampMs,
         onRootCommentClick = onRootCommentClick,
         onReplyClick = onReplyClick,
-        onUserClick = onUserClick
+        onUserClick = onUserClick,
+        onOpenBilibiliLink = onOpenBilibiliLink,
     )
 }

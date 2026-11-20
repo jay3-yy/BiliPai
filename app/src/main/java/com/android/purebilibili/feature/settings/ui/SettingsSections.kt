@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.android.purebilibili.core.ui.rememberAppShareIcon
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.R
-import com.android.purebilibili.core.ui.rememberAppShareIcon
 import com.android.purebilibili.core.ui.animation.entrance
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.adaptiveSquircleBackground
@@ -130,7 +130,6 @@ internal data class SettingsDetailEntry(
 internal data class SettingsRootCategoryActions(
     val onAppearanceClick: () -> Unit,
     val onHomeClick: () -> Unit,
-    val onAnimationClick: () -> Unit,
     val onPlaybackClick: () -> Unit,
     val onBottomBarClick: () -> Unit,
     val onPermissionClick: () -> Unit,
@@ -241,7 +240,7 @@ internal fun SettingsRootCategoryListSection(
                 category = category,
                 first = index == 0,
                 onClick = { onCategoryClick(category) },
-            ) { open ->
+            ) { contentModifier, open ->
                 SettingsRootCategoryRow(
                     title = stringResource(category.titleResource()),
                     subtitle = stringResource(category.subtitleResource()),
@@ -251,6 +250,7 @@ internal fun SettingsRootCategoryListSection(
                     iconTint = siblingTints[index],
                     iconSizeDp = visual.iconSizeDp,
                     onClick = open,
+                    contentModifier = contentModifier,
                 )
             }
             SettingsAdaptiveDivider()
@@ -269,15 +269,14 @@ internal fun SettingsRootCategoryListSection(
     }
 }
 
-/** 捕获单行自己的绘制；材质、字体和按压反馈仍由原设置行负责。 */
+/** 登记条目到详情页的共享边界。 */
 @Composable
 private fun SettingsCategoryContainerOrigin(
     category: SettingsRootCategory,
     first: Boolean,
     onClick: () -> Unit,
-    content: @Composable (() -> Unit) -> Unit,
+    content: @Composable (Modifier, () -> Unit) -> Unit,
 ) {
-    // 首页与子入口共用图层和底色同步，深浅色切换后不能重放旧主题底板。
     SettingsNavigationContainerOrigin(
         target = resolveSettingsCategoryNavKey(category),
         onClick = onClick,
@@ -299,6 +298,7 @@ private fun SettingsRootCategoryRow(
     iconSizeDp: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    contentModifier: Modifier = Modifier,
 ) {
     val visualSpec = resolveSettingsVisualSpec()
     val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint)
@@ -307,6 +307,8 @@ private fun SettingsRootCategoryRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            // 按压反馈留在原列表，只有行内容进入共享叠层。
+            .then(contentModifier)
             .padding(
                 horizontal = 16.dp,
                 vertical = visualSpec.categoryRowVerticalPadding,
@@ -352,7 +354,7 @@ private fun SettingsRootCategoryRow(
             )
         }
         AppIcon(
-            imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+            imageVector = rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
             contentDescription = null,
             tint = AppContentColors.secondaryText().copy(alpha = 0.55f),
             modifier = Modifier.size(14.dp),
@@ -423,7 +425,8 @@ internal fun SettingsRootCategoryContent(
             SettingsRootCategory.COMMENTS_CONTENT,
             SettingsRootCategory.MESSAGE_NOTIFICATION,
             SettingsRootCategory.VIDEO_DECODER,
-            SettingsRootCategory.GLASS_ADVANCED -> Unit
+            SettingsRootCategory.GLASS_ADVANCED,
+            SettingsRootCategory.ANIMATION_HAPTICS -> Unit
             SettingsRootCategory.PLAYER_DIAGNOSTICS -> {
                 SettingsDetailGroup(title = "应用日志") {
                     DiagnosticsSection(
@@ -440,7 +443,7 @@ internal fun SettingsRootCategoryContent(
             }
             SettingsRootCategory.APPEARANCE_THEME -> {
                 SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "外观与主题") {
+                    SettingsDetailGroup(title = "显示样式") {
                         SettingsDetailEntrySection(
                             entries = listOf(
                                 SettingsDetailEntry(
@@ -516,24 +519,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "交互与动效") {
-                        SettingsDetailEntrySection(
-                            entries = listOf(
-                                SettingsDetailEntry(
-                                    target = SettingsSearchTarget.ANIMATION,
-                                    title = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
-                                    value = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).summary,
-                                    openFocus = SettingsSceneDetailFocus(
-                                        SettingsSearchTarget.ANIMATION,
-                                        SettingsSearchFocusIds.ANIMATION_START,
-                                    ),
-                                    onClick = actions.onAnimationClick,
-                                ),
-                            ),
-                        )
-                    }
-                }
             }
             SettingsRootCategory.PRIVACY_PERMISSION -> {
                 SettingsRootCategoryEntranceSection {
@@ -600,24 +585,6 @@ internal fun SettingsRootCategoryContent(
                                         SettingsSearchFocusIds.APPEARANCE_THEME,
                                     ),
                                     onClick = actions.onAppearanceClick
-                                )
-                            )
-                        )
-                    }
-                }
-                SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "动效") {
-                        SettingsDetailEntrySection(
-                            entries = listOf(
-                                SettingsDetailEntry(
-                                    target = SettingsSearchTarget.ANIMATION,
-                                    title = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
-                                    value = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).summary,
-                                    openFocus = SettingsSceneDetailFocus(
-                                        SettingsSearchTarget.ANIMATION,
-                                        SettingsSearchFocusIds.ANIMATION_START,
-                                    ),
-                                    onClick = actions.onAnimationClick
                                 )
                             )
                         )
@@ -886,7 +853,7 @@ private fun SettingsAboutCategoryContent(
     val agreement: @Composable () -> Unit = {
         var showUserAgreement by remember { mutableStateOf(false) }
         SettingClickableItem(
-            icon = rememberMaterialSymbol(R.drawable.ms_gavel_24),
+            icon = rememberSettingsVector(R.drawable.ph_scales_24, R.drawable.ms_gavel_24),
             title = "用户协议与隐私政策",
             value = "查看全文",
             onClick = { showUserAgreement = true },
@@ -980,7 +947,7 @@ fun ReleaseChannelPinnedCard(
     onDisclaimerClick: () -> Unit
 ) {
     val disclaimerTint = rememberAdaptivePreferenceIconTint(AppContentColors.accent())
-    val releaseChannelIcon = rememberAppShareIcon()
+    val releaseChannelIcon = rememberSettingsVector(R.drawable.ph_share_network_24) { rememberAppShareIcon() }
     AppCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -1356,6 +1323,9 @@ fun PrivacySection(
     val searchHintEnabled by remember(context) {
         com.android.purebilibili.core.store.SearchHintSettingsStore.isEnabled(context)
     }.collectAsStateWithLifecycle(initialValue = true)
+    val linkPreviewEnabled by remember(context) {
+        SettingsManager.getLinkPreviewEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
     val personalRecapEnabled by remember(context) {
         SettingsManager.getSubscriptionRecapEnabled(context)
     }.collectAsStateWithLifecycle(initialValue = false)
@@ -1425,6 +1395,19 @@ fun PrivacySection(
             )
         }
         SettingsAdaptiveDivider()
+        SettingsItemAnchor("privacy.link_preview_enabled") {
+            SettingSwitchItem(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.OPEN_LINKS),
+                title = settingItemTitle("privacy.link_preview_enabled"),
+                subtitle = settingSearchDescription("privacy.link_preview_enabled"),
+                checked = linkPreviewEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setLinkPreviewEnabled(context, enabled) }
+                },
+                iconTint = siblingTints[0],
+            )
+        }
+        SettingsAdaptiveDivider()
         SettingsItemAnchor("privacy.privacy_mode_enabled") {
             SettingSwitchItem(
                 icon = historyIcon,
@@ -1438,7 +1421,7 @@ fun PrivacySection(
         SettingsAdaptiveDivider()
         SettingSwitchItem(
             icon = personalRecapIcon,
-            title = "我的回顾",
+            title = stringResource(R.string.history_activity_stats),
             subtitle = "在历史页显示阅读与观看统计、趋势图和最近爱看的 UP 主",
             checked = personalRecapEnabled,
             onCheckedChange = { enabled ->
@@ -1494,7 +1477,7 @@ fun PrivacySection(
         )
         SettingsAdaptiveDivider()
         SettingClickableItem(
-            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_shield_24),
+            icon = rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_24),
             title = "评论检查记录",
             value = "查看已发评论及其显示状态",
             onClick = onCommentFraudHistoryClick,
@@ -1672,7 +1655,7 @@ private fun DiagnosticsSection(
         SettingsAdaptiveDivider()
         SettingsItemAnchor("diagnostics.enhanced_diagnostic_logging_enabled") {
             SettingSwitchItem(
-                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_pest_control_24),
+                icon = rememberSettingsVector(R.drawable.ph_bug_beetle_24, R.drawable.ms_pest_control_24),
                 title = settingItemTitle("diagnostics.enhanced_diagnostic_logging_enabled"),
                 subtitle = if (enhancedDiagnosticLoggingEnabled) {
                     "记录详细运行信息；关闭后清除，基础错误日志保留"
@@ -1689,7 +1672,7 @@ private fun DiagnosticsSection(
         }
         SettingsAdaptiveDivider()
         SettingSwitchItem(
-            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_lan_24),
+            icon = rememberSettingsVector(R.drawable.ph_tree_structure_24, R.drawable.ms_lan_24),
             title = "网络代理",
             subtitle = formatAppHttpProxySummary(proxySettings) +
                 "（作用于应用内网络请求；视频播放始终直连）",
@@ -1705,7 +1688,7 @@ private fun DiagnosticsSection(
         )
         SettingsAdaptiveDivider()
         SettingClickableItem(
-            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_hub_24),
+            icon = rememberSettingsVector(R.drawable.ph_graph_24, R.drawable.ms_hub_24),
             title = "代理地址",
             value = formatAppHttpProxyEndpoint(proxySettings),
             subtitle = "填写“主机:端口”，例如 127.0.0.1:7890",
@@ -1969,7 +1952,7 @@ fun AboutSection(
     }
     var detailDialogContent by remember { mutableStateOf<AppBuildInfoDialogContent?>(null) }
     val easterEggTint = rememberSettingsEntryTint(AppSemanticAccentRole.TERTIARY, AppContentColors.warning())
-    val updateSiblingTints = rememberSettingsSiblingIconTints(5, paletteOffset = 3)
+    val updateSiblingTints = rememberSettingsSiblingIconTints(6, paletteOffset = 3)
     val licensesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_LICENSES)
     val openSourceHomeVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_HOME)
     val checkUpdateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CHECK_UPDATE)
@@ -2180,10 +2163,12 @@ fun AboutSection(
                 )
             },
             selectedValue = appUpdateChannel,
-            icon = checkUpdateVisual.icon,
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_CHANNEL),
             iconTint = updateSiblingTints[4],
             onSelectionChange = onAppUpdateChannelChange
         )
+        SettingsAdaptiveDivider()
+        AppUpdateMirrorPreferences(iconTint = updateSiblingTints[5])
     }
     Spacer(modifier = Modifier.height(12.dp))
 
@@ -2208,6 +2193,49 @@ fun AboutSection(
                 iconTint = easterEggTint
             )
         }
+    }
+}
+
+@Composable
+private fun AppUpdateMirrorPreferences(iconTint: Color) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val preference = rememberAppUpdateMirrorPreference()
+    var editCustomMirror by rememberSaveable { mutableStateOf(false) }
+    SettingsSingleChoicePreference(
+        title = "下载镜像源",
+        options = AppUpdateMirror.entries.map { mirror ->
+            com.android.purebilibili.core.ui.components.AppSegmentOption(value = mirror, label = mirror.label)
+        },
+        selectedValue = preference.source,
+        icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR),
+        iconTint = iconTint,
+        onSelectionChange = { mirror ->
+            if (mirror == AppUpdateMirror.CUSTOM && preference.customPrefix.isEmpty()) {
+                editCustomMirror = true
+            } else {
+                scope.launch { SettingsManager.setAppUpdateMirror(context, mirror) }
+            }
+        },
+    )
+    if (preference.source == AppUpdateMirror.CUSTOM) {
+        SettingsAdaptiveDivider()
+        SettingClickableItem(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR_ADDRESS),
+            title = "自定义源地址",
+            subtitle = preference.customPrefix.takeIf(String::isNotEmpty),
+            onClick = { editCustomMirror = true },
+        )
+    }
+    if (editCustomMirror) {
+        AppUpdateCustomMirrorDialog(
+            initialPrefix = preference.customPrefix,
+            onConfirm = { prefix ->
+                editCustomMirror = false
+                scope.launch { SettingsManager.setAppUpdateCustomMirror(context, prefix, useAsDefault = true) }
+            },
+            onDismiss = { editCustomMirror = false },
+        )
     }
 }
 

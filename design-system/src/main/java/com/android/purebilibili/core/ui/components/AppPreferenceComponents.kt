@@ -31,6 +31,13 @@ enum class AppPreferenceGroupPresentation {
     FLAT,
 }
 
+enum class AppPreferenceGroupSegment {
+    WHOLE,
+    FIRST,
+    MIDDLE,
+    LAST,
+}
+
 @Composable
 fun AppPreferenceGroup(
     modifier: Modifier = Modifier,
@@ -38,6 +45,7 @@ fun AppPreferenceGroup(
     shape: Shape? = null,
     border: BorderStroke? = null,
     presentation: AppPreferenceGroupPresentation = AppPreferenceGroupPresentation.CARD,
+    segment: AppPreferenceGroupSegment = AppPreferenceGroupSegment.WHOLE,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // 分组即“同级”边界：组内入口按声明顺序分配多彩色，重新进入分组时从头取色
@@ -48,6 +56,7 @@ fun AppPreferenceGroup(
             shape = shape,
             border = border,
             presentation = presentation,
+            segment = segment,
             content = content,
         )
     }
@@ -108,6 +117,7 @@ fun AppSliderPreference(
     valueColor = valueColor,
 )
 
+/** [contentModifier] wraps the row content inside its click feedback for shared transitions. */
 @Composable
 fun AppPreference(
     icon: ImageVector? = null,
@@ -126,6 +136,7 @@ fun AppPreference(
     enableCopy: Boolean = false,
     onCopyRequest: ((text: String, label: String?) -> Unit)? = null,
     showChevron: Boolean = true,
+    contentModifier: Modifier = Modifier,
     trailingContent: @Composable (() -> Unit)? = null,
 ) = AdaptivePreferenceContent(
     icon = icon,
@@ -144,6 +155,7 @@ fun AppPreference(
     enableCopy = enableCopy,
     onCopyRequest = onCopyRequest,
     showChevron = showChevron,
+    contentModifier = contentModifier,
     trailingContent = trailingContent,
 )
 

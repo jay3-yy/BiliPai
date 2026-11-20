@@ -20,6 +20,7 @@ internal data class VideoOpenRequest(
     /** 直播、番剧等非视频窗口入口的初始路由；bvid 为空时窗口按该路由组装首栈。 */
     val initialRoute: String = "",
     val title: String = "",
+    val linkStartPositionMs: Long? = null,
 ) {
     /** 系统卡片转场只补竖屏方向，是否直达全屏跟「竖屏直达」设置走。 */
     fun forSystemCardTransition(
@@ -27,7 +28,7 @@ internal data class VideoOpenRequest(
         directPortraitEntryEnabled: Boolean = false,
     ): VideoOpenRequest {
         if (!isVerticalVideo || startAudio || initialRoute.isNotBlank() ||
-            commentRootRpid > 0L || commentTargetRpid > 0L
+            commentRootRpid > 0L || commentTargetRpid > 0L || linkStartPositionMs != null
         ) return this
         return copy(
             initialVertical = true,
@@ -43,6 +44,7 @@ internal data class VideoOpenRequest(
         resumePositionMs = resumePositionMs, commentRootRpid = commentRootRpid,
         commentTargetRpid = commentTargetRpid, initialVertical = initialVertical,
         directPortraitEntry = directPortraitEntry,
+        linkStartPositionMs = linkStartPositionMs,
     )
 
     /** 窗口首栈路由：视频入口按视频键展开，非视频入口原样携带路由。 */
@@ -57,6 +59,7 @@ internal data class VideoOpenRequest(
         putBoolean("autoPortrait", autoPortrait)
         putBoolean("fullscreen", fullscreen)
         putLong("resumePositionMs", resumePositionMs)
+        linkStartPositionMs?.let { putLong("linkStartPositionMs", it) }
         putLong("commentRootRpid", commentRootRpid)
         putLong("commentTargetRpid", commentTargetRpid)
         putBoolean("initialVertical", initialVertical)
@@ -69,6 +72,7 @@ internal data class VideoOpenRequest(
             bvid = key.bvid, cid = key.cid, coverUrl = key.coverUrl, title = key.title,
             startAudio = key.startAudio, autoPortrait = key.autoPortrait,
             fullscreen = key.fullscreen, resumePositionMs = key.resumePositionMs,
+            linkStartPositionMs = key.linkStartPositionMs,
             commentRootRpid = key.commentRootRpid, commentTargetRpid = key.commentTargetRpid,
             initialVertical = key.initialVertical, directPortraitEntry = key.directPortraitEntry,
         )
@@ -85,6 +89,7 @@ internal data class VideoOpenRequest(
                 commentRootRpid = bundle.getLong("commentRootRpid"), commentTargetRpid = bundle.getLong("commentTargetRpid"),
                 initialVertical = bundle.getBoolean("initialVertical"), directPortraitEntry = bundle.getBoolean("directPortraitEntry"),
                 initialRoute = initialRoute,
+                linkStartPositionMs = bundle.getLong("linkStartPositionMs", -1L).takeIf { it >= 0L },
             )
         }
     }

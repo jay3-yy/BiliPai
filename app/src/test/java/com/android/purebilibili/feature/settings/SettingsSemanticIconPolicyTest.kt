@@ -9,16 +9,10 @@ import kotlin.test.assertTrue
 
 class SettingsSemanticIconPolicyTest {
     @Test
-    fun materialPreset_usesMaterialSymbolResources() {
-        assertEquals(R.drawable.ms_home_24, resolveSettingsMaterialSymbolResource(SettingsIconRole.HOME_FEED))
-        assertEquals(R.drawable.ms_backup_24, resolveSettingsMaterialSymbolResource(SettingsIconRole.DATA_BACKUP))
-        assertEquals(R.drawable.ms_terminal_24, resolveSettingsMaterialSymbolResource(SettingsIconRole.DIAGNOSTICS))
-    }
-
-    @Test
-    fun everyMaterialRole_hasAUniqueResource() {
-        val duplicates = SettingsIconRole.entries.groupBy(::resolveSettingsMaterialSymbolResource).filterValues { it.size > 1 }
-        assertTrue(duplicates.isEmpty(), duplicates.toString())
+    fun materialPreset_usesSharedSettingsVectors() {
+        assertEquals(R.drawable.ph_house_24, resolveSettingsIconResource(SettingsIconRole.HOME_FEED))
+        assertEquals(R.drawable.ph_archive_24, resolveSettingsIconResource(SettingsIconRole.DATA_BACKUP))
+        assertEquals(R.drawable.ph_terminal_window_24, resolveSettingsIconResource(SettingsIconRole.DIAGNOSTICS))
     }
 
     @Test
@@ -29,22 +23,9 @@ class SettingsSemanticIconPolicyTest {
     @Test
     fun batteryStatus_usesBatteryResourceInsteadOfPhoneGlyph() {
         assertEquals(
-            R.drawable.ms_battery_full_24,
-            resolveSettingsMaterialSymbolResource(SettingsIconRole.BATTERY_STATUS),
+            R.drawable.ph_battery_full_24,
+            resolveSettingsIconResource(SettingsIconRole.BATTERY_STATUS),
         )
-    }
-
-    @Test
-    fun allSettingsSkinsUseRoleSpecificLocalVectors() {
-        val source = File(
-            "app/src/main/java/com/android/purebilibili/feature/settings/SettingsSemanticIconPolicy.kt"
-        ).readText()
-        val rememberFunction = source
-            .substringAfter("internal fun rememberSettingsSemanticIcon(")
-            .substringBefore("internal fun resolveSettingsMaterialSymbolResource(")
-
-        assertTrue(rememberFunction.contains("resolveSettingsMaterialSymbolResource(role)"))
-        assertTrue(!rememberFunction.contains("resolveMiuixSettingsSemanticIcon(role)"))
     }
 
     @Test

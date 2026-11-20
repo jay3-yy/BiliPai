@@ -28,12 +28,8 @@ import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
 internal const val SPACE_SKELETON_CARD_CONTENT_TYPE = "space_skeleton_card"
 
 /**
- * UP 空间首屏骨架的 item 提供者：资料头、主标签条、分段标题和投稿网格都与真实
- * [SpaceContent] 同构。
- *
- * 关键点：它**不再自建 `LazyVerticalStaggeredGrid`**，而是把骨架 item 铺进 [SpaceContent]
- * 的内容网格（同一个 LazyVerticalStaggeredGrid、同一个 `gridState`）。Loading → Success 因此
- * 只是 item 原地替换，网格与滚动锚点都不会重建，首屏不再跳。
+ * UP 空间首屏骨架的 item 提供者，沿用正式列表的网格排版。骨架和正式 Pager 各自管理
+ * 分页槽位，外层持有各标签的滚动状态。
  *
  * 列数、封面比例、内边距、头部形态都由调用方按真实内容同规则算好传入；色块用固定色
  * 而非呼吸脉冲（`rememberStaticSkeletonBlockColor`），避免「灰块呼吸 + 内容淡入」叠成闪烁。

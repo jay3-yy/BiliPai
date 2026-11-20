@@ -24,6 +24,8 @@ import android.os.StrictMode
 import android.os.SystemClock
 import androidx.compose.foundation.ComposeFoundationFlags
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.ComposeUiFlags
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.profileinstaller.ProfileInstaller
 import com.android.purebilibili.BuildConfig
 import coil3.ImageLoader
@@ -60,6 +62,8 @@ import com.android.purebilibili.core.util.CacheUtils
 import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.LogCollector
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.feature.agreement.UserAgreementStore
+import com.android.purebilibili.feature.agreement.shouldEnableStartupTelemetry
 import com.android.purebilibili.feature.settings.applyAppLanguage
 import com.android.purebilibili.feature.settings.AppThemeMode
 import com.android.purebilibili.feature.settings.resolveThemeModePreference
@@ -80,6 +84,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal fun shouldRefreshLauncherIconForNightModeChange(
     previousUiMode: Int,
@@ -104,6 +109,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     private var imageMemoryBudget: BackgroundImageCacheBudget? = null
     private var fairMemoryTrimReceiver: android.content.BroadcastReceiver? = null
     private var launcherIconUiModeSnapshot: Int? = null
+    private val telemetryInitialized = AtomicBoolean(false)
 
     private val backgroundImageTrimHandler by lazy { Handler(Looper.getMainLooper()) }
     private var enteredBackgroundForImageTrimAtMs = 0L
@@ -237,7 +243,11 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             }
     }
     
-    @OptIn(ExperimentalFoundationApi::class, dev.chrisbanes.haze.ExperimentalHazeApi::class)
+    @OptIn(
+        ExperimentalComposeUiApi::class,
+        ExperimentalFoundationApi::class,
+        dev.chrisbanes.haze.ExperimentalHazeApi::class,
+    )
     override fun onCreate() {
         instance = this
         // 让 core-data 等下层模块的日志也进同一份日志文件（它们不能反向依赖 Logger）。
@@ -249,6 +259,8 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             com.android.purebilibili.feature.message.notification.initializeMessageNotificationProcess(this)
             return
         }
+
+        ComposeUiFlags.isMediaQueryIntegrationEnabled = true
 
         // 在效果节点挂载前开放官方窗口背景渲染；只有显式选择窗口背景的
         // 同窗口入口参与，指定源采样和 Miuix 渐进模糊继续使用各自路径。
@@ -271,14 +283,21 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         com.android.purebilibili.core.performance.ProcessExitContextRecorder.initialize(this)
         CrashReporter.installGlobalExceptionHandler()
         // Apply stored collection choices before startup work or the first screen can report.
+        val agreementAccepted = UserAgreementStore.isAccepted(this)
         CrashReporter.prepare(
-            getSharedPreferences("crash_tracking", Context.MODE_PRIVATE)
-                .getBoolean("enabled", DEFAULT_CRASH_TRACKING_ENABLED)
+            shouldEnableStartupTelemetry(
+                agreementAccepted = agreementAccepted,
+                preferenceEnabled = getSharedPreferences("crash_tracking", Context.MODE_PRIVATE)
+                    .getBoolean("enabled", DEFAULT_CRASH_TRACKING_ENABLED),
+            )
         )
         AnalyticsHelper.prepare(
             this,
-            getSharedPreferences("analytics_tracking", Context.MODE_PRIVATE)
-                .getBoolean("enabled", DEFAULT_ANALYTICS_ENABLED)
+            shouldEnableStartupTelemetry(
+                agreementAccepted = agreementAccepted,
+                preferenceEnabled = getSharedPreferences("analytics_tracking", Context.MODE_PRIVATE)
+                    .getBoolean("enabled", DEFAULT_ANALYTICS_ENABLED),
+            )
         )
         StartupRecovery.beginLaunch(this)
         if (StartupRecovery.isRecoveryMode) {
@@ -298,22 +317,19 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
                     .getAllBlockedUps().map { users -> users.map { it.mid }.toSet() },
             )
         }
-        // 评论仓库已下沉 core-data；手机端的发评后反诈旁路在此注入，共享层不感知其实现。
+        val commentChecks = com.android.purebilibili.core.coroutines.AccountScopedRequests(AppScope.mainScope)
+        commentChecks.observe {}
         com.android.purebilibili.data.repository.CommentRepository.onCommentPosted =
-            { reply, oid, type, root, parent, message ->
-                AppScope.ioScope.launch {
-                    com.android.purebilibili.data.repository.CommentFraudRepository.saveRecord(
-                        rpid = reply.rpid,
-                        oid = oid,
-                        type = type,
-                        root = root,
-                        parent = parent,
-                        uid = reply.mid,
-                        message = message,
-                        status = com.android.purebilibili.data.model.CommentFraudStatus.UNKNOWN, // 当前状态未知（检测中）
-                        initialStatus = null, // 初始状态先置为 null (等待 5 秒后初检回填)
-                        postTime = if (reply.ctime > 0L) reply.ctime * 1000L else System.currentTimeMillis()
-                    )
+            { reply, oid, type, root, parent, message, account ->
+                AppScope.mainScope.launch {
+                    if (!commentChecks.isCurrent(account)) return@launch
+                    commentChecks.awaitCurrentIdentity()
+                    if (!commentChecks.isCurrent(account)) return@launch
+                    commentChecks.launch {
+                        com.android.purebilibili.feature.comment.visibility.checkPostedComment(
+                            this@PureApplication, account, reply, oid, type, root, parent, message,
+                        )
+                    }
                 }
             }
         // 预热启动任务(wbi_key_restore)要在主线程同步读的 SP 文件:
@@ -526,6 +542,8 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     }
 
     private fun initTelemetryNow() {
+        if (!UserAgreementStore.isAccepted(this)) return
+        if (!telemetryInitialized.compareAndSet(false, true)) return
         initCrashlytics()
         val crashDiagnosticsEnabled = getSharedPreferences("crash_tracking", Context.MODE_PRIVATE)
             .getBoolean("enabled", DEFAULT_CRASH_TRACKING_ENABLED)
@@ -535,6 +553,19 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         )
         initAnalytics()
         attachTelemetryListener()
+    }
+
+    fun onUserAgreementAccepted(
+        crashTrackingEnabled: Boolean,
+        analyticsEnabled: Boolean,
+    ) {
+        initTelemetryNow()
+        CrashReporter.setEnabled(crashTrackingEnabled)
+        com.android.purebilibili.core.performance.Android17Diagnostics.updateEnabled(
+            this,
+            crashTrackingEnabled,
+        )
+        AnalyticsHelper.setEnabled(analyticsEnabled)
     }
 
     private fun initPluginStackNow() {

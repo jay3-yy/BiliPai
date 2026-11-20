@@ -365,6 +365,9 @@ internal fun PlayerNativeDropdownItem(
     onSelectedIndexChange: (Int) -> Unit,
 ) {
     val itemModifier = modifier.semantics(mergeDescendants = true) { selected = isSelected }
+    val selectWithFeedback = com.android.purebilibili.core.ui.components.appValueChangeWithFeedback<Int>(
+        onValueChange = onSelectedIndexChange,
+    )
     if (com.android.purebilibili.core.ui.components.LocalAppGlassMenuScope.current != null) {
         com.android.purebilibili.core.ui.components.AppDropdownMenuItem(
             modifier = itemModifier,
@@ -376,7 +379,7 @@ internal fun PlayerNativeDropdownItem(
             },
             enabled = enabled,
             trailingIcon = if (isSelected) { { Icon(Icons.Default.Check, contentDescription = null) } } else null,
-            onClick = { onSelectedIndexChange(index) },
+            onClick = { selectWithFeedback(index) },
         )
         return
     }
@@ -388,7 +391,7 @@ internal fun PlayerNativeDropdownItem(
                 isSelected = isSelected,
                 index = index,
                 enabled = enabled,
-                onSelectedIndexChange = onSelectedIndexChange,
+                onSelectedIndexChange = selectWithFeedback,
             )
         }
     } else {
@@ -406,7 +409,7 @@ internal fun PlayerNativeDropdownItem(
             trailingIcon = if (isSelected) {
                 { Icon(Icons.Default.Check, contentDescription = null) }
             } else null,
-            onClick = { onSelectedIndexChange(index) },
+            onClick = { selectWithFeedback(index) },
         )
     }
 }

@@ -29,7 +29,19 @@ class VideoCompanionEntryPolicyTest {
     @Test
     fun disablingFeatureOrOpeningFromPlayerKeepsNormalNavigation() {
         assertFalse(shouldOpenVideoCompanion(video, BiliPaiNavKey.MainHost, false, window, AppFoldPosture.Flat, false))
-        assertFalse(shouldOpenVideoCompanion(video, BiliPaiNavKey.VideoDetail("BV2xx411c7mD"), true, window, AppFoldPosture.Flat, false))
+        listOf(
+            BiliPaiNavKey.VideoDetail("BV2xx411c7mD"),
+            BiliPaiNavKey.BangumiPlayer(seasonId = 1L, epId = 2L),
+            BiliPaiNavKey.Live(roomId = "100"),
+            BiliPaiNavKey.Story(seedBvid = "BV2xx411c7mD"),
+            BiliPaiNavKey.AudioMode(sourceBvid = "BV2xx411c7mD"),
+            BiliPaiNavKey.NativeMusic(title = "track", bvid = "BV2xx411c7mD", cid = 1L),
+        ).forEach { playerOrigin ->
+            assertTrue(isPlayerDestinationKey(playerOrigin), playerOrigin.toString())
+            assertFalse(shouldOpenVideoCompanion(video, playerOrigin, true, window, AppFoldPosture.Flat, false), playerOrigin.toString())
+        }
+        assertFalse(isPlayerDestinationKey(BiliPaiNavKey.MainHost))
+        assertFalse(isPlayerDestinationKey(BiliPaiNavKey.Space(42L)))
         val compact = window.copy(widthSizeClass = WindowWidthSizeClass.Compact, widthDp = 393.dp)
         assertFalse(shouldOpenVideoCompanion(video, BiliPaiNavKey.History, true, compact, AppFoldPosture.None, false))
     }

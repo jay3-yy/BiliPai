@@ -87,7 +87,7 @@ fun PortraitInteractionBar(
     onCoinClick: () -> Unit = {},
     onFavoriteClick: () -> Unit,
     onFavoriteLongClick: () -> Unit = {},
-    onCommentClick: () -> Unit,
+    onCommentClick: (() -> Unit)?,
     onShareClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -168,14 +168,15 @@ fun PortraitInteractionBar(
             }
         )
 
-        // 评论
-        InteractionButton(
-            icon = Icons.AutoMirrored.Rounded.Comment,
-            countText = if (commentCount > 0) FormatUtils.formatStat(commentCount.toLong()) else "评论",
-            isActive = false,
-            layoutPolicy = layoutPolicy,
-            onClick = onCommentClick
-        )
+        if (onCommentClick != null) {
+            InteractionButton(
+                icon = Icons.AutoMirrored.Rounded.Comment,
+                countText = if (commentCount > 0) FormatUtils.formatStat(commentCount.toLong()) else "评论",
+                isActive = false,
+                layoutPolicy = layoutPolicy,
+                onClick = onCommentClick
+            )
+        }
 
         // 收藏
         InteractionButton(

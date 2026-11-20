@@ -34,4 +34,9 @@ class HomeAvatarActionPolicyTest {
 
         assertEquals(HomeAvatarAction.OPEN_LOGIN, action)
     }
+
+    @Test
+    fun loggedOutUser_opensProfileWhenDrawerIsDisabled() {
+        assertEquals(HomeAvatarAction.OPEN_PROFILE, resolveHomeAvatarAction(false, false))
+    }
 }

@@ -25,7 +25,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
-import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 import com.android.purebilibili.feature.profile.ProfileAvatarFusionView
 
@@ -86,7 +86,8 @@ internal fun SpaceBannerFusionEffect(
     val latestParallaxLimit = rememberUpdatedState(maxParallaxTranslationPx)
     val lowBudget = isLowBlurBudgetForced()
     val latestLowBudget = rememberUpdatedState(lowBudget)
-    val enabled = LocalComponentMotionEnabled.current && !rememberSystemReduceMotion() && !lowBudget
+    // 导航宿主已监听系统动效设置。列表挂载头图时直接共享该状态。
+    val enabled = LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current && !lowBudget
     val latestEnabled = rememberUpdatedState(enabled)
     val host = remember { arrayOfNulls<ProfileAvatarFusionView>(1) }
     // Refresh the native display list even when Compose reuses its cached draw layer,

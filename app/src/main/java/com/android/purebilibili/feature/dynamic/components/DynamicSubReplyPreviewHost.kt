@@ -44,6 +44,7 @@ fun DynamicSubReplyPreviewHost(
     var previewInitialIndex by remember { mutableIntStateOf(0) }
     var previewSourceRect by remember { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
     var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
+    val previewPageMotion = remember { ImagePreviewPageMotion() }
 
     if (showImagePreview && previewImages.isNotEmpty()) {
         ImagePreviewDialog(
@@ -51,6 +52,8 @@ fun DynamicSubReplyPreviewHost(
             initialIndex = previewInitialIndex,
             sourceRect = previewSourceRect?.rect,
             sourceRects = previewSourceRect?.galleryRects.orEmpty(),
+            sourceKey = previewSourceRect?.sourceKey,
+            sourcePageMotion = previewPageMotion,
             sourceCornerRadiusDp = previewSourceRect?.cornerRadiusDp
                 ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
             textContent = previewTextContent,
@@ -70,6 +73,7 @@ fun DynamicSubReplyPreviewHost(
 
     SubReplySheet(
         state = state,
+        sheetSurfaceModifier = previewPageMotion.backdropModifier,
         emoteMap = emoteMap,
         onDismiss = onDismiss,
         onLoadMore = onLoadMore,

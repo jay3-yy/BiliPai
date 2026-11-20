@@ -85,14 +85,15 @@ fun PermissionSettingsContent(
     val context = LocalContext.current
 
     // 权限列表数据
+    val glyphs = currentSettingsIconGlyphs()
     val rememberedSecondaryTextColor = AppContentColors.secondaryText()
-    val permissions = remember(rememberedSecondaryTextColor) {
+    val permissions = remember(rememberedSecondaryTextColor, glyphs) {
         listOf(
             PermissionInfo(
                 nameResId = R.string.permission_network_access,
                 permission = Manifest.permission.INTERNET,
                 descriptionResId = R.string.permission_network_access_description,
-                iconResId = R.drawable.ms_wifi_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_wifi_high_24, R.drawable.ms_wifi_24),
                 iconTint = rememberedSecondaryTextColor,
                 isNormal = true,
                 alwaysGranted = true
@@ -101,7 +102,7 @@ fun PermissionSettingsContent(
                 nameResId = R.string.permission_network_status,
                 permission = Manifest.permission.ACCESS_NETWORK_STATE,
                 descriptionResId = R.string.permission_network_status_description,
-                iconResId = R.drawable.ms_bar_chart_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_chart_bar_24, R.drawable.ms_bar_chart_24),
                 iconTint = rememberedSecondaryTextColor,
                 isNormal = true,
                 alwaysGranted = true
@@ -114,7 +115,7 @@ fun PermissionSettingsContent(
                     "android.permission.POST_NOTIFICATIONS"
                 },
                 descriptionResId = R.string.permission_notifications_description,
-                iconResId = R.drawable.ms_notifications_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_bell_24, R.drawable.ms_notifications_24),
                 iconTint = rememberedSecondaryTextColor,
                 isNormal = false,
                 alwaysGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
@@ -123,7 +124,7 @@ fun PermissionSettingsContent(
                 nameResId = R.string.permission_background_service,
                 permission = Manifest.permission.FOREGROUND_SERVICE,
                 descriptionResId = R.string.permission_background_service_description,
-                iconResId = R.drawable.ms_play_circle_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_play_circle_24, R.drawable.ms_play_circle_24),
                 iconTint = rememberedSecondaryTextColor,
                 isNormal = true,
                 alwaysGranted = true
@@ -132,7 +133,7 @@ fun PermissionSettingsContent(
                 nameResId = R.string.permission_media_playback_service,
                 permission = "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
                 descriptionResId = R.string.permission_media_playback_service_description,
-                iconResId = R.drawable.ms_audio_file_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_file_audio_24, R.drawable.ms_audio_file_24),
                 iconTint = rememberedSecondaryTextColor,
                 isNormal = true,
                 alwaysGranted = true
@@ -143,7 +144,7 @@ fun PermissionSettingsContent(
                 permission = localNetworkRuntimePermissions().firstOrNull()
                     ?: "android.permission.ACCESS_LOCAL_NETWORK",
                 descriptionResId = if (Build.VERSION.SDK_INT >= 37) R.string.permission_local_network_cast_description else R.string.permission_local_network_dlna_description,
-                iconResId = R.drawable.ms_tv_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_television_simple_24, R.drawable.ms_tv_24),
                 iconTint = rememberedSecondaryTextColor,
                 isNormal = false,
                 alwaysGranted = localNetworkRuntimePermissions().isEmpty(),
@@ -154,7 +155,7 @@ fun PermissionSettingsContent(
                 nameResId = R.string.permission_save_images_downloads,
                 permission = "scoped_storage",
                 descriptionResId = R.string.permission_save_images_downloads_description,
-                iconResId = R.drawable.ms_folder_shared_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_folder_user_24, R.drawable.ms_folder_shared_24),
                 iconTint = rememberedSecondaryTextColor,
                 isNormal = true,
                 alwaysGranted = true
@@ -266,7 +267,7 @@ private fun PermissionItem(
     isGranted: Boolean,
     onOpenSettings: (() -> Unit)?
 ) {
-    val permissionIcon = rememberMaterialSymbol(info.iconResId)
+    val permissionIcon = rememberSettingsVector(info.iconResId)
     val name = stringResource(info.nameResId)
     val description = stringResource(info.descriptionResId)
     val grantedLabel = stringResource(R.string.permission_status_granted)
@@ -326,7 +327,7 @@ private fun PermissionItem(
         // 状态指示器
         if (isGranted) {
             AppIcon(
-                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_check_circle_outline_24),
+                rememberSettingsVector(R.drawable.ph_check_circle_24, R.drawable.ms_check_circle_outline_24),
                 contentDescription = grantedLabel,
                 tint = grantedTint,
                 modifier = Modifier.size(22.dp)
@@ -334,7 +335,7 @@ private fun PermissionItem(
         } else {
             // 未授权时显示红色的 X
             AppIcon(
-                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_cancel_24),
+                rememberSettingsVector(R.drawable.ph_x_circle_24, R.drawable.ms_cancel_24),
                 contentDescription = deniedLabel,
                 tint = deniedTint,
                 modifier = Modifier.size(22.dp)

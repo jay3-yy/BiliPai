@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.video.screen
 
 import androidx.compose.runtime.BroadcastFrameClock
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.Snapshot
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -12,6 +14,48 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class VideoDetailEntryWorkHandoffTest {
+    @Test
+    fun frameCallbacksCannotReleaseWorkBeforeThePreviousLayout() = runTest {
+        val clock = BroadcastFrameClock()
+        val bodyPlaced = mutableStateOf(false)
+        val playerPlaced = mutableStateOf(false)
+        val events = mutableListOf<String>()
+        var timestamp = 0L
+        fun advanceFrames() {
+            repeat(2) {
+                clock.sendFrame(++timestamp)
+                runCurrent()
+            }
+        }
+
+        val job = launch(clock, start = CoroutineStart.UNDISPATCHED) {
+            runVideoDetailEntryWorkHandoff(
+                onPlaybackReady = { events += "playback" },
+                onCommentsReady = { events += "comments" },
+                onRelatedReady = { events += "related" },
+                bodyPlaced = bodyPlaced,
+                playerPlaced = playerPlaced,
+            )
+        }
+
+        advanceFrames()
+        assertTrue(events.isEmpty())
+        Snapshot.withMutableSnapshot { bodyPlaced.value = true }
+        runCurrent()
+        advanceFrames()
+        assertEquals(listOf("playback"), events)
+
+        advanceFrames()
+        assertEquals(listOf("playback"), events)
+        Snapshot.withMutableSnapshot { playerPlaced.value = true }
+        runCurrent()
+        advanceFrames()
+        assertEquals(listOf("playback", "comments"), events)
+        advanceFrames()
+        assertEquals(listOf("playback", "comments", "related"), events)
+        assertTrue(job.isCompleted)
+    }
+
     @Test
     fun resumedEntryOnlyReleasesItsRemainingPhases() = runTest {
         for (start in listOf(VideoDetailEntryWorkPhase.Playback, VideoDetailEntryWorkPhase.Comments)) {

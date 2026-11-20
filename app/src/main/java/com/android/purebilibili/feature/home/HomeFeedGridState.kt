@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Density
-import com.android.purebilibili.core.ui.components.notifyAppScrollToTop
 import com.android.purebilibili.core.util.animateScrollToTop
 import com.android.purebilibili.core.ui.rememberHomeStaggeredGridState
 
@@ -44,6 +43,16 @@ internal class HomeFeedGridState(
     val lastVisibleItemIndex: Int
         get() = if (regularLayout) regular.layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: -1
             else waterfall.layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: -1
+
+    /** The leading item's actual position, including when it is visible in the padding. */
+    fun remainingScrollToTopPx(): Int? {
+        val top = if (regularLayout) {
+            regular.layoutInfo.visibleItemsInfo.firstOrNull { it.index == 0 }?.offset?.y
+        } else {
+            waterfall.layoutInfo.visibleItemsInfo.firstOrNull { it.index == 0 }?.offset?.y
+        }
+        return top?.let { (-it).coerceAtLeast(0) }
+    }
 
     fun visibleItemKeys(): Set<Any> = if (regularLayout) {
         visibleKeyCache.keys(regular.layoutInfo.visibleItemsInfo) { it.key }
@@ -109,15 +118,10 @@ internal class HomeFeedGridState(
         else waterfall.animateScrollToItem(index, scrollOffset)
     }
 
-    /** Route return actions to the same native state that owns the rendered grid and feedback. */
+    /** Route return actions to the native state that owns the rendered grid. */
     suspend fun animateScrollToTop(fast: Boolean = false) {
         if (regularLayout) regular.animateScrollToTop(fast)
         else waterfall.animateScrollToTop(fast)
-    }
-
-    fun notifyAppScrollToTop() {
-        if (regularLayout) regular.notifyAppScrollToTop()
-        else waterfall.notifyAppScrollToTop()
     }
 }
 

@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings.screen
 
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.feature.settings.SettingsFunctionIcon
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.theme.AppUiStyle
@@ -51,7 +52,7 @@ import com.android.purebilibili.core.ui.blur.recoverableBlurEnabled
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.blur.shouldAllowRenderEffectBackedHazeEffect
 import com.android.purebilibili.core.ui.blur.unifiedBlur
-import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.feature.settings.rememberSettingsVector
 import com.android.purebilibili.feature.home.components.BiliPaiImmersiveTopBar
 import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgressiveTopBlur
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
@@ -203,7 +204,7 @@ fun SettingsTabletShell(
                                 navigationIcon = {
                                     AppIconButton(onClick = onBack) {
                                         AppIcon(
-                                            imageVector = rememberAppBackIcon(),
+                                            imageVector = rememberSettingsVector(R.drawable.ph_arrow_left_24) { rememberAppBackIcon() },
                                             contentDescription = stringResource(R.string.common_back),
                                         )
                                     }

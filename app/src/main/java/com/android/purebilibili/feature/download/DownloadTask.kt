@@ -47,7 +47,8 @@ data class DownloadAssetState(
     val filePath: String? = null,
     val tempPath: String? = null,
     val errorMessage: String? = null,
-    val segmentCount: Int = 0
+    val segmentCount: Int = 0,
+    val sha256: String? = null,
 )
 
 /**
@@ -90,7 +91,17 @@ data class DownloadTask(
     val options: DownloadOptions = DownloadOptions(),
     val assets: List<DownloadAssetState> = emptyList(),
     val localDanmakuSegmentPaths: List<String> = emptyList(),
-    val localDanmakuMetadataPath: String? = null
+    val localDanmakuMetadataPath: String? = null,
+    val workToken: String? = null,
+    val pgcEpisodeId: Long = 0L,
+    val pgcSeasonId: Long = 0L,
+    val isCourse: Boolean = false,
+    val urlsRefreshedAt: Long = 0L,
+    val downloadAttempts: Int = 0,
+    val videoBackupUrls: List<String> = emptyList(),
+    val audioBackupUrls: List<String> = emptyList(),
+    val automaticRetries: Int = 0,
+    val retryNotBeforeMs: Long = 0L,
 ) {
     val id: String get() = if (isAudioOnly) "${bvid}_${cid}_audio" else "${bvid}_${cid}_$quality"
     
@@ -98,6 +109,7 @@ data class DownloadTask(
     val isDownloading: Boolean get() = status == DownloadStatus.DOWNLOADING || status == DownloadStatus.MERGING
     val canResume: Boolean get() = status == DownloadStatus.PAUSED || status == DownloadStatus.FAILED
     val isFailed: Boolean get() = status == DownloadStatus.FAILED
+    val isWaitingForRetry: Boolean get() = status == DownloadStatus.QUEUED && retryNotBeforeMs > 0L
 }
 
 /**

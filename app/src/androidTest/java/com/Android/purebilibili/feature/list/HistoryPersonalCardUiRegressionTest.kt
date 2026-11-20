@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.list
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
@@ -11,15 +12,24 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.AppThemeConfig
+import com.android.purebilibili.core.ui.ProvideAppThemeConfig
+import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.HistoryBusiness
 import com.android.purebilibili.data.model.response.HistoryData
+import com.android.purebilibili.feature.home.HomeAlignedVideoRow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -27,6 +37,77 @@ import org.junit.Test
 
 class HistoryPersonalCardUiRegressionTest {
     @get:Rule val rule = createComposeRule()
+
+    @Test
+    fun stackedCardsAlignAuthorViewedTimeAndOverflowAcrossDifferentTitleHeights() {
+        val style = mutableStateOf(AppUiStyle.MATERIAL3)
+        val glassEnabled = mutableStateOf(false)
+        val owners = listOf("UP 甲", "UP 乙")
+        val viewedAt = listOf(1_700_000_000L, 1_700_003_600L)
+        val titles = listOf("短标题", TITLE)
+        val keys = listOf("short_title_card", "long_title_card")
+        val items = titles.indices.map { index ->
+            HistoryData(title = titles[index], author_name = owners[index], view_at = viewedAt[index]).toHistoryItem()
+        }
+        rule.setContent {
+            CompositionLocalProvider(
+                LocalDensity provides Density(1f, 1.5f),
+                LocalAppUiStyle provides style.value,
+            ) {
+                ProvideAppThemeConfig(AppThemeConfig(liquidGlassEnabled = glassEnabled.value)) {
+                    MaterialTheme {
+                        HomeAlignedVideoRow(
+                            indices = items.indices,
+                            itemKeys = keys,
+                            columns = 2,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.width(320.dp),
+                        ) { index, modifier ->
+                            HistoryPersonalCard(
+                                item = items[index],
+                                selected = false,
+                                batchMode = false,
+                                transitionEnabled = false,
+                                onClick = {},
+                                onLongClick = {},
+                                onUpClick = null,
+                                onAddToWatchLater = null,
+                                onDelete = {},
+                                modifier = modifier.testTag(keys[index]),
+                                stacked = true,
+                                matchRowHeight = true,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        for (uiStyle in listOf(AppUiStyle.MATERIAL3, AppUiStyle.MIUIX)) {
+            for (glass in listOf(false, true)) {
+                rule.runOnIdle {
+                    style.value = uiStyle
+                    glassEnabled.value = glass
+                }
+                val authorBounds = owners.map { textBounds(it) }
+                val timeBounds = viewedAt.map { textBounds(FormatUtils.formatHistoryViewTime(it)) }
+                assertTrue(textBounds(TITLE).height > textBounds(titles.first()).height)
+                assertEquals(authorBounds[0].bottom, authorBounds[1].bottom, 1f)
+                assertEquals(timeBounds[0].bottom, timeBounds[1].bottom, 1f)
+                val menuInsets = keys.map { key ->
+                    val card = bounds(key)
+                    val menu = rule.onNode(
+                        hasContentDescription("历史记录操作") and hasAnyAncestor(hasTestTag(key)),
+                        useUnmergedTree = true,
+                    ).fetchSemanticsNode().boundsInRoot
+                    assertTrue(menu.center.x > card.center.x && menu.center.y > card.center.y)
+                    (card.right - menu.right) to (card.bottom - menu.bottom)
+                }
+                assertEquals(menuInsets[0].first, menuInsets[1].first, 1f)
+                assertEquals(menuInsets[0].second, menuInsets[1].second, 1f)
+            }
+        }
+    }
 
     @Test
     fun titleUsesFullInfoWidthWhileMetadataStaysOutsideMenuTouchTarget() {
@@ -94,6 +175,9 @@ class HistoryPersonalCardUiRegressionTest {
     }
 
     private fun bounds(tag: String) = rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+
+    private fun textBounds(text: String) =
+        rule.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
 
     private companion object {
         const val TITLE = "这是一个用于检查历史记录标题右侧空间的较长视频标题，不应为底部菜单留下整列空白"

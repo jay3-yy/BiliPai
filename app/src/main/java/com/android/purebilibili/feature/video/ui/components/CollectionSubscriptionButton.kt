@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.video.ui.components
 
-import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.HapticType
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -47,7 +46,7 @@ internal fun CollectionSubscriptionButton(
     key(collectionId) {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
-        val subscriptionHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
+        val subscriptionHaptic = com.android.purebilibili.core.util.rememberVisibleHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
         val cachedSubscription = remember(context, collectionId) {
             SettingsManager.getCollectionSubscriptionState(context, collectionId)
         }

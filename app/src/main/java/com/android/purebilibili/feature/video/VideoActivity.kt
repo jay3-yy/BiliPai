@@ -17,6 +17,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.metrics.performance.JankStats
 import com.android.purebilibili.core.store.SettingsManager
@@ -46,6 +48,8 @@ import com.android.purebilibili.core.util.applyPlayerRequestedOrientation
 import com.android.purebilibili.core.util.resolveAppDisplayContext
 import com.android.purebilibili.core.util.resolveSafeAndroidPipRational
 import com.android.purebilibili.core.util.shouldUsePhonePlayerOrientation
+import com.android.purebilibili.navigation.NavigationCardActivity
+import com.android.purebilibili.feature.privacy.authenticatePrivacyAccess
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.buildPipPlaybackRemoteActions
 import com.android.purebilibili.feature.video.screen.isActivityInMultiWindowOrFloatingMode
@@ -59,14 +63,16 @@ import com.android.purebilibili.navigation3.toLegacyRoute
 private const val TAG = "BiliPlayerActivity"
 
 
-open class VideoActivity : ComponentActivity() {
+open class VideoActivity : FragmentActivity() {
 
+    private val isNavigationCardWindow get() = this is NavigationCardActivity
+    private var navigationCardHasPlayback = false
+    internal val managesPlayback get() = !isNavigationCardWindow || navigationCardHasPlayback
     private var playbackWindowActive by mutableStateOf(true)
     private var finishingBvid: String? = null
     private var finishingPlayer: androidx.media3.common.Player? = null
     private var officialReturnMotionEnabled = true
     private var officialReturnBlurEnabled = true
-    private var officialRootPredictiveBack = false
     private var officialCardReturnAtRoot = false
     private var officialReturnToSource = true
 
@@ -79,14 +85,16 @@ open class VideoActivity : ComponentActivity() {
         officialReturnToSource = false
     }
 
-    internal fun updateOfficialRootPredictiveBack(atRoot: Boolean, predictiveEnabled: Boolean) {
+    internal fun updateOfficialCardReturnAtRoot(atRoot: Boolean, hasPlaybackDestination: Boolean) {
         officialCardReturnAtRoot = atRoot
-        // 仅标准系统转场尝试跨 Activity 预测返回；旧圆角协议沿用自身返回。
-        val enabled = atRoot && predictiveEnabled && Build.VERSION.SDK_INT >= 35 &&
-            intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION)?.startsWith("sdk:") == true
-        if (officialRootPredictiveBack == enabled) return
-        officialRootPredictiveBack = enabled
-        refreshOfficialReturn("root_predictive_back_changed")
+        if (isNavigationCardWindow && navigationCardHasPlayback != hasPlaybackDestination) {
+            navigationCardHasPlayback = hasPlaybackDestination
+            if (hasPlaybackDestination && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                resumedVideoWindow = java.lang.ref.WeakReference(this)
+            } else if (resumedVideoWindow?.get() === this) {
+                resumedVideoWindow = null
+            }
+        }
     }
 
     internal open fun updateOfficialReturnMotion(enabled: Boolean, realtimeBlurEnabled: Boolean) {
@@ -101,7 +109,6 @@ open class VideoActivity : ComponentActivity() {
             this, officialReturnMotionEnabled, officialReturnBlurEnabled, reason,
             returnToSource = officialReturnToSource,
             preparingToFinish = preparingToFinish,
-            preferSystemPredictiveBack = officialRootPredictiveBack,
         )
 
     internal fun onOpeningVideoChild() {
@@ -141,7 +148,7 @@ open class VideoActivity : ComponentActivity() {
         // 分屏 / 系统小窗（freeform）下窗口可以跟随横竖屏，不再强制竖屏，
         // 让视频以横屏打开；普通手机窗口维持既有竖屏策略。
         if (
-            savedInstanceState == null &&
+            !isNavigationCardWindow && savedInstanceState == null &&
             !entryIsInMultiWindowOrFloatingMode &&
             shouldUsePhonePlayerOrientation(entryDisplayContext)
         ) {
@@ -152,7 +159,7 @@ open class VideoActivity : ComponentActivity() {
         }
 
         //  2. 请求权限 (Android 13+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (!isNavigationCardWindow && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         
@@ -181,12 +188,14 @@ open class VideoActivity : ComponentActivity() {
             val currentWindowMetrics = remember(
                 configuration.screenWidthDp,
                 configuration.screenHeightDp,
+                configuration.densityDpi,
             ) {
                 calculator.computeCurrentWindowMetrics(this@VideoActivity)
             }
             val maximumWindowMetrics = remember(
                 configuration.screenWidthDp,
                 configuration.screenHeightDp,
+                configuration.densityDpi,
             ) {
                 calculator.computeMaximumWindowMetrics(this@VideoActivity)
             }
@@ -230,6 +239,8 @@ open class VideoActivity : ComponentActivity() {
                 .getHomeCardFrostedGlassEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = false)
             val replyPreviewReactions: com.android.purebilibili.feature.video.viewmodel.ReplyPreviewReactionViewModel =
+                androidx.lifecycle.viewmodel.compose.viewModel()
+            val replyTranslations: com.android.purebilibili.feature.video.viewmodel.ReplyTranslationViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel()
             val subReplyPreviewLikesEnabled by remember(this@VideoActivity) {
                 SettingsManager.getSubReplyPreviewLikesEnabled(this@VideoActivity)
@@ -342,6 +353,7 @@ open class VideoActivity : ComponentActivity() {
                     ),
                     com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides themeSettings,
                     com.android.purebilibili.feature.video.viewmodel.LocalReplyPreviewReactions provides replyPreviewReactions,
+                    com.android.purebilibili.feature.video.viewmodel.LocalReplyTranslation provides replyTranslations,
                     com.android.purebilibili.core.ui.LocalSubReplyPreviewLikesEnabled provides subReplyPreviewLikesEnabled,
                     com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled provides commentIpLocationEnabled,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
@@ -392,6 +404,7 @@ open class VideoActivity : ComponentActivity() {
                 ) {
                 com.android.purebilibili.navigation.AppNavigation(
                     initialVideoRoute = request.toInitialRoute(),
+                    onPrivacyAuthenticationRequired = this@VideoActivity::authenticatePrivacyAccess,
                     videoActivityPlaybackActive = playbackWindowActive,
                     onVideoActivityHome = {
                         if (SystemVideoCardTransition.returnsDirectlyToHome(this@VideoActivity)) {
@@ -451,6 +464,7 @@ open class VideoActivity : ComponentActivity() {
         super.onResume()
         playbackWindowActive = true
         refreshOfficialReturn("on_resume")
+        if (!managesPlayback) return
         resumedVideoWindow = java.lang.ref.WeakReference(this)
         val mini = MiniPlayerManager.getInstance(this)
         mini.clearUserLeaveHint()
@@ -480,7 +494,7 @@ open class VideoActivity : ComponentActivity() {
         if (preparingToFinish) {
             // 系统返回与页面返回共用此入口；关闭窗口前刷新同一来源实例的落点。
             refreshOfficialReturn("before_finish", preparingToFinish = true)
-            if (playbackWindowActive) {
+            if (playbackWindowActive && managesPlayback) {
                 val manager = MiniPlayerManager.getInstance(this)
                 finishingBvid = manager.currentBvid
                 finishingPlayer = manager.player
@@ -500,7 +514,7 @@ open class VideoActivity : ComponentActivity() {
                 if (intent.getBooleanExtra("video_parent_is_video", false)) {
                     manager.markLeavingByNavigation(expectedBvid = bvid, forceStop = true)
                 } else if (manager.prepareAudioNowPlayingForNavigationExit(bvid)) {
-                    manager.markLeavingByNavigation(expectedBvid = bvid)
+                    manager.markLeavingByNavigation(expectedBvid = bvid, audioNowPlayingPrepared = true)
                 } else if (manager.shouldShowInAppMiniPlayer()) {
                     manager.enterMiniMode()
                 } else {
@@ -578,6 +592,7 @@ open class VideoActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        if (!managesPlayback) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) return
         val mini = MiniPlayerManager.getInstance(this)
         mini.markUserLeaveHint()

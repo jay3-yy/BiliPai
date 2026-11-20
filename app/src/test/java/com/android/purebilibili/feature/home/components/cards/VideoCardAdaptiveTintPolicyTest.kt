@@ -146,6 +146,54 @@ class VideoCardAdaptiveTintPolicyTest {
     }
 
     @Test
+    fun grayscaleCover_keepsItsNeutralToneDespiteSmallSaturatedCaption() {
+        val gray = Palette.Swatch(0xFF7F7F7F.toInt(), 140)
+        val otherGrays = listOf(0xFF282828, 0xFF525252, 0xFFA5A5A5, 0xFFC8C8C8, 0xFFF2F2F2)
+            .map { Palette.Swatch(it.toInt(), 130) }
+        val caption = Palette.Swatch(0xFFFF0000.toInt(), 150)
+
+        assertEquals(gray, VideoCardCoverColorStore.resolveRepresentativeSwatch(listOf(caption, gray) + otherGrays))
+    }
+
+    @Test
+    fun relatedCoverShadesJointlyOutweighAnIsolatedColor() {
+        val foregroundBlue = Palette.Swatch(0xFF34679A.toInt(), 95)
+        val shadowBlue = Palette.Swatch(0xFF244E76.toInt(), 80)
+        val neutral = Palette.Swatch(0xFFE6E6E6.toInt(), 550)
+        val orange = Palette.Swatch(0xFFD05A20.toInt(), 125)
+
+        assertEquals(foregroundBlue, VideoCardCoverColorStore.resolveRepresentativeSwatch(
+            listOf(neutral, orange, shadowBlue, foregroundBlue),
+        ))
+    }
+
+    @Test
+    fun coverPlateKeepsThemeTextReadableAndPreservesCoverHue() {
+        for (dark in listOf(false, true)) {
+            val base = if (dark) Color(0xFF1C1B1F) else Color(0xFFF7F2FA)
+            val title = if (dark) Color(0xFFE6E1E5) else Color(0xFF1D1B20)
+            val subtitle = if (dark) Color(0xFFCAC4D0) else Color(0xFF49454F)
+            for (cover in listOf(Color(0xFF174282), Color(0xFFD65116), Color.Gray)) {
+                val plate = resolveCoverCardTint(cover, base, title, subtitle)
+                val source = Hct.fromInt(cover.toArgb())
+                val toned = Hct.fromInt(plate.toArgb())
+                if (source.chroma >= 12) {
+                    val hueDistance = abs(source.hue - toned.hue)
+                    assertTrue(minOf(hueDistance, 360.0 - hueDistance) < 12.0)
+                    assertTrue(toned.chroma < source.chroma)
+                } else {
+                    assertTrue(toned.chroma < 6.0)
+                }
+                for (text in listOf(title, subtitle)) {
+                    val bright = maxOf(text.luminance(), plate.luminance())
+                    val dim = minOf(text.luminance(), plate.luminance())
+                    assertTrue((bright + 0.05f) / (dim + 0.05f) >= 4.5f)
+                }
+            }
+        }
+    }
+
+    @Test
     fun resolveVideoCardAmbientDrawSpec_fallsBackWhenDisabled() {
         val defaultContainer = Color(0xFF1E1E1E)
         val defaultBorder = Color(0xFF333333)

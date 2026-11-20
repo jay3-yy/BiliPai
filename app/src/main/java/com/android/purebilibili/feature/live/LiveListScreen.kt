@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.live
 
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
 import androidx.compose.foundation.border
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -8,7 +9,7 @@ import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -17,6 +18,8 @@ import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVe
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Apps
@@ -45,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.channels.Channel
@@ -81,8 +85,9 @@ import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
-import com.android.purebilibili.core.ui.components.notifyAppScrollToTop
-import com.android.purebilibili.core.util.animateScrollToTop
+import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
+import com.android.purebilibili.core.util.animateScrollWhileActive
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.LiveAreaParent
 import com.android.purebilibili.data.repository.LiveRepository
@@ -582,6 +587,9 @@ fun LiveListScreen(
     val feedScrolling = com.android.purebilibili.feature.home.LocalHomeFeedScrollInProgress.current
     val setBottomBarVisible = com.android.purebilibili.core.ui.LocalSetBottomBarVisible.current
     val scrollWorkActive = isCurrentPage && com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    val latestReturnMotionAllowed by rememberUpdatedState(
+        scrollWorkActive && LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current,
+    )
     val bottomBarScrollConnection = com.android.purebilibili.core.ui.rememberBottomBarScrollHideConnection(
         chromeScrollOffset = chromeScrollOffset,
         autoHideEnabled = com.android.purebilibili.core.ui.shouldAutoHideBottomBarOnScroll(navigationSettings.bottomBarVisibilityMode),
@@ -611,14 +619,16 @@ fun LiveListScreen(
     suspend fun scrollLiveHomeToTop(refreshAtTop: Boolean = true) {
         val atTop = liveGridState.firstVisibleItemIndex == 0 &&
             liveGridState.firstVisibleItemScrollOffset < 50
-        if (!refreshAtTop) {
-            val wasScrolled = liveGridState.canScrollBackward
-            liveGridState.scrollToItem(0)
-            if (wasScrolled) liveGridState.notifyAppScrollToTop()
-        } else if (!atTop) {
-            liveGridState.animateScrollToTop()
-        } else {
+        if (refreshAtTop && atTop) {
             viewModel.refresh()
+        } else if (liveGridState.canScrollBackward) {
+            if (latestReturnMotionAllowed) {
+                animateScrollWhileActive(isActive = { latestReturnMotionAllowed }) {
+                    liveGridState.animateScrollToItem(0)
+                }
+            } else {
+                liveGridState.scrollToItem(0)
+            }
         }
     }
     LaunchedEffect(scrollToTopRequestId) {
@@ -631,6 +641,13 @@ fun LiveListScreen(
         }
     }
 
+    fun resetLiveCategoryScroll() {
+        val category = liveGridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == LIVE_HOME_CATEGORY_KEY }
+        if (category != null && category.offset.y <= 0) {
+            liveGridState.requestScrollToItem(category.index)
+        }
+    }
+
     // 顶部避让属于可滚动内容；视口保持全高，让卡片经过顶栏下方供模糊采样。
     val liveContent: @Composable (androidx.compose.ui.unit.Dp) -> Unit = { topInset ->
         AdaptivePullToRefreshBox(
@@ -639,6 +656,13 @@ fun LiveListScreen(
             modifier = Modifier.fillMaxSize().then(if (embeddedInHome) Modifier else Modifier.nestedScroll(bottomBarScrollConnection)),
             indicatorTopInset = topInset,
         ) {
+            LiveGridPagination(
+                grid = liveGridState,
+                enabled = scrollWorkActive && state.hasMore && !state.isLoading && !state.isLoadingMore &&
+                    state.error == null && state.loadMoreError == null,
+                nextPage = state.page + 1,
+                onLoadMore = viewModel::loadMore,
+            )
             LiveHomeContent(
                 gridState = liveGridState,
                 followRowState = followRowState,
@@ -673,7 +697,7 @@ fun LiveListScreen(
                     // 静默丢弃会让拖动松手后的选中被吞掉，指示器弹回旧分 Tab。
                     if (index != state.selectedAreaIndex) {
                         viewModel.selectHomeArea(index)
-                        coroutineScope.launch { liveGridState.scrollToItem(0) }
+                        resetLiveCategoryScroll()
                     }
                 },
                 onToggleFirstFrame = viewModel::toggleShowFirstFrame,
@@ -682,7 +706,7 @@ fun LiveListScreen(
                 onSortTagSelected = { sort ->
                     if (!state.isLoading) {
                         viewModel.selectSortTag(sort)
-                        coroutineScope.launch { liveGridState.scrollToItem(0) }
+                        resetLiveCategoryScroll()
                     }
                 },
                 onLoadMore = viewModel::loadMore,
@@ -750,6 +774,8 @@ fun LiveListScreen(
     coverToSave?.let { card -> LiveCoverSaveDialog(card) { coverToSave = null } }
 
 }
+
+private const val LIVE_HOME_CATEGORY_KEY = "live_categories"
 
 @Composable
 internal fun LiveHomeContent(
@@ -854,19 +880,21 @@ internal fun LiveHomeContent(
                     AppTextButton(onClick = onRetry) { AppText("重试") }
                 }
             }
-            item(key = "live_categories", span = { GridItemSpan(maxLineSpan) }) {
-                LiveAreaHomeChipRow(
-                    areaEntries = resolveLiveHomeAreaEntries(areaEntries, areaList),
-                    selectedAreaIndex = selectedAreaIndex,
-                    showFirstFrame = showFirstFrame,
-                    onAreaSelected = onAreaSelected,
-                    onToggleFirstFrame = onToggleFirstFrame,
-                    onAreaListClick = onAreaListClick,
-                    onMatchClick = onMatchClick,
-                )
-            }
-            if (selectedParentAreaId > 0 && sortTags.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+            item(key = LIVE_HOME_CATEGORY_KEY, span = { GridItemSpan(maxLineSpan) }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
+                ) {
+                    LiveAreaHomeChipRow(
+                        areaEntries = resolveLiveHomeAreaEntries(areaEntries, areaList),
+                        selectedAreaIndex = selectedAreaIndex,
+                        showFirstFrame = showFirstFrame,
+                        onAreaSelected = onAreaSelected,
+                        onToggleFirstFrame = onToggleFirstFrame,
+                        onAreaListClick = onAreaListClick,
+                        onMatchClick = onMatchClick,
+                    )
+                    if (selectedParentAreaId > 0 && sortTags.isNotEmpty()) {
                         LiveSortTagChipRow(
                             tags = sortTags,
                             selectedSortType = selectedSortType,
@@ -874,6 +902,7 @@ internal fun LiveHomeContent(
                         )
                     }
                 }
+            }
             when {
                 isLoading && contentItems.isEmpty() -> {
                     liveRoomSkeletonItems(skeletonLayout.cardCount, metrics, skeletonColor)
@@ -905,12 +934,13 @@ internal fun LiveHomeContent(
                 }
             }
             if (hasMore && !isLoading && error == null) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(key = LIVE_GRID_LOAD_MORE_KEY, span = { GridItemSpan(maxLineSpan) }) {
                     LiveHomeLoadMoreFooter(
                         isLoadingMore = isLoadingMore,
                         contentCount = contentItems.size,
                         hasMore = hasMore,
                         error = loadMoreError,
+                        autoLoad = false,
                         onLoadMore = onLoadMore,
                     )
                 }
@@ -929,9 +959,12 @@ private fun LiveListHeader(
     onSearchClick: () -> Unit,
     onAreaListClick: () -> Unit,
     searchBackdrop: top.yukonga.miuix.kmp.blur.Backdrop? = null,
-) {
+) = NavigationControlMotionGroup {
     val palette = rememberLiveChromePalette()
     val compactChrome = rememberAppTopChromePolicy().compactChromeSpec
+    val searchShape = AppShapes.container(ContainerLevel.Pill)
+    val search = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveSearch, searchShape, onSearchClick)
+    val areas = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveArea, CircleShape, onAreaListClick)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -961,8 +994,11 @@ private fun LiveListHeader(
                 }
             } else {
                 // 头像在玻璃与原生主题中共用账号来源和尺寸，材质由顶栏容器负责。
+                val avatar = if (user.isLogin) {
+                    rememberSystemWindowNavigationControl(BiliPaiNavKey.Profile, CircleShape, onAvatarClick)
+                } else null
                 AppSurface(
-                    onClick = onAvatarClick,
+                    onClick = avatar?.onClick ?: onAvatarClick,
                     color = Color.Transparent,
                     shape = CircleShape,
                     modifier = Modifier.size(48.dp),
@@ -971,14 +1007,14 @@ private fun LiveListHeader(
                         user = user,
                         shape = CircleShape,
                         fallbackBackgroundColor = palette.surface,
-                        modifier = Modifier.padding(4.dp),
+                        modifier = Modifier.padding(4.dp).then(avatar?.modifier ?: Modifier),
                     )
                 }
             }
             // 中间槽位弹性占位，胶囊本身限制宽度；手机、窄分屏会按可用宽度收缩。
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock(
-                    shape = AppShapes.container(ContainerLevel.Pill),
+                    shape = searchShape,
                     modifier = Modifier.widthIn(max = 220.dp).fillMaxWidth(),
                     backdrop = searchBackdrop,
                     reuseEnabled = true,
@@ -989,10 +1025,10 @@ private fun LiveListHeader(
                 ) { liquidChromeActive ->
                     // 玻璃外壳拥有材质；关闭时保留原生 Surface 的颜色、形状与点击行为。
                     AppSurface(
-                        onClick = onSearchClick,
+                        onClick = search.onClick,
                         color = if (liquidChromeActive) Color.Transparent else palette.searchField,
-                        shape = AppShapes.container(ContainerLevel.Pill),
-                        modifier = Modifier.fillMaxWidth().height(compactChrome.primaryHeightDp.dp),
+                        shape = searchShape,
+                        modifier = Modifier.fillMaxWidth().height(compactChrome.primaryHeightDp.dp).then(search.modifier),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = compactChrome.inputHorizontalPaddingDp.dp),
@@ -1019,11 +1055,12 @@ private fun LiveListHeader(
             // 关注直播入口收敛到页内「已关注」分类与关注主播行，头部不再重复；
             // 分区入口使用诚实的分区图标，不再用关注主播头像伪装。
             AppSurface(
-                onClick = onAreaListClick,
+                onClick = areas.onClick,
                 color = Color.Transparent,
                 shape = CircleShape,
                 modifier = Modifier
                     .size(AppSpacingTokens.TripleExtraLarge)
+                    .then(areas.modifier)
                     .semantics { contentDescription = "全部直播分区" }
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -1096,12 +1133,19 @@ private fun LiveFollowAvatarRow(
     val palette = rememberLiveChromePalette()
     LazyRow(state = listState) {
         items(items, key = { it.roomId }) { item ->
+            val room = rememberSystemWindowNavigationControl(
+                BiliPaiNavKey.Live(roomId = item.roomId.toString(), title = item.title, uname = item.uname),
+                AppShapes.container(ContainerLevel.Card),
+            ) {
+                onLiveClick(item.roomId, item.title, item.uname)
+            }
             Column(
                 modifier = Modifier
                     .width(metrics.followItemExtentDp.dp)
+                    .then(room.modifier)
                     .onSecondaryClick { if (item.uid > 0) onUserClick(item.uid) }
-                    .combinedClickable(
-                        onClick = { onLiveClick(item.roomId, item.title, item.uname) },
+                    .appCombinedClickable(
+                        onClick = room.onClick,
                         onLongClick = { if (item.uid > 0) onUserClick(item.uid) },
                     ),
                 horizontalAlignment = Alignment.CenterHorizontally

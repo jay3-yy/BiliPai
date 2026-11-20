@@ -1,6 +1,7 @@
 // 文件路径: feature/home/components/cards/StoryVideoCard.kt
 package com.android.purebilibili.feature.home.components.cards
 
+import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
 import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
@@ -73,6 +74,7 @@ import androidx.compose.animation.core.tween
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionEnabled
+import com.android.purebilibili.core.ui.transition.videoCardSourceCaptureEnabled
 import com.android.purebilibili.core.ui.videoCardTitleMaxLines
 import com.android.purebilibili.core.ui.videoCardTitleOverflow
 import com.android.purebilibili.core.ui.AppShapes
@@ -211,7 +213,7 @@ internal fun StoryVideoCard(
     val sharedSourceInstanceId = rememberSaveable(video.bvid) {
         CardPositionManager.newVideoCardSourceInstanceId()
     }
-    val sourceEnabled = transitionEnabled && LocalSharedTransitionEnabled.current
+    val sourceEnabled = transitionEnabled && videoCardSourceCaptureEnabled()
     val sourceInteraction = remember(video.bvid, video.cid, effectiveSharedElementSourceRoute) {
         VideoCardSourceInteraction()
     }
@@ -373,7 +375,7 @@ internal fun StoryVideoCard(
             .then(cardVisibility.observerModifier)
             .fillMaxWidth()
             .adaptiveCardHoverEffect(shape = cardShellShape)
-            .videoCardSourceAnchor(video.bvid, cardShellShape)
+            .videoCardSourceAnchor(video.bvid, cardShellShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
             .padding(horizontal = cardHorizontalPadding, vertical = AppSpacingTokens.Small)
             .animateEnter(
                 index = index,
@@ -534,27 +536,28 @@ internal fun StoryVideoCard(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            if (scrollLitePolicy.showSecondaryStatsRow && video.stat.view > 0) {
+            val showPlaybackStats = scrollLitePolicy.showSecondaryStatsRow && video.stat.view > 0
+            val showPublishTimeWithStats = scrollLitePolicy.showSecondaryStatsRow && publishTimeRowText.isNotBlank()
+            if (showPlaybackStats || showPublishTimeWithStats) {
                 FlowRow(
                     itemVerticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(HORIZONTAL_VIDEO_STAT_ROW_SPACING_DP.dp),
                     verticalArrangement = Arrangement.spacedBy(HORIZONTAL_VIDEO_STAT_WRAP_SPACING_DP.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    HorizontalVideoStatRow(
-                        playText = viewText,
-                        danmakuText = if (video.stat.danmaku > 0) {
-                            danmakuText
-                        } else {
-                            ""
-                        },
-                    )
-                    if (publishTimeRowText.isNotBlank()) {
+                    if (showPlaybackStats) {
+                        HorizontalVideoStatRow(
+                            playText = viewText,
+                            danmakuText = danmakuText.takeIf { video.stat.danmaku > 0 }.orEmpty(),
+                        )
+                    }
+                    if (showPublishTimeWithStats) {
                         AppText(
                             text = publishTimeRowText,
                             color = AppContentColors.secondaryText(),
                             style = contentTypography.statistic,
-                            overflow = TextOverflow.Visible,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
