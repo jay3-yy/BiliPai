@@ -1869,7 +1869,17 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 @Suppress("DEPRECATION")
                 intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT) as? KeyEvent
             }
-            Logger.d(TAG, " onMediaButtonEvent: action=${intent.action} keyCode=${keyEvent?.keyCode} keyAction=${keyEvent?.action}")
+            Logger.d(
+                TAG,
+                " onMediaButtonEvent: controller=${controllerInfo.packageName}, " +
+                    "action=${intent.action}, keyCode=${keyEvent?.keyCode}, " +
+                    "keyAction=${keyEvent?.action}, repeat=${keyEvent?.repeatCount}, " +
+                    "deviceId=${keyEvent?.deviceId}, " +
+                    "source=0x${keyEvent?.let { Integer.toHexString(it.source) } ?: "-"}, " +
+                    "flags=0x${keyEvent?.let { Integer.toHexString(it.flags) } ?: "-"}, " +
+                    "scanCode=${keyEvent?.scanCode}, " +
+                    "metaState=0x${keyEvent?.let { Integer.toHexString(it.metaState) } ?: "-"}"
+            )
             val controlType = keyEvent?.let { resolveMediaButtonControlType(it.keyCode, it.action) }
             if (controlType != null) {
                 Logger.d(TAG, "🎮 媒体按键控制: $controlType")
@@ -1886,7 +1896,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             customCommand: androidx.media3.session.SessionCommand,
             args: android.os.Bundle
         ): com.google.common.util.concurrent.ListenableFuture<androidx.media3.session.SessionResult> {
-            Logger.d(TAG, " onCustomCommand: ${customCommand.customAction}")
+            Logger.d(TAG, " onCustomCommand: ${customCommand.customAction}, controller=${controller.packageName}")
             when (customCommand.customAction) {
                 SESSION_COMMAND_SKIP_TO_PREVIOUS -> performMediaControl(MediaControlType.PREVIOUS)
                 SESSION_COMMAND_SKIP_TO_NEXT -> performMediaControl(MediaControlType.NEXT)
