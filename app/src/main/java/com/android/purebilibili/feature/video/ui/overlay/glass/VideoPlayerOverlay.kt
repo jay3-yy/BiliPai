@@ -1776,6 +1776,19 @@ private fun VideoPlayerOverlayContent(
             configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) &&
             com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
         val hideCenterPlayback = if (centerPlaybackSupported) rememberHideCenterPlayback() else true
+        val loadingIndicatorsActive = visualWorkActive && progressInViewport
+        val showRebufferingIndicator = loadingIndicatorsActive && shouldShowBufferingIndicator(
+            isBuffering = isBuffering,
+            isQualitySwitching = isQualitySwitching,
+            playWhenReady = player.playWhenReady,
+            hasRenderedFirstFrame = hasRenderedFirstFrame,
+            suppressTransientOverlays = suppressTransientOverlaysForTransition,
+        ) && centerLoadingUiState == null && !state.startupLoadingActive && !player.isPlaying
+        val showCenterLoadingBadge = loadingIndicatorsActive && !pluginPlaybackStatus.first &&
+            !suppressTransientOverlaysForTransition &&
+            !state.startupLoadingActive && !player.isPlaying && hasRenderedFirstFrame &&
+            (showRebufferingIndicator || centerLoadingUiState != null)
+
         val showCenterPlaybackControl = centerPlaybackSupported && !hideCenterPlayback && showPlayerChrome &&
             (pluginPlaybackStatus.first || player.playbackState == Player.STATE_READY ||
                 player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_ENDED) &&
@@ -1783,6 +1796,7 @@ private fun VideoPlayerOverlayContent(
         if (centerPlaybackSupported) {
             com.android.purebilibili.feature.video.ui.overlay.CenterPlaybackControl(
                 visible = showCenterPlaybackControl,
+                loading = showCenterLoadingBadge,
                 isPlaying = effectiveIsPlaying,
                 onPlayPause = { togglePlayPause() },
                 diameter = if (isFullscreen) 72.dp else 56.dp,
@@ -2019,24 +2033,19 @@ private fun VideoPlayerOverlayContent(
 
         // --- 5.4  缓冲加载指示器 ---
         AnimatedVisibility(
-            visible = shouldShowBufferingIndicator(
-                isBuffering = isBuffering,
-                isQualitySwitching = isQualitySwitching,
-                playWhenReady = player.playWhenReady,
-                hasRenderedFirstFrame = hasRenderedFirstFrame,
-                suppressTransientOverlays = suppressTransientOverlaysForTransition,
-            ) && centerLoadingUiState == null && !showCenterPlaybackControl &&
-                !state.startupLoadingActive && !player.isPlaying,
+            visible = showRebufferingIndicator && !showCenterPlaybackControl,
             modifier = Modifier.align(Alignment.Center),
             // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
             // 看起来像又一次进场闪烁。
             enter = EnterTransition.None,
             exit = fadeOut(OverlayControlFadeSpec)
         ) {
-            BiliTvBufferingIndicator(
-                tint = centerLoadingVisualState.indicatorColor,
-                bufferedProvider = { progressProvider().buffered },
-            )
+            if (loadingIndicatorsActive && !showCenterPlaybackControl) {
+                BiliTvBufferingIndicator(
+                    tint = centerLoadingVisualState.indicatorColor,
+                    bufferedProvider = { progressProvider().buffered },
+                )
+            }
         }
 
         AnimatedVisibility(
@@ -2045,6 +2054,7 @@ private fun VideoPlayerOverlayContent(
             enter = fadeIn(OverlayControlFadeSpec),
             exit = fadeOut(OverlayControlFadeSpec)
         ) {
+            if (!loadingIndicatorsActive || showCenterPlaybackControl) return@AnimatedVisibility
             val loadingState = centerLoadingUiState ?: return@AnimatedVisibility
             Box(modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)) {
                 Column(
