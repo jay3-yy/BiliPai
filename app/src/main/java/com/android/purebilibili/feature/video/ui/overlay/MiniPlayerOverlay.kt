@@ -991,7 +991,10 @@ private fun MiniPlayerSessionOverlay(
                 }
 
                 player?.let { currentPlayer ->
-                    PlayerBufferingIndicator(player = currentPlayer, modifier = Modifier.align(Alignment.Center))
+                    // 退出小窗/落地过渡期间不再叠一层缓冲动画，避免详情页起播前先闪一个小圈。
+                    if (miniPlayerManager.isMiniMode && landingCover == null) {
+                        PlayerBufferingIndicator(player = currentPlayer, modifier = Modifier.align(Alignment.Center))
+                    }
                 }
 
                 // 控件直接叠在视频上；玻璃与原生材质共用媒体白色图标，不增加标题栏。
