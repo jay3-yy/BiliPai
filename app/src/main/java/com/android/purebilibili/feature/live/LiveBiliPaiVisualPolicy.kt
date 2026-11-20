@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.core.ui.AppTopTabPresentation
 import com.android.purebilibili.core.ui.CompactCapsuleChromeSpec
 
+internal const val LIVE_ROOM_COVER_ASPECT_RATIO = 16f / 10f
+
 internal data class LiveBiliPaiHomeMetrics(
     val safeSpaceDp: Int,
     val cardSpaceDp: Int,
@@ -112,7 +114,7 @@ internal fun resolveLiveVisualSpec(
             safeSpaceDp = safeSpaceDp,
             cardSpaceDp = cardSpaceDp,
             cardRadiusDp = 12,
-            coverAspectRatio = 16f / 10f,
+            coverAspectRatio = LIVE_ROOM_COVER_ASPECT_RATIO,
             followAvatarSizeDp = 45,
             followItemExtentDp = 70,
         ),

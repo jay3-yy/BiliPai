@@ -124,7 +124,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardInteractio
 import com.android.purebilibili.feature.dynamic.components.DynamicCardNavigationActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardPresentation
 import com.android.purebilibili.feature.dynamic.components.DynamicSidebar
-import com.android.purebilibili.feature.dynamic.components.DynamicUserLiveBadge
+import com.android.purebilibili.feature.dynamic.components.DynamicUserAvatarWithLiveBadge
 import com.android.purebilibili.feature.dynamic.components.DynamicTopBarWithTabs
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
@@ -1971,7 +1971,7 @@ private fun HorizontalUserList(
                             .padding(AppSpacingTokens.ExtraSmall)
                             .alpha(if (user.isHidden) 0.5f else 1f)
                     ) {
-                        Box {
+                        DynamicUserAvatarWithLiveBadge(isLive = user.isLive) {
                             val hasUpdate = user.uid in uplistUpdateMids
                             Box(
                                 modifier = Modifier
@@ -1984,15 +1984,16 @@ private fun HorizontalUserList(
                                                 AppContentColors.accent(),
                                                 CircleShape
                                             )
-                                            // 有新动态的 UP：主题色圆环提示，比单独的小红点更显眼
-                                            hasUpdate -> Modifier.border(
+                                            // 直播和未读状态共用主题色圆环。
+                                            hasUpdate || user.isLive -> Modifier.border(
                                                 2.dp,
                                                 AppContentColors.accent(),
                                                 CircleShape
                                             )
                                             else -> Modifier
                                         }
-                                    ),
+                                    )
+                                    .padding(if (user.isLive) 3.dp else 0.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isDynamicUpPanelAllShortcut(user.uid)) {
@@ -2023,9 +2024,6 @@ private fun HorizontalUserList(
                                         .background(AppContentColors.accent())
                                 )
                             }
-                        }
-                        if (shouldShowDynamicUserLiveBadge(user.isLive)) {
-                            DynamicUserLiveBadge(modifier = Modifier.padding(top = AppSpacingTokens.Micro))
                         }
                         Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
                         AppText(

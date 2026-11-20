@@ -2473,48 +2473,38 @@ fun CommonListScreen(
     }
 
     if (showHistoryBatchDeleteConfirm && historyViewModel != null) {
-        AppAlertDialog(
-            onDismissRequest = { showHistoryBatchDeleteConfirm = false },
-            title = { AppText("批量删除历史") },
-            text = { AppText("确认删除已选择的 ${selectedHistoryKeys.size} 条历史记录吗？") },
-            confirmButton = {
-                AppTextButton(
-                    onClick = {
-                        val targetKeys = selectedHistoryKeys
-                        val pageIndex = historyPagerState.currentPage
-                        val pageItems = filterHistoryItemsByContent(
-                            items = state.items,
-                            filter = historyFilters.getOrElse(pageIndex) { HistoryContentFilter.ALL },
-                            resolveHistoryItem = { video ->
-                                historyViewModel.getHistoryItem(historyViewModel.resolveHistoryLookupKey(video))
-                            },
-                        )
-                        val filteredItems = filterCommonListVideosByQuery(pageItems, searchQuery)
-                        val historyRenderKeys = resolveCommonListRenderKeys(filteredItems.map(historyViewModel::resolveHistoryRenderKey))
-                        val visibleItemKeys = historyPagerGridStates[pageIndex]?.layoutInfo
-                            ?.visibleItemsInfo.orEmpty().map { it.key.toString() }.toSet()
-                        val visibleIndices = if (personalListColumns > 1 && !homeSettings.showFullVideoCardContent) {
-                            resolveCommonListAlignedRows(filteredItems, historyRenderKeys, personalListColumns)
-                                .filter { it.key in visibleItemKeys }
-                                .flatMap { it.indices.toList() }
-                        } else {
-                            historyRenderKeys.indices.filter { historyRenderKeys[it] in visibleItemKeys }
-                        }
-                        val visibleKeys = visibleIndices.map { historyViewModel.resolveHistoryRenderKey(filteredItems[it]) }.toSet()
-                        historyViewModel.startVideosDissolve(targetKeys, visibleKeys)
-                        selectedHistoryKeys = emptySet()
-                        isHistoryBatchMode = false
-                        showHistoryBatchDeleteConfirm = false
-                    }
-                ) {
-                    AppText("删除")
+        CommonListConfirmationDialog(
+            title = "批量删除历史",
+            message = "确认删除已选择的 ${selectedHistoryKeys.size} 条历史记录吗？",
+            confirmLabel = "删除",
+            onDismiss = { showHistoryBatchDeleteConfirm = false },
+            onConfirm = {
+                val targetKeys = selectedHistoryKeys
+                val pageIndex = historyPagerState.currentPage
+                val pageItems = filterHistoryItemsByContent(
+                    items = state.items,
+                    filter = historyFilters.getOrElse(pageIndex) { HistoryContentFilter.ALL },
+                    resolveHistoryItem = { video ->
+                        historyViewModel.getHistoryItem(historyViewModel.resolveHistoryLookupKey(video))
+                    },
+                )
+                val filteredItems = filterCommonListVideosByQuery(pageItems, searchQuery)
+                val historyRenderKeys = resolveCommonListRenderKeys(filteredItems.map(historyViewModel::resolveHistoryRenderKey))
+                val visibleItemKeys = historyPagerGridStates[pageIndex]?.layoutInfo
+                    ?.visibleItemsInfo.orEmpty().map { it.key.toString() }.toSet()
+                val visibleIndices = if (personalListColumns > 1 && !homeSettings.showFullVideoCardContent) {
+                    resolveCommonListAlignedRows(filteredItems, historyRenderKeys, personalListColumns)
+                        .filter { it.key in visibleItemKeys }
+                        .flatMap { it.indices.toList() }
+                } else {
+                    historyRenderKeys.indices.filter { historyRenderKeys[it] in visibleItemKeys }
                 }
+                val visibleKeys = visibleIndices.map { historyViewModel.resolveHistoryRenderKey(filteredItems[it]) }.toSet()
+                historyViewModel.startVideosDissolve(targetKeys, visibleKeys)
+                selectedHistoryKeys = emptySet()
+                isHistoryBatchMode = false
+                showHistoryBatchDeleteConfirm = false
             },
-            dismissButton = {
-                AppTextButton(onClick = { showHistoryBatchDeleteConfirm = false }) {
-                    AppText("取消")
-                }
-            }
         )
     }
 
@@ -2555,49 +2545,35 @@ fun CommonListScreen(
     }
 
     if (pendingLikedRemove && likedVideosViewModel != null) {
-        AppAlertDialog(
-            onDismissRequest = { pendingLikedRemove = false },
-            title = { AppText("取消点赞") },
-            text = { AppText("确认取消选中的 ${selectedLikedKeys.size} 个视频的点赞吗？") },
-            confirmButton = {
-                AppTextButton(enabled = !isManagingLikes, onClick = {
-                    val aids = state.items.filter { favoriteDetailRenderKey(it) in selectedLikedKeys && it.id > 0 }.map { it.id }
-                    pendingLikedRemove = false
-                    likedVideosViewModel.manageLikedVideos(aids, removeLike = true) {
-                        isLikedBatchMode = false
-                        selectedLikedKeys = emptySet()
-                    }
-                }) { AppText("取消点赞") }
+        CommonListConfirmationDialog(
+            title = "取消点赞",
+            message = "确认取消选中的 ${selectedLikedKeys.size} 个视频的点赞吗？",
+            confirmLabel = "取消点赞",
+            dismissLabel = "返回",
+            confirmEnabled = !isManagingLikes,
+            onDismiss = { pendingLikedRemove = false },
+            onConfirm = {
+                val aids = state.items.filter { favoriteDetailRenderKey(it) in selectedLikedKeys && it.id > 0 }.map { it.id }
+                pendingLikedRemove = false
+                likedVideosViewModel.manageLikedVideos(aids, removeLike = true) {
+                    isLikedBatchMode = false
+                    selectedLikedKeys = emptySet()
+                }
             },
-            dismissButton = { AppTextButton(onClick = { pendingLikedRemove = false }) { AppText("返回") } },
         )
     }
 
     if (showFavoriteCleanInvalidConfirm && favoriteViewModel != null && isFavoriteFolderSelectionMode) {
-        AppAlertDialog(
-            onDismissRequest = { showFavoriteCleanInvalidConfirm = false },
-            title = { AppText("清理失效内容") },
-            text = {
-                AppText(
-                    "确认清理已选择的 ${selectedFavoriteFolderIds.size} 个收藏夹里的失效内容吗？本操作会修改远端收藏夹。"
-                )
+        CommonListConfirmationDialog(
+            title = "清理失效内容",
+            message = "确认清理已选择的 ${selectedFavoriteFolderIds.size} 个收藏夹里的失效内容吗？本操作会修改远端收藏夹。",
+            confirmLabel = "清理",
+            confirmEnabled = favoriteFolderPermissions.canClean && !isFavoriteManaging,
+            onDismiss = { showFavoriteCleanInvalidConfirm = false },
+            onConfirm = {
+                favoriteViewModel.cleanInvalidFavoriteFolders(selectedFavoriteFolderIds, exitFavoriteFolderSelection)
+                showFavoriteCleanInvalidConfirm = false
             },
-            confirmButton = {
-                AppTextButton(
-                    enabled = favoriteFolderPermissions.canClean && !isFavoriteManaging,
-                    onClick = {
-                        favoriteViewModel.cleanInvalidFavoriteFolders(selectedFavoriteFolderIds, exitFavoriteFolderSelection)
-                        showFavoriteCleanInvalidConfirm = false
-                    }
-                ) {
-                    AppText("清理")
-                }
-            },
-            dismissButton = {
-                AppTextButton(onClick = { showFavoriteCleanInvalidConfirm = false }) {
-                    AppText("取消")
-                }
-            }
         )
     }
 
@@ -2693,77 +2669,45 @@ fun CommonListScreen(
     }
 
     if (showFavoriteFolderDeleteConfirm && favoriteViewModel != null && isFavoriteFolderSelectionMode) {
-        AppAlertDialog(
-            onDismissRequest = { showFavoriteFolderDeleteConfirm = false },
-            title = { AppText("删除收藏夹") },
-            text = { AppText("确认删除已选择的 ${selectedFavoriteFolderIds.size} 个收藏夹吗？收藏内容不会从站点删除。") },
-            confirmButton = {
-                AppTextButton(
-                    enabled = favoriteFolderPermissions.canDelete && !isFavoriteManaging,
-                    onClick = {
-                        favoriteViewModel.deleteFavoriteFolders(selectedFavoriteFolderIds, exitFavoriteFolderSelection)
-                        showFavoriteFolderDeleteConfirm = false
-                    },
-                ) {
-                    AppText("删除")
-                }
-            },
-            dismissButton = {
-                AppTextButton(onClick = { showFavoriteFolderDeleteConfirm = false }) {
-                    AppText("取消")
-                }
+        CommonListConfirmationDialog(
+            title = "删除收藏夹",
+            message = "确认删除已选择的 ${selectedFavoriteFolderIds.size} 个收藏夹吗？收藏内容不会从站点删除。",
+            confirmLabel = "删除",
+            confirmEnabled = favoriteFolderPermissions.canDelete && !isFavoriteManaging,
+            onDismiss = { showFavoriteFolderDeleteConfirm = false },
+            onConfirm = {
+                favoriteViewModel.deleteFavoriteFolders(selectedFavoriteFolderIds, exitFavoriteFolderSelection)
+                showFavoriteFolderDeleteConfirm = false
             },
         )
     }
 
     if (showFavoriteDynamicShareConfirm && seasonSeriesDetailViewModel != null && seasonSeriesDetailViewModel.canShareFavoriteFolder) {
-        AppAlertDialog(
-            onDismissRequest = { showFavoriteDynamicShareConfirm = false },
-            title = { AppText("分享至动态") },
-            text = {
-                AppText("将“${state.title}”作为收藏夹卡片发布到动态？")
-            },
-            confirmButton = {
-                AppTextButton(
-                    enabled = !isFavoriteDetailBusy && seasonSeriesDetailViewModel.canShareFavoriteFolder,
-                    onClick = {
-                        seasonSeriesDetailViewModel.shareFavoriteFolderToDynamic()
-                        showFavoriteDynamicShareConfirm = false
-                    }
-                ) {
-                    AppText("发布")
-                }
-            },
-            dismissButton = {
-                AppTextButton(onClick = { showFavoriteDynamicShareConfirm = false }) {
-                    AppText("取消")
-                }
+        CommonListConfirmationDialog(
+            title = "分享至动态",
+            message = "将“${state.title}”作为收藏夹卡片发布到动态？",
+            confirmLabel = "发布",
+            confirmEnabled = !isFavoriteDetailBusy && seasonSeriesDetailViewModel.canShareFavoriteFolder,
+            onDismiss = { showFavoriteDynamicShareConfirm = false },
+            onConfirm = {
+                seasonSeriesDetailViewModel.shareFavoriteFolderToDynamic()
+                showFavoriteDynamicShareConfirm = false
             },
         )
     }
 
     if (showFavoriteBatchDeleteConfirm && favoriteViewModel != null) {
-        AppAlertDialog(
-            onDismissRequest = { showFavoriteBatchDeleteConfirm = false },
-            title = { AppText("批量删除收藏内容") },
-            text = { AppText("确认移除已选择的 ${selectedFavoriteResourceIds.size} 个内容吗？") },
-            confirmButton = {
-                AppTextButton(
-                    enabled = selectedFavoriteResourceIds.isNotEmpty(),
-                    onClick = {
-                        favoriteViewModel.deleteSelectedFavoriteResources(selectedFavoriteResourceIds)
-                        selectedFavoriteResourceIds = emptySet()
-                        isFavoriteBatchMode = false
-                        showFavoriteBatchDeleteConfirm = false
-                    },
-                ) {
-                    AppText("删除")
-                }
-            },
-            dismissButton = {
-                AppTextButton(onClick = { showFavoriteBatchDeleteConfirm = false }) {
-                    AppText("取消")
-                }
+        CommonListConfirmationDialog(
+            title = "批量删除收藏内容",
+            message = "确认移除已选择的 ${selectedFavoriteResourceIds.size} 个内容吗？",
+            confirmLabel = "删除",
+            confirmEnabled = selectedFavoriteResourceIds.isNotEmpty(),
+            onDismiss = { showFavoriteBatchDeleteConfirm = false },
+            onConfirm = {
+                favoriteViewModel.deleteSelectedFavoriteResources(selectedFavoriteResourceIds)
+                selectedFavoriteResourceIds = emptySet()
+                isFavoriteBatchMode = false
+                showFavoriteBatchDeleteConfirm = false
             },
         )
     }
@@ -2813,102 +2757,62 @@ fun CommonListScreen(
     }
 
     if (showHistoryClearConfirm && historyViewModel != null) {
-        AppAlertDialog(
-            onDismissRequest = { showHistoryClearConfirm = false },
-            title = { AppText("清空历史") },
-            text = { AppText(resolveHistoryClearConfirmText(state.items.size)) },
-            confirmButton = {
-                AppTextButton(
-                    onClick = {
-                        historyViewModel.clearAllHistory()
-                        selectedHistoryKeys = emptySet()
-                        isHistoryBatchMode = false
-                        showHistoryClearConfirm = false
-                    }
-                ) {
-                    AppText("清空")
-                }
+        CommonListConfirmationDialog(
+            title = "清空历史",
+            message = resolveHistoryClearConfirmText(state.items.size),
+            confirmLabel = "清空",
+            onDismiss = { showHistoryClearConfirm = false },
+            onConfirm = {
+                historyViewModel.clearAllHistory()
+                selectedHistoryKeys = emptySet()
+                isHistoryBatchMode = false
+                showHistoryClearConfirm = false
             },
-            dismissButton = {
-                AppTextButton(onClick = { showHistoryClearConfirm = false }) {
-                    AppText("取消")
-                }
-            }
         )
     }
 
     if (pendingHistorySingleDeleteKey != null && historyViewModel != null) {
-        AppAlertDialog(
-            onDismissRequest = { pendingHistorySingleDeleteKey = null },
-            title = { AppText("删除历史记录") },
-            text = { AppText("确认删除这条历史记录吗？") },
-            confirmButton = {
-                AppTextButton(
-                    onClick = {
-                        pendingHistorySingleDeleteKey?.let { historyViewModel.startVideoDissolve(it) }
-                        pendingHistorySingleDeleteKey = null
-                    }
-                ) {
-                    AppText("删除")
-                }
+        CommonListConfirmationDialog(
+            title = "删除历史记录",
+            message = "确认删除这条历史记录吗？",
+            confirmLabel = "删除",
+            onDismiss = { pendingHistorySingleDeleteKey = null },
+            onConfirm = {
+                pendingHistorySingleDeleteKey?.let { historyViewModel.startVideoDissolve(it) }
+                pendingHistorySingleDeleteKey = null
             },
-            dismissButton = {
-                AppTextButton(onClick = { pendingHistorySingleDeleteKey = null }) {
-                    AppText("取消")
-                }
-            }
         )
     }
 
     if (showFavoriteDetailRemoveConfirm && canManageFavoriteDetailResources && seasonSeriesDetailViewModel != null) {
-        AppAlertDialog(
-            onDismissRequest = { showFavoriteDetailRemoveConfirm = false },
-            title = { AppText("取消收藏") },
-            text = { AppText("确认取消收藏所选的 ${selectedFavoriteDetailKeys.size} 个内容吗？") },
-            confirmButton = {
-                AppTextButton(
-                    onClick = {
-                        seasonSeriesDetailViewModel.removeFavoriteResources(
-                            resolveFavoriteDetailResourceIds(state.items, selectedFavoriteDetailKeys, favoriteDetailRenderKey)
-                        )
-                        selectedFavoriteDetailKeys = emptySet()
-                        isFavoriteDetailBatchMode = false
-                        showFavoriteDetailRemoveConfirm = false
-                    }
-                ) {
-                    AppText("移除")
-                }
+        CommonListConfirmationDialog(
+            title = "取消收藏",
+            message = "确认取消收藏所选的 ${selectedFavoriteDetailKeys.size} 个内容吗？",
+            confirmLabel = "移除",
+            onDismiss = { showFavoriteDetailRemoveConfirm = false },
+            onConfirm = {
+                seasonSeriesDetailViewModel.removeFavoriteResources(
+                    resolveFavoriteDetailResourceIds(state.items, selectedFavoriteDetailKeys, favoriteDetailRenderKey)
+                )
+                selectedFavoriteDetailKeys = emptySet()
+                isFavoriteDetailBatchMode = false
+                showFavoriteDetailRemoveConfirm = false
             },
-            dismissButton = {
-                AppTextButton(onClick = { showFavoriteDetailRemoveConfirm = false }) {
-                    AppText("取消")
-                }
-            }
         )
     }
 
     pendingFavoriteDetailRemoveKeys?.takeIf { canManageFavoriteDetailResources }?.let { removeKeys ->
-        AppAlertDialog(
-            onDismissRequest = { pendingFavoriteDetailRemoveKeys = null },
-            title = { AppText("取消收藏") },
-            text = { AppText("要取消收藏吗?") },
-            confirmButton = {
-                AppTextButton(
-                    onClick = {
-                        seasonSeriesDetailViewModel?.removeFavoriteResources(
-                            resolveFavoriteDetailResourceIds(state.items, removeKeys, favoriteDetailRenderKey)
-                        )
-                        pendingFavoriteDetailRemoveKeys = null
-                    }
-                ) {
-                    AppText("确认取消")
-                }
+        CommonListConfirmationDialog(
+            title = "取消收藏",
+            message = "要取消收藏吗?",
+            confirmLabel = "确认取消",
+            onDismiss = { pendingFavoriteDetailRemoveKeys = null },
+            onConfirm = {
+                seasonSeriesDetailViewModel?.removeFavoriteResources(
+                    resolveFavoriteDetailResourceIds(state.items, removeKeys, favoriteDetailRenderKey)
+                )
+                pendingFavoriteDetailRemoveKeys = null
             },
-            dismissButton = {
-                AppTextButton(onClick = { pendingFavoriteDetailRemoveKeys = null }) {
-                    AppText("取消")
-                }
-            }
         )
     }
 
@@ -2982,6 +2886,33 @@ fun CommonListScreen(
             )
         }
     }
+}
+
+@Composable
+private fun CommonListConfirmationDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    dismissLabel: String = "取消",
+    confirmEnabled: Boolean = true,
+) {
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { AppText(title) },
+        text = { AppText(message) },
+        confirmButton = {
+            AppTextButton(enabled = confirmEnabled, onClick = onConfirm) {
+                AppText(confirmLabel)
+            }
+        },
+        dismissButton = {
+            AppTextButton(onClick = onDismiss) {
+                AppText(dismissLabel)
+            }
+        },
+    )
 }
 
 // 提取通用列表内容组件

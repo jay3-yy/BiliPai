@@ -1349,6 +1349,7 @@ fun ReplyItemView(
     onUrlClick: ((String) -> Unit)? = null,
     maxTimestampMs: Long? = null,
     hideSubPreview: Boolean = false,
+    animateSupplementedSubReplies: Boolean = false,
     // Thread detail reuses this row in every material; defaults keep native main-list behavior.
     containerColor: Color = Color.Unspecified,
     onConversationClick: (() -> Unit)? = null,
@@ -2132,12 +2133,16 @@ fun ReplyItemView(
                             // This preview is already inside the indented body column.
                             .clip(AppShapes.container(ContainerLevel.Chip))
                             .background(appearance.composerHintBackgroundColor)
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(start = 8.dp, top = 8.dp, end = 8.dp),
                     ) {
                         previewReplies.forEachIndexed { index, subReply ->
                             key(subReply.rpid) {
-                                CommentContentReveal(visible = index < visibleSubReplies.size) {
+                                CommentContentReveal(
+                                    visible = index < visibleSubReplies.size,
+                                    animateInitialAppearance = animateSupplementedSubReplies &&
+                                        item.replies.orEmpty().none { it.rpid == subReply.rpid },
+                                ) {
+                                    // 间距跟随回复一起展开，避免零高度的动画行先撑开列表。
                                     if (subReply.aiBotFolded || subReply.repeatedReplyFolded) {
                                         AppText(
                                             text = stringResource(
@@ -2146,9 +2151,12 @@ fun ReplyItemView(
                                             ),
                                             fontSize = VideoCommentTypographyTokens.subReply,
                                             color = appearance.secondaryTextColor,
-                                            modifier = Modifier.fillMaxWidth().appActionClickable {
-                                                onSubClick(previewRoot, resolveSubReplyOpenTargetId(item.rpid, subReply.rpid))
-                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 8.dp)
+                                                .appActionClickable {
+                                                    onSubClick(previewRoot, resolveSubReplyOpenTargetId(item.rpid, subReply.rpid))
+                                                },
                                         )
                                         return@CommentContentReveal
                                     }
@@ -2268,6 +2276,7 @@ fun ReplyItemView(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .padding(bottom = 8.dp)
                                             .testTag("$COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX${subReply.rpid}")
                                             .appCombinedClickable(
                                                 longPressScene = com.android.purebilibili.core.ui.AppHapticScene.TEXT,
@@ -2315,23 +2324,27 @@ fun ReplyItemView(
                                 color = appearance.accentColor,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier
+                                    .padding(bottom = 8.dp)
                                     .appActionClickable { isSubPreviewExpanded = !isSubPreviewExpanded }
                                     .padding(vertical = 4.dp)
                             )
-                        } else if (showSubReplySummary) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("$COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX${item.rpid}")
-                                    .appActionClickable { onSubClick(previewRoot, 0L) },
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                AppText(
-                                    text = subReplySummaryLabel,
-                                    fontSize = VideoCommentTypographyTokens.subReply,
-                                    color = appearance.accentColor,
-                                    fontWeight = FontWeight.Medium
-                                )
+                        } else if (showSubReplySummary || animateSupplementedSubReplies) {
+                            CommentContentReveal(visible = showSubReplySummary) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                        .testTag("$COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX${item.rpid}")
+                                        .appActionClickable { onSubClick(previewRoot, 0L) },
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    AppText(
+                                        text = subReplySummaryLabel,
+                                        fontSize = VideoCommentTypographyTokens.subReply,
+                                        color = appearance.accentColor,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                             }
                         }
                     }

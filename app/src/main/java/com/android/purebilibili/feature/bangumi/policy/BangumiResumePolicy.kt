@@ -10,22 +10,6 @@ internal data class BangumiResumeTarget(
     val resumePositionMs: Long
 )
 
-internal data class BangumiDetailRequest(
-    val seasonId: Long,
-    val epId: Long
-)
-
-internal fun resolveBangumiDetailRequest(
-    seasonId: Long,
-    epId: Long
-): BangumiDetailRequest {
-    return if (epId > 0L) {
-        BangumiDetailRequest(seasonId = 0L, epId = epId)
-    } else {
-        BangumiDetailRequest(seasonId = seasonId.coerceAtLeast(0L), epId = 0L)
-    }
-}
-
 internal fun bangumiAllEpisodes(detail: BangumiDetail): List<BangumiEpisode> =
     detail.episodes.orEmpty() + detail.section.orEmpty().flatMap { it.episodes.orEmpty() }
 
@@ -56,7 +40,7 @@ internal fun resolveBangumiAutoResumeTarget(
     )
 }
 
-/** 默认选择依次使用指定视频、指定剧集、观看记录、首个正片或附加分区剧集。 */
+/** 按指定分集、观看记录、首集正片或附加分区首集选择，课程可优先按 aid 匹配。 */
 internal fun resolveBangumiInitialEpisode(
     detail: BangumiDetail,
     preferredAid: Long,

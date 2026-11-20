@@ -1574,7 +1574,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         commentLoadJob = launchAccount {
             val routeIntentActive = routeIntentSession == subReplyLoadRequestId
             val sortMode = _dynamicCommentSortMode.value
-            val fallbackCount = item.modules.module_stat?.comment?.count ?: 0
+            val seededCount = item.modules.module_stat?.comment?.count
+            val fallbackCount = seededCount ?: 0
             val dynamicId = item.id_str
             // 命中缓存先秒出旧评论，再后台静默刷新（stale-while-revalidate）。
             val cached = if (isRefresh) null else commentCache.get(dynamicId, sortMode.apiMode)
@@ -1591,6 +1592,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         hasMore = !cached.isEnd,
                         nextPage = cached.nextPage,
                         totalCount = maxOf(cached.totalCount, fallbackCount),
+                        totalCountKnown = true,
                         isLoading = false,
                         isRefreshing = false,
                         isLoadingMore = false,
@@ -1607,6 +1609,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         hasMore = false,
                         nextPage = 1,
                         totalCount = if (isRefresh) it.totalCount else fallbackCount,
+                        totalCountKnown = if (isRefresh) it.totalCountKnown else seededCount != null,
                         isLoading = !isRefresh,
                         isRefreshing = isRefresh,
                         isLoadingMore = false,
@@ -1705,7 +1708,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                             comments = emptyList(),
                             hasMore = false,
                             nextPage = 1,
-                            totalCount = fallbackCount,
                             dynamicId = dynamicId,
                             refreshError = firstFailureMessage ?: "评论加载失败，请重试",
                         )
@@ -1922,7 +1924,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             ) return@launchAccount
             updateCommentUiState { current ->
                 // 保留请求期间发评、删评产生的本地数量变化。
-                current.copy(totalCount = (count + current.totalCount - countAtRequest).coerceAtLeast(0))
+                current.copy(
+                    totalCount = (count + current.totalCount - countAtRequest).coerceAtLeast(0),
+                    totalCountKnown = true,
+                )
             }
             cacheCurrentComments(_commentUiState.value.comments)
         }
@@ -1971,6 +1976,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 hasMore = if (alreadyPagedFurther) it.hasMore else !attempt.isEnd,
                 nextPage = if (alreadyPagedFurther) it.nextPage else attempt.nextPage,
                 totalCount = if (sameSubject) maxOf(attempt.totalCount, it.totalCount) else attempt.totalCount,
+                totalCountKnown = true,
                 isLoading = false,
                 isRefreshing = false,
                 refreshError = null,

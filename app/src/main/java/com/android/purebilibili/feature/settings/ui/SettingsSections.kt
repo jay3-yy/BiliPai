@@ -130,7 +130,6 @@ internal data class SettingsDetailEntry(
 internal data class SettingsRootCategoryActions(
     val onAppearanceClick: () -> Unit,
     val onHomeClick: () -> Unit,
-    val onAnimationClick: () -> Unit,
     val onPlaybackClick: () -> Unit,
     val onBottomBarClick: () -> Unit,
     val onPermissionClick: () -> Unit,
@@ -426,7 +425,8 @@ internal fun SettingsRootCategoryContent(
             SettingsRootCategory.COMMENTS_CONTENT,
             SettingsRootCategory.MESSAGE_NOTIFICATION,
             SettingsRootCategory.VIDEO_DECODER,
-            SettingsRootCategory.GLASS_ADVANCED -> Unit
+            SettingsRootCategory.GLASS_ADVANCED,
+            SettingsRootCategory.ANIMATION_HAPTICS -> Unit
             SettingsRootCategory.PLAYER_DIAGNOSTICS -> {
                 SettingsDetailGroup(title = "应用日志") {
                     DiagnosticsSection(
@@ -443,7 +443,7 @@ internal fun SettingsRootCategoryContent(
             }
             SettingsRootCategory.APPEARANCE_THEME -> {
                 SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "外观与主题") {
+                    SettingsDetailGroup(title = "显示样式") {
                         SettingsDetailEntrySection(
                             entries = listOf(
                                 SettingsDetailEntry(
@@ -519,24 +519,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "交互与动效") {
-                        SettingsDetailEntrySection(
-                            entries = listOf(
-                                SettingsDetailEntry(
-                                    target = SettingsSearchTarget.ANIMATION,
-                                    title = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
-                                    value = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).summary,
-                                    openFocus = SettingsSceneDetailFocus(
-                                        SettingsSearchTarget.ANIMATION,
-                                        SettingsSearchFocusIds.ANIMATION_START,
-                                    ),
-                                    onClick = actions.onAnimationClick,
-                                ),
-                            ),
-                        )
-                    }
-                }
             }
             SettingsRootCategory.PRIVACY_PERMISSION -> {
                 SettingsRootCategoryEntranceSection {
@@ -603,24 +585,6 @@ internal fun SettingsRootCategoryContent(
                                         SettingsSearchFocusIds.APPEARANCE_THEME,
                                     ),
                                     onClick = actions.onAppearanceClick
-                                )
-                            )
-                        )
-                    }
-                }
-                SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "动效") {
-                        SettingsDetailEntrySection(
-                            entries = listOf(
-                                SettingsDetailEntry(
-                                    target = SettingsSearchTarget.ANIMATION,
-                                    title = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
-                                    value = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).summary,
-                                    openFocus = SettingsSceneDetailFocus(
-                                        SettingsSearchTarget.ANIMATION,
-                                        SettingsSearchFocusIds.ANIMATION_START,
-                                    ),
-                                    onClick = actions.onAnimationClick
                                 )
                             )
                         )

@@ -48,9 +48,13 @@
     <string name="common_refresh">重新整理</string>
 
     <string name="settings_title">設定</string>
-    <string name="appearance_settings_title">外觀設定</string>
     <string name="playback_settings_title">播放設定</string>
-    <string name="animation_effects_title">動畫與觸感</string>
+    <string name="animation_effects_title">動態效果與回饋</string>
+    <string name="settings_category_appearance_title">介面外觀</string>
+    <string name="settings_category_appearance_summary">介面風格、主題、文字大小和圖示</string>
+    <string name="settings_category_animation_summary">頁面動態效果、震動回饋和液態玻璃</string>
+    <string name="animation_glass_section_title">液態玻璃與磨砂</string>
+    <string name="animation_glass_share_text">BiliPai 液態玻璃設定，可在「%1$s &gt; %2$s」中匯入。</string>
     <string name="icon_settings_title">應用圖示</string>
     <string name="bottom_bar_management_title">導航設定</string>
     <string name="permission_management_title">權限管理</string>

@@ -78,6 +78,7 @@ import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import com.android.purebilibili.feature.video.viewmodel.commentComposerDraftKey
 import androidx.compose.ui.geometry.Rect
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewPageMotion
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -206,6 +207,8 @@ fun BangumiPlayerContent(
     var previewImages by remember(currentEpisode.id) { mutableStateOf<List<String>>(emptyList()) }
     var previewIndex by remember(currentEpisode.id) { mutableIntStateOf(0) }
     var previewSourceRect by remember(currentEpisode.id) { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
+    var previewPageMotion by remember(currentEpisode.id) { mutableStateOf<ImagePreviewPageMotion?>(null) }
+    val threadPreviewPageMotion = remember { ImagePreviewPageMotion() }
     var previewTextContent by remember(currentEpisode.id) { mutableStateOf<ImagePreviewTextContent?>(null) }
 
     LaunchedEffect(
@@ -989,6 +992,7 @@ fun BangumiPlayerContent(
                                     previewImages = images
                                     previewIndex = index
                                     previewSourceRect = rect
+                                    previewPageMotion = null
                                     previewTextContent = textContent
                                 },
                             )
@@ -1070,6 +1074,7 @@ fun BangumiPlayerContent(
 
     if (ownsCommentUi) SubReplySheet(
         state = subReplyState,
+        sheetSurfaceModifier = threadPreviewPageMotion.backdropModifier,
         emoteMap = emptyMap(),
         onDismiss = commentViewModel::closeSubReply,
         onCoveredBlurProgressChange = { subReplyCoveredBlurProgress.floatValue = it },
@@ -1096,6 +1101,7 @@ fun BangumiPlayerContent(
             previewImages = images
             previewIndex = index
             previewSourceRect = rect
+            previewPageMotion = threadPreviewPageMotion
             previewTextContent = textContent
         }
     )
@@ -1116,6 +1122,8 @@ fun BangumiPlayerContent(
             initialIndex = previewIndex,
             sourceRect = previewSourceRect?.rect,
             sourceRects = previewSourceRect?.galleryRects.orEmpty(),
+            sourceKey = previewSourceRect?.sourceKey,
+            sourcePageMotion = previewPageMotion,
             sourceCornerRadiusDp = previewSourceRect?.cornerRadiusDp
                 ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
             textContent = previewTextContent,

@@ -6,9 +6,10 @@ import kotlin.test.assertEquals
 class SettingsRootCategoryPolicyTest {
 
     @Test
-    fun `mobile and tablet settings share eight direct category entries`() {
+    fun `mobile and tablet settings share the same root categories`() {
         val expected = listOf(
             SettingsRootCategory.APPEARANCE_THEME,
+            SettingsRootCategory.ANIMATION_HAPTICS,
             SettingsRootCategory.PLAYBACK_QUALITY,
             SettingsRootCategory.HOME_RECOMMENDATION,
             SettingsRootCategory.NAVIGATION_INTERACTION,
@@ -26,7 +27,8 @@ class SettingsRootCategoryPolicyTest {
     fun `root categories expose the agreed user facing titles`() {
         assertEquals(
             listOf(
-                "外观与动画",
+                "界面外观",
+                "动效与反馈",
                 "播放设置",
                 "首页与动态",
                 "导航布局",
@@ -54,8 +56,7 @@ class SettingsRootCategoryPolicyTest {
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.INTERACTION_COMMENT),
         )
         assertEquals(
-            // 动画与触感页的导航父级是外观设置,搜索归属保持一致
-            SettingsRootCategory.APPEARANCE_THEME,
+            SettingsRootCategory.ANIMATION_HAPTICS,
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.ANIMATION),
         )
         assertEquals(

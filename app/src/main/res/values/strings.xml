@@ -53,9 +53,8 @@
     <string name="common_refresh">刷新</string>
 
     <string name="settings_title">设置</string>
-    <string name="appearance_settings_title">外观设置</string>
     <string name="playback_settings_title">播放设置</string>
-    <string name="animation_effects_title">动画与触感</string>
+    <string name="animation_effects_title">动效与反馈</string>
     <string name="icon_settings_title">应用图标</string>
     <string name="bottom_bar_management_title">导航设置</string>
     <string name="permission_management_title">权限管理</string>
@@ -254,8 +253,9 @@
     <string name="user_agreement_crash_tracking_subtitle">崩溃时自动上报错误日志，帮助快速修复问题</string>
     <string name="user_agreement_analytics_title">匿名使用统计</string>
     <string name="user_agreement_analytics_subtitle">收集匿名活跃与基础功能统计，不含个人身份信息</string>
-    <string name="settings_category_appearance_title">外观与动画</string>
-    <string name="settings_category_appearance_summary">主题、文字大小、图标、动画与振动</string>
+    <string name="settings_category_appearance_title">界面外观</string>
+    <string name="settings_category_appearance_summary">界面风格、主题、文字大小和图标</string>
+    <string name="settings_category_animation_summary">页面动效、振动反馈和液态玻璃</string>
     <string name="settings_category_playback_title">播放设置</string>
     <string name="settings_category_playback_summary">画质、倍速、字幕、连播、小窗和后台播放</string>
     <string name="settings_category_home_title">首页与动态</string>
@@ -371,16 +371,21 @@
     <string name="animation_section_maid">蓝雪女仆</string>
     <string name="animation_maid_summary">关闭后隐藏女仆动画和静态图</string>
     <string name="animation_card_entrance_summary">打开首页时卡片依次淡入</string>
-    <string name="animation_card_transition_summary">使用系统动画展开详情并返回来源卡片；不支持时回退普通页面转场</string>
+    <string name="animation_card_transition_summary">从来源卡片或按钮展开详情，返回时收回原位</string>
+    <string name="animation_card_transition_method_title">卡片转场方式</string>
+    <string name="animation_card_transition_method_summary">选择金标优先或直接使用安卓共享元素</string>
+    <string name="animation_card_transition_auto">自动（金标优先）</string>
+    <string name="animation_card_transition_shared_element">安卓共享元素</string>
     <string name="animation_card_removal_dissolve_title">卡片移除粒子消散</string>
     <string name="animation_card_removal_dissolve_summary">适用于首页不感兴趣和稍后再看单条移除。快速档的粒子消散约 0.7 秒，关闭后直接更新列表。</string>
     <string name="animation_card_removal_dissolve_off">关闭</string>
-    <string name="animation_card_transition_source_official">从可见的卡片或按钮展开页面并返回原位；系统转场不可用时使用普通导航</string>
-    <string name="animation_card_transition_source_fallback">当前设备不支持系统一镜到底动画，使用普通页面转场</string>
+    <string name="animation_card_transition_source_official">可用时优先使用金标，其他入口有来源时使用安卓共享元素</string>
+    <string name="animation_card_transition_source_fallback">金标当前不可用，有来源时使用安卓共享元素</string>
+    <string name="animation_card_transition_source_shared">有来源时直接使用安卓共享元素</string>
     <string name="animation_card_transition_source_reduced_motion">系统已开启减少动态效果，当前不使用卡片过渡动画</string>
-    <string name="animation_transition_blur_official_supported">控制系统一镜到底动画的背景模糊</string>
-    <string name="animation_transition_blur_official_system">当前系统自行管理转场背景模糊，此开关不影响系统效果</string>
-    <string name="animation_transition_blur_summary">当前设备不支持系统一镜到底动画，此开关不影响普通页面转场</string>
+    <string name="animation_transition_blur_official_supported">控制金标、卡片共享转场和容器形变的背景模糊</string>
+    <string name="animation_transition_blur_official_system">控制卡片共享转场和容器形变的背景模糊，金标模糊由系统管理</string>
+    <string name="animation_transition_blur_summary">控制卡片共享转场和容器形变的背景模糊</string>
     <string name="animation_predictive_back_title">预测性返回手势</string>
     <string name="animation_predictive_back_summary">统一控制页面、卡片、图片预览、评论和弹窗的跟手返回预览；关闭后仍可正常返回，不影响页面切换动画设置</string>
     <string name="animation_back_title">页面切换动画</string>
@@ -405,7 +410,7 @@
     <string name="animation_glass_section_title">液态玻璃与磨砂</string>
     <string name="animation_glass_unavailable">当前设备不支持玻璃效果，以下参数暂不生效</string>
     <string name="animation_glass_disabled">先在外观设置中启用液态玻璃，以下参数暂不生效</string>
-    <string name="animation_glass_share_text">BiliPai 液态玻璃设置，可在“动画与触感 &gt; 液态玻璃与磨砂”中导入。</string>
+    <string name="animation_glass_share_text">BiliPai 液态玻璃设置，可在“%1$s &gt; %2$s”中导入。</string>
     <string name="animation_glass_share_title">分享液态玻璃设置</string>
     <string name="animation_glass_share_failed">无法打开系统分享</string>
     <string name="animation_glass_export_failed">液态玻璃设置导出失败</string>
@@ -540,8 +545,6 @@
     <string name="settings_search_history_clear_all">清空全部</string>
     <string name="settings_search_history_empty">暂无搜索历史，搜索设置功能后会显示在这里</string>
     <string name="settings_search_history_delete">删除搜索历史：%1$s</string>
-    <string name="settings_search_legacy_001_title">外观与动画</string>
-    <string name="settings_search_legacy_001_summary">主题、文字大小、图标、动画与振动</string>
     <string name="settings_search_legacy_002_title">首页与推荐</string>
     <string name="settings_search_legacy_002_summary">首页卡片、推荐内容、动态和更新时间表</string>
     <string name="settings_search_legacy_003_title">导航布局</string>
@@ -706,7 +709,6 @@
     <string name="appearance_settings_icon_glyphs_original">原版</string>
     <string name="appearance_single_choice_title">单选菜单样式</string>
     <string name="appearance_single_choice_summary">从条目旁展开，或居中弹出</string>
-    <string name="appearance_animation_glass_title">动画、振动与玻璃效果</string>
 <string name="appearance_md3_color_source_wallpaper_summary">跟随模式使用系统原配色；重新调色可自选壁纸色系的风格与标准</string>
     <string name="appearance_md3_color_source_fallback_summary">壁纸取色需要 Android 12 及以上；当前使用预设色作为后备，可选择自定义颜色</string>
     <string name="appearance_custom_theme_color_title">自定义主题颜色</string>
@@ -964,7 +966,6 @@
     <string name="appearance_home_card_ratio_bilipai_label">16:10</string>
     <string name="animation_indicator_wobble_title">液态玻璃指示器甩尾</string>
     <string name="animation_indicator_wobble_summary">点按切换与拖动松手时追加形变回弹，仅作用于液态玻璃指示器；关闭后保留原有位移和按压反馈</string>
-    <string name="animation_settings_container_blur_summary">容器形变进入与返回时，实时模糊背后的设置页；需 Android 12 及以上</string>
     <string name="home_settings_grid_customization_summary">关闭后恢复各页面自动布局，保留已选列数；不影响单列视频模式</string>
     <string name="home_settings_grid_share_summary">开启后，支持缩放的列表共用并保存最后列数；关闭后各页独立调整。窄屏、宽屏竖屏与宽屏横屏分别记忆</string>
     <string name="home_settings_grid_default_summary">自动沿用页面布局；固定列数按当前内容宽度限制上限。共用开启时，缩放会更新此值</string>

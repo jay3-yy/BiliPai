@@ -62,10 +62,9 @@ internal fun resolveHistoryCardContainerTarget(
     val video = item.videoItem
     return when (item.business) {
         HistoryBusiness.PGC -> when {
-            item.seasonId > 0L && item.epid > 0L ->
-                BiliPaiNavKey.BangumiPlayer(item.seasonId, item.epid)
-            item.seasonId > 0L || item.epid > 0L ->
-                BiliPaiNavKey.BangumiDetail(item.seasonId, item.epid)
+            // 历史记录的 oid 可能是视频 aid，有分集 ID 时用它查询番剧。
+            item.epid > 0L -> BiliPaiNavKey.BangumiPlayer(seasonId = 0L, epId = item.epid)
+            item.seasonId > 0L -> BiliPaiNavKey.BangumiDetail(seasonId = item.seasonId)
             else -> null
         }
         HistoryBusiness.CHEESE -> if (item.seasonId > 0L || item.epid > 0L) {

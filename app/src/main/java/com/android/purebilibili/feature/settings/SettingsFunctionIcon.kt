@@ -19,6 +19,7 @@ import com.android.purebilibili.core.ui.components.LocalAppPreferenceIconColors
 private fun settingsCategoryIconColor(category: SettingsRootCategory): Color =
     AppPreferenceIconPalette[when (canonicalSettingsRootCategory(category)) {
         SettingsRootCategory.APPEARANCE_THEME -> 9
+        SettingsRootCategory.ANIMATION_HAPTICS -> 8
         SettingsRootCategory.PLAYBACK_QUALITY -> 2
         SettingsRootCategory.HOME_RECOMMENDATION -> 1
         SettingsRootCategory.NAVIGATION_INTERACTION -> 0
@@ -39,7 +40,7 @@ private val settingsFunctionIconColors: Map<String, Color> by lazy {
             put(settingsDestinationCopy(target).title, preferenceIconColorForKey(settingsDestinationCopy(target).title))
         }
         resolveSettingsRootCategoryOrder().forEach { category -> put(category.title, settingsCategoryIconColor(category)) }
-        // 首页九个入口各有独立色组；同一入口在搜索与侧栏保持一致。
+        // 首页入口使用独立色组；同一入口在搜索与侧栏保持一致。
         put(settingsDestinationCopy(SettingsSearchTarget.DONATE).title, AppPreferenceIconPalette[5])
     }
 }

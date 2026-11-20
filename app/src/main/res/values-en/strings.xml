@@ -51,9 +51,8 @@
     <string name="common_refresh">Refresh</string>
 
     <string name="settings_title">Settings</string>
-    <string name="appearance_settings_title">Appearance Settings</string>
     <string name="playback_settings_title">Playback Settings</string>
-    <string name="animation_effects_title">Animation &amp; Haptics</string>
+    <string name="animation_effects_title">Motion &amp; Feedback</string>
     <string name="icon_settings_title">App Icon</string>
     <string name="bottom_bar_management_title">Navigation</string>
     <string name="permission_management_title">Permissions</string>
@@ -251,8 +250,9 @@
     <string name="user_agreement_crash_tracking_subtitle">Send crash reports to help fix stability issues</string>
     <string name="user_agreement_analytics_title">Anonymous Usage Statistics</string>
     <string name="user_agreement_analytics_subtitle">Share anonymous activity and feature usage without personal identifiers</string>
-    <string name="settings_category_appearance_title">Appearance &amp; Animation</string>
-    <string name="settings_category_appearance_summary">Themes, text size, icons, motion, and vibration</string>
+    <string name="settings_category_appearance_title">Appearance</string>
+    <string name="settings_category_appearance_summary">Interface style, themes, text size, and icons</string>
+    <string name="settings_category_animation_summary">Page animations, haptic feedback, and Liquid Glass</string>
     <string name="settings_category_playback_title">Playback</string>
     <string name="settings_category_playback_summary">Video quality, speed, subtitles, autoplay, PiP, and background playback</string>
     <string name="settings_category_home_title">Home &amp; Feed</string>
@@ -368,16 +368,21 @@
     <string name="animation_section_maid">Blue Snow Maid</string>
     <string name="animation_maid_summary">Hides maid animations and static images when turned off</string>
     <string name="animation_card_entrance_summary">Fade cards in one at a time when opening Home</string>
-    <string name="animation_card_transition_summary">Use system animation to expand details and return to the source card; fall back to regular page transitions when unsupported</string>
+    <string name="animation_card_transition_summary">Expand details from the source card or button and return to it</string>
+    <string name="animation_card_transition_method_title">Card transition method</string>
+    <string name="animation_card_transition_method_summary">Prefer system animations or use Android shared elements</string>
+    <string name="animation_card_transition_auto">Auto (prefer system)</string>
+    <string name="animation_card_transition_shared_element">Android shared elements</string>
     <string name="animation_card_removal_dissolve_title">Card removal effect</string>
     <string name="animation_card_removal_dissolve_summary">Applies to Not interested on Home and single-item removal in Watch Later. Fast dissolves in about 0.7 seconds. Off updates the list immediately.</string>
     <string name="animation_card_removal_dissolve_off">Off</string>
-    <string name="animation_card_transition_source_official">Expand from visible cards or buttons and return to their original position. Use regular navigation when system transitions are unavailable.</string>
-    <string name="animation_card_transition_source_fallback">This device does not support system one-take animation; regular page transitions are used</string>
+    <string name="animation_card_transition_source_official">Use system animation when available. Other entries with a source use Android shared elements.</string>
+    <string name="animation_card_transition_source_fallback">System animation is currently unavailable. Entries with a source use Android shared elements.</string>
+    <string name="animation_card_transition_source_shared">Use Android shared elements when an entry has a source</string>
     <string name="animation_card_transition_source_reduced_motion">Reduced motion is enabled in system settings; card transitions are currently inactive</string>
-    <string name="animation_transition_blur_official_supported">Control background blur for the system one-take animation</string>
-    <string name="animation_transition_blur_official_system">The system manages transition blur; this switch does not affect the system effect</string>
-    <string name="animation_transition_blur_summary">System one-take animation is unsupported; this switch does not affect regular page transitions</string>
+    <string name="animation_transition_blur_official_supported">Control background blur for system, shared card, and container transitions</string>
+    <string name="animation_transition_blur_official_system">Control background blur for shared card and container transitions. The system manages its own blur.</string>
+    <string name="animation_transition_blur_summary">Control background blur for shared card and container transitions</string>
     <string name="animation_predictive_back_title">Predictive back gestures</string>
     <string name="animation_predictive_back_summary">Control back previews across pages, cards, images, comments and dialogs. Turning this off keeps normal back navigation and your page transition choice.</string>
     <string name="animation_back_title">Page transition animation</string>
@@ -402,7 +407,7 @@
     <string name="animation_glass_section_title">Liquid Glass and blur</string>
     <string name="animation_glass_unavailable">Glass effects are not supported on this device, so these settings have no effect</string>
     <string name="animation_glass_disabled">Enable Liquid Glass in Appearance settings to use these options</string>
-    <string name="animation_glass_share_text">BiliPai Liquid Glass settings. Import them from Animation &amp; Haptics &gt; Liquid Glass and blur.</string>
+    <string name="animation_glass_share_text">BiliPai Liquid Glass settings. Import them from %1$s &gt; %2$s.</string>
     <string name="animation_glass_share_title">Share Liquid Glass settings</string>
     <string name="animation_glass_share_failed">Could not open the system share sheet</string>
     <string name="animation_glass_export_failed">Could not export Liquid Glass settings</string>
@@ -537,8 +542,6 @@
     <string name="settings_search_history_clear_all">Clear all</string>
     <string name="settings_search_history_empty">No search history yet. Search for a setting to see it here.</string>
     <string name="settings_search_history_delete">Delete search history: %1$s</string>
-    <string name="settings_search_legacy_001_title">Appearance and animation</string>
-    <string name="settings_search_legacy_001_summary">Theme, text size, icons, animation, and vibration</string>
     <string name="settings_search_legacy_002_title">Home and recommendations</string>
     <string name="settings_search_legacy_002_summary">Home cards, recommendations, dynamic posts, and release schedules</string>
     <string name="settings_search_legacy_003_title">Navigation layout</string>
@@ -703,7 +706,6 @@
     <string name="appearance_settings_icon_glyphs_original">Original</string>
     <string name="appearance_single_choice_title">Single-choice menu style</string>
     <string name="appearance_single_choice_summary">Open beside the setting or in a centered dialog.</string>
-    <string name="appearance_animation_glass_title">Motion, haptics, and glass effects</string>
 <string name="appearance_md3_color_source_wallpaper_summary">Follow the system color scheme, or choose a style and specification for wallpaper-derived colors.</string>
     <string name="appearance_md3_color_source_fallback_summary">Wallpaper colors require Android 12 or later. A preset is used as a fallback, or you can choose a custom color.</string>
     <string name="appearance_custom_theme_color_title">Custom theme color</string>
@@ -962,7 +964,6 @@
     <string name="appearance_home_card_ratio_bilipai_label">16:10</string>
     <string name="animation_indicator_wobble_title">Liquid glass indicator recoil</string>
     <string name="animation_indicator_wobble_summary">Add squash and rebound when selecting a tab or releasing a drag. Applies only to liquid glass indicators; turning it off keeps normal movement and press feedback.</string>
-    <string name="animation_settings_container_blur_summary">Blur the settings page behind container transitions in real time; requires Android 12 or later</string>
     <string name="home_settings_grid_customization_summary">Turn off to restore automatic layouts while keeping your choices. Single-column video mode is unchanged.</string>
     <string name="home_settings_grid_share_summary">Share and save the last column count across supported lists, or adjust each page independently. Narrow, wide portrait and wide landscape windows keep separate values.</string>
     <string name="home_settings_grid_default_summary">Automatic uses the page layout. Fixed counts are limited by the content width. Shared pinch changes update this value.</string>

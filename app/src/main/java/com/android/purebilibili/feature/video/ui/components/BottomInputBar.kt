@@ -4,6 +4,10 @@ import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.BottomBarScrollHideIntent
+import com.android.purebilibili.core.ui.BottomBarScrollHideState
+import com.android.purebilibili.core.ui.BottomBarScrollHideTopRevealPx
+import com.android.purebilibili.core.ui.reduceBottomBarScrollHideDelta
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -82,6 +86,7 @@ import top.yukonga.miuix.kmp.blur.Backdrop
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 
 internal const val BOTTOM_INPUT_BAR_PLACEHOLDER_MIN_CONTRAST = 4.5f
 
@@ -136,6 +141,47 @@ internal fun shouldShowBottomInputBarActionButtons(
 ): Boolean = showActionButtons && availableWidthDp >= BOTTOM_INPUT_BAR_ACTIONS_MIN_WIDTH_DP
 
 @Composable
+internal fun rememberCommentBarScrollVisible(
+    autoHideOnScroll: Boolean,
+    scrollSourceKey: Any? = Unit,
+    scrollPositionProvider: () -> Pair<Int, Int>?,
+): Boolean {
+    var isVisible by remember(scrollSourceKey) { mutableStateOf(true) }
+    val currentScrollPositionProvider by rememberUpdatedState(scrollPositionProvider)
+    LaunchedEffect(autoHideOnScroll, scrollSourceKey) {
+        if (!autoHideOnScroll) {
+            isVisible = true
+            return@LaunchedEffect
+        }
+        var previousPosition: Pair<Int, Int>? = null
+        var scrollHideState = BottomBarScrollHideState()
+        snapshotFlow { currentScrollPositionProvider() }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { currentPosition ->
+                val previous = previousPosition
+                previousPosition = currentPosition
+                if (previous == null) return@collect
+                val (previousItem, previousOffset) = previous
+                val (currentItem, currentOffset) = currentPosition
+                if (currentItem != previousItem) {
+                    scrollHideState = BottomBarScrollHideState()
+                    isVisible = currentItem < previousItem
+                } else {
+                    val update = reduceBottomBarScrollHideDelta(
+                        previousState = scrollHideState,
+                        deltaY = (previousOffset - currentOffset).toFloat(),
+                        isAtTop = currentItem == 0 && currentOffset < BottomBarScrollHideTopRevealPx,
+                    )
+                    scrollHideState = update.state
+                    update.intent?.let { isVisible = it == BottomBarScrollHideIntent.SHOW }
+                }
+            }
+    }
+    return !autoHideOnScroll || isVisible
+}
+
+@Composable
 fun BottomInputBar(
     modifier: Modifier = Modifier,
     isLiked: Boolean,
@@ -163,32 +209,7 @@ fun BottomInputBar(
         .collectAsStateWithLifecycle(initialValue = AppNavigationSettings())
     val autoHideOnScroll = appNavigationSettings.bottomBarVisibilityMode ==
         SettingsManager.BottomBarVisibilityMode.SCROLL_HIDE
-    var isVisible by remember { mutableStateOf(true) }
-    val currentScrollPositionProvider by rememberUpdatedState(scrollPositionProvider)
-
-    LaunchedEffect(autoHideOnScroll) {
-        if (!autoHideOnScroll) {
-            isVisible = true
-            return@LaunchedEffect
-        }
-        var previousPosition = currentScrollPositionProvider() ?: return@LaunchedEffect
-        snapshotFlow { currentScrollPositionProvider() }
-            .distinctUntilChanged()
-            .collect { currentPosition ->
-                currentPosition ?: return@collect
-                val (previousItem, previousOffset) = previousPosition
-                val (currentItem, currentOffset) = currentPosition
-                isVisible = when {
-                    currentItem == 0 && currentOffset < 100 -> true
-                    currentItem > previousItem -> false
-                    currentItem < previousItem -> true
-                    currentOffset > previousOffset + 24 -> false
-                    currentOffset < previousOffset - 24 -> true
-                    else -> isVisible
-                }
-                previousPosition = currentPosition
-            }
-    }
+    val isVisible = rememberCommentBarScrollVisible(autoHideOnScroll, scrollPositionProvider = scrollPositionProvider)
     val floatingLiquidGlass = shouldUseFloatingLiquidBottomInputBar(
         androidNativeLiquidGlassEnabled = homeSettings.commentBarGlassEnabled
     )
@@ -325,6 +346,7 @@ internal fun CommentEntryBarContent(
     iconSpacing: Dp,
     textStyle: TextStyle,
     modifier: Modifier = Modifier,
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = modifier,
@@ -339,11 +361,13 @@ internal fun CommentEntryBarContent(
         )
         AppText(
             text = "发评论",
+            modifier = if (trailingContent != null) Modifier.weight(1f, fill = false) else Modifier,
             color = textColor,
             style = textStyle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        trailingContent?.invoke()
     }
 }
 

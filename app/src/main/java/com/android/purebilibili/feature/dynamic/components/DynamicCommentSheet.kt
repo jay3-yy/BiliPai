@@ -268,6 +268,7 @@ fun DynamicCommentSheet(
     var previewInitialIndex by remember { mutableIntStateOf(0) }
     var previewSourceRect by remember { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
     var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
+    val previewPageMotion = remember { ImagePreviewPageMotion() }
     val sortModes = remember { listOf(CommentSortMode.HOT, CommentSortMode.NEWEST) }
     val sortModeLabels = remember(sortModes) { sortModes.map { it.label } }
 
@@ -277,6 +278,8 @@ fun DynamicCommentSheet(
             initialIndex = previewInitialIndex,
             sourceRect = previewSourceRect?.rect,
             sourceRects = previewSourceRect?.galleryRects.orEmpty(),
+            sourceKey = previewSourceRect?.sourceKey,
+            sourcePageMotion = previewPageMotion,
             sourceCornerRadiusDp = previewSourceRect?.cornerRadiusDp
                 ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
             textContent = previewTextContent,
@@ -321,7 +324,7 @@ fun DynamicCommentSheet(
         // 内容自己绘制底部安全区，避免弹层默认底色在评论页下方露出一条异色带。
         // 同时覆盖 MD3/Miuix，玻璃开关不改变安全区归属。
         windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
-        sheetSurfaceModifier = Modifier
+        sheetSurfaceModifier = previewPageMotion.backdropModifier
             .background(AppSurfaceTokens.surfaceContainer())
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)),
     ) {
@@ -523,6 +526,7 @@ fun DynamicCommentSheet(
                                             modifier = dynamicCommentItemModifier(),
                                             avatarListState = listState.takeIf { avatarPushEnabled },
                                             item = reply,
+                                            animateSupplementedSubReplies = true,
                                             upMid = dynamicAuthorMid,
                                             onClick = { onViewReplies(reply, 0L) },
                                             onSubClick = onViewReplies,
@@ -864,6 +868,7 @@ fun LazyListScope.dynamicInlineCommentItems(
                 modifier = dynamicCommentItemModifier(),
                 avatarListState = avatarListState,
                 item = reply,
+                animateSupplementedSubReplies = true,
                 upMid = dynamicAuthorMid,
                 onClick = { onViewReplies(reply, 0L) },
                 onSubClick = onViewReplies,

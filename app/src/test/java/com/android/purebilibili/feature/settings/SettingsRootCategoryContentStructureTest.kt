@@ -56,7 +56,6 @@ class SettingsRootCategoryContentStructureTest {
 
         assertTrue(source.contains("SettingsSearchFocusIds.PLAYBACK_DECODER"))
         assertTrue(source.contains("SettingsSearchFocusIds.BOTTOM_BAR_START"))
-        assertTrue(source.contains("SettingsSearchFocusIds.ANIMATION_START"))
         assertTrue(source.contains("SettingsSearchFocusIds.PLAYBACK_COMMENTS"))
         assertTrue(source.contains("SettingsSearchFocusIds.PLAYBACK_FULLSCREEN"))
         assertTrue(source.contains("SettingsSearchFocusIds.PLAYBACK_DEBUG"))
@@ -399,7 +398,7 @@ class SettingsRootCategoryContentStructureTest {
         assertTrue(settingsSections.contains("SettingsDetailGroup(title = \"显示与交互\")"))
         assertTrue(settingsSections.contains("SettingsDetailGroup(title = \"画质与播放\")"))
         assertTrue(settingsSections.contains("SettingsDetailGroup(title = \"隐私与安全\")"))
-        // 外观与动画页的分组标题已走字符串资源,断言标题资源接线而非字面量
+        // 外观页的分组标题使用字符串资源。
         assertTrue(appearance.contains("R.string.appearance_section_interface_effects"))
         assertTrue(appearance.contains("R.string.appearance_section_text_size"))
         assertTrue(appearance.contains("R.string.appearance_section_splash_icon"))

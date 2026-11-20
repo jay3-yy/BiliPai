@@ -126,6 +126,7 @@ import com.android.purebilibili.feature.list.LikedVideosViewModel
 import com.android.purebilibili.feature.list.FavoriteViewModel
 import com.android.purebilibili.feature.list.FavoriteCollectionRoute
 import com.android.purebilibili.feature.list.HistoryNavigationKind
+import com.android.purebilibili.feature.list.resolveHistoryCardContainerTarget
 import com.android.purebilibili.feature.list.resolveHistoryNavigationKind
 import com.android.purebilibili.feature.list.resolveHistoryPlaybackCid
 import com.android.purebilibili.feature.list.resolveHistoryResumePositionMs
@@ -137,6 +138,7 @@ import com.android.purebilibili.feature.dynamic.DynamicScreen
 import com.android.purebilibili.feature.dynamic.DynamicScrollRequest
 import com.android.purebilibili.feature.dynamic.LocalDynamicScrollChannel
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewOverlayHost
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewPageMotion
 import com.android.purebilibili.feature.live.shouldStopLivePlaybackOnRouteDispose
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.HomeCoverReturnPrefetchRegistry
@@ -708,13 +710,14 @@ fun AppNavigation(
     val systemReduceMotion = rememberSystemReduceMotion()
     val miniPlayerMotionEnabled = hostWindowFocused && hostWindowResumed && !isInPipMode &&
         !systemReduceMotion && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled
-    val systemCardTransitionEnabled = appearance.cardTransitionEnabled && !systemReduceMotion
-    val sharedVideoCardTransitionEnabled = systemCardTransitionEnabled
+    val sharedVideoCardTransitionEnabled = appearance.cardTransitionEnabled && !systemReduceMotion
+    val systemCardTransitionEnabled = sharedVideoCardTransitionEnabled && !homeSettings.preferSharedElementCardTransition
     androidx.compose.runtime.SideEffect {
+        // The method preference selects new launches. An existing system window keeps its return path.
         (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)
-            ?.updateOfficialReturnMotion(systemCardTransitionEnabled, videoTransitionRealtimeBlurEnabled)
+            ?.updateOfficialReturnMotion(sharedVideoCardTransitionEnabled, videoTransitionRealtimeBlurEnabled)
     }
-    val videoCardSourceTrackingEnabled = systemCardTransitionEnabled
+    val videoCardSourceTrackingEnabled = sharedVideoCardTransitionEnabled
     val effectiveVideoCardTransitionDurationMillis = if (systemReduceMotion) {
         VideoCardTransitionVisualTimeline.REDUCED_MOTION_DURATION_MILLIS
     } else {
@@ -1598,8 +1601,9 @@ fun AppNavigation(
         fun navigateToSystemCardWindowOrPush(key: BiliPaiNavKey, useRecordedCardSource: Boolean = true) {
             latestOpenSystemCard.value(key, useRecordedCardSource)
         }
-        fun tryOpenRecordedSystemWindow(key: BiliPaiNavKey, fallback: (VideoCardSourceAnchor?) -> Unit): Boolean {
-            if (!systemCardTransitionEnabled ||
+        fun navigateWithRecordedCardSource(key: BiliPaiNavKey, fallback: (VideoCardSourceAnchor?) -> Unit): Boolean {
+            // Both transition methods need the clicked anchor, even when no system window is requested.
+            if (!sharedVideoCardTransitionEnabled ||
                 (resolvedPrivacyAuthenticationEnabled != false && isPrivacyProtectedNavigationTarget(key.toPrivacyNavigationTarget()))
             ) return false
             // 平板设置侧栏可再次打开搜索，沿用当前栈里已有的入口。
@@ -1620,12 +1624,12 @@ fun AppNavigation(
             )
             return true
         }
-        val latestTryOpenRecordedSystemWindow = rememberUpdatedState(::tryOpenRecordedSystemWindow)
+        val latestNavigateWithRecordedCardSource = rememberUpdatedState(::navigateWithRecordedCardSource)
         fun pushNavigation3Key(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)? = null) {
             val push: (VideoCardSourceAnchor?) -> Unit = { source ->
                 latestPushNavigation3WithSource.value(key, beforeNavigation, source)
             }
-            if (beforeNavigation != null || !latestTryOpenRecordedSystemWindow.value(key, push)) push(null)
+            if (beforeNavigation != null || !latestNavigateWithRecordedCardSource.value(key, push)) push(null)
         }
         fun replaceNavigation3TopWithKey(key: BiliPaiNavKey) {
             if (initialVideoRoute != null && navigation3BackStack.size == 1) {
@@ -1692,7 +1696,7 @@ fun AppNavigation(
                     latestPushNavigation3WithSource.value(key, beforeNavigation, source)
                 }
             }
-            if (beforeNavigation != null || !latestTryOpenRecordedSystemWindow.value(key, openInApp)) openInApp(null)
+            if (beforeNavigation != null || !latestNavigateWithRecordedCardSource.value(key, openInApp)) openInApp(null)
         }
         val latestPushNavigation3Target = rememberUpdatedState(::pushNavigation3TargetImpl)
         fun pushNavigation3Target(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)? = null) {
@@ -1713,9 +1717,9 @@ fun AppNavigation(
             }
             // 隐私入口的认证及解锁状态属于当前导航宿主。
             val protected = isPrivacyProtectedNavigationTarget(key.toPrivacyNavigationTarget())
-            fun canUseWindow() = systemCardTransitionEnabled &&
+            fun canUseCardTransition() = sharedVideoCardTransitionEnabled &&
                 (!protected || resolvedPrivacyAuthenticationEnabled == false)
-            if (!canUseWindow() || !recordSource()) {
+            if (!canUseCardTransition() || !recordSource()) {
                 openInApp()
                 return
             }
@@ -1727,7 +1731,7 @@ fun AppNavigation(
                 fallback = ::openInApp,
                 isCurrent = {
                     navigation3BackStack.lastOrNull() == BiliPaiNavKey.MainHost &&
-                        mainBottomPagerState.selectedPage == sourcePage && canUseWindow()
+                        mainBottomPagerState.selectedPage == sourcePage && canUseCardTransition()
                 },
                 onReturn = { phase ->
                     val previous = systemReturn
@@ -3132,7 +3136,8 @@ fun AppNavigation(
                     com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass(android.os.Build.VERSION.SDK_INT),
                 tuning = liquidGlassRenderConfig.tuning,
             ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+            val imagePreviewPageMotion = remember { ImagePreviewPageMotion() }
+            Box(modifier = Modifier.fillMaxSize().then(imagePreviewPageMotion.backdropModifier)) {
             // 账号弹层必须在同窗宿主内组合，才能取得玻璃容器和菜单锚点的 presenter。
             if (sidebarAccountSwitcherVisible) {
                 AccountSwitchDialog(
@@ -4004,14 +4009,9 @@ fun AppNavigation(
                             val resumePositionMs = resolveHistoryResumePositionMs(historyItem)
                             when (resolveHistoryNavigationKind(historyItem)) {
                                 HistoryNavigationKind.PGC -> {
-                                    if (historyItem != null && historyItem.epid > 0 && historyItem.seasonId > 0) {
-                                        navigateToSystemCardWindowOrPush(
-                                            BiliPaiNavKey.BangumiPlayer(seasonId = historyItem.seasonId, epId = historyItem.epid)
-                                        )
-                                    } else if (historyItem != null && (historyItem.seasonId > 0 || historyItem.epid > 0)) {
-                                        navigateToSystemCardWindowOrPush(
-                                            BiliPaiNavKey.BangumiDetail(seasonId = historyItem.seasonId, epId = historyItem.epid)
-                                        )
+                                    val target = historyItem?.let(::resolveHistoryCardContainerTarget)
+                                    if (target != null) {
+                                        navigateToSystemCardWindowOrPush(target)
                                     } else {
                                         navigateToVideoInNavigation3(
                                             lookupKey,
@@ -4913,7 +4913,6 @@ fun AppNavigation(
                             onOpenSourceLicensesClick = { pushNavigation3Key(BiliPaiNavKey.OpenSourceLicenses) },
                             onAppearanceClick = { pushNavigation3Key(BiliPaiNavKey.AppearanceSettings) },
                             onHomeClick = { pushNavigation3Key(BiliPaiNavKey.HomeSettings) },
-                            onAnimationClick = { pushNavigation3Key(BiliPaiNavKey.AnimationSettings) },
                             onPlaybackClick = { pushNavigation3Key(BiliPaiNavKey.PlaybackSettings) },
                             onPermissionClick = { pushNavigation3Key(BiliPaiNavKey.PermissionSettings) },
                             onSpacePrivacyClick = { pushNavigation3Key(BiliPaiNavKey.SpacePrivacySettings) },
@@ -4958,7 +4957,6 @@ fun AppNavigation(
                             onOpenSourceLicensesClick = { pushNavigation3Key(BiliPaiNavKey.OpenSourceLicenses) },
                             onAppearanceClick = { pushNavigation3Key(BiliPaiNavKey.AppearanceSettings) },
                             onHomeClick = { pushNavigation3Key(BiliPaiNavKey.HomeSettings) },
-                            onAnimationClick = { pushNavigation3Key(BiliPaiNavKey.AnimationSettings) },
                             onPlaybackClick = { pushNavigation3Key(BiliPaiNavKey.PlaybackSettings) },
                             onPermissionClick = { pushNavigation3Key(BiliPaiNavKey.PermissionSettings) },
                             onSpacePrivacyClick = { pushNavigation3Key(BiliPaiNavKey.SpacePrivacySettings) },
@@ -5016,7 +5014,6 @@ fun AppNavigation(
                             viewModel = settingsViewModel,
                             onBack = { performSystemBackAction() },
                             onNavigateToIconSettings = { pushNavigation3Key(BiliPaiNavKey.IconSettings) },
-                            onAnimationClick = { pushNavigation3Key(BiliPaiNavKey.AnimationSettings) },
                         )
                     }
                 }
@@ -6591,7 +6588,7 @@ fun AppNavigation(
                     // 系统未启动时，仅本次可匹配来源启用官方共享容器；其余沿用页面转场。
                     cardTransitionEnabled = cardTransitionEnabled && !systemReduceMotion,
                     videoCardTransitionEnabled = sharedVideoCardTransitionEnabled && !miniPlayerOwnsNavigationMotion,
-                    sharedContainerFallbackEnabled = systemCardTransitionEnabled && !miniPlayerOwnsNavigationMotion,
+                    sharedContainerFallbackEnabled = sharedVideoCardTransitionEnabled && !miniPlayerOwnsNavigationMotion,
                     videoMiniPlayerDeparture = miniPlayerOwnsNavigationMotion,
                     videoTransitionRealtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                     isLightBackground = isLightBackground,
@@ -6610,8 +6607,6 @@ fun AppNavigation(
                     // List cover waits for the live handoff window; list info is native throughout return.
                     settingsContainerMorphEnabled =
                         appNavigationSettings.settingsContainerMorphEnabled,
-                    settingsContainerRealtimeBlurEnabled =
-                        appNavigationSettings.settingsContainerRealtimeBlurEnabled,
                     preferWholeCardReturn = false,
                     // 会话与伴随面板使用各自的返回入口，外层横滑会预览错误的页面。
                     allowFullScreenSwipeBack = !companionSessionVisible &&
@@ -6807,7 +6802,7 @@ fun AppNavigation(
                         visibleState = bottomBarVisibilityState,
                         edge = BottomBarMatchedDockEdge.BOTTOM,
                         // 普通视频返回只保留滑入和淡入；玻璃与原生共用，其他显隐沿用默认缩放。
-                        animateScale = systemCardTransitionEnabled ||
+                        animateScale = sharedVideoCardTransitionEnabled ||
                             !navigation3ReturnSession.isReturningFromDetail,
                         enterFadeDurationMillis = navMotionSpec.slowFadeDurationMillis,
                         exitFadeDurationMillis = navMotionSpec.fastFadeDurationMillis
@@ -7207,7 +7202,8 @@ fun AppNavigation(
             ImagePreviewOverlayHost(
                 modifier = Modifier
                     .fillMaxSize()
-                    .zIndex(100f)
+                    .zIndex(100f),
+                pageMotion = imagePreviewPageMotion,
             )
 
             HingeOcclusionInputShield(

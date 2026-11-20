@@ -158,6 +158,7 @@ internal fun resolveDynamicSubReplyStateAfterFailure(
 internal data class DynamicCommentUiState(
     val comments: List<ReplyItem> = emptyList(),
     val totalCount: Int = 0,
+    val totalCountKnown: Boolean = false,
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val isLoadingMore: Boolean = false,

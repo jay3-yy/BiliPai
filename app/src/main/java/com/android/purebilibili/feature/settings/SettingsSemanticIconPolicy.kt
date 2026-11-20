@@ -106,7 +106,6 @@ internal enum class SettingsIconRole(
     HOME_WALLPAPER(R.drawable.ms_image_24, R.drawable.ph_panorama_24),
     WALLPAPER_EFFECT(R.drawable.ms_blur_on_24),
     SETTINGS_CONTAINER_MORPH(R.drawable.ms_bottom_panel_open_24, R.drawable.ph_corners_out_24),
-    SETTINGS_CONTAINER_BLUR(R.drawable.ms_lens_blur_24, R.drawable.ic_settings_container_blur_24),
     HOME_UP_BADGES(R.drawable.ms_workspace_premium_24, R.drawable.ph_medal_24),
     HOME_REFRESH_TIP(R.drawable.ms_history_24, R.drawable.ph_clock_counter_clockwise_24),
     HOME_REFRESH_UNDO(R.drawable.ms_undo_24, R.drawable.ph_arrow_u_up_left_24),

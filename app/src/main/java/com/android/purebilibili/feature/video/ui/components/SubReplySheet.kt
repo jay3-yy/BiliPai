@@ -58,6 +58,7 @@ fun SubReplySheet(
     showIdentityDecorations: Boolean = true,
     onAvatarClick: ((String) -> Unit)? = null,
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
+    sheetSurfaceModifier: Modifier = Modifier,
 ) {
     if (state.visible) {
         val rootReply = state.rootReply
@@ -93,7 +94,7 @@ fun SubReplySheet(
             containerColor = panelColor,
             // 底部安全区由评论面板统一绘制，保留共享弹层与原生材质默认行为。
             windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
-            sheetSurfaceModifier = Modifier
+            sheetSurfaceModifier = sheetSurfaceModifier
                 .background(panelColor)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)),
             modifier = Modifier.fillMaxHeight(maxHeightFraction)

@@ -119,7 +119,6 @@ fun AppearanceSettingsScreen(
     onBack: () -> Unit,
     onNavigateToIconSettings: () -> Unit = {},
     contentMode: AppearanceSettingsContentMode = AppearanceSettingsContentMode.APPEARANCE,
-    onAnimationClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -132,7 +131,7 @@ fun AppearanceSettingsScreen(
     var pendingLanguageRestart by remember { mutableStateOf<AppLanguage?>(null) }
     val backLabel = stringResource(R.string.common_back)
     val screenTitle = when (contentMode) {
-        AppearanceSettingsContentMode.APPEARANCE -> stringResource(R.string.appearance_settings_title)
+        AppearanceSettingsContentMode.APPEARANCE -> stringResource(SettingsRootCategory.APPEARANCE_THEME.titleResource())
         AppearanceSettingsContentMode.HOME -> context.getString(R.string.appearance_home_and_dynamic_title)
     }
     val restartDialogTitle = stringResource(R.string.app_language_restart_dialog_title)
@@ -180,7 +179,6 @@ fun AppearanceSettingsScreen(
     ) {
         CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides effectiveLiquidGlassEnabled) {
             AppearanceSettingsContent(
-                onAnimationClick = onAnimationClick,
                 state = state,
                 onNavigateToIconSettings = onNavigateToIconSettings,
                 contentMode = contentMode,
@@ -246,7 +244,6 @@ fun AppearanceSettingsContent(
     viewModel: SettingsViewModel,
     context: android.content.Context,
     onAppLanguageChange: (AppLanguage) -> Unit,
-    onAnimationClick: () -> Unit = {},
 ) {
     val homeConfiguration = rememberSettingsHomeConfiguration()
     val themeConfiguration = rememberSettingsThemeConfiguration()
@@ -662,7 +659,7 @@ fun AppearanceSettingsContent(
                             )
                         }
 
-                        // 液态玻璃总开关与玻璃材质条目已集中在「动画与触感」页的玻璃分组,
+                        // 液态玻璃总开关与玻璃材质条目位于「动效与反馈」页的玻璃分组。
                         // 这里只保留与玻璃无关的显示样式条目。
 
                         SettingsItemAnchor("appearance.app_list_item_style") {
@@ -760,19 +757,6 @@ fun AppearanceSettingsContent(
                                         )
                                     }
                                 },
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsNavigationContainerOrigin(
-                            target = com.android.purebilibili.navigation3.BiliPaiNavKey.AnimationSettings,
-                            onClick = onAnimationClick,
-                            first = false,
-                        ) { contentModifier, open ->
-                            AppPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.ANIMATION),
-                                title = context.getString(R.string.appearance_animation_glass_title),
-                                onClick = open,
-                                contentModifier = contentModifier,
                             )
                         }
                     }
@@ -2314,7 +2298,7 @@ fun AppearanceSettingsContent(
                             }
                         }
 
-                        // 「卡片背景模糊」已并入「动画与触感」页的液态玻璃与磨砂分组。
+                        // 「卡片背景模糊」位于「动效与反馈」页的液态玻璃与磨砂分组。
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.home_card_dynamic_tint_enabled") {
                             AppSwitchPreference(

@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -107,29 +108,25 @@ internal fun LiveRoomCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(metrics.coverAspectRatio)
-                    .then(
-                        if (
-                            enableSharedCoverTransition &&
-                            !containerTransition.enabled &&
-                            sharedTransitionScope != null &&
-                            animatedVisibilityScope != null
-                        ) {
-                            with(sharedTransitionScope) {
-                                Modifier.sharedElement(
-                                    sharedContentState = rememberSharedContentState(
-                                        key = liveCoverSharedElementKey(model.roomId),
-                                    ),
-                                    animatedVisibilityScope = animatedVisibilityScope,
-                                )
-                            }
-                        } else {
-                            Modifier
-                        },
-                    ),
+            LiveRoomCover(
+                modifier = Modifier.fillMaxWidth(),
+                sharedElementModifier = if (
+                    enableSharedCoverTransition &&
+                    !containerTransition.enabled &&
+                    sharedTransitionScope != null &&
+                    animatedVisibilityScope != null
+                ) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            sharedContentState = rememberSharedContentState(
+                                key = liveCoverSharedElementKey(model.roomId),
+                            ),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                        )
+                    }
+                } else {
+                    Modifier
+                },
             ) {
                 AsyncImage(
                     model = model.coverUrl,
@@ -227,4 +224,16 @@ internal fun LiveRoomCard(
         }
     }
     }
+}
+
+@Composable
+internal fun LiveRoomCover(
+    modifier: Modifier = Modifier,
+    sharedElementModifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Box(
+        modifier = modifier.aspectRatio(LIVE_ROOM_COVER_ASPECT_RATIO).then(sharedElementModifier),
+        content = content,
+    )
 }

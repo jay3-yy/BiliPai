@@ -105,6 +105,8 @@ import com.android.purebilibili.core.ui.setWindowNavigationBarColor
 import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
 import com.android.purebilibili.core.ui.rememberAppLikeIcon
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isFinite
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.media3.common.Player
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -195,6 +197,7 @@ private data class ImagePreviewOverlayRequest(
     val defaultTextVisible: Boolean,
     val onImageLongPress: ((String) -> Unit)?,
     val publicContent: Boolean = false,
+    val sourcePageMotion: ImagePreviewPageMotion?,
     val onDismiss: () -> Unit
 )
 
@@ -333,7 +336,7 @@ private object ImagePreviewOverlayController {
 }
 
 @Composable
-fun ImagePreviewDialog(
+internal fun ImagePreviewDialog(
     images: List<String>,
     initialIndex: Int,
     livePhotoVideos: Map<String, String> = emptyMap(),
@@ -345,10 +348,11 @@ fun ImagePreviewDialog(
     defaultTextVisible: Boolean = true,
     onImageLongPress: ((String) -> Unit)? = null,
     publicContent: Boolean = false,
+    sourcePageMotion: ImagePreviewPageMotion? = null,
     onDismiss: () -> Unit
 ) {
     val latestOnDismiss by rememberUpdatedState(onDismiss)
-    val requestToken = remember(images, initialIndex, sourceRect, sourceRects, sourceKey, sourceCornerRadiusDp, livePhotoVideos, publicContent) { System.nanoTime() }
+    val requestToken = remember(images, initialIndex, sourceRect, sourceRects, sourceKey, sourceCornerRadiusDp, livePhotoVideos, publicContent, sourcePageMotion) { System.nanoTime() }
 
     DisposableEffect(requestToken) {
         ImagePreviewOverlayController.show(
@@ -356,6 +360,7 @@ fun ImagePreviewDialog(
                 token = requestToken,
                 images = images,
                 publicContent = publicContent,
+                sourcePageMotion = sourcePageMotion,
                 livePhotoVideos = livePhotoVideos,
                 initialIndex = initialIndex,
                 sourceRect = sourceRect,
@@ -377,6 +382,14 @@ fun ImagePreviewDialog(
 @Composable
 fun ImagePreviewOverlayHost(
     modifier: Modifier = Modifier
+) {
+    ImagePreviewOverlayHost(modifier, pageMotion = null)
+}
+
+@Composable
+internal fun ImagePreviewOverlayHost(
+    modifier: Modifier,
+    pageMotion: ImagePreviewPageMotion?
 ) {
     val activeRequest by ImagePreviewOverlayController.request.collectAsStateWithLifecycle()
     activeRequest?.let { request ->
@@ -418,6 +431,7 @@ fun ImagePreviewOverlayHost(
                     textContent = request.textContent,
                     defaultTextVisible = request.defaultTextVisible,
                     onImageLongPress = request.onImageLongPress,
+                    pageMotion = request.sourcePageMotion ?: pageMotion,
                     dismissRequestCount = dismissRequestCount,
                     onDismiss = {
                         ImagePreviewOverlayController.dismiss(request.token)
@@ -446,6 +460,7 @@ private fun ImagePreviewOverlayContent(
     defaultTextVisible: Boolean = true,
     onImageLongPress: ((String) -> Unit)? = null,
     publicContent: Boolean = false,
+    pageMotion: ImagePreviewPageMotion?,
     dismissRequestCount: Int = 0,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -736,8 +751,12 @@ private fun ImagePreviewOverlayContent(
         normalizeImageUrl(images.getOrNull(pagerState.currentPage) ?: "")
     }
 
+    var previewOriginOnScreen by remember { mutableStateOf(Offset.Zero) }
     BoxWithConstraints(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize().onGloballyPositioned { coordinates ->
+            val originOnScreen = coordinates.localToScreen(Offset.Zero)
+            if (originOnScreen.isFinite) previewOriginOnScreen = originOnScreen
+        }
     ) {
             val constraints = this
             val fullWidth = constraints.maxWidth
@@ -771,6 +790,31 @@ private fun ImagePreviewOverlayContent(
             fun dismissRemainingProgress(): Float =
                 (animateTrigger.value / dismissStartProgress.coerceAtLeast(0.001f)).coerceIn(0f, 1f)
 
+            fun currentPageScale(): Float {
+                if (pageMotion == null || reducePreviewMotion) return 1f
+                val dragY = if (isDismissing) dismissOffsetYPx else verticalDismissOffsetYPx
+                val progress = if (isDismissing) {
+                    dismissStartProgress * dismissRemainingProgress()
+                } else {
+                    currentTransitionProgress()
+                }
+                return resolveImagePreviewPageScale(progress, dragY, fullHeightPx)
+            }
+
+            if (pageMotion != null) {
+                val latestPageScale by rememberUpdatedState<() -> Float>({ currentPageScale() })
+                DisposableEffect(pageMotion) {
+                    pageMotion.readScale = { latestPageScale() }
+                    onDispose { pageMotion.readScale = null }
+                }
+            }
+
+            fun mapSourceRect(
+                source: androidx.compose.ui.geometry.Rect,
+                pageScale: Float = currentPageScale(),
+            ): androidx.compose.ui.geometry.Rect =
+                pageMotion?.mapSourceRect(source, pageScale, previewOriginOnScreen) ?: source
+
             val currentSourceRect = sourceRectForPage(pagerState.currentPage)
             val shouldUseRectAnim = currentSourceRect != null && !pagerState.isScrollInProgress
             val previewSurfaceRect = remember(constraints.maxWidth, constraints.maxHeight) {
@@ -795,19 +839,20 @@ private fun ImagePreviewOverlayContent(
                 // dismiss 起飞时已冻结源 rect,动画中途不再跟读(防切页改道)。
                 val source = (if (isDismissing) dismissSourceRect else currentSourceRect)
                     ?: return null
+                val mappedSource = mapSourceRect(source)
                 return if (isDismissing) {
                     val start = dismissImageDisplayRect ?: previewSurfaceRect
                     val normalizedProgress = (progress / dismissStartProgress.coerceAtLeast(0.001f))
                         .coerceIn(0f, 1f)
                     resolveImagePreviewDismissRectFrame(
                         transitionProgress = normalizedProgress,
-                        sourceRect = source,
+                        sourceRect = mappedSource,
                         displayedImageRect = start
                     )?.rect
                 } else {
                     resolveImagePreviewOpenRect(
                         transitionProgress = progress,
-                        sourceRect = source,
+                        sourceRect = mappedSource,
                         previewSurfaceRect = previewSurfaceRect
                     )
                 }
@@ -858,13 +903,15 @@ private fun ImagePreviewOverlayContent(
                     )
                 }
                 dismissTargetImageScale = fillScale
-                dismissStartImageScale = (fillScale + (1f - fillScale) * startProgress) * dragFrame.scale
+                val startFillScale = fillScale * currentPageScale()
+                dismissStartImageScale =
+                    (startFillScale + (1f - startFillScale) * startProgress) * dragFrame.scale
                 dismissImageContentRect = currentImageDisplayRect
                 dismissStartCornerRadiusDp = resolveImagePreviewPresentedCornerRadiusDp(
                     visualProgress = startProgress,
                     verticalDragProgress = dragFrame.progress,
                     hasSourceRect = shouldUseRectAnim,
-                    sourceCornerRadiusDp = sourceCornerRadiusDp,
+                    sourceCornerRadiusDp = sourceCornerRadiusDp * currentPageScale(),
                 )
                 dismissFallbackScale = resolveImagePreviewTransitionFrame(
                     rawProgress = startProgress,
@@ -895,7 +942,7 @@ private fun ImagePreviewOverlayContent(
                         initialVelocity = resolveImagePreviewDismissProgressVelocity(
                             velocityY = initialVelocityY,
                             startRect = dismissImageDisplayRect,
-                            targetRect = dismissSourceRect,
+                            targetRect = dismissSourceRect?.let { mapSourceRect(it, pageScale = 1f) },
                             containerHeightPx = fullHeightPx,
                             startProgress = startProgress,
                         ),
@@ -1058,12 +1105,14 @@ private fun ImagePreviewOverlayContent(
                     val presentedCornerRadius = if (isDismissing) resolveImagePreviewDismissCornerRadiusDp(
                         remainingProgress = dismissRemainingProgress(),
                         startCornerRadiusDp = dismissStartCornerRadiusDp,
-                        targetCornerRadiusDp = if (dismissSourceRect != null) sourceCornerRadiusDp else 0f,
+                        targetCornerRadiusDp = if (dismissSourceRect != null) {
+                            sourceCornerRadiusDp * currentPageScale()
+                        } else 0f,
                     ) else resolveImagePreviewPresentedCornerRadiusDp(
                         visualProgress = progress,
                         verticalDragProgress = if (isDismissing) 0f else dragFrame.progress,
                         hasSourceRect = shouldUseRectAnim,
-                        sourceCornerRadiusDp = sourceCornerRadiusDp
+                        sourceCornerRadiusDp = sourceCornerRadiusDp * currentPageScale()
                     )
                     if (flightRect != null) {
                         val baseScaleX = (flightRect.width / size.width).coerceAtLeast(0.01f)
@@ -1115,22 +1164,23 @@ private fun ImagePreviewOverlayContent(
                             if (flightRect != null) {
                                 val baseScaleX = (flightRect.width / size.width).coerceAtLeast(0.01f)
                                 val baseScaleY = (flightRect.height / size.height).coerceAtLeast(0.01f)
-                                val sourceFillScale = currentSourceRect
-                                    ?.let { source ->
-                                        (currentImageDisplayRect ?: openingSeedRect)
-                                            ?.takeIf { it.width > 0f && it.height > 0f }
-                                            ?.let { displayed ->
-                                                maxOf(
-                                                    source.width / displayed.width,
-                                                    source.height / displayed.height
-                                                )
-                                            }
-                                    }
-                                    ?: maxOf(baseScaleX, baseScaleY)
+                                val pageScale = currentPageScale()
                                 val imageScale = if (isDismissing) {
-                                    dismissTargetImageScale +
-                                        (dismissStartImageScale - dismissTargetImageScale) * dismissRemainingProgress()
+                                    val targetScale = dismissTargetImageScale * pageScale
+                                    targetScale + (dismissStartImageScale - targetScale) * dismissRemainingProgress()
                                 } else {
+                                    val sourceFillScale = currentSourceRect
+                                        ?.let { source ->
+                                            (currentImageDisplayRect ?: openingSeedRect)
+                                                ?.takeIf { it.width > 0f && it.height > 0f }
+                                                ?.let { displayed ->
+                                                    maxOf(
+                                                        source.width / displayed.width,
+                                                        source.height / displayed.height
+                                                    ) * pageScale
+                                                }
+                                        }
+                                        ?: maxOf(baseScaleX, baseScaleY)
                                     sourceFillScale + (1f - sourceFillScale) * currentTransitionProgress().coerceIn(0f, 1f)
                                 }
                                 scaleX = imageScale / baseScaleX

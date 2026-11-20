@@ -66,14 +66,6 @@ class BangumiResumePolicyTest {
     }
 
     @Test
-    fun `bangumi detail request prefers episode id from pgc history`() {
-        val request = resolveBangumiDetailRequest(seasonId = 114514L, epId = 1919810L)
-
-        assertEquals(0L, request.seasonId)
-        assertEquals(1919810L, request.epId)
-    }
-
-    @Test
     fun `bangumi playback restores local episode progress when the route has none`() {
         assertEquals(
             45_000L,

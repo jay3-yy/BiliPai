@@ -244,8 +244,18 @@ internal fun BangumiCommentPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .offset { IntOffset(0, topContentInsetPx().roundToInt()) }
-                    .videoContentHeight(visibleHeaderHeight)
-                    .graphicsLayer { clip = true }
+                    .then(
+                        if (hideSortDock || !liquidGlassEnabled) {
+                            Modifier
+                                .videoContentHeight(visibleHeaderHeight)
+                                .graphicsLayer {
+                                    // 玻璃排序胶囊展开时允许形变溢出，滚动收起才裁剪可见高度。
+                                    clip = !liquidGlassEnabled || visibleHeaderHeight() < commentHeaderHeightPx.floatValue
+                                }
+                        } else {
+                            Modifier
+                        }
+                    )
                     .then(if (floatingHeader) Modifier else Modifier.background(MaterialTheme.colorScheme.surface)),
             ) {
                 VideoCommentFloatingHeader(

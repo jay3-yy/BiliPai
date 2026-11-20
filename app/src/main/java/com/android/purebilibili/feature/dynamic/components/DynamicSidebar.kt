@@ -90,7 +90,6 @@ import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgress
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarDividerTopOffset
 import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarReturnHeaderHeightDp
-import com.android.purebilibili.feature.dynamic.shouldShowDynamicUserLiveBadge
 import com.android.purebilibili.feature.dynamic.SidebarUser
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
@@ -686,7 +685,7 @@ fun SidebarUserItem(
                 .padding(vertical = AppSpacingTokens.Small) // 内部间距
                 .alpha(if (user.isHidden) 0.5f else 1f)
         ) {
-            Box {
+            DynamicUserAvatarWithLiveBadge(isLive = user.isLive) {
                 // 头像
                 Box(
                     modifier = Modifier
@@ -697,6 +696,7 @@ fun SidebarUserItem(
                                     navigationColors?.selectedContainer ?: accentColor.copy(alpha = 0.12f),
                                     CircleShape
                                 )
+                                user.isLive -> Modifier.border(1.5.dp, AppContentColors.accent(), CircleShape)
                                 isSelected -> Modifier.border(AppSpacingTokens.Micro / 2, accentColor, CircleShape)
                                 else -> Modifier.border(AppSpacingTokens.Micro / 2, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
                             }
@@ -733,10 +733,6 @@ fun SidebarUserItem(
                             .background(AppContentColors.accent())
                     )
                 }
-            }
-
-            if (shouldShowDynamicUserLiveBadge(user.isLive)) {
-                DynamicUserLiveBadge(modifier = Modifier.padding(top = AppSpacingTokens.Micro))
             }
 
             if (showLabel) {

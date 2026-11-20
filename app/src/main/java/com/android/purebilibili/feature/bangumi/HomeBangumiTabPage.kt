@@ -2,11 +2,6 @@ package com.android.purebilibili.feature.bangumi
 
 import com.android.purebilibili.feature.home.collectAsHomeFeedState
 import com.android.purebilibili.navigation.tabIndicatorPosition
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -23,7 +18,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -99,12 +93,7 @@ fun HomeBangumiTabPage(
     val density = LocalDensity.current
     var channelHeightPx by remember { mutableIntStateOf(0) }
     val channelHeight = with(density) { channelHeightPx.toDp() }
-    // 频道 tab 行（番剧/影视）：下滑折叠隐藏，上滑/回顶重新出现
-    var channelTabsVisible by remember { mutableStateOf(true) }
-    var lastScrollIndex by remember { mutableStateOf(0) }
-    var lastScrollOffset by remember { mutableStateOf(0) }
     val homeTopPadding = contentPadding.calculateTopPadding()
-    val visibleChannelHeight = if (channelTabsVisible || !inHubHome) channelHeight else 0.dp
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -155,71 +144,49 @@ fun HomeBangumiTabPage(
                     onLoadMoreSearch = viewModel::loadMoreSearch,
                     scrollToTopRequestId = scrollToTopRequestId,
                     listBottomPadding = contentPadding.calculateBottomPadding(),
-                    // 频道栏收起后撤销其占位，不保留上次测量的完整高度。
-                    listTopPadding = homeTopPadding + visibleChannelHeight,
+                    listTopPadding = homeTopPadding + channelHeight,
                     tabBackdrop = null,
-                    onHomeScrollChanged = { index, offset ->
-                        channelTabsVisible = if (index == 0 && offset < 100) {
-                            true
-                        } else {
-                            val scrollingDown = when {
-                                index > lastScrollIndex -> true
-                                index < lastScrollIndex -> false
-                                else -> offset > lastScrollOffset + 50
-                            }
-                            val scrollingUp = when {
-                                index < lastScrollIndex -> true
-                                index > lastScrollIndex -> false
-                                else -> offset < lastScrollOffset - 50
-                            }
-                            if (scrollingDown) false else if (scrollingUp) true else channelTabsVisible
-                        }
-                        lastScrollIndex = index
-                        lastScrollOffset = offset
-                    },
                 )
             }
         }
-        AnimatedVisibility(
-            visible = channelTabsVisible || !inHubHome,
-            modifier = Modifier.padding(top = homeTopPadding),
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut(),
+        Column(
+            modifier = Modifier
+                .padding(top = homeTopPadding)
+                .fillMaxWidth()
+                .onSizeChanged { channelHeightPx = it.height },
         ) {
-            Column(Modifier.fillMaxWidth().onSizeChanged { channelHeightPx = it.height }) {
-                if (!inHubHome) {
-                    AppTopBar(
-                        modifier = Modifier.consumeWindowInsets(WindowInsets.statusBars),
-                        title = when (state.page) {
-                            BangumiHubPage.INDEX -> "索引"
-                            BangumiHubPage.FOLLOW -> if (state.channel == BangumiChannel.BANGUMI) "我的追番" else "我的追剧"
-                            BangumiHubPage.SEARCH -> "搜索"
-                            BangumiHubPage.HOME -> state.channel.label
-                        },
-                        navigationIcon = {
-                            AppIconButton(onClick = handleBack) {
-                                AppIcon(rememberAppBackIcon(), contentDescription = "返回")
-                            }
-                        },
-                    )
-                } else {
-                    AppLiquidAwareTabRow(
-                        // Glass indicator fills the measured slot; native geometry keeps its defaults.
-                        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
-                        role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
-                        options = channelOptions,
-                        selectedValue = state.channel,
-                        indicatorPositionProvider = { channelPager.tabIndicatorPosition },
-                        isScrollInProgressProvider = { channelPager.isScrollInProgress },
-                        onSelectionChange = viewModel::selectChannel,
-                        dragSelectionEnabled = channelOptions.size > 1,
-                        tapPressRefractionEnabled = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        miuixBackdrop = channelBackdrop,
-                    )
-                }
+            if (!inHubHome) {
+                AppTopBar(
+                    modifier = Modifier.consumeWindowInsets(WindowInsets.statusBars),
+                    title = when (state.page) {
+                        BangumiHubPage.INDEX -> "索引"
+                        BangumiHubPage.FOLLOW -> if (state.channel == BangumiChannel.BANGUMI) "我的追番" else "我的追剧"
+                        BangumiHubPage.SEARCH -> "搜索"
+                        BangumiHubPage.HOME -> state.channel.label
+                    },
+                    navigationIcon = {
+                        AppIconButton(onClick = handleBack) {
+                            AppIcon(rememberAppBackIcon(), contentDescription = "返回")
+                        }
+                    },
+                )
+            } else {
+                AppLiquidAwareTabRow(
+                    // Glass indicator fills the measured slot; native geometry keeps its defaults.
+                    liquidGlassAdaptIndicatorToLabel = !themeConfig.liquidGlassEnabled,
+                    role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
+                    options = channelOptions,
+                    selectedValue = state.channel,
+                    indicatorPositionProvider = { channelPager.tabIndicatorPosition },
+                    isScrollInProgressProvider = { channelPager.isScrollInProgress },
+                    onSelectionChange = viewModel::selectChannel,
+                    dragSelectionEnabled = channelOptions.size > 1,
+                    tapPressRefractionEnabled = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    miuixBackdrop = channelBackdrop,
+                )
             }
         }
         AppSnackbarHost(

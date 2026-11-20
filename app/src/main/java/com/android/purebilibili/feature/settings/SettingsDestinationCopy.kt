@@ -15,8 +15,8 @@ data class SettingsDestinationCopy(
 internal fun settingsDestinationCopy(target: SettingsSearchTarget): SettingsDestinationCopy = when (target) {
     // 场景级分组（分类页聚合入口）:标题与根分类名保持一致,子页另用更具体的名称
     SettingsSearchTarget.INTERFACE_THEME -> SettingsDestinationCopy(
-        title = "外观与动画",
-        summary = "主题、文字大小、图标、动画与振动",
+        title = SettingsRootCategory.APPEARANCE_THEME.title,
+        summary = SettingsRootCategory.APPEARANCE_THEME.subtitle,
     )
     SettingsSearchTarget.NAVIGATION -> SettingsDestinationCopy(
         title = "导航布局",
@@ -45,7 +45,7 @@ internal fun settingsDestinationCopy(target: SettingsSearchTarget): SettingsDest
 
     // 目的地页面与行入口
     SettingsSearchTarget.APPEARANCE -> SettingsDestinationCopy(
-        title = "外观设置",
+        title = SettingsRootCategory.APPEARANCE_THEME.title,
         summary = "选择界面风格、颜色、字体、显示大小和启动画面",
     )
     SettingsSearchTarget.PLAYBACK -> SettingsDestinationCopy(
@@ -57,8 +57,8 @@ internal fun settingsDestinationCopy(target: SettingsSearchTarget): SettingsDest
         summary = "选择底栏和顶部入口，并调整图标、文字和顺序",
     )
     SettingsSearchTarget.ANIMATION -> SettingsDestinationCopy(
-        title = "动画与触感",
-        summary = "页面动画、振动反馈和玻璃效果",
+        title = SettingsRootCategory.ANIMATION_HAPTICS.title,
+        summary = SettingsRootCategory.ANIMATION_HAPTICS.subtitle,
     )
     SettingsSearchTarget.FULLSCREEN_GESTURE -> SettingsDestinationCopy(
         title = "全屏与手势",

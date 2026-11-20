@@ -124,6 +124,17 @@ import com.android.purebilibili.feature.dynamic.resolveDynamicDeleteAction
 import com.android.purebilibili.feature.web.PublicWebLinkText
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
+internal fun shareDynamicLink(context: android.content.Context, item: DynamicItem) {
+    val dynamicUrl = "https://t.bilibili.com/${item.id_str}"
+    val description = item.modules.module_dynamic?.desc?.text?.take(100).orEmpty()
+    val shareText = "${description.ifBlank { "分享动态" }}\n$dynamicUrl"
+    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+    }
+    context.startActivity(android.content.Intent.createChooser(shareIntent, "分享动态"))
+}
+
 @Immutable
 data class DynamicCardNavigationActions(
     val onVideoClick: (String) -> Unit,
@@ -697,24 +708,7 @@ fun DynamicCardV2(
                                 AppWindowAction(
                                     label = "分享动态",
                                     icon = shareIcon,
-                                    onClick = {
-                                        val dynamicUrl = "https://t.bilibili.com/${item.id_str}"
-                                        val descText = content?.desc?.text?.take(100).orEmpty()
-                                        val shareText = if (descText.isNotBlank()) {
-                                            "$descText\n$dynamicUrl"
-                                        } else {
-                                            "分享动态\n$dynamicUrl"
-                                        }
-                                        val shareIntent = android.content.Intent(
-                                            android.content.Intent.ACTION_SEND
-                                        ).apply {
-                                            this.type = "text/plain"
-                                            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                                        }
-                                        context.startActivity(
-                                            android.content.Intent.createChooser(shareIntent, "分享动态")
-                                        )
-                                    },
+                                    onClick = { shareDynamicLink(context, item) },
                                 )
                             )
                             if (watchLaterAid != null && onWatchLaterClick != null) {

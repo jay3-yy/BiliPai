@@ -142,7 +142,6 @@ internal fun BiliPaiNavDisplayHost(
     miuixPredictiveBackMaxProgressPercent: Int =
         MIUIX_PREDICTIVE_BACK_DEFAULT_MAX_PROGRESS_PERCENT,
     settingsContainerMorphEnabled: Boolean = true,
-    settingsContainerRealtimeBlurEnabled: Boolean = false,
     sourceMetadata: BiliPaiNavSourceMetadata,
     programmaticBackDispatcher: BiliPaiProgrammaticBackDispatcher,
     preferWholeCardReturn: Boolean = false,
@@ -203,7 +202,7 @@ internal fun BiliPaiNavDisplayHost(
     val settingsContainerPageColor = rememberUpdatedState(AppSurfaceTokens.groupedListContainer())
     val settingsContainerSnapshot = settingsContainerSources.sources.toMap()
     val availableSettingsContainerTransitions = remember(
-        settingsContainerSnapshot, settingsContainerRealtimeBlurEnabled, navBlurMotionTierProvider,
+        settingsContainerSnapshot, videoTransitionRealtimeBlurEnabled, navBlurMotionTierProvider,
         stackSnapshot,
     ) {
         settingsContainerSnapshot.mapValues { (target, source) ->
@@ -211,7 +210,7 @@ internal fun BiliPaiNavDisplayHost(
                 origin = source,
                 destinationZIndex = stackSnapshot.indexOf(target).toFloat(),
                 pageColor = { settingsContainerPageColor.value },
-                realtimeBlurEnabled = settingsContainerRealtimeBlurEnabled,
+                realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                 blurMotionTier = navBlurMotionTierProvider,
             )
         }
@@ -235,7 +234,7 @@ internal fun BiliPaiNavDisplayHost(
     val navigationSharedSnapshot = navigationSharedSources.sources.toMap()
     val navigationContainerTransitions = remember(
         navigationSharedEnabled, navigationSharedSnapshot, stackSnapshot,
-        settingsPersistentPanes, activeMainHostRoute, settingsContainerRealtimeBlurEnabled,
+        settingsPersistentPanes, activeMainHostRoute, videoTransitionRealtimeBlurEnabled,
         navBlurMotionTierProvider,
     ) {
         if (!navigationSharedEnabled) emptyMap() else
@@ -247,7 +246,7 @@ internal fun BiliPaiNavDisplayHost(
                     origin = origin,
                     destinationZIndex = stackSnapshot.indexOf(target).toFloat(),
                     pageColor = { settingsContainerPageColor.value },
-                    realtimeBlurEnabled = settingsContainerRealtimeBlurEnabled,
+                    realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                     blurMotionTier = navBlurMotionTierProvider,
                     navigationControlFallback = true,
                 )
@@ -268,7 +267,7 @@ internal fun BiliPaiNavDisplayHost(
     val liveContainerIsLightBackground = rememberUpdatedState(isLightBackground)
     val availableLiveContainerTransitions = remember(
         liveContainerSnapshot, videoSharedTransitionDurationMillis,
-        videoTransitionRealtimeBlurEnabled, settingsContainerRealtimeBlurEnabled, navBlurMotionTierProvider,
+        videoTransitionRealtimeBlurEnabled, navBlurMotionTierProvider,
     ) {
         liveContainerSnapshot.mapValues { (target, source) ->
             val articleTarget = target is BiliPaiNavKey.ArticleDetail || target is BiliPaiNavKey.DynamicDetail
@@ -289,8 +288,7 @@ internal fun BiliPaiNavDisplayHost(
                 cardBackgroundEffectsEnabled = articleTarget || bangumiPlayerTarget ||
                     target is BiliPaiNavKey.Live || target is BiliPaiNavKey.LiveAreaDetail,
                 useSharedSnapshotBlur = target is BiliPaiNavKey.Live,
-                realtimeBlurEnabled = if (generalContainer) settingsContainerRealtimeBlurEnabled
-                    else videoTransitionRealtimeBlurEnabled,
+                realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                 isLightBackground = { liveContainerIsLightBackground.value },
                 blurMotionTierProvider = navBlurMotionTierProvider,
             )

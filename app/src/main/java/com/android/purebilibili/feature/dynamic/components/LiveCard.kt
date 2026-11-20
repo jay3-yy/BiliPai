@@ -1,49 +1,52 @@
 // 文件路径: feature/dynamic/components/LiveCard.kt
 package com.android.purebilibili.feature.dynamic.components
 
-import com.android.purebilibili.core.ui.AppContentColors
-
-import coil3.network.NetworkHeaders
-import coil3.network.httpHeaders
-
-import coil3.request.crossfade
-import com.android.purebilibili.core.ui.components.AppIcon
-import com.android.purebilibili.core.ui.components.AppText
-
-import com.android.purebilibili.core.ui.AppSpacingTokens
-
-import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.rememberAppPlayIcon
-import com.android.purebilibili.core.ui.components.AppCard
-import com.android.purebilibili.core.ui.components.AppCardDefaults
-import com.android.purebilibili.core.ui.components.AppCardShape
-
 import android.util.Log
 import androidx.compose.foundation.background
-import com.android.purebilibili.core.ui.components.appActionClickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-//  Material Icons
-import androidx.compose.material3.*
-import com.android.purebilibili.core.theme.LocalAppUiStyle
-import com.android.purebilibili.feature.live.rememberLiveCardContainerTransition
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSpacingTokens
+import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppCard
+import com.android.purebilibili.core.ui.components.AppCardDefaults
+import com.android.purebilibili.core.ui.components.AppCardShape
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.PageAwareAsyncImage
-//  已改用 AppContentColors.accent()
+import com.android.purebilibili.core.ui.components.appActionClickable
+import com.android.purebilibili.core.ui.rememberAppPlayIcon
 import com.android.purebilibili.data.model.response.LiveMajor
 import com.android.purebilibili.data.model.response.LiveRcmdMajor
 import com.android.purebilibili.feature.dynamic.model.LiveContentInfo
+import com.android.purebilibili.feature.live.LiveRoomCover
+import com.android.purebilibili.feature.live.rememberLiveCardContainerTransition
 import kotlinx.serialization.json.Json
 
 /**
@@ -67,100 +70,15 @@ fun LiveCard(
         }
     }
 
-    val context = LocalContext.current
-
     if (liveInfo != null) {
-        val roomId = liveInfo.live_play_info?.room_id ?: 0L
-        val title = liveInfo.live_play_info?.title ?: ""
-
-        val transition = rememberLiveCardContainerTransition(
-            roomId = roomId, title = title, hostName = "",
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            cornerRadius = AppShapes.resolveContainerCornerDp(ContainerLevel.Card, LocalAppUiStyle.current),
-            onClick = { onLiveClick(roomId, title, "") },
+        val playInfo = liveInfo.live_play_info
+        DynamicLiveRoomCard(
+            roomId = playInfo?.room_id ?: 0L,
+            title = playInfo?.title,
+            coverUrl = playInfo?.cover,
+            viewerCount = playInfo?.online,
+            onLiveClick = onLiveClick,
         )
-        AppCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(transition.modifier)
-                .appActionClickable(onClick = transition.onClick),
-            shape = AppCardShape.Semantic(ContainerLevel.Card),
-            colors = AppCardDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            )
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.DoubleExtraLarge)
-                    .padding(AppSpacingTokens.Small),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 直播封面
-                Box(
-                    modifier = Modifier
-                        .width(AppSpacingTokens.TripleExtraLarge * 2 + AppSpacingTokens.ExtraLarge)
-                        .fillMaxHeight()
-                        .clip(AppShapes.container(ContainerLevel.Chip))
-                ) {
-                    liveInfo.live_play_info?.cover?.let { coverUrl ->
-                        val url = if (coverUrl.startsWith("http://")) coverUrl.replace("http://", "https://") else coverUrl
-                        PageAwareAsyncImage(
-                            model = coil3.request.ImageRequest.Builder(context)
-                                .data(url)
-                                .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-
-                    // 直播标识
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(AppSpacingTokens.ExtraSmall)
-                            .background(AppContentColors.accent(), AppShapes.container(ContainerLevel.Tag))
-                            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.Micro)
-                    ) {
-                        AppText("直播中", fontSize = MaterialTheme.typography.labelSmall.fontSize, color = AppContentColors.onAccent(), fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(AppSpacingTokens.Small + AppSpacingTokens.Micro))
-
-                // 直播信息
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    AppText(
-                        liveInfo.live_play_info?.title ?: "直播中",
-                        fontSize = MaterialTheme.typography.labelMedium.fontSize,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = AppContentColors.primaryText()
-                    )
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        AppIcon(
-                            rememberAppPlayIcon(),
-                            null,
-                            modifier = Modifier.size(AppSpacingTokens.Medium + AppSpacingTokens.Micro),
-                            tint = AppContentColors.secondaryText().copy(0.6f)
-                        )
-                        AppText(
-                            "${liveInfo.live_play_info?.online ?: 0} 人观看",
-                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                            color = AppContentColors.secondaryText().copy(0.6f)
-                        )
-                    }
-                }
-            }
-        }
     } else {
         // 无法解析时显示占位
         AppCard(
@@ -201,52 +119,71 @@ fun LiveMajorCard(
 ) {
     val roomId = live.id.trim().toLongOrNull() ?: 0L
     if (roomId <= 0L) return
-    val title = live.title.ifBlank { "直播间" }
-    val context = LocalContext.current
+    DynamicLiveRoomCard(
+        roomId = roomId,
+        title = live.title.ifBlank { "直播间" },
+        coverUrl = live.cover,
+        viewerCount = null,
+        onLiveClick = onLiveClick,
+    )
+}
+
+@Composable
+private fun DynamicLiveRoomCard(
+    roomId: Long,
+    title: String?,
+    coverUrl: String?,
+    viewerCount: Int?,
+    onLiveClick: (roomId: Long, title: String, uname: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     val transition = rememberLiveCardContainerTransition(
-        roomId = roomId, title = title, hostName = "",
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        roomId = roomId,
+        title = title.orEmpty(),
+        hostName = "",
+        color = containerColor,
         cornerRadius = AppShapes.resolveContainerCornerDp(ContainerLevel.Card, LocalAppUiStyle.current),
-        onClick = { onLiveClick(roomId, title, "") },
+        onClick = { onLiveClick(roomId, title.orEmpty(), "") },
     )
     AppCard(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .then(transition.modifier)
             .appActionClickable(onClick = transition.onClick),
         shape = AppCardShape.Semantic(ContainerLevel.Card),
-        colors = AppCardDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+        colors = AppCardDefaults.colors(containerColor = containerColor),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.DoubleExtraLarge)
                 .padding(AppSpacingTokens.Small),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
+            LiveRoomCover(
                 modifier = Modifier
-                    .width(AppSpacingTokens.TripleExtraLarge * 2 + AppSpacingTokens.ExtraLarge)
-                    .fillMaxHeight()
-                    .clip(AppShapes.container(ContainerLevel.Chip))
+                    .widthIn(max = 120.dp)
+                    .clip(AppShapes.container(ContainerLevel.Chip)),
             ) {
-                if (live.cover.isNotBlank()) {
-                    val url = if (live.cover.startsWith("http://")) {
-                        live.cover.replace("http://", "https://")
-                    } else {
-                        live.cover
-                    }
-                    PageAwareAsyncImage(
-                        model = coil3.request.ImageRequest.Builder(context)
+                if (!coverUrl.isNullOrBlank()) {
+                    val context = LocalContext.current
+                    val request = remember(context, coverUrl) {
+                        val url = if (coverUrl.startsWith("http://")) {
+                            coverUrl.replaceFirst("http://", "https://")
+                        } else {
+                            coverUrl
+                        }
+                        ImageRequest.Builder(context)
                             .data(url)
                             .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
                             .crossfade(true)
-                            .build(),
+                            .build()
+                    }
+                    PageAwareAsyncImage(
+                        model = request,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Crop,
                     )
                 }
                 Box(
@@ -254,20 +191,45 @@ fun LiveMajorCard(
                         .align(Alignment.TopStart)
                         .padding(AppSpacingTokens.ExtraSmall)
                         .background(AppContentColors.accent(), AppShapes.container(ContainerLevel.Tag))
-                        .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.Micro)
+                        .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.Micro),
                 ) {
-                    AppText("直播中", fontSize = MaterialTheme.typography.labelSmall.fontSize, color = AppContentColors.onAccent(), fontWeight = FontWeight.Bold)
+                    AppText(
+                        text = "直播中",
+                        fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                        color = AppContentColors.onAccent(),
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
             Spacer(modifier = Modifier.width(AppSpacingTokens.Small + AppSpacingTokens.Micro))
-            AppText(
-                title,
-                fontSize = MaterialTheme.typography.labelMedium.fontSize,
-                fontWeight = FontWeight.Medium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                color = AppContentColors.primaryText()
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                AppText(
+                    text = title ?: "直播中",
+                    fontSize = MaterialTheme.typography.labelMedium.fontSize,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = AppContentColors.primaryText(),
+                )
+                if (viewerCount != null) {
+                    val viewerColor = AppContentColors.secondaryText().copy(alpha = 0.6f)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppIcon(
+                            rememberAppPlayIcon(),
+                            contentDescription = null,
+                            modifier = Modifier.size(AppSpacingTokens.Medium + AppSpacingTokens.Micro),
+                            tint = viewerColor,
+                        )
+                        AppText(
+                            text = "$viewerCount 人观看",
+                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                            color = viewerColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
         }
     }
 }

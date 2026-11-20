@@ -133,9 +133,9 @@ internal fun performancePageLabel(value: String) = when (value) {
     "watch_later" -> "稍后再看"
     "listen_video" -> "听视频"
     "live_list" -> "直播列表"
-    "appearance_settings" -> "外观设置"
+    "appearance_settings" -> com.android.purebilibili.feature.settings.SettingsRootCategory.APPEARANCE_THEME.title
     "playback_settings" -> "播放设置"
-    "animation_settings" -> "动画与触感"
+    "animation_settings" -> com.android.purebilibili.feature.settings.SettingsRootCategory.ANIMATION_HAPTICS.title
     "home_settings" -> "首页与动态设置"
     "bottom_bar_settings" -> "导航布局"
     "unknown" -> "页面未记录"

@@ -75,7 +75,13 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = settingsDestinationCopy(SettingsSearchTarget.INTERFACE_THEME).title,
         subtitle = settingsDestinationCopy(SettingsSearchTarget.INTERFACE_THEME).summary,
         section = "设置",
-        aliases = listOf("界面与主题", "外观与动画", "界面", "主题", "ui预设", "md3", "miuix", "字体", "dpi", "动态图标", "应用图标", "开屏", "开屏壁纸")
+        aliases = listOf(
+            "界面与主题", "外观与主题", "外观与动画", "外观设置", "外观", "界面", "主题",
+            "ui预设", "md3", "miuix", "字体", "dpi", "动态图标", "应用图标", "开屏", "开屏壁纸",
+            "文字粗细", "参与随机的壁纸", "图标", "皮肤", "动态取色", "自定义颜色", "主题色",
+            "动态颜色", "语言", "应用字体", "本地字体", "导入字体", "自定义字体", "ttf", "otf",
+            "界面缩放", "自定义壁纸", "相册壁纸", "material", "android", "安卓", "原生",
+        ),
     ),
     SettingsSearchEntry(
         settingId = "legacy.002",
@@ -200,46 +206,6 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         subtitle = settingsDestinationCopy(SettingsSearchTarget.ABOUT_SUPPORT).summary,
         section = "设置",
         aliases = listOf("SHA-256", "provenance", "安装包来源验证", "版本来源", "关于与支持", "帮助与关于", "关于", "支持", "版本", "更新", "开源", "发布渠道", "小贴士", "默认打开链接", "telegram", "twitter", "捐赠", "打赏")
-    ),
-    SettingsSearchEntry(
-        settingId = "legacy.013",
-        target = SettingsSearchTarget.APPEARANCE,
-        title = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
-        subtitle = "主题、字体、缩放、开屏与应用图标",
-        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
-        // 泛入口别名：具体子项词（主题色/hex/md3颜色/字体大小/dpi/开屏壁纸等）交由
-        // 更具体的子项条目承接，避免泛条目靠堆叠别名压过具体结果。
-        aliases = listOf(
-            "文字粗细",
-            "参与随机的壁纸",
-            "首页卡片淡入",
-            "外观",
-            "主题",
-            "图标",
-            "皮肤",
-            "动态取色",
-            "自定义颜色",
-            "主题色",
-            "动态颜色",
-            "语言",
-            "字体",
-            "应用字体",
-            "本地字体",
-            "导入字体",
-            "自定义字体",
-            "ttf",
-            "otf",
-            "界面缩放",
-            "开屏",
-            "自定义壁纸",
-            "相册壁纸",
-            "应用图标",
-            "md3",
-            "material",
-            "android",
-            "安卓",
-            "原生",
-        )
     ),
     SettingsSearchEntry(
         settingId = "legacy.014",
@@ -737,10 +703,12 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     SettingsSearchEntry(
         settingId = "legacy.045",
         target = SettingsSearchTarget.ANIMATION,
-        title = "动画、振动与玻璃效果",
-        subtitle = "页面动画、玻璃效果与振动反馈",
-        section = "动画与触感",
+        title = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).summary,
+        section = "设置",
         aliases = listOf(
+            "动画、振动与玻璃效果",
+            "动画与振动",
             "返回时模糊背景",
             "加载占位动画",
             "动画与触感",

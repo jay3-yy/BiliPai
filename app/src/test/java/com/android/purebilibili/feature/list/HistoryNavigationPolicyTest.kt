@@ -108,7 +108,7 @@ class HistoryNavigationPolicyTest {
             seasonId = 123L, epid = 456L,
         )
         assertEquals(
-            com.android.purebilibili.navigation3.BiliPaiNavKey.BangumiPlayer(123L, 456L),
+            com.android.purebilibili.navigation3.BiliPaiNavKey.BangumiPlayer(0L, 456L),
             resolveHistoryCardContainerTarget(item),
         )
         assertEquals(

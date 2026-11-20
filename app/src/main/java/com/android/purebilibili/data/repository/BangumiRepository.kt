@@ -299,20 +299,17 @@ object BangumiRepository {
     /**
      * 获取番剧详情
      */
-    /**
-     * 获取番剧详情
-     */
     suspend fun getSeasonDetail(seasonId: Long = 0, epId: Long = 0): Result<BangumiDetail> = withContext(Dispatchers.IO) {
         try {
             //  [修复] 使用 ResponseBody 自行解析，避免大型番剧导致 OOM
-            // 优先使用 epId (因为历史记录中的 seasonId 可能是 AVID，而 epId 是准确的)，如果 epId 为 0 则使用 seasonId
-            val responseBody = if (epId > 0) {
-                api.getSeasonDetail(epId = epId)
-            } else if (seasonId > 0) {
-                api.getSeasonDetail(seasonId = seasonId)
-            } else {
+            if (seasonId <= 0L && epId <= 0L) {
                 return@withContext Result.failure(Exception("参数错误: seasonId 和 epId 不能同时为空"))
             }
+            // 未播出的分集可能无法单独查询，保留番剧 ID 以获取整季详情。
+            val responseBody = api.getSeasonDetail(
+                seasonId = seasonId.takeIf { it > 0L },
+                epId = epId.takeIf { it > 0L }
+            )
 
             val jsonString = responseBody.string()
             
