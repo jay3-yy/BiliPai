@@ -58,6 +58,20 @@ class BilibiliLinkNavigationPolicyTest {
     }
 
     @Test
+    fun `read mobile and native paths resolve to the article id`() {
+        listOf(
+            "https://www.bilibili.com/read/mobile/8905947",
+            "https://www.bilibili.com/read/native/8905947",
+            "https://www.bilibili.com/read/cv8905947",
+        ).forEach { link ->
+            val native = assertIs<BilibiliLinkNavigationAction.NativeTarget>(
+                resolveBilibiliLinkNavigationAction(link)
+            )
+            assertEquals(BilibiliNavigationTarget.Article(8905947L), native.target, link)
+        }
+    }
+
+    @Test
     fun `external link remains external`() {
         val action = resolveBilibiliLinkNavigationAction("https://example.com/demo")
 

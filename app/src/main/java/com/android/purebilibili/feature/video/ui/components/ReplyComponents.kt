@@ -943,16 +943,25 @@ internal fun buildRichCommentAnnotatedString(
         }
 
         richUrls.forEach { (token, url) ->
-            addExactTokenMatch(
-                token = token,
-                type = "rich_url",
-                annotation = resolveReplyContentUrlNavigationUrl(token, url),
-                displayText = resolveReplyContentUrlDisplayText(token, url),
-                inlineContentId = url.prefixIcon.takeIf { it.isNotBlank() }?.let {
-                    resolveReplyContentUrlPrefixInlineId(token)
-                },
-                priority = 0
-            )
+            val navigationUrl = resolveReplyContentUrlNavigationUrl(token, url)
+            val displayText = resolveReplyContentUrlDisplayText(token, url)
+            val inlineContentId = url.prefixIcon.takeIf { it.isNotBlank() }?.let {
+                resolveReplyContentUrlPrefixInlineId(token)
+            }
+            // 正文已换成标题、原文 token 不在时，仍把标题区间标成同一个跳转。
+            val tokenInMessage = token.isNotEmpty() && remainingText.contains(token)
+            val title = url.title.trim()
+            val linkToken = if (tokenInMessage) token else title
+            if (linkToken.isNotEmpty() && (tokenInMessage || linkToken != token)) {
+                addExactTokenMatch(
+                    token = linkToken,
+                    type = "rich_url",
+                    annotation = navigationUrl,
+                    displayText = displayText,
+                    inlineContentId = inlineContentId,
+                    priority = 0
+                )
+            }
         }
 
         atNameToMid.forEach { (name, mid) ->
