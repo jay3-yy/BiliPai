@@ -4535,30 +4535,41 @@ private fun VideoPageItem(
         }
 
 
-        PortraitCommentSheet(
-            visible = showCommentSheet,
-            active = isCurrentPage,
-            onDismiss = {
-                showCommentSheet = false
-            },
-            onVisibilityProgressChange = { progress ->
-                commentSheetVisibilityProgress = progress
-            },
-            commentViewModel = commentViewModel,
-            aid = activeAid,
-            upMid = authorMid,
-            expectedReplyCount = if (isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.reply else stat.reply,
-            emoteMap = currentSuccess?.emoteMap ?: emptyMap(),
-            maxTimestampMs = currentSuccess?.videoDurationMs?.takeIf { it > 0L }
-                ?: progressDuration.takeIf { it > 0L },
-            onRootCommentClick = { viewModel.openRootCommentComposer() },
-            onReplyClick = { reply ->
-                viewModel.setReplyingTo(reply)
-                viewModel.showCommentInputDialog()
-            },
-            onUserClick = onUserClick,
-            onOpenBilibiliLink = onOpenBilibiliLink,
-        )
+        CompositionLocalProvider(
+            com.android.purebilibili.feature.share.LocalReplyShareContext provides
+                com.android.purebilibili.feature.share.videoReplyShareContext(
+                    bvid = bvid,
+                    title = currentSuccess?.info?.title?.ifBlank { null } ?: title,
+                    cover = currentSuccess?.info?.pic?.ifBlank { null } ?: cover,
+                    page = currentSuccess?.info?.pages?.indexOfFirst { it.cid == currentPlayingCid }
+                        ?.coerceAtLeast(0)?.plus(1) ?: 1,
+                ),
+        ) {
+            PortraitCommentSheet(
+                visible = showCommentSheet,
+                active = isCurrentPage,
+                onDismiss = {
+                    showCommentSheet = false
+                },
+                onVisibilityProgressChange = { progress ->
+                    commentSheetVisibilityProgress = progress
+                },
+                commentViewModel = commentViewModel,
+                aid = activeAid,
+                upMid = authorMid,
+                expectedReplyCount = if (isCurrentModelVideo && currentSuccess != null) currentSuccess.info.stat.reply else stat.reply,
+                emoteMap = currentSuccess?.emoteMap ?: emptyMap(),
+                maxTimestampMs = currentSuccess?.videoDurationMs?.takeIf { it > 0L }
+                    ?: progressDuration.takeIf { it > 0L },
+                onRootCommentClick = { viewModel.openRootCommentComposer() },
+                onReplyClick = { reply ->
+                    viewModel.setReplyingTo(reply)
+                    viewModel.showCommentInputDialog()
+                },
+                onUserClick = onUserClick,
+                onOpenBilibiliLink = onOpenBilibiliLink,
+            )
+        }
 
         if (isCurrentPage) {
             val showCommentInput by viewModel.showCommentDialog.collectAsStateWithLifecycle()

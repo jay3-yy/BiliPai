@@ -58,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.feature.video.ui.components.replyMenuCallbacks
 import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.util.FormatUtils
@@ -137,9 +138,10 @@ fun BangumiPlayerContent(
 ) {
     androidx.compose.runtime.CompositionLocalProvider(
         com.android.purebilibili.feature.share.LocalReplyShareContext provides
-            com.android.purebilibili.feature.share.ReplyShareContext(
-                url = "https://www.bilibili.com/bangumi/play/ep${currentEpisode.id}",
-                title = detail.title, cover = currentEpisode.cover,
+            com.android.purebilibili.feature.share.bangumiReplyShareContext(
+                episodeId = currentEpisode.id,
+                title = detail.title,
+                cover = currentEpisode.cover,
             ),
     ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -1088,6 +1090,8 @@ fun BangumiPlayerContent(
         onDissolveStart = commentViewModel::startDissolve,
         showIdentityDecorations = showIdentityDecorations,
         onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUserClick?.invoke(it) } },
+        pinnedReplyIds = commentState.pinnedReplyIds,
+        menuCallbacks = commentViewModel.replyMenuCallbacks(),
         likedComments = commentState.likedComments,
         currentMid = commentState.currentMid,
         showUpFlag = commentState.showUpFlag,

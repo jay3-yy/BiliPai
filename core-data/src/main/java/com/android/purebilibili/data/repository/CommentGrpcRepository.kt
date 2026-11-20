@@ -381,6 +381,7 @@ object CommentGrpcRepository {
             config = ReplyConfig(showUpFlag = subject.showUpAction),
             replies = root.replies.orEmpty(),
             root = root,
+            upper = subject.upMid.takeIf { it > 0L }?.let { ReplyUpper(mid = it) },
             control = ReplyPageControl(
                 title = subject.title,
                 backgroundText = subject.backgroundText,
@@ -414,6 +415,7 @@ object CommentGrpcRepository {
             cursor = cursor.copy(allCount = subject.count.toInt()),
             config = ReplyConfig(showUpFlag = subject.showUpAction),
             replies = replies,
+            upper = subject.upMid.takeIf { it > 0L }?.let { ReplyUpper(mid = it) },
             control = ReplyPageControl(
                 title = subject.title,
                 backgroundText = subject.backgroundText,

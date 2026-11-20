@@ -108,10 +108,11 @@ import com.android.purebilibili.feature.video.ui.components.CommentSortHeader
 import com.android.purebilibili.feature.video.ui.components.CommentSortFilterBar
 import com.android.purebilibili.feature.video.ui.components.CommentSearchSheet
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
+import com.android.purebilibili.feature.video.ui.components.ReplyMenuCallbacks
 import com.android.purebilibili.feature.video.ui.components.VideoCommentVoteCard
 import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
-import com.android.purebilibili.feature.video.ui.components.shouldShowReplyTopAction
+import com.android.purebilibili.feature.video.ui.components.resolveReplyMenuBindings
 import com.android.purebilibili.feature.video.ui.components.shouldShowVideoCommentBackToTop
 import com.android.purebilibili.feature.video.ui.components.LandscapeSidePanel
 import com.android.purebilibili.feature.video.ui.components.LandscapeSidePanelEdge
@@ -494,6 +495,7 @@ internal class VideoContentCommentState(
     val hatedComments: Set<Long>,
     val nextPage: Int,
     val pageControl: com.android.purebilibili.data.model.response.ReplyPageControl? = null,
+    val pinnedReplyIds: Set<Long> = emptySet(),
 )
 
 internal class VideoContentNoteState(
@@ -1016,6 +1018,7 @@ internal fun VideoContentSection(
                             isRepliesEnd = pageComments?.isRepliesEnd ?: isRepliesEnd,
                             paginationPage = pageComments?.nextPage ?: commentState.nextPage,
                             pageControl = pageComments?.pageControl ?: commentState.pageControl,
+                            pinnedReplyIds = pageComments?.pinnedReplyIds ?: commentState.pinnedReplyIds,
                             voteCard = if (pageComments != null) pageComments.voteCard else voteCard,
                             onUpClick = onUpClick,
                             onSubReplyClick = onSubReplyClick,
@@ -1735,6 +1738,20 @@ internal fun VideoCommentTab(
                     contentType = { resolveReplyItemContentType(it) }
                 ) { reply ->
                     // [新增] 使用 DissolvableVideoCard 包裹
+                    val menuCallbacks = remember(onReportComment, onCheckCommentFraud, onToggleTopComment) {
+                        ReplyMenuCallbacks(
+                            onReport = { item, reason -> onReportComment(item.rpid, reason) },
+                            onCheckFraud = onCheckCommentFraud,
+                            onToggleTop = onToggleTopComment,
+                        )
+                    }
+                    val menuBindings = resolveReplyMenuBindings(
+                        item = reply,
+                        currentMid = currentMid,
+                        upMid = upMid,
+                        pinnedReplyIds = pinnedReplyIds,
+                        callbacks = menuCallbacks,
+                    )
                     com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
                         isDissolving = reply.rpid in dissolvingIds,
                         onDissolveComplete = { onDeleteComment(reply.rpid) },
@@ -1745,7 +1762,7 @@ internal fun VideoCommentTab(
                         ReplyItemView(
                             showUpFlag = showUpFlag,
                             item = reply,
-                            isPinned = reply.rpid in pinnedReplyIds,
+                            isPinned = menuBindings.isPinned,
                             upMid = upMid,
                             emoteMap = emoteMap,
                             avatarListState = listState.takeIf { avatarPushEnabled },
@@ -1762,13 +1779,9 @@ internal fun VideoCommentTab(
                             onLikeClick = { onCommentLike(reply.rpid) },
                             onHateClick = { onCommentHate(reply.rpid) },
                             onReplyClick = { onCommentReplyClick(reply) },
-                            onReportClick = { reason -> onReportComment(reply.rpid, reason) },
-                            canToggleTop = shouldShowReplyTopAction(
-                                currentMid = currentMid,
-                                upMid = upMid,
-                                item = reply
-                            ),
-                            onToggleTopClick = { onToggleTopComment(reply) },
+                            onReportClick = menuBindings.onReportClick,
+                            canToggleTop = menuBindings.canToggleTop,
+                            onToggleTopClick = menuBindings.onToggleTopClick,
                             // [修复] 正确传递点赞状态 (API数据 或 本地乐观更新)
                             isLiked = reply.rpid in likedComments,
                             isHated = reply.rpid in hatedComments,
@@ -1776,9 +1789,7 @@ internal fun VideoCommentTab(
                             onDeleteClick = if (currentMid > 0 && reply.mid == currentMid) {
                                 { onDissolveStart(reply.rpid) }
                             } else null,
-                            onCheckFraudClick = if (currentMid > 0 && reply.mid == currentMid) {
-                                { onCheckCommentFraud(reply) }
-                            } else null,
+                            onCheckFraudClick = menuBindings.onCheckFraudClick,
                             // [新增] URL 点击跳转
                             onUrlClick = onCommentUrlClick,
                             // [新增] 头像点击
@@ -1856,6 +1867,7 @@ internal fun LandscapeCommentPanel(
     modifier: Modifier = Modifier,
     paginationPage: Int = 1,
     pageControl: com.android.purebilibili.data.model.response.ReplyPageControl? = null,
+    pinnedReplyIds: Set<Long> = emptySet(),
 ) {
     var previewImages by remember { mutableStateOf(emptyList<String>()) }
     var previewInitialIndex by remember { mutableIntStateOf(0) }
@@ -1955,6 +1967,7 @@ internal fun LandscapeCommentPanel(
                                         ?: info.pages.firstOrNull()?.duration?.times(1000L),
                                     replies = replies,
                                     pageControl = pageControl,
+                                    pinnedReplyIds = pinnedReplyIds,
                                     replyCount = replyCount,
                                     emoteMap = emoteMap,
                                     isRepliesLoading = isRepliesLoading,

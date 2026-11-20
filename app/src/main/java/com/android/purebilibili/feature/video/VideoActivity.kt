@@ -251,6 +251,9 @@ open class VideoActivity : FragmentActivity() {
             val commentReplyPreviewVisible by remember(this@VideoActivity) {
                 SettingsManager.getCommentReplyPreviewVisible(this@VideoActivity)
             }.collectAsStateWithLifecycle(initialValue = true)
+            val detailedCommentTimeEnabled by remember(this@VideoActivity) {
+                SettingsManager.getDetailedCommentTimeEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = false)
             val hapticSettings by remember(this@VideoActivity) { SettingsManager.getHapticSettings(this@VideoActivity) }
                 .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppHapticSettings())
             val hapticFeedbackEnabled by SettingsManager
@@ -357,6 +360,7 @@ open class VideoActivity : FragmentActivity() {
                     com.android.purebilibili.core.ui.LocalSubReplyPreviewLikesEnabled provides subReplyPreviewLikesEnabled,
                     com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled provides commentIpLocationEnabled,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
+                    com.android.purebilibili.core.ui.LocalDetailedCommentTimeEnabled provides detailedCommentTimeEnabled,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->
                         startActivity(android.content.Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
                             putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE,

@@ -207,6 +207,14 @@ fun ArticleDetailScreen(
         onBack(sharedReturnReady)
     }
 
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.android.purebilibili.feature.share.LocalReplyShareContext provides
+            com.android.purebilibili.feature.share.articleReplyShareContext(
+                articleId = articleId,
+                title = screenTitle,
+                cover = (uiState as? ArticleDetailUiState.Success)?.article?.bannerUrl.orEmpty(),
+            ),
+    ) {
     AppScaffold(
         modifier = modifier,
         blurContentReady = uiState !is ArticleDetailUiState.Loading,
@@ -329,6 +337,7 @@ fun ArticleDetailScreen(
             }
         }
         }
+    }
     }
 }
 

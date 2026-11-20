@@ -555,6 +555,7 @@ internal fun resolveReplyCommentShareUrl(
                 11, 17 -> "bilibili://following/detail/${item.oid}"
                 12 -> "https://www.bilibili.com/read/cv${item.oid}"
                 14 -> "https://www.bilibili.com/audio/au${item.oid}"
+                27 -> "https://www.bilibili.com/h5/match/data/detail/${item.oid}"
                 else -> ""
             }
         return buildString {

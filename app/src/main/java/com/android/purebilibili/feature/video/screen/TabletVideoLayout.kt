@@ -1211,6 +1211,7 @@ internal fun TabletSecondaryContent(
                             onCommentLike = commentActions.likeComment,
                             onCommentHate = commentActions.hateComment,
                             onReportComment = commentActions.reportComment,
+                            onToggleTopComment = commentActions.toggleTopComment,
                             onUrlClick = openCommentUrl,
                             showIdentityDecorations = showIdentityDecorations,
                             onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUpClick) ?: Unit }
@@ -1275,6 +1276,13 @@ internal fun TabletSecondaryContent(
                                 key = { "reply_${it.rpid}" },
                                 contentType = { resolveReplyItemContentType(it) }
                             ) { reply ->
+                                val menuBindings = resolveReplyMenuBindings(
+                                    item = reply,
+                                    currentMid = commentState.currentMid,
+                                    upMid = success.info.owner.mid,
+                                    pinnedReplyIds = commentState.pinnedReplyIds,
+                                    callbacks = commentActions.replyMenuCallbacks(),
+                                )
                                 com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
                                     isDissolving = reply.rpid in commentState.dissolvingIds,
                                     onDissolveComplete = { commentActions.deleteComment(reply.rpid) },
@@ -1290,7 +1298,7 @@ internal fun TabletSecondaryContent(
                                         upMid = success.info.owner.mid,
                                         showUpFlag = commentState.showUpFlag,
                                         showIdentityDecorations = showIdentityDecorations,
-                                        isPinned = reply.rpid in commentState.pinnedReplyIds,
+                                        isPinned = menuBindings.isPinned,
                                         onClick = {},
                                         onSubClick = commentActions.openSubReply,
                                         onTimestampClick = { positionMs ->
@@ -1309,19 +1317,13 @@ internal fun TabletSecondaryContent(
                                         isLiked = reply.rpid in commentState.likedComments,
                                         isHated = reply.rpid in commentState.hatedComments,
                                         onReplyClick = { playbackActions.replyTo(reply) },
-                                        onReportClick = { reason -> commentActions.reportComment(reply.rpid, reason) },
-                                        canToggleTop = shouldShowReplyTopAction(
-                                            currentMid = commentState.currentMid,
-                                            upMid = success.info.owner.mid,
-                                            item = reply
-                                        ),
-                                        onToggleTopClick = { commentActions.toggleTopComment(reply) },
+                                        onReportClick = menuBindings.onReportClick,
+                                        canToggleTop = menuBindings.canToggleTop,
+                                        onToggleTopClick = menuBindings.onToggleTopClick,
                                         onDeleteClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
                                             { commentActions.startDissolve(reply.rpid) }
                                         } else null,
-                                        onCheckFraudClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
-                                            { commentActions.checkCommentFraud(reply) }
-                                        } else null,
+                                        onCheckFraudClick = menuBindings.onCheckFraudClick,
                                         onUrlClick = openCommentUrl,
                                         onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUpClick(it) } }
                                     )
