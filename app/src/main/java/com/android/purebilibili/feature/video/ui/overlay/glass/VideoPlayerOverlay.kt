@@ -1787,8 +1787,6 @@ private fun VideoPlayerOverlayContent(
                 onPlayPause = { togglePlayPause() },
                 diameter = if (isFullscreen) 72.dp else 56.dp,
                 modifier = Modifier.align(Alignment.Center),
-                isBuffering = !pluginPlaybackStatus.first && player.playWhenReady &&
-                    (player.playbackState == Player.STATE_BUFFERING || centerLoadingUiState != null),
             )
         }
 
@@ -2028,7 +2026,7 @@ private fun VideoPlayerOverlayContent(
                 hasRenderedFirstFrame = hasRenderedFirstFrame,
                 suppressTransientOverlays = suppressTransientOverlaysForTransition,
             ) && centerLoadingUiState == null && !showCenterPlaybackControl &&
-                !state.startupLoadingActive,
+                !state.startupLoadingActive && !player.isPlaying,
             modifier = Modifier.align(Alignment.Center),
             // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
             // 看起来像又一次进场闪烁。

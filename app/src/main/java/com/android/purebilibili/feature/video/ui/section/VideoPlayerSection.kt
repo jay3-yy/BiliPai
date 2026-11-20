@@ -1105,19 +1105,20 @@ private fun VideoPlayerSectionContent(
     // Keep real first-frame readiness across detail/mini-player handoffs, without telemetry.
     val persistedRenderedFirstFrame by playerState.hasRenderedFirstFrame.collectAsStateWithLifecycle()
     val hasPlayedCurrentMedia by playerState.hasPlayedCurrentMedia.collectAsStateWithLifecycle()
-    val currentPlaybackIdentity = remember(bvid, uiState) {
-        val success = uiState as? VideoPlaybackUiState.Success
+    val playbackIdentityBvid = (uiState as? VideoPlaybackUiState.Success)?.info?.bvid
+    val playbackIdentityCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid
+    val currentPlaybackIdentity = remember(bvid, playbackIdentityBvid, playbackIdentityCid) {
         resolvePlayerInteractionIdentity(
             routeBvid = bvid,
-            playbackBvid = success?.info?.bvid,
-            playbackCid = success?.info?.cid
+            playbackBvid = playbackIdentityBvid,
+            playbackCid = playbackIdentityCid
         )
     }
     var hasStartedPlayback by remember(currentPlaybackIdentity, playerState.player) {
         mutableStateOf(false)
     }
-    LaunchedEffect(observedIsPlaying) {
-        if (observedIsPlaying) hasStartedPlayback = true
+    LaunchedEffect(currentPlaybackIdentity, observedIsPlaying) {
+        if (observedIsPlaying || playerState.player.isPlaying) hasStartedPlayback = true
     }
 
     // 控制器显示状态
@@ -5319,22 +5320,17 @@ private fun VideoPlayerSectionContent(
 
         val showStartupLoadingIndicator = playerVisualWorkActive && !isInPipMode &&
             !hasStartedPlayback && !observedIsPlaying &&
+            !(playerState.player.isPlaying && isFirstFrameRendered) &&
             !state.forceCoverOnly && !state.liveBackPreview &&
             !suppressTransientOverlaysForTransition && !keepCoverForManualStart &&
             (uiState is VideoPlaybackUiState.Loading ||
                 (isBuffering && playerState.player.playWhenReady))
         if (showStartupLoadingIndicator) {
-            Column(
+            com.android.purebilibili.feature.video.ui.overlay.PlayerLoadingIndicator(
+                label = if (isBuffering) "正在缓冲" else "正在加载",
+                tint = Color.White,
                 modifier = Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                com.android.purebilibili.feature.video.ui.overlay.BiliTvAnimatedBufferingIndicator(tint = Color.White)
-                AppText(
-                    text = if (isBuffering) "正在缓冲" else "正在加载",
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
+            )
         }
 
         if (uiState is VideoPlaybackUiState.Success && !isInPipMode) {

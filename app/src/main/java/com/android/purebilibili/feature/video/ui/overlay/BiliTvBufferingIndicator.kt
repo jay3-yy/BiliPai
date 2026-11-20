@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import android.os.Build
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,31 +75,39 @@ internal fun BiliTvAnimatedBufferingIndicator(
     )
 }
 
-/** 小电视与已缓冲位置共用透明容器，等待时保留当前视频画面。 */
+/** 播放器起播与再缓冲共用同一套小电视动画和文案。 */
+@Composable
+internal fun PlayerLoadingIndicator(
+    label: String,
+    tint: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 32.dp,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier,
+    ) {
+        BiliTvAnimatedBufferingIndicator(tint = tint, size = size)
+        AppText(
+            text = label,
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+        )
+    }
+}
+
+/** 保持既有调用名，内部与起播指示器使用同一套动画和文案。 */
 @Composable
 internal fun BiliTvBufferingIndicator(
     tint: Color,
     modifier: Modifier = Modifier,
     bufferedProvider: () -> Long = { 0L },
 ) {
-    val bufferedMs = bufferedProvider().coerceAtLeast(0L)
-    val label = if (bufferedMs > 0L) {
-        com.android.purebilibili.core.util.FormatUtils.formatDuration(
-            (bufferedMs / 1000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        )
-    } else {
-        "加载中..."
-    }
-    Box(modifier = modifier.padding(20.dp)) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            BiliTvAnimatedBufferingIndicator(tint = tint, size = 25.dp)
-            AppText(
-                text = label,
-                color = Color.White,
-                style = MaterialTheme.typography.labelMedium,
-            )
-        }
-    }
+    PlayerLoadingIndicator(
+        label = if (bufferedProvider() > 0L) "正在缓冲" else "正在加载",
+        tint = tint,
+        modifier = modifier.padding(20.dp),
+    )
 }
 
 /** 原生播放视图不再自行显示进度环，由同一动画响应真实缓冲状态。 */
