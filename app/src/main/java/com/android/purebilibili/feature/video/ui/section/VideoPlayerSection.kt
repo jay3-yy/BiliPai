@@ -1114,12 +1114,6 @@ private fun VideoPlayerSectionContent(
             playbackCid = playbackIdentityCid
         )
     }
-    var hasStartedPlayback by remember(currentPlaybackIdentity, playerState.player) {
-        mutableStateOf(false)
-    }
-    LaunchedEffect(currentPlaybackIdentity, observedIsPlaying) {
-        if (observedIsPlaying || playerState.player.isPlaying) hasStartedPlayback = true
-    }
 
     // 控制器显示状态
     var showControls by remember(currentPlaybackIdentity, playerState.player) {
@@ -5319,7 +5313,7 @@ private fun VideoPlayerSectionContent(
         }
 
         val showStartupLoadingIndicator = playerVisualWorkActive && !isInPipMode &&
-            !hasStartedPlayback && !observedIsPlaying &&
+            !hasPlayedCurrentMedia && !observedIsPlaying &&
             !(playerState.player.isPlaying && isFirstFrameRendered) &&
             !state.forceCoverOnly && !state.liveBackPreview &&
             !suppressTransientOverlaysForTransition && !keepCoverForManualStart &&
