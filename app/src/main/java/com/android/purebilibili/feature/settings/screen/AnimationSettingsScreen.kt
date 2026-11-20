@@ -37,6 +37,7 @@ import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.CardRemovalDissolveMode
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.AppAlertDialog
@@ -689,6 +690,25 @@ fun AnimationSettingsContent(
                                     viewModel.toggleCardTransition(enabled)
                                     if (enabled) {
                                         Toast.makeText(context, cardTransitionSourceDescription, Toast.LENGTH_LONG).show()
+                                    }
+                                },
+                                iconTint = AppContentColors.secondaryText()
+                            )
+                        }
+                        AppPreferenceDivider()
+
+                        SettingsItemAnchor(CARD_REMOVAL_DISSOLVE_SETTING_ID) {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_REMOVAL_DISSOLVE),
+                                title = stringResource(R.string.animation_card_removal_dissolve_title),
+                                subtitle = stringResource(R.string.animation_card_removal_dissolve_summary),
+                                options = CardRemovalDissolveMode.entries.map { mode ->
+                                    AppSegmentOption(mode, stringResource(cardRemovalDissolveModeLabel(mode)))
+                                },
+                                selectedValue = rememberSettingsHomeConfiguration().cardRemovalDissolveMode,
+                                onSelectionChange = { mode ->
+                                    scope.launch {
+                                        SettingsManager.setCardRemovalDissolveMode(context, mode)
                                     }
                                 },
                                 iconTint = AppContentColors.secondaryText()

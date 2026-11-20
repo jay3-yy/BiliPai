@@ -667,6 +667,12 @@ enum class BottomBarLiquidGlassPreset(
     }
 }
 
+enum class CardRemovalDissolveMode {
+    STANDARD,
+    QUICK,
+    OFF,
+}
+
 // 设置流加载前使用相同的轻量视觉默认值，避免首帧短暂启用模糊或卡片展开。
 data class HomeSettings(
     val displayMode: Int = 0,              // 展示模式 (0=网格, 1=故事卡片)
@@ -728,6 +734,7 @@ data class HomeSettings(
     val homeRefreshUndoVisible: Boolean = false, // 刷新后的撤销按钮默认隐藏
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = false,   // 卡片展开过渡按需开启
+    val cardRemovalDissolveMode: CardRemovalDissolveMode = CardRemovalDissolveMode.STANDARD,
     val videoSharedTransitionSpeed: VideoSharedTransitionSpeed = VideoSharedTransitionSpeed.STANDARD,
     val videoSharedTransitionCustomDurationMillis: Int =
         VIDEO_SHARED_TRANSITION_CUSTOM_DEFAULT_MILLIS,
@@ -1697,6 +1704,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey("maid_lottie_animation_enabled")
     //  [新增] 卡片过渡动画开关
     private val KEY_CARD_TRANSITION_ENABLED = booleanPreferencesKey("card_transition_enabled")
+    private val KEY_CARD_REMOVAL_DISSOLVE_ENABLED = booleanPreferencesKey("card_removal_dissolve_enabled")
+    private val KEY_CARD_REMOVAL_DISSOLVE_QUICK = booleanPreferencesKey("card_removal_dissolve_quick")
     // 实时画面转场：SDR 用 TextureView 一镜到底；HDR 仍 SurfaceView（不降画质），morph 走封面
     private val KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED =
         booleanPreferencesKey("live_surface_card_transition_enabled")
@@ -1983,6 +1992,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             homeRefreshUndoVisible = preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: false,
             cardAnimationEnabled = preferences[KEY_CARD_ANIMATION_ENABLED] ?: false,
             cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: false,
+            cardRemovalDissolveMode = readCardRemovalDissolveMode(preferences),
             videoSharedTransitionSpeed = VideoSharedTransitionSpeed.fromValue(
                 preferences[KEY_VIDEO_SHARED_TRANSITION_SPEED]
                     ?: VideoSharedTransitionSpeed.STANDARD.value
@@ -3608,6 +3618,23 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     suspend fun setCardTransitionEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] = value }
+    }
+
+    private fun readCardRemovalDissolveMode(preferences: Preferences): CardRemovalDissolveMode = when {
+        preferences[KEY_CARD_REMOVAL_DISSOLVE_ENABLED] == false -> CardRemovalDissolveMode.OFF
+        preferences[KEY_CARD_REMOVAL_DISSOLVE_QUICK] == true -> CardRemovalDissolveMode.QUICK
+        else -> CardRemovalDissolveMode.STANDARD
+    }
+
+    fun getCardRemovalDissolveMode(context: Context): Flow<CardRemovalDissolveMode> = context.settingsDataStore.data
+        .map(::readCardRemovalDissolveMode)
+        .distinctUntilChanged()
+
+    suspend fun setCardRemovalDissolveMode(context: Context, mode: CardRemovalDissolveMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_CARD_REMOVAL_DISSOLVE_ENABLED] = mode != CardRemovalDissolveMode.OFF
+            preferences[KEY_CARD_REMOVAL_DISSOLVE_QUICK] = mode == CardRemovalDissolveMode.QUICK
+        }
     }
 
     /** 默认关闭：稳妥封面过渡；开启后 SDR 可用实时画面双向 morph，HDR 仍不强制 TextureView。 */
@@ -9033,6 +9060,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 SettingsShareSection.APPEARANCE,
             ),
             BooleanShareablePreferenceDefinition(KEY_CARD_TRANSITION_ENABLED, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_CARD_REMOVAL_DISSOLVE_ENABLED, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_CARD_REMOVAL_DISSOLVE_QUICK, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED, SettingsShareSection.APPEARANCE),
 
             BooleanShareablePreferenceDefinition(

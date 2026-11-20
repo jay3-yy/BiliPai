@@ -25,6 +25,9 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.store.CardRemovalDissolveMode
+import com.android.purebilibili.core.ui.animation.gl.THANOS_QUICK_TIME_SCALE
+import com.android.purebilibili.core.ui.animation.gl.THANOS_TIME_SCALE
 import com.android.purebilibili.core.ui.animation.gl.ThanosEffectView
 import com.android.purebilibili.core.ui.animation.gl.isThanosEffectSupported
 import kotlinx.coroutines.CancellationException
@@ -55,8 +58,16 @@ object DissolveAnimationManager {
 
 enum class DissolveAnimationPreset {
     CLASSIC,
-    TELEGRAM_FAST
+    TELEGRAM_FAST,
+    QUICK_PARTICLES,
 }
+
+internal val CardRemovalDissolveMode.animationPreset: DissolveAnimationPreset
+    get() = if (this == CardRemovalDissolveMode.QUICK) {
+        DissolveAnimationPreset.QUICK_PARTICLES
+    } else {
+        DissolveAnimationPreset.TELEGRAM_FAST
+    }
 
 internal fun shouldWrapWithDissolveAnimation(isDissolving: Boolean): Boolean {
     return isDissolving
@@ -212,7 +223,8 @@ fun DissolvableVideoCard(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessHigh
             )
-            DissolveAnimationPreset.TELEGRAM_FAST -> if (reflowDuringFinalTail) {
+            DissolveAnimationPreset.TELEGRAM_FAST,
+            DissolveAnimationPreset.QUICK_PARTICLES -> if (reflowDuringFinalTail) {
                 tween(240, easing = AppMotionEasing.M1Decelerate)
             } else {
                 tween(135, easing = AppMotionEasing.M1Standard)
@@ -284,6 +296,12 @@ fun DissolvableVideoCard(
             },
             sweepReversed = reverseSweep,
             originInWindow = originInWindow(),
+            // 快速档压缩整条时间线，保持扫描、淡出与结束回调的相对顺序。
+            timeScale = if (preset == DissolveAnimationPreset.QUICK_PARTICLES) {
+                THANOS_QUICK_TIME_SCALE
+            } else {
+                THANOS_TIME_SCALE
+            },
         )
         if (effectView == null) {
             if (!bitmap.isRecycled) bitmap.recycle()

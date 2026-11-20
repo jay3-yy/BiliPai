@@ -58,7 +58,8 @@ import com.android.purebilibili.core.ui.rememberCompatibleStaggeredGridState
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
+import com.android.purebilibili.core.store.CardRemovalDissolveMode
+import com.android.purebilibili.core.ui.animation.animationPreset
 import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.HazeState
@@ -156,6 +157,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.rounded.Close
 import com.android.purebilibili.core.util.FormatUtils
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.animation.gl.isThanosEffectSupported
+import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 
 // 辅助函数：格式化时长
 private fun formatDuration(seconds: Int): String {
@@ -474,24 +477,39 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
      * 从稍后再看删除视频
      */
     fun deleteItem(aid: Long) {
-        // 乐观更新：直接从列表中移除，不需要重新请求
         val snapshotState = _uiState.value
-        val currentList = snapshotState.items
-        val newList = currentList.filter { it.id != aid }
-        val removedBvid = currentList.firstOrNull { it.id == aid }?.bvid
-        // A failed request restores the card, not the already completed dissolve request.
-        val rollbackState = snapshotState.copy(
-            dissolvingIds = snapshotState.dissolvingIds - setOfNotNull(removedBvid)
+        val removedIndex = snapshotState.items.indexOfFirst { it.id == aid }
+        if (removedIndex == -1) return
+        val removedItem = snapshotState.items[removedIndex]
+        val remainingItems = snapshotState.items.filterNot { it.id == aid }
+        _uiState.value = snapshotState.copy(
+            items = remainingItems,
+            totalCount = (snapshotState.totalCount - 1).coerceAtLeast(remainingItems.size),
+            dissolvingIds = snapshotState.dissolvingIds - removedItem.bvid,
         )
-        _uiState.value = _uiState.value.copy(
-            items = newList,
-            totalCount = (snapshotState.totalCount - (currentList.size - newList.size)).coerceAtLeast(newList.size),
-            dissolvingIds = if (removedBvid == null) {
-                _uiState.value.dissolvingIds
+
+        fun restoreRemovedItem() {
+            tabCache.remove(snapshotState.filter)
+            val current = _uiState.value
+            if (current.filter != snapshotState.filter || current.query != snapshotState.query ||
+                current.sortOrder != snapshotState.sortOrder || current.items.any { it.id == aid }
+            ) return
+
+            val followingIds = snapshotState.items.subList(removedIndex + 1, snapshotState.items.size)
+                .mapTo(mutableSetOf()) { it.id }
+            val nextIndex = current.items.indexOfFirst { it.id in followingIds }
+            // Other removals may shift the original index while the request is pending.
+            val insertionIndex = if (nextIndex >= 0) {
+                nextIndex
             } else {
-                _uiState.value.dissolvingIds - removedBvid
+                val precedingIds = snapshotState.items.subList(0, removedIndex).mapTo(mutableSetOf()) { it.id }
+                current.items.indexOfLast { it.id in precedingIds } + 1
             }
-        )
+            _uiState.value = current.copy(
+                items = current.items.toMutableList().apply { add(insertionIndex, removedItem) },
+                totalCount = current.totalCount + 1,
+            )
+        }
 
         val identity = accountRequests.identity
         val csrf = TokenManager.csrfCache.orEmpty()
@@ -499,7 +517,7 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
         accountRequests.launch {
             try {
                 if (csrf.isEmpty()) {
-                    _uiState.value = rollbackState
+                    restoreRemovedItem()
                     android.widget.Toast.makeText(getApplication(), "请先登录", android.widget.Toast.LENGTH_SHORT).show()
                     return@launch
                 }
@@ -509,7 +527,7 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
                     tabCache.clear()
                     android.widget.Toast.makeText(getApplication(), "已从稍后再看移除", android.widget.Toast.LENGTH_SHORT).show()
                 } else {
-                    _uiState.value = rollbackState
+                    restoreRemovedItem()
                     android.widget.Toast.makeText(
                         getApplication(),
                         "移除失败: ${result.exceptionOrNull()?.message ?: "请稍后重试"}",
@@ -520,7 +538,7 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
                 if (e is CancellationException) throw e
                 if (!accountRequests.isCurrent(identity)) return@launch
                 e.printStackTrace()
-                _uiState.value = rollbackState
+                restoreRemovedItem()
                 android.widget.Toast.makeText(getApplication(), "移除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
@@ -881,6 +899,8 @@ fun WatchLaterScreen(
         hazeState?.let { recoverableBlurEnabled(it) } == true &&
         !progressiveChromeActive
     val topChromePolicy = rememberAppTopChromePolicy()
+    val systemReduceMotion = rememberSystemReduceMotion()
+    val dissolveMode = homeSettings.cardRemovalDissolveMode
     val watchLaterFilterChrome = remember(homeSettings, topChromePolicy) {
         resolveHistoryFilterTabChromeSpec(
             homeSettings = homeSettings,
@@ -1555,7 +1575,7 @@ fun WatchLaterScreen(
                                                     isDissolving = isDissolving,
                                                     onDissolveComplete = { viewModel.completeVideoDissolve(item.bvid) },
                                                     cardId = item.bvid,
-                                                    preset = DissolveAnimationPreset.TELEGRAM_FAST,
+                                                    preset = dissolveMode.animationPreset,
                                                 ) {
                                                     WatchLaterVideoCard(
                                                         item = item,
@@ -1565,7 +1585,15 @@ fun WatchLaterScreen(
                                                         isBatchMode = isBatchMode,
                                                         isSelected = isSelected,
                                                         transitionEnabled = pageActive && homeSettings.cardTransitionEnabled,
-                                                        onRemove = { viewModel.startVideoDissolve(item.bvid) },
+                                                        onRemove = {
+                                                            if (dissolveMode != CardRemovalDissolveMode.OFF &&
+                                                                !systemReduceMotion && isThanosEffectSupported(context)
+                                                            ) {
+                                                                viewModel.startVideoDissolve(item.bvid)
+                                                            } else {
+                                                                viewModel.deleteItem(item.id)
+                                                            }
+                                                        },
                                                         onLongClick = {
                                                             isBatchMode = true
                                                             selectedBvids = selectedBvids + item.bvid

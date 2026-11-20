@@ -152,6 +152,7 @@ internal enum class SettingsIconRole(
     HOME_CARD_WIDTH(R.drawable.ms_width_normal_24, R.drawable.ph_arrows_out_line_horizontal_24),
     CARD_ENTRANCE_ANIMATION(R.drawable.ms_auto_awesome_motion_24, R.drawable.ph_stack_24),
     CARD_TRANSITION_ANIMATION(R.drawable.ms_sync_alt_24, R.drawable.ph_arrows_left_right_24),
+    CARD_REMOVAL_DISSOLVE(R.drawable.ic_settings_card_removal_dissolve_24, R.drawable.ic_settings_card_removal_dissolve_24),
     LIVE_SURFACE_TRANSITION(R.drawable.ms_movie_24, R.drawable.ph_film_slate_24),
     PREDICTIVE_BACK(R.drawable.ms_arrow_back_24, R.drawable.ph_arrow_left_24),
     PREDICTIVE_BACK_GESTURE(R.drawable.ic_settings_predictive_back_24),

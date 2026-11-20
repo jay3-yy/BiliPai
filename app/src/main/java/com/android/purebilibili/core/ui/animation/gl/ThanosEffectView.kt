@@ -44,6 +44,7 @@ internal class ThanosEffectView private constructor(
     private var onFinalTail: (() -> Unit)?,
     private val sweepReversed: Boolean,
     private val dissolveOrigin: android.graphics.PointF?,
+    private val timeScale: Float,
 ) : TextureView(context), TextureView.SurfaceTextureListener {
     private var session: RenderSession? = null
     private var disposed = false
@@ -66,7 +67,16 @@ internal class ThanosEffectView private constructor(
     override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
         if (disposed) return
         session = RenderSession(
-            context, bitmap, bounds, surface, width, height, particleBudget(context), sweepReversed, dissolveOrigin,
+            context = context,
+            bitmap = bitmap,
+            bounds = bounds,
+            surfaceTexture = surface,
+            initialWidth = width,
+            initialHeight = height,
+            budget = particleBudget(context),
+            sweepReversed = sweepReversed,
+            dissolveOrigin = dissolveOrigin,
+            timeScale = timeScale,
             scheduleFrame = { if (firstFrameDelivered) scheduleNextFrame() },
             complete = { if (!disposed) onComplete?.invoke() },
             finalTail = { if (!disposed) onFinalTail?.invoke() },
@@ -123,6 +133,7 @@ internal class ThanosEffectView private constructor(
             sweepReversed: Boolean = false,
             // 窗口坐标中的触发按钮中心；提供时从该点向外消散。
             originInWindow: android.graphics.PointF? = null,
+            timeScale: Float = THANOS_TIME_SCALE,
         ): ThanosEffectView? {
             val root = window.decorView as? ViewGroup ?: return null
             if (!root.isAttachedToWindow || !isThanosEffectSupported(root.context)) return null
@@ -135,7 +146,9 @@ internal class ThanosEffectView private constructor(
                     (it.y - windowBounds.top) / windowBounds.height(),
                 )
             }
-            val view = ThanosEffectView(root.context, bitmap, bounds, onFirstFrame, onComplete, onFinalTail, sweepReversed, origin)
+            val view = ThanosEffectView(
+                root.context, bitmap, bounds, onFirstFrame, onComplete, onFinalTail, sweepReversed, origin, timeScale,
+            )
             return try {
                 root.addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
                 view
@@ -159,6 +172,7 @@ private class RenderSession(
     private val budget: Int,
     private val sweepReversed: Boolean,
     private val dissolveOrigin: android.graphics.PointF?,
+    private val timeScale: Float,
     private val scheduleFrame: () -> Unit,
     private val complete: () -> Unit,
     private val finalTail: () -> Unit,
@@ -184,7 +198,14 @@ private class RenderSession(
             runSafely {
                 initializeEgl()
                 renderer = ParticleRenderer(
-                    context.resources, bitmap, bounds, context.resources.displayMetrics.density, budget, sweepReversed, dissolveOrigin,
+                    resources = context.resources,
+                    bitmap = bitmap,
+                    bounds = bounds,
+                    density = context.resources.displayMetrics.density,
+                    maxParticles = budget,
+                    sweepReversed = sweepReversed,
+                    dissolveOrigin = dissolveOrigin,
+                    timeScale = timeScale,
                 )
                 renderer?.initialize(initialWidth, initialHeight)
                 // Reset frame has zero delta. Subsequent draws wait for UI's first-frame handoff.

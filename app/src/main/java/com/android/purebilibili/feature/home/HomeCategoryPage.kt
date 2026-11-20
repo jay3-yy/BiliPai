@@ -216,6 +216,7 @@ internal fun HomeCategoryPageContent(
     onDismissVideo: (VideoItem) -> Unit,
     onWatchLater: (String, Long) -> Unit,
     onDissolveComplete: (String) -> Unit,
+    dissolvePreset: DissolveAnimationPreset,
     onDissolveReflowStarted: (String) -> Unit = {},
     dissolveReflowEnabled: Boolean = true,
     longPressCallback: ((VideoItem) -> Unit)? = null,
@@ -502,7 +503,7 @@ internal fun HomeCategoryPageContent(
             isDissolving = isDissolving,
             onDissolveComplete = { onDissolveComplete(video.bvid) },
             cardId = video.bvid,
-            preset = DissolveAnimationPreset.TELEGRAM_FAST,
+            preset = dissolvePreset,
             publishGlobalDissolveState = false,
             reflowDuringFinalTail = dissolveReflowEnabled,
             onReflowStarted = {
@@ -801,6 +802,7 @@ internal fun HomeCategoryPageContent(
                                     onGestureActiveChange = onHeroCarouselGestureActiveChange,
                                     dissolvingVideos = dissolvingVideos,
                                     onDissolveComplete = onDissolveComplete,
+                                    dissolvePreset = dissolvePreset,
                                     onLongPress = longPressCallback.takeUnless { downloadSelection?.active == true },
                                     onVideoClick = { video ->
                                         if (downloadSelection?.active == true) downloadSelection.toggle(video)

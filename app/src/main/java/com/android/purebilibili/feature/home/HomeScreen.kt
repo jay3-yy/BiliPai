@@ -134,6 +134,8 @@ import com.android.purebilibili.core.ui.transition.videoCardTransitionOverlayDep
 import com.android.purebilibili.feature.home.components.BottomBarMatchedDockEdge
 import com.android.purebilibili.feature.home.components.BottomBarMatchedDockVisibility
 import com.android.purebilibili.core.ui.animation.LocalAppNavigationEntranceReady
+import com.android.purebilibili.core.store.CardRemovalDissolveMode
+import com.android.purebilibili.core.ui.animation.animationPreset
 import com.android.purebilibili.core.ui.animation.gl.isThanosEffectSupported
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.blur.recoverableBlurEnabled
@@ -802,7 +804,8 @@ internal fun HomeScreen(
     }
     val confirmNotInterested: (VideoItem, RecommendationFeedbackReason) -> Unit = { video, reason ->
         pendingNotInterestedVideo = null
-        val dissolveEnabled = !systemReduceMotion && isThanosEffectSupported(context)
+        val dissolveEnabled = homeSettings.cardRemovalDissolveMode != CardRemovalDissolveMode.OFF &&
+            !systemReduceMotion && isThanosEffectSupported(context)
         if (dissolveEnabled) dissolvingNotInterestedVideo = video
         viewModel.markNotInterested(
             video = video,
@@ -2267,6 +2270,7 @@ internal fun HomeScreen(
                                          onDismissVideo = { video -> onDismissVideoCallback(video) },
                                          onWatchLater = onWatchLaterCallback,
                                          onDissolveComplete = onDissolveCompleteCallback,
+                                         dissolvePreset = homeSettings.cardRemovalDissolveMode.animationPreset,
                                          dissolveReflowEnabled = !systemReduceMotion,
                                          longPressCallback = onLongPressCallback,
                                          downloadSelection = downloadSelection.takeIf { category == currentCategory },

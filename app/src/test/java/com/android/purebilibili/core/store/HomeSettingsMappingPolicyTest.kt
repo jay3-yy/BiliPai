@@ -86,6 +86,7 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(HomeFeedCardWidthPreset.AUTO, result.homeFeedCardWidthPreset)
         assertFalse(result.cardAnimationEnabled)
         assertFalse(result.cardTransitionEnabled)
+        assertEquals(CardRemovalDissolveMode.STANDARD, result.cardRemovalDissolveMode)
         assertEquals(VideoSharedTransitionSpeed.STANDARD, result.videoSharedTransitionSpeed)
         assertEquals(
             VIDEO_SHARED_TRANSITION_CUSTOM_DEFAULT_MILLIS,
@@ -112,6 +113,7 @@ class HomeSettingsMappingPolicyTest {
                 booleanPreferencesKey("bottom_bar_floating") to true,
                 booleanPreferencesKey("header_blur_enabled") to true,
                 booleanPreferencesKey("card_transition_enabled") to true,
+                booleanPreferencesKey("card_removal_dissolve_enabled") to false,
                 booleanPreferencesKey("android_native_liquid_glass_enabled") to true,
                 booleanPreferencesKey("home_hero_carousel_enabled") to true,
             )
@@ -120,6 +122,7 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.isBottomBarFloating)
         assertTrue(result.isHeaderBlurEnabled)
         assertTrue(result.cardTransitionEnabled)
+        assertEquals(CardRemovalDissolveMode.OFF, result.cardRemovalDissolveMode)
         assertTrue(result.androidNativeLiquidGlassEnabled)
         assertTrue(result.homeHeroCarouselEnabled)
     }
@@ -162,6 +165,7 @@ class HomeSettingsMappingPolicyTest {
             intPreferencesKey("home_feed_card_style") to HomeFeedCardStyle.OFFICIAL.value,
             booleanPreferencesKey("card_animation_enabled") to true,
             booleanPreferencesKey("card_transition_enabled") to false,
+            booleanPreferencesKey("card_removal_dissolve_quick") to true,
             intPreferencesKey("video_shared_transition_speed") to VideoSharedTransitionSpeed.CUSTOM.value,
             intPreferencesKey("video_shared_transition_custom_duration_millis") to 620,
             booleanPreferencesKey("smart_visual_guard_enabled") to false,
@@ -218,6 +222,7 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(HomeFeedCardWidthPreset.WIDE, result.homeFeedCardWidthPreset)
         assertTrue(result.cardAnimationEnabled)
         assertFalse(result.cardTransitionEnabled)
+        assertEquals(CardRemovalDissolveMode.QUICK, result.cardRemovalDissolveMode)
         assertEquals(VideoSharedTransitionSpeed.CUSTOM, result.videoSharedTransitionSpeed)
         assertEquals(620, result.videoSharedTransitionCustomDurationMillis)
         assertFalse(result.smartVisualGuardEnabled)

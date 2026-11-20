@@ -19,6 +19,7 @@ internal class ParticleRenderer(
     /** true 时粒子自右向左消失，默认沿用上游的左→右扫描。 */
     private val sweepReversed: Boolean = false,
     private val dissolveOrigin: android.graphics.PointF? = null,
+    private val timeScale: Float,
 ) {
     private var program = 0
     private val buffers = IntArray(2)
@@ -103,12 +104,12 @@ internal class ParticleRenderer(
     }
 
     /** Matches upstream Animation.draw(), including reset, integration, and the tail. */
-    fun isInFinalTail(): Boolean = shouldBeginThanosReflow(time)
+    fun isInFinalTail(): Boolean = shouldBeginThanosReflow(time, timeScale)
 
     fun draw(frameNanos: Long): Boolean {
         val delta = if (lastDrawNanos < 0) 0f else (frameNanos - lastDrawNanos) / 1_000_000_000f
         lastDrawNanos = frameNanos
-        val scaledDelta = delta * THANOS_TIME_SCALE
+        val scaledDelta = delta * timeScale
         time += scaledDelta
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
         GLES30.glUseProgram(program)
@@ -151,7 +152,7 @@ internal class ParticleRenderer(
         firstDraw = false
         currentBuffer = 1 - currentBuffer
         checkGlError()
-        return shouldNotifyParticleAnimationComplete(false, time, THANOS_LONGEVITY + THANOS_TAIL_SECONDS)
+        return shouldNotifyParticleAnimationComplete(false, time, THANOS_DURATION_SECONDS)
     }
 
     fun release() {

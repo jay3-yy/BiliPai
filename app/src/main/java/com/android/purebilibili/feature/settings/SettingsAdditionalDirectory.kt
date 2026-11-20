@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.settings
 
+import androidx.annotation.StringRes
+import com.android.purebilibili.R
+import com.android.purebilibili.core.store.CardRemovalDissolveMode
+import com.android.purebilibili.core.store.SettingsManager
 import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
 
@@ -8,6 +12,15 @@ internal const val GRID_SHARE_SETTING_ID = "appearance.grid_columns_shared_acros
 internal const val GRID_COMPACT_SETTING_ID = "appearance.grid_column_count_compact"
 internal const val GRID_WIDE_PORTRAIT_SETTING_ID = "appearance.grid_column_count_wide_portrait"
 internal const val PROGRESSIVE_BLUR_RENDERER_SETTING_ID = "animation.progressive_blur_renderer"
+
+internal const val CARD_REMOVAL_DISSOLVE_SETTING_ID = "animation.card_removal_dissolve_enabled"
+
+@StringRes
+internal fun cardRemovalDissolveModeLabel(mode: CardRemovalDissolveMode): Int = when (mode) {
+    CardRemovalDissolveMode.STANDARD -> R.string.animation_speed_standard
+    CardRemovalDissolveMode.QUICK -> R.string.animation_speed_fast
+    CardRemovalDissolveMode.OFF -> R.string.animation_card_removal_dissolve_off
+}
 
 internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem(com.android.purebilibili.core.performance.PERFORMANCE_HISTORY_SETTING_ID, com.android.purebilibili.core.performance.PERFORMANCE_HISTORY_TITLE, SettingsRootCategory.SYSTEM_ABOUT, com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SECTION, null, aliases = listOf("性能历史", "性能排行榜", "性能对比", "性能趋势", "返回首页性能"), target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
@@ -68,6 +81,19 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("animation.global_text_tap_copy_enabled", "点按文字复制", SettingsRootCategory.APPEARANCE_THEME, "appearance_text_size", { context -> com.android.purebilibili.core.store.SettingsManager.getGlobalTextTapCopyEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.APPEARANCE, aliases = listOf("文字复制", "点按正文复制")),
     PlaybackSettingItem("animation.card_animation_enabled", "首页卡片淡入", SettingsRootCategory.APPEARANCE_THEME, "animation_card", null, target = SettingsSearchTarget.ANIMATION, readState = { state -> if (state.cardAnimationEnabled) "开启" else "关闭" }),
     PlaybackSettingItem("animation.card_transition_enabled", "一镜到底动画", SettingsRootCategory.APPEARANCE_THEME, "animation_card", null, aliases = listOf("卡片展开动画", "卡片过渡", "系统一镜到底"), target = SettingsSearchTarget.ANIMATION, readState = { state -> if (state.cardTransitionEnabled) "开启" else "关闭" }),
+    PlaybackSettingItem(
+        settingId = CARD_REMOVAL_DISSOLVE_SETTING_ID,
+        title = "卡片移除粒子消散",
+        page = SettingsRootCategory.APPEARANCE_THEME,
+        sectionKey = "animation_card",
+        observeValue = { context ->
+            SettingsManager.getCardRemovalDissolveMode(context).map { mode ->
+                context.getString(cardRemovalDissolveModeLabel(mode))
+            }
+        },
+        aliases = listOf("删除动画", "快速消散", "不感兴趣", "稍后再看移除"),
+        target = SettingsSearchTarget.ANIMATION,
+    ),
     PlaybackSettingItem("animation.app_navigation_settings.settings_container_morph_enabled", "设置容器动画", SettingsRootCategory.APPEARANCE_THEME, "animation_card", null, aliases = listOf("容器形变", "设置页转场"), target = SettingsSearchTarget.ANIMATION),
     PlaybackSettingItem("animation.app_navigation_settings.settings_container_realtime_blur_enabled", "容器转场实时模糊", SettingsRootCategory.APPEARANCE_THEME, "animation_card", { context -> com.android.purebilibili.core.store.SettingsManager.getSettingsContainerRealtimeBlurEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.ANIMATION, aliases = listOf("设置背景模糊", "容器形变模糊", "实时背景")),
     PlaybackSettingItem("animation.video_transition_realtime_blur_enabled", "转场时模糊背景", SettingsRootCategory.APPEARANCE_THEME, "animation_glass", { context -> com.android.purebilibili.core.store.SettingsManager.getVideoTransitionRealtimeBlurEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.ANIMATION),

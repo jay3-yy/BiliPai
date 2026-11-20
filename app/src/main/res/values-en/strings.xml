@@ -369,6 +369,9 @@
     <string name="animation_maid_summary">Hides maid animations and static images when turned off</string>
     <string name="animation_card_entrance_summary">Fade cards in one at a time when opening Home</string>
     <string name="animation_card_transition_summary">Use system animation to expand details and return to the source card; fall back to regular page transitions when unsupported</string>
+    <string name="animation_card_removal_dissolve_title">Card removal effect</string>
+    <string name="animation_card_removal_dissolve_summary">Applies to Not interested on Home and single-item removal in Watch Later. Fast dissolves in about 0.7 seconds. Off updates the list immediately.</string>
+    <string name="animation_card_removal_dissolve_off">Off</string>
     <string name="animation_card_transition_source_official">Expand from visible cards or buttons and return to their original position. Use regular navigation when system transitions are unavailable.</string>
     <string name="animation_card_transition_source_fallback">This device does not support system one-take animation; regular page transitions are used</string>
     <string name="animation_card_transition_source_reduced_motion">Reduced motion is enabled in system settings; card transitions are currently inactive</string>

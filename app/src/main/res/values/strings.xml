@@ -372,6 +372,9 @@
     <string name="animation_maid_summary">关闭后隐藏女仆动画和静态图</string>
     <string name="animation_card_entrance_summary">打开首页时卡片依次淡入</string>
     <string name="animation_card_transition_summary">使用系统动画展开详情并返回来源卡片；不支持时回退普通页面转场</string>
+    <string name="animation_card_removal_dissolve_title">卡片移除粒子消散</string>
+    <string name="animation_card_removal_dissolve_summary">适用于首页不感兴趣和稍后再看单条移除。快速档的粒子消散约 0.7 秒，关闭后直接更新列表。</string>
+    <string name="animation_card_removal_dissolve_off">关闭</string>
     <string name="animation_card_transition_source_official">从可见的卡片或按钮展开页面并返回原位；系统转场不可用时使用普通导航</string>
     <string name="animation_card_transition_source_fallback">当前设备不支持系统一镜到底动画，使用普通页面转场</string>
     <string name="animation_card_transition_source_reduced_motion">系统已开启减少动态效果，当前不使用卡片过渡动画</string>
