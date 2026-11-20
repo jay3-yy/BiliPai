@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -17,21 +18,28 @@ import androidx.work.WorkerParameters
 import com.android.purebilibili.app.DOWNLOAD_NOTIFICATION_CHANNEL_ID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.coroutineContext
 
 private const val APP_UPDATE_WORK_NAME = "app_update_download"
 private const val APP_UPDATE_WORK_TAG = "app_update_download"
 private const val KEY_ASSET_NAME = "asset_name"
 private const val KEY_ASSET_URL = "asset_url"
+private const val KEY_MIRROR_URL = "mirror_url"
 private const val KEY_ASSET_SIZE = "asset_size"
 private const val KEY_EXPECTED_SHA256 = "expected_sha256"
 private const val KEY_RELEASE_VERSION = "release_version"
@@ -39,6 +47,9 @@ private const val KEY_DOWNLOADED_BYTES = "downloaded_bytes"
 private const val KEY_TOTAL_BYTES = "total_bytes"
 private const val KEY_FILE_PATH = "file_path"
 private const val KEY_ERROR_MESSAGE = "error_message"
+private const val KEY_GITHUB_FALLBACK = "github_fallback"
+
+private class AppUpdateChecksumException : IOException("安装包 SHA-256 校验失败")
 
 internal class AppUpdateDownloadWorker(
     context: Context,
@@ -53,79 +64,130 @@ internal class AppUpdateDownloadWorker(
         val expectedSha256 = inputData.getString(KEY_EXPECTED_SHA256)
             ?.lowercase()
             ?.takeIf(String::isNotBlank)
+        val mirrorUrl = inputData.getString(KEY_MIRROR_URL)?.takeIf(String::isNotBlank)
+        if (mirrorUrl != null && !isAppUpdateSha256(expectedSha256)) {
+            return@withContext Result.failure(errorData("此版本未提供 SHA-256，请使用 GitHub 下载"))
+        }
         val declaredSize = inputData.getLong(KEY_ASSET_SIZE, 0L).coerceAtLeast(0L)
         val updateDir = resolveAppUpdateCacheDir(applicationContext.cacheDir).apply { mkdirs() }
         val outputFile = File(updateDir, sanitizeAppUpdateFileName(assetName))
-        val partFile = File(updateDir, "${sanitizeAppUpdateFileName(assetName)}.part")
+        val officialPartFile = File(updateDir, "$id.part")
+        val mirrorPartFile = File(updateDir, "$id.mirror.part")
+        val workContext = currentCoroutineContext()
 
         try {
             setForeground(createForegroundInfo())
-            val initialBytes = partFile.length().coerceAtLeast(0L)
-            var connection = openDownloadConnection(assetUrl, initialBytes)
-            var responseCode = connection.responseCode
-            if (responseCode == 416 && initialBytes > 0L) {
-                connection.disconnect()
-                partFile.delete()
-                connection = openDownloadConnection(assetUrl, existingBytes = 0L)
-                responseCode = connection.responseCode
-            }
-            val canResume = responseCode == HttpURLConnection.HTTP_PARTIAL
-            if (responseCode !in 200..299) {
-                connection.disconnect()
-                throw IOException("更新下载失败: HTTP $responseCode")
-            }
-
-            val existingBytes = if (canResume) initialBytes else 0L
-            if (!canResume && partFile.exists()) partFile.delete()
-            val responseBytes = connection.contentLengthLong.coerceAtLeast(0L)
-            val totalBytes = when {
-                canResume && responseBytes > 0L -> existingBytes + responseBytes
-                responseBytes > 0L -> responseBytes
-                else -> declaredSize
-            }
-            setProgress(progressData(existingBytes, totalBytes))
-
-            try {
-                connection.inputStream.use { input ->
-                    FileOutputStream(partFile, canResume).use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var downloadedBytes = existingBytes
-                        while (true) {
-                            coroutineContext.ensureActive()
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            output.write(buffer, 0, read)
-                            downloadedBytes += read
-                            setProgress(progressData(downloadedBytes, totalBytes))
-                        }
+            var completedPart = officialPartFile
+            var usedGitHubFallback = false
+            val totalBytes = if (mirrorUrl == null) {
+                downloadApk(assetUrl, officialPartFile, declaredSize, expectedSha256)
+            } else {
+                try {
+                    downloadApk(mirrorUrl, mirrorPartFile, declaredSize, expectedSha256).also {
+                        completedPart = mirrorPartFile
                     }
-                }
-            } finally {
-                connection.disconnect()
-            }
-
-            if (expectedSha256 != null) {
-                val actualSha256 = sha256(partFile)
-                if (!actualSha256.equals(expectedSha256, ignoreCase = true)) {
-                    partFile.delete()
-                    return@withContext Result.failure(errorData("安装包校验失败，已删除下载文件"))
+                } catch (error: IOException) {
+                    workContext.ensureActive()
+                    mirrorPartFile.delete()
+                    usedGitHubFallback = true
+                    downloadApk(assetUrl, officialPartFile, declaredSize, expectedSha256, usedGitHubFallback = true)
                 }
             }
-            if (outputFile.exists()) outputFile.delete()
-            check(partFile.renameTo(outputFile)) { "无法完成安装包落盘" }
+            workContext.ensureActive()
+            Files.move(completedPart.toPath(), outputFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            officialPartFile.delete()
+            mirrorPartFile.delete()
             Result.success(
                 Data.Builder()
                     .putString(KEY_FILE_PATH, outputFile.absolutePath)
                     .putLong(KEY_DOWNLOADED_BYTES, outputFile.length())
-                    .putLong(KEY_TOTAL_BYTES, totalBytes.coerceAtLeast(outputFile.length()))
+                    .putLong(KEY_TOTAL_BYTES, totalBytes)
+                    .putBoolean(KEY_GITHUB_FALLBACK, usedGitHubFallback)
                     .build()
             )
         } catch (error: CancellationException) {
             throw error
+        } catch (error: AppUpdateChecksumException) {
+            officialPartFile.delete()
+            Result.failure(errorData(error.message.orEmpty()))
         } catch (error: IOException) {
             Result.retry()
         } catch (error: Exception) {
+            officialPartFile.delete()
+            mirrorPartFile.delete()
             Result.failure(errorData(error.message ?: "更新下载失败"))
+        } finally {
+            if (!workContext.isActive) {
+                officialPartFile.delete()
+                mirrorPartFile.delete()
+            }
+        }
+    }
+
+    private suspend fun downloadApk(
+        url: String,
+        partFile: File,
+        declaredSize: Long,
+        expectedSha256: String?,
+        usedGitHubFallback: Boolean = false,
+    ): Long {
+        val downloadContext = currentCoroutineContext()
+        var existingBytes = partFile.length()
+        var connection = openDownloadConnection(url, existingBytes)
+        try {
+            setProgress(progressData(existingBytes, declaredSize, usedGitHubFallback))
+            var responseCode = connection.responseCode
+            if (responseCode == 416 && existingBytes > 0L) {
+                connection.disconnect()
+                partFile.delete()
+                existingBytes = 0L
+                connection = openDownloadConnection(url, existingBytes)
+                responseCode = connection.responseCode
+            }
+            val partialResponse = responseCode == HttpURLConnection.HTTP_PARTIAL
+            if (responseCode != HttpURLConnection.HTTP_OK && !partialResponse) {
+                throw IOException("更新下载失败: HTTP $responseCode")
+            }
+            if (partialResponse && connection.getHeaderField("Content-Range")?.startsWith("bytes $existingBytes-") != true) {
+                partFile.delete()
+                throw IOException("更新下载的续传范围不匹配")
+            }
+            if (!partialResponse) existingBytes = 0L
+            val totalBytes = declaredSize.takeIf { it > 0L }
+                ?: connection.contentLengthLong.takeIf { it > 0L }?.plus(existingBytes)
+                ?: 0L
+            var downloadedBytes = existingBytes
+            var lastProgressReport = SystemClock.elapsedRealtime()
+            setProgress(progressData(downloadedBytes, totalBytes, usedGitHubFallback))
+            connection.inputStream.use { input ->
+                FileOutputStream(partFile, partialResponse && existingBytes > 0L).use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        downloadContext.ensureActive()
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        downloadedBytes += read
+                        if (totalBytes > 0L && downloadedBytes > totalBytes) {
+                            throw IOException("安装包超过预期大小")
+                        }
+                        output.write(buffer, 0, read)
+                        val now = SystemClock.elapsedRealtime()
+                        if (now - lastProgressReport >= 250L) {
+                            setProgress(progressData(downloadedBytes, totalBytes, usedGitHubFallback))
+                            lastProgressReport = now
+                        }
+                    }
+                }
+            }
+            if (downloadedBytes == 0L || (totalBytes > 0L && downloadedBytes != totalBytes)) {
+                throw IOException("安装包下载不完整")
+            }
+            if (expectedSha256 != null && !sha256(partFile).equals(expectedSha256, ignoreCase = true)) {
+                throw AppUpdateChecksumException()
+            }
+            return downloadedBytes
+        } finally {
+            connection.disconnect()
         }
     }
 
@@ -152,14 +214,16 @@ internal class AppUpdateDownloadWorker(
             connectTimeout = 10_000
             readTimeout = 30_000
             setRequestProperty("Accept", "application/octet-stream")
+            setRequestProperty("Accept-Encoding", "identity")
             setRequestProperty("User-Agent", "BiliPai-AppUpdate")
             if (existingBytes > 0L) setRequestProperty("Range", "bytes=$existingBytes-")
         }
     }
 
-    private fun progressData(downloadedBytes: Long, totalBytes: Long): Data = Data.Builder()
+    private fun progressData(downloadedBytes: Long, totalBytes: Long, usedGitHubFallback: Boolean): Data = Data.Builder()
         .putLong(KEY_DOWNLOADED_BYTES, downloadedBytes.coerceAtLeast(0L))
         .putLong(KEY_TOTAL_BYTES, totalBytes.coerceAtLeast(0L))
+        .putBoolean(KEY_GITHUB_FALLBACK, usedGitHubFallback)
         .build()
 
     private fun errorData(message: String): Data = Data.Builder()
@@ -185,7 +249,8 @@ internal object AppUpdateDownloadCoordinator {
         context: Context,
         asset: AppUpdateAsset,
         releaseVersion: String,
-        expectedSha256: String?
+        expectedSha256: String?,
+        mirrorUrl: String? = null,
     ) {
         val request = OneTimeWorkRequestBuilder<AppUpdateDownloadWorker>()
             .setConstraints(
@@ -198,6 +263,7 @@ internal object AppUpdateDownloadCoordinator {
                 Data.Builder()
                     .putString(KEY_ASSET_NAME, asset.name)
                     .putString(KEY_ASSET_URL, asset.downloadUrl)
+                    .putString(KEY_MIRROR_URL, mirrorUrl)
                     .putLong(KEY_ASSET_SIZE, asset.sizeBytes)
                     .putString(KEY_EXPECTED_SHA256, expectedSha256.orEmpty())
                     .putString(KEY_RELEASE_VERSION, releaseVersion)
@@ -213,31 +279,21 @@ internal object AppUpdateDownloadCoordinator {
         )
     }
 
-    fun cancel(context: Context, assetName: String) {
+    fun cancel(context: Context) {
         WorkManager.getInstance(context.applicationContext).cancelUniqueWork(APP_UPDATE_WORK_NAME)
-        val updateDir = resolveAppUpdateCacheDir(context.cacheDir)
-        val safeName = sanitizeAppUpdateFileName(assetName)
-        File(updateDir, "$safeName.part").delete()
-        File(updateDir, safeName).delete()
     }
 
-    suspend fun readState(
+    fun observeState(
         context: Context,
         releaseVersion: String,
-        checksumProvided: Boolean
-    ): AppUpdateDownloadState =
-        withContext(Dispatchers.IO) {
-            val workInfo = runCatching {
-                WorkManager.getInstance(context.applicationContext)
-                    .getWorkInfosForUniqueWork(APP_UPDATE_WORK_NAME)
-                    .get()
-                    .firstOrNull()
-            }.getOrNull() ?: return@withContext AppUpdateDownloadState()
-            if (releaseTag(releaseVersion) !in workInfo.tags) {
-                return@withContext AppUpdateDownloadState()
-            }
-            workInfo.toAppUpdateDownloadState(checksumProvided)
-        }
+        checksumProvided: Boolean,
+    ): Flow<AppUpdateDownloadState> = WorkManager.getInstance(context.applicationContext)
+        .getWorkInfosForUniqueWorkFlow(APP_UPDATE_WORK_NAME)
+        .map { infos ->
+            infos.firstOrNull { releaseTag(releaseVersion) in it.tags }
+                ?.toAppUpdateDownloadState(checksumProvided)
+                ?: AppUpdateDownloadState()
+        }.distinctUntilChanged()
 }
 
 private fun releaseTag(releaseVersion: String): String = "$APP_UPDATE_WORK_TAG:$releaseVersion"
@@ -261,6 +317,7 @@ private fun WorkInfo.toAppUpdateDownloadState(checksumProvided: Boolean): AppUpd
         filePath = data.getString(KEY_FILE_PATH),
         errorMessage = data.getString(KEY_ERROR_MESSAGE),
         checksumProvided = checksumProvided,
+        usedGitHubFallback = data.getBoolean(KEY_GITHUB_FALLBACK, false),
     )
 }
 

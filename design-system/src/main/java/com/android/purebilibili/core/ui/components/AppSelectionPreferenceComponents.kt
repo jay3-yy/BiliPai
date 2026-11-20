@@ -139,8 +139,7 @@ fun <T> AppSingleChoicePreference(
     dialogTitle: String = title,
     /**
      * 可选的每项前导视觉（例如色彩风格的三色小样）。
-     * 提供后：下拉项把小样放在 leading 位置、选中勾移到 trailing 位置；
-     * 居中弹窗把小样排在名称之前；Miuix 窗口菜单沿用原生图标槽显示小样。
+     * 下拉菜单和居中弹窗均在名称前显示小样；Miuix 窗口菜单沿用原生图标槽。
      */
     optionLeading: (@Composable (T) -> Unit)? = null,
     presentation: AppSingleChoicePresentation = LocalAppSingleChoicePresentation.current,
@@ -344,23 +343,12 @@ fun <T> AppSingleChoicePreference(
                                         }
                                     }
                                 },
-                                leadingIcon = when {
-                                    optionLeading != null -> {
-                                        { optionLeading(option.value) }
-                                    }
-                                    selected -> {
-                                        {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = null,
-                                                tint = AppContentColors.link(),
-                                            )
-                                        }
-                                    }
-                                    else -> null
+                                leadingIcon = if (optionLeading != null) {
+                                    { optionLeading(option.value) }
+                                } else {
+                                    null
                                 },
-                                // 小样占用 leading 后，选中态改由 trailing 的勾表达，避免信息丢失。
-                                trailingIcon = if (optionLeading != null && selected) {
+                                trailingIcon = if (selected) {
                                     {
                                         Icon(
                                             imageVector = Icons.Default.Check,
@@ -371,6 +359,7 @@ fun <T> AppSingleChoicePreference(
                                 } else {
                                     null
                                 },
+                                selected = selected,
                                 onClick = {
                                     menuExpanded = false
                                     if (shouldDispatchAppChoiceSelection(selectedValue, option.value)) {
