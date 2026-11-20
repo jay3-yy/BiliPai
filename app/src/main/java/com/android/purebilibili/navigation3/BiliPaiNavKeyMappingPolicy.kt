@@ -65,6 +65,9 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         BiliPaiNavKey.LoginActivitySettings -> ScreenRoutes.LoginActivitySettings.route
         BiliPaiNavKey.MessageNotificationSettings -> ScreenRoutes.MessageNotificationSettings.route
         is BiliPaiNavKey.PluginsSettings -> ScreenRoutes.PluginsSettings.createRoute(importUrl)
+        is BiliPaiNavKey.BuiltinPluginSettings -> "${routeBase}/${encodeRouteValue(pluginId)}"
+        is BiliPaiNavKey.JsonPluginEditor -> pluginId?.let { "${routeBase}/${encodeRouteValue(it)}" } ?: routeBase
+        BiliPaiNavKey.PluginSkinCatalog,
         BiliPaiNavKey.ContentFilterHistory -> routeBase
         is BiliPaiNavKey.JsPluginContent -> ScreenRoutes.JsPluginContent.createRoute(pluginId)
         is BiliPaiNavKey.ExternalMedia -> ScreenRoutes.ExternalMedia.createRoute(launchId)
@@ -216,6 +219,11 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         normalized == ScreenRoutes.LoginActivitySettings.route -> BiliPaiNavKey.LoginActivitySettings
         normalized == ScreenRoutes.MessageNotificationSettings.route -> BiliPaiNavKey.MessageNotificationSettings
         routeBase == "plugins_settings" -> BiliPaiNavKey.PluginsSettings(importUrl = query["importUrl"])
+        segments.firstOrNull() == "builtin_plugin_settings" && segments.size >= 2 ->
+            BiliPaiNavKey.BuiltinPluginSettings(decodeRouteValue(segments[1]))
+        segments.firstOrNull() == "json_plugin_editor" ->
+            BiliPaiNavKey.JsonPluginEditor(segments.getOrNull(1)?.let(::decodeRouteValue))
+        normalized == BiliPaiNavKey.PluginSkinCatalog.routeBase -> BiliPaiNavKey.PluginSkinCatalog
         normalized == BiliPaiNavKey.ContentFilterHistory.routeBase -> BiliPaiNavKey.ContentFilterHistory
         segments.firstOrNull() == "js_plugin" && segments.size >= 2 -> {
             BiliPaiNavKey.JsPluginContent(pluginId = decodeRouteValue(segments[1]))

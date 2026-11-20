@@ -990,10 +990,12 @@ fun SearchScreen(
         )
     }
     val entryMotionSpec = resolveSearchEntryMotionSpec(
-        source = entryMotionSource,
+        source = if (com.android.purebilibili.core.ui.animation.LocalNavigationOwnsContentEntrance.current) {
+            SearchEntryMotionSource.NONE
+        } else entryMotionSource,
         reducedMotionBudget = searchMotionBudget == SearchMotionBudget.REDUCED
     )
-    val exitMotionSpec = remember(entryMotionKey, configuration.screenHeightDp) {
+    val exitMotionSpec = remember(entryMotionKey, configuration.screenHeightDp, entryMotionSpec) {
         resolveSearchExitMotionSpec(
             entrySpec = entryMotionSpec,
             screenHeightDp = configuration.screenHeightDp,

@@ -4,6 +4,7 @@ package com.android.purebilibili.navigation3
 
 import android.util.Log
 import android.view.animation.AnimationUtils
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.EnterTransition
@@ -22,8 +23,8 @@ import androidx.compose.animation.core.createChildTransition
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
 import androidx.compose.foundation.shape.CornerSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -51,9 +52,12 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.toSize
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.transition.navigationBlurBlend
@@ -61,6 +65,7 @@ import com.android.purebilibili.core.ui.transition.resolveNavigationBlurBlendFra
 import com.android.purebilibili.feature.settings.LocalSettingsContainerSharedScope
 import com.android.purebilibili.feature.settings.SettingsSharedContainerOrigin
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
 import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
@@ -77,6 +82,7 @@ internal class SettingsSharedContainerTransition(
     private val pageColor: () -> Color,
     private val realtimeBlurEnabled: Boolean,
     private val blurMotionTier: () -> MotionTier,
+    val navigationControlFallback: Boolean = false,
 ) : NavTransition {
     override val preparesEnterFrame = true
     override val handlesOwnClipping = true
@@ -119,6 +125,8 @@ internal class SettingsSharedContainerBounds(
 ) {
     var sourcePlaced by mutableStateOf(false)
     var destinationPlaced by mutableStateOf(false)
+    var destinationCorners by mutableStateOf(WindowCornerRadii())
+    val clipShape = settingsSharedContainerShape(origin, open) { destinationCorners }
 
     val traceDraw = BuildConfig.DEBUG && Log.isLoggable(SETTINGS_SHARED_DRAW_TAG, Log.DEBUG)
 
@@ -186,7 +194,25 @@ internal fun settingsSharedContainerDestination(
             }
         }
     }
-    return settingsSharedContainerBounds(bounds, pageColor = color)
+    LaunchedEffect(bounds) {
+        // 预测手势预览不移除页面。只在返回已提交且两端确实参加过共享布局时通知来源。
+        snapshotFlow {
+            latestScope.value.isRemoving && bounds.sourcePlaced && bounds.destinationPlaced
+        }.first { it }
+        if (!origin.returnLandingHandledByOwner) origin.returnLanding.request()
+    }
+    val view = LocalView.current
+    val activity = LocalActivity.current
+    return Modifier
+        .onGloballyPositioned {
+            // 取目标页面的布局边界；共享叠层中每帧变化的矩形只负责裁剪插值。
+            bounds.destinationCorners = resolveWindowCornerRadii(
+                view,
+                Rect(it.positionInWindow(), it.size.toSize()),
+                isInMultiWindow = activity?.isInMultiWindowMode == true,
+            )
+        }
+        .then(settingsSharedContainerBounds(bounds, pageColor = color))
 }
 
 @Composable
@@ -213,11 +239,6 @@ internal fun settingsSharedContainerBounds(
     if (bounds == null) return Modifier
     val origin = bounds.origin
     val source = pageColor == null
-    val shape = remember(bounds) {
-        val top = SettingsSharedContainerCorner(bounds.open) { origin.topRadius }
-        val bottom = SettingsSharedContainerCorner(bounds.open) { origin.bottomRadius }
-        RoundedCornerShape(topStart = top, topEnd = top, bottomStart = bottom, bottomEnd = bottom)
-    }
     return with(sharedScope) {
         val config = remember(origin) {
             object : SharedTransitionScope.SharedContentConfig {
@@ -231,7 +252,8 @@ internal fun settingsSharedContainerBounds(
         val sharedContent = rememberSharedContentState(key = bounds, config = config)
         val isMorphing = bounds.transition.currentState != bounds.transition.targetState
         val side = if (source) "row" else "page"
-        val clip = OverlayClip(shape)
+        // 底色、页面和来源内容在共享叠层里使用同一组物理圆角。
+        val clip = remember(bounds, sharedScope) { OverlayClip(bounds.clipShape) }
         val overlayClip = if (bounds.traceDraw) {
             val container = bounds
             object : SharedTransitionScope.OverlayClip {
@@ -334,10 +356,23 @@ internal fun settingsSharedContainerBounds(
     }
 }
 
-private class SettingsSharedContainerCorner(
-    private val open: State<Float>,
-    private val radius: () -> Dp,
-) : CornerSize {
-    override fun toPx(shapeSize: Size, density: Density): Float =
-        with(density) { radius().toPx() * (1f - open.value) }
+internal fun settingsSharedContainerShape(
+    origin: SettingsSharedContainerOrigin,
+    open: State<Float>,
+    destinationCorners: () -> WindowCornerRadii,
+): AbsoluteRoundedCornerShape {
+    fun corner(source: () -> Dp, destination: (WindowCornerRadii) -> Float) =
+        object : CornerSize {
+            override fun toPx(shapeSize: Size, density: Density): Float {
+                val start = with(density) { source().toPx() }
+                val end = destination(destinationCorners())
+                return start + (end - start) * open.value
+            }
+        }
+    return AbsoluteRoundedCornerShape(
+        topLeft = corner({ origin.topRadius }) { it.topLeft },
+        topRight = corner({ origin.topRadius }) { it.topRight },
+        bottomRight = corner({ origin.bottomRadius }) { it.bottomRight },
+        bottomLeft = corner({ origin.bottomRadius }) { it.bottomLeft },
+    )
 }

@@ -1,6 +1,7 @@
 // 文件路径: navigation/AppNavigation.kt
 package com.android.purebilibili.navigation
 
+import com.android.purebilibili.core.ui.transition.VideoCardSourceAnchor
 import kotlinx.coroutines.flow.first
 import android.app.Activity
 import android.app.Application
@@ -605,7 +606,7 @@ fun AppNavigation(
             homeSettings = homeSettings,
         )
     }
-    // 一镜到底仅由系统窗口承接；应用内导航统一使用普通页面转场。
+    // 旧整卡执行器保持关闭；系统窗口未启动时由官方共享容器按本次来源接替。
     val cardTransitionEnabled = false
     val videoTransitionRealtimeBlurEnabled by remember(context) {
         SettingsManager.getVideoTransitionRealtimeBlurEnabled(context)
@@ -1419,7 +1420,7 @@ fun AppNavigation(
             return true
         }
 
-        fun pushResolvedNavigation3KeyDirect(key: BiliPaiNavKey) {
+        fun pushResolvedNavigation3KeyDirect(key: BiliPaiNavKey, sharedSource: VideoCardSourceAnchor? = null) {
             val currentSearch = navigation3BackStack.lastOrNull() as? BiliPaiNavKey.Search
             val requestedSearchKeyword = (key as? BiliPaiNavKey.Search)?.keyword
             // Guard before allocating openId: repeated entrance taps belong to the same page.
@@ -1481,13 +1482,21 @@ fun AppNavigation(
                     forceStopPlayback = isPlayerDestinationKey(sessionScopedKey),
                 )
             }
+            if (nextStack.lastOrNull() != navigation3BackStack.lastOrNull()) {
+                // openId 等会话键在此确定；来源必须绑定最终入栈的完整键。
+                sharedSource?.prepareSharedFallback(sessionScopedKey)
+            }
             replaceNavigation3BackStack(nextStack)
         }
-        fun pushNavigation3KeyDirect(key: BiliPaiNavKey) {
+        fun pushNavigation3KeyDirect(key: BiliPaiNavKey, sharedSource: VideoCardSourceAnchor? = null) {
             if (tryOpenCompanionVideoDetail(key)) return
-            pushResolvedNavigation3KeyDirect(com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(key))
+            pushResolvedNavigation3KeyDirect(com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(key), sharedSource)
         }
-        fun pushNavigation3KeyImpl(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)?) {
+        fun pushNavigation3KeyWithSourceImpl(
+            key: BiliPaiNavKey,
+            beforeNavigation: (() -> Unit)?,
+            sharedSource: VideoCardSourceAnchor?,
+        ) {
             val target = key.toPrivacyNavigationTarget()
             if (
                 shouldRequirePrivacyAuthentication(
@@ -1503,7 +1512,7 @@ fun AppNavigation(
                         PrivacyAuthenticationResult.Success -> {
                             privacySessionUnlocked = true
                             beforeNavigation?.invoke()
-                            pushNavigation3KeyDirect(key)
+                            pushNavigation3KeyDirect(key, sharedSource)
                         }
                         is PrivacyAuthenticationResult.Failure -> {
                             android.widget.Toast.makeText(context, result.message, android.widget.Toast.LENGTH_SHORT).show()
@@ -1512,9 +1521,13 @@ fun AppNavigation(
                 }
             } else {
                 beforeNavigation?.invoke()
-                pushNavigation3KeyDirect(key)
+                pushNavigation3KeyDirect(key, sharedSource)
             }
         }
+        fun pushNavigation3KeyImpl(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)?) {
+            pushNavigation3KeyWithSourceImpl(key, beforeNavigation, null)
+        }
+        val latestPushNavigation3WithSource = rememberUpdatedState(::pushNavigation3KeyWithSourceImpl)
         // 页面只捕获下面的 State 容器，导航事件触发时才读取最新实现。
         // 不把当前路由、返回会话和认证状态展开到每个页面的点击 lambda 捕获中；
         // 导航状态变化不会仅因事件回调换实例就使保留页面失去跳过重组的机会。
@@ -1523,14 +1536,16 @@ fun AppNavigation(
         fun navigateToSystemCardWindowOrPushImpl(
             key: BiliPaiNavKey,
             useRecordedCardSource: Boolean,
-            fallback: (() -> Unit)? = null,
+            fallback: ((VideoCardSourceAnchor?) -> Unit)? = null,
             isCurrent: () -> Boolean = { true },
-            onReturn: (() -> Unit)? = null,
+            onReturn: ((com.android.purebilibili.navigation3.SystemWindowMotionPhase) -> Unit)? = null,
         ) {
             if (tryOpenCompanionVideoDetail(key)) return
             val resolvedKey = com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(key)
+            var sharedFallback: VideoCardSourceAnchor? = null
             fun commitInApp() {
-                if (fallback != null) fallback() else latestPushNavigation3Key.value(resolvedKey, null)
+                if (fallback != null) fallback(sharedFallback)
+                else latestPushNavigation3WithSource.value(resolvedKey, null, sharedFallback)
             }
             if (resolvedPrivacyAuthenticationEnabled != false &&
                 isPrivacyProtectedNavigationTarget(resolvedKey.toPrivacyNavigationTarget())
@@ -1543,6 +1558,7 @@ fun AppNavigation(
                 coverUrl = null,
                 useRecordedCardSource = useRecordedCardSource,
             )
+            sharedFallback = session.sourceAnchor
             if (!com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
                     systemCardTransitionEnabled, session, hostActivity,
                 )
@@ -1579,7 +1595,7 @@ fun AppNavigation(
         fun navigateToSystemCardWindowOrPush(key: BiliPaiNavKey, useRecordedCardSource: Boolean = true) {
             latestOpenSystemCard.value(key, useRecordedCardSource)
         }
-        fun tryOpenRecordedSystemWindow(key: BiliPaiNavKey, fallback: () -> Unit): Boolean {
+        fun tryOpenRecordedSystemWindow(key: BiliPaiNavKey, fallback: (VideoCardSourceAnchor?) -> Unit): Boolean {
             if (!systemCardTransitionEnabled ||
                 (resolvedPrivacyAuthenticationEnabled != false && isPrivacyProtectedNavigationTarget(key.toPrivacyNavigationTarget()))
             ) return false
@@ -1603,8 +1619,10 @@ fun AppNavigation(
         }
         val latestTryOpenRecordedSystemWindow = rememberUpdatedState(::tryOpenRecordedSystemWindow)
         fun pushNavigation3Key(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)? = null) {
-            val push = { latestPushNavigation3Key.value(key, beforeNavigation) }
-            if (beforeNavigation != null || !latestTryOpenRecordedSystemWindow.value(key, push)) push()
+            val push: (VideoCardSourceAnchor?) -> Unit = { source ->
+                latestPushNavigation3WithSource.value(key, beforeNavigation, source)
+            }
+            if (beforeNavigation != null || !latestTryOpenRecordedSystemWindow.value(key, push)) push(null)
         }
         fun replaceNavigation3TopWithKey(key: BiliPaiNavKey) {
             if (initialVideoRoute != null && navigation3BackStack.size == 1) {
@@ -1663,12 +1681,12 @@ fun AppNavigation(
         fun pushNavigation3TargetImpl(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)?) {
             val legacyRoute = key.toLegacyRoute()
             if (!canNavigate(shouldBypassNavigationDebounceForRoute(legacyRoute))) return
-            val openInApp = {
+            val openInApp: (VideoCardSourceAnchor?) -> Unit = { source ->
                 if (!requestBottomPagerPageForRoute(legacyRoute, beforeNavigation)) {
-                    latestPushNavigation3Key.value(key, beforeNavigation)
+                    latestPushNavigation3WithSource.value(key, beforeNavigation, source)
                 }
             }
-            if (beforeNavigation != null || !latestTryOpenRecordedSystemWindow.value(key, openInApp)) openInApp()
+            if (beforeNavigation != null || !latestTryOpenRecordedSystemWindow.value(key, openInApp)) openInApp(null)
         }
         val latestPushNavigation3Target = rememberUpdatedState(::pushNavigation3TargetImpl)
         fun pushNavigation3Target(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)? = null) {
@@ -1677,9 +1695,15 @@ fun AppNavigation(
         fun openHomeTopActionImpl(key: BiliPaiNavKey, control: HomeHeaderControl, recordSource: () -> Boolean) {
             val route = key.toLegacyRoute()
             if (!canNavigate(shouldBypassNavigationDebounceForRoute(route))) return
-            fun openInApp() {
-                val trackReturn = { pendingHomeHeaderReturn = HomeHeaderReturn(control) }
-                if (!requestBottomPagerPageForRoute(route, trackReturn)) pushNavigation3Key(key, trackReturn)
+            fun openInApp(source: VideoCardSourceAnchor? = null) {
+                val trackReturn = {
+                    // 顶栏搜索不能沿用上次底栏搜索的入场/退出来源。
+                    if (control == HomeHeaderControl.SEARCH) searchEntryMotionSource = SearchEntryMotionSource.NONE
+                    pendingHomeHeaderReturn = HomeHeaderReturn(control)
+                }
+                if (!requestBottomPagerPageForRoute(route, trackReturn)) {
+                    latestPushNavigation3WithSource.value(key, trackReturn, source)
+                }
             }
             // 隐私入口的认证及解锁状态属于当前导航宿主。
             val protected = isPrivacyProtectedNavigationTarget(key.toPrivacyNavigationTarget())
@@ -1690,6 +1714,7 @@ fun AppNavigation(
                 return
             }
             val sourcePage = mainBottomPagerState.selectedPage
+            var systemReturn: HomeHeaderReturn? = null
             navigateToSystemCardWindowOrPushImpl(
                 key = key,
                 useRecordedCardSource = true,
@@ -1698,7 +1723,20 @@ fun AppNavigation(
                     navigation3BackStack.lastOrNull() == BiliPaiNavKey.MainHost &&
                         mainBottomPagerState.selectedPage == sourcePage && canUseWindow()
                 },
-                onReturn = { homeHeaderReturn = HomeHeaderReturn(control, landingFromSystemWindow = true) },
+                onReturn = { phase ->
+                    val previous = systemReturn
+                    val landing = if (previous == null ||
+                        phase == com.android.purebilibili.navigation3.SystemWindowMotionPhase.RETURNING
+                    ) {
+                        HomeHeaderReturn(control, landingFromSystemWindow = true).also {
+                            systemReturn = it
+                            homeHeaderReturn = it
+                        }
+                    } else {
+                        previous
+                    }
+                    landing.updateSystemPhase(phase)
+                },
             )
         }
         val latestOpenHomeTopAction = rememberUpdatedState(::openHomeTopActionImpl)
@@ -1853,7 +1891,7 @@ fun AppNavigation(
                     miniPlayerManager?.haltForeignPlaybackForIncomingVideo(videoBvid)
                 }
                 miniPlayerManager?.exitMiniMode(animate = false)
-                pushNavigation3Key(targetKey)
+                latestPushNavigation3WithSource.value(targetKey, null, transitionSession.sourceAnchor)
             }
             suspend fun prepareAndCommitInAppVideoNavigation() {
                 if (key !is BiliPaiNavKey.VideoDetail) {
@@ -5054,17 +5092,12 @@ fun AppNavigation(
                 }
 
                 @Composable
-                fun RenderPluginsSettingsEntryContent(key: BiliPaiNavKey, isActive: Boolean) {
-                    val pluginsKey = key as BiliPaiNavKey.PluginsSettings
+                fun RenderPluginsSettingsEntryContent(key: BiliPaiNavKey.PluginsSettings) {
                     SettingsTabletEntry(key) {
                         com.android.purebilibili.feature.settings.PluginsScreen(
                             onBack = { performSystemBackAction() },
-                            onOpenFilterHistory = { pushNavigation3Key(BiliPaiNavKey.ContentFilterHistory) },
-                            isActive = isActive,
-                            initialImportUrl = pluginsKey.importUrl,
-                            onOpenJsPlugin = { pluginId ->
-                                pushNavigation3Key(BiliPaiNavKey.JsPluginContent(pluginId))
-                            }
+                            initialImportUrl = key.importUrl,
+                            onNavigate = { pushNavigation3Key(it) },
                         )
                     }
                 }
@@ -6399,10 +6432,15 @@ fun AppNavigation(
                         BiliPaiNavEntryContentRole.MESSAGE_NOTIFICATION_SETTINGS ->
                             RenderMessageNotificationSettingsEntryContent(key)
                         BiliPaiNavEntryContentRole.PLUGINS_SETTINGS ->
-                            RenderPluginsSettingsEntryContent(
-                                key = key,
-                                isActive = if (isBottomPagerHosted) isBottomPagerPageActive else key == currentNavigation3Key,
-                            )
+                            RenderPluginsSettingsEntryContent(key as BiliPaiNavKey.PluginsSettings)
+                        BiliPaiNavEntryContentRole.PLUGIN_CENTER_DETAIL ->
+                            SettingsTabletEntry(key) {
+                                com.android.purebilibili.feature.settings.PluginCenterDetailScreen(
+                                    key = key,
+                                    onBack = { performSystemBackAction() },
+                                    onOpenFilterHistory = { pushNavigation3Key(BiliPaiNavKey.ContentFilterHistory) },
+                                )
+                            }
                         BiliPaiNavEntryContentRole.CONTENT_FILTER_HISTORY ->
                             SettingsTabletEntry(key) {
                                 com.android.purebilibili.feature.settings.screen.ContentFilterHistoryScreen(
@@ -6544,9 +6582,10 @@ fun AppNavigation(
                     backStack = navigation3BackStack,
                     onOpenCardContainer = { navigateToSystemCardWindowOrPush(it) },
                     activeMainHostRoute = activeBottomTabRoute,
-                    // 系统转场未启动时，视频、直播及文章等均回退普通页面转场。
+                    // 系统未启动时，仅本次可匹配来源启用官方共享容器；其余沿用页面转场。
                     cardTransitionEnabled = cardTransitionEnabled && !systemReduceMotion,
                     videoCardTransitionEnabled = sharedVideoCardTransitionEnabled && !miniPlayerOwnsNavigationMotion,
+                    sharedContainerFallbackEnabled = systemCardTransitionEnabled && !miniPlayerOwnsNavigationMotion,
                     videoMiniPlayerDeparture = miniPlayerOwnsNavigationMotion,
                     videoTransitionRealtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                     isLightBackground = isLightBackground,

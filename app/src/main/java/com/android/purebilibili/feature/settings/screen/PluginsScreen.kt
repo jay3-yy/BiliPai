@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -69,7 +68,8 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.iOSPink  // 插件图标色
 import com.android.purebilibili.core.theme.resolveAccessibleContainerColors
 import com.android.purebilibili.feature.plugin.BiliPaiFeedFilterPlugin
-import com.android.purebilibili.feature.settings.SettingsLocalBackHandler
+import com.android.purebilibili.feature.settings.SettingsNavigationContainerOrigin
+import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.feature.settings.screen.SkinCatalogScreen
 import com.android.purebilibili.feature.settings.ui.SettingsBottomBarScrollEffect
 import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
@@ -177,59 +177,15 @@ private fun PluginCenterSectionTitle(title: String, modifier: Modifier = Modifie
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun PluginsScreen(
+internal fun PluginsScreen(
     onBack: () -> Unit,
-    onOpenFilterHistory: () -> Unit,
-    isActive: Boolean,
+    onNavigate: (BiliPaiNavKey) -> Unit,
     initialImportUrl: String? = null,
-    onOpenJsPlugin: (String) -> Unit = {}
 ) {
-    // Top-level state for managing plugins and editing
     val plugins by PluginManager.pluginsFlow.collectAsStateWithLifecycle()
     val jsonPlugins by com.android.purebilibili.core.plugin.json.JsonPluginManager.plugins.collectAsStateWithLifecycle()
     val screenTitle = stringResource(R.string.plugins_center_title)
     val backLabel = stringResource(R.string.common_back)
-
-    //  编辑插件状态
-    var editingPlugin by remember { mutableStateOf<com.android.purebilibili.core.plugin.json.JsonRulePlugin?>(null) }
-    var creatingJsonPlugin by remember { mutableStateOf(false) }
-    var selectedBuiltInPluginId by rememberSaveable { mutableStateOf<String?>(null) }
-    var showSkinCatalog by remember { mutableStateOf(false) }
-
-    //  如果正在编辑插件，显示编辑器全屏覆盖 (Mobile behavior)
-    //  In Tablet, this will be handled differently.
-    if (creatingJsonPlugin || editingPlugin != null) {
-        val closeEditor = { creatingJsonPlugin = false; editingPlugin = null }
-        SettingsLocalBackHandler { closeEditor() }
-        JsonRuleSourceEditorScreen(
-            plugin = editingPlugin,
-            onBack = closeEditor,
-        )
-        return
-    }
-
-    selectedBuiltInPluginId?.let { pluginId ->
-        val pluginInfo = plugins.firstOrNull { it.plugin.id == pluginId }
-        if (pluginInfo != null) {
-            // 过滤记录转场期间，底层插件详情仍可能保留在组合中。
-            SettingsLocalBackHandler(enabled = isActive) { selectedBuiltInPluginId = null }
-            PluginDetailScreen(
-                pluginInfo = pluginInfo,
-                onBack = { selectedBuiltInPluginId = null },
-                onOpenFilterHistory = onOpenFilterHistory,
-            )
-            return
-        }
-    }
-
-    if (showSkinCatalog) {
-        SettingsLocalBackHandler { showSkinCatalog = false }
-        SkinCatalogScreen(
-            onBack = { showSkinCatalog = false },
-            onInstalled = { showSkinCatalog = false }
-        )
-        return
-    }
 
     val bottomContentPadding = LocalBottomBarContentPadding.current
 
@@ -243,12 +199,12 @@ fun PluginsScreen(
         PluginsContent(
             plugins = plugins,
             jsonPlugins = jsonPlugins,
-            onOpenBuiltInPlugin = { selectedBuiltInPluginId = it },
-            onEditJsonPlugin = { editingPlugin = it },
-            onCreateJsonPlugin = { creatingJsonPlugin = true },
+            onOpenBuiltInPlugin = { onNavigate(BiliPaiNavKey.BuiltinPluginSettings(it)) },
+            onEditJsonPlugin = { onNavigate(BiliPaiNavKey.JsonPluginEditor(it.id)) },
+            onCreateJsonPlugin = { onNavigate(BiliPaiNavKey.JsonPluginEditor()) },
             initialImportUrl = initialImportUrl,
-            onOpenJsPlugin = onOpenJsPlugin,
-            onOpenSkinCatalog = { showSkinCatalog = true },
+            onOpenJsPlugin = { onNavigate(BiliPaiNavKey.JsPluginContent(it)) },
+            onOpenSkinCatalog = { onNavigate(BiliPaiNavKey.PluginSkinCatalog) },
         )
     }
 }
@@ -556,12 +512,22 @@ fun PluginsContent(
                     Column {
                         entries.forEachIndexed { index, pluginInfo ->
                             key(pluginInfo.plugin.id) {
-                                PluginItem(
-                                    pluginInfo = pluginInfo,
-                                    iconTint = rememberPluginEntryIconTint(plugins.indexOf(pluginInfo)),
-                                    onToggle = { enabled -> scope.launch { PluginManager.setEnabled(pluginInfo.plugin.id, enabled) } },
-                                    onOpen = { onOpenBuiltInPlugin(pluginInfo.plugin.id) },
-                                )
+                                val pluginId = pluginInfo.plugin.id
+                                SettingsNavigationContainerOrigin(
+                                    target = BiliPaiNavKey.BuiltinPluginSettings(pluginId),
+                                    first = index == 0,
+                                    last = index == entries.lastIndex,
+                                    flatGroup = true,
+                                    onClick = { onOpenBuiltInPlugin(pluginId) },
+                                ) { contentModifier, open ->
+                                    PluginItem(
+                                        pluginInfo = pluginInfo,
+                                        iconTint = rememberPluginEntryIconTint(plugins.indexOf(pluginInfo)),
+                                        onToggle = { enabled -> scope.launch { PluginManager.setEnabled(pluginId, enabled) } },
+                                        onOpen = open,
+                                        contentModifier = contentModifier,
+                                    )
+                                }
                             }
                             if (index < entries.lastIndex) AppPreferenceDivider()
                         }
@@ -585,12 +551,19 @@ fun PluginsContent(
             item(key = "rules-heading") { PluginCenterSectionTitle("自定义规则") }
             item(key = "rule-actions") {
                 AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    AppPreference(
-                        icon = rememberSettingsVector(R.drawable.ph_note_pencil_24, R.drawable.ms_edit_note_24),
-                        title = "编写 JSON 规则",
-                        subtitle = "粘贴或编写规则，实时测试过滤结果",
+                    SettingsNavigationContainerOrigin(
+                        target = BiliPaiNavKey.JsonPluginEditor(),
                         onClick = onCreateJsonPlugin,
-                    )
+                        last = false,
+                    ) { contentModifier, open ->
+                        AppPreference(
+                            icon = rememberSettingsVector(R.drawable.ph_note_pencil_24, R.drawable.ms_edit_note_24),
+                            title = "编写 JSON 规则",
+                            subtitle = "粘贴或编写规则，实时测试过滤结果",
+                            onClick = open,
+                            contentModifier = contentModifier,
+                        )
+                    }
                     AppPreferenceDivider()
                     AppPreference(
                         icon = rememberSettingsVector(R.drawable.ph_cloud_arrow_down_24, R.drawable.ms_cloud_download_24),
@@ -860,12 +833,19 @@ fun PluginsContent(
             item(key = "skins-heading") { PluginCenterSectionTitle("界面装扮") }
             item(key = "skin-actions") {
                 AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    AppPreference(
-                        icon = rememberSettingsVector(R.drawable.ph_cloud_24, R.drawable.ms_cloud_fill_24),
-                        title = "在线装扮",
-                        subtitle = "浏览装扮，预览后安装",
+                    SettingsNavigationContainerOrigin(
+                        target = BiliPaiNavKey.PluginSkinCatalog,
                         onClick = onOpenSkinCatalog,
-                    )
+                        last = false,
+                    ) { contentModifier, open ->
+                        AppPreference(
+                            icon = rememberSettingsVector(R.drawable.ph_cloud_24, R.drawable.ms_cloud_fill_24),
+                            title = "在线装扮",
+                            subtitle = "浏览装扮，预览后安装",
+                            onClick = open,
+                            contentModifier = contentModifier,
+                        )
+                    }
                     AppPreferenceDivider()
                     AppPreference(
                         icon = rememberSettingsVector(R.drawable.ph_paint_brush_24, R.drawable.ms_brush_fill_24),
@@ -1822,6 +1802,7 @@ private fun PluginItem(
     onToggle: (Boolean) -> Unit,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
+    contentModifier: Modifier = Modifier,
 ) {
     val plugin = pluginInfo.plugin
     val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint)
@@ -1843,6 +1824,7 @@ private fun PluginItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onOpen() }
+                .then(contentModifier)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1929,6 +1911,49 @@ private fun PluginItem(
             )
         }
 
+    }
+}
+
+@Composable
+internal fun PluginCenterDetailScreen(
+    key: BiliPaiNavKey,
+    onBack: () -> Unit,
+    onOpenFilterHistory: () -> Unit,
+) {
+    when (key) {
+        is BiliPaiNavKey.BuiltinPluginSettings -> {
+            val plugins by PluginManager.pluginsFlow.collectAsStateWithLifecycle()
+            val pluginInfo = plugins.firstOrNull { it.plugin.id == key.pluginId }
+            if (pluginInfo != null) {
+                PluginDetailScreen(pluginInfo, onBack, onOpenFilterHistory)
+            } else {
+                MissingPluginCenterItem("插件详情", "插件已不可用", onBack)
+            }
+        }
+        is BiliPaiNavKey.JsonPluginEditor -> {
+            val plugins by com.android.purebilibili.core.plugin.json.JsonPluginManager.plugins.collectAsStateWithLifecycle()
+            val plugin = plugins.firstOrNull { it.plugin.id == key.pluginId }?.plugin
+            if (key.pluginId == null || plugin != null) {
+                JsonRuleSourceEditorScreen(plugin = plugin, onBack = onBack)
+            } else {
+                MissingPluginCenterItem("编辑 JSON 规则", "找不到该规则", onBack)
+            }
+        }
+        BiliPaiNavKey.PluginSkinCatalog -> SkinCatalogScreen(onBack = onBack, onInstalled = onBack)
+        else -> error("Unsupported plugin center destination: ${key.routeBase}")
+    }
+}
+
+@Composable
+private fun MissingPluginCenterItem(title: String, message: String, onBack: () -> Unit) {
+    SettingsPageScaffold(
+        title = title,
+        onBack = onBack,
+        backContentDescription = stringResource(R.string.common_back),
+        bottomContentPadding = LocalBottomBarContentPadding.current,
+        scrollHost = SettingsPageScrollHost.External,
+    ) {
+        AppText(message, modifier = Modifier.padding(16.dp), color = AppContentColors.secondaryText())
     }
 }
 
@@ -2069,11 +2094,14 @@ private fun InstalledJsPluginItem(
         }
         PluginCapabilityChips(capabilities = installed.grantedCapabilities)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            AppTextButton(
+            SettingsNavigationContainerOrigin(
+                target = BiliPaiNavKey.JsPluginContent(installed.manifest.id),
                 onClick = onOpen,
-                enabled = installed.enabled
-            ) {
-                AppText("打开内容")
+                flatGroup = true,
+            ) { contentModifier, open ->
+                AppTextButton(onClick = open, enabled = installed.enabled, modifier = contentModifier) {
+                    AppText("打开内容")
+                }
             }
             AppTextButton(
                 onClick = onTest,
@@ -2537,13 +2565,19 @@ internal fun JsonPluginItem(
                         AppText("重置统计", style = MaterialTheme.typography.labelMedium)
                     }
 
-                    // 编辑按钮
-                    AppTextButton(
+                    SettingsNavigationContainerOrigin(
+                        target = BiliPaiNavKey.JsonPluginEditor(plugin.id),
                         onClick = onEdit,
-                    ) {
-                        AppIcon(rememberSettingsVector(R.drawable.ph_note_pencil_24, R.drawable.ms_edit_note_24), null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        AppText("编辑", style = MaterialTheme.typography.labelMedium)
+                        flatGroup = true,
+                    ) { contentModifier, open ->
+                        AppTextButton(
+                            onClick = open,
+                            modifier = contentModifier,
+                        ) {
+                            AppIcon(rememberSettingsVector(R.drawable.ph_note_pencil_24, R.drawable.ms_edit_note_24), null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            AppText("编辑", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
 
                     // 删除按钮

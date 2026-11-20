@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.offset
@@ -336,10 +335,14 @@ internal fun LinkedBottomDock(
             com.android.purebilibili.core.ui.AppNavigationColorRole.BAR,
         )?.selectedContent ?: accentColor
         BoxWithConstraints(
-            // 与未联动的底栏使用同一稳定占位；仍保留 IME 避让及 inset 消费。
+            // 仅底栏自己的输入态避让键盘。顶部搜索或其他页面收键盘时，
+            // 首页底栏保持原落点，不能跟随尚未归零的 IME inset 上下跳动。
             modifier = modifier
                 .fillMaxWidth()
-                .imePadding()
+                .windowInsetsPadding(
+                    if (shouldLinkedDockAvoidIme(phase, isTopLevelDestination)) WindowInsets.ime
+                    else WindowInsets(0, 0, 0, 0),
+                )
                 .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             contentAlignment = Alignment.TopCenter,

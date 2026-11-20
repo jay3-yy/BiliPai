@@ -128,6 +128,21 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data class BuiltinPluginSettings(val pluginId: String) : BiliPaiNavKey {
+        override val routeBase: String = "builtin_plugin_settings"
+    }
+
+    @Serializable
+    data class JsonPluginEditor(val pluginId: String? = null) : BiliPaiNavKey {
+        override val routeBase: String = "json_plugin_editor"
+    }
+
+    @Serializable
+    data object PluginSkinCatalog : BiliPaiNavKey {
+        override val routeBase: String = "plugin_skin_catalog"
+    }
+
+    @Serializable
     data object ContentFilterHistory : BiliPaiNavKey {
         override val routeBase: String = "content_filter_history"
     }

@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components.cards
 
+import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
 import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.components.VideoStatusBadges
 import com.android.purebilibili.core.ui.components.wallpaperAwareMediaCardBackground
@@ -96,6 +97,7 @@ internal fun HomeStyleSingleColumnVideoCard(
     coverAspectRatio: Float,
     transitionEnabled: Boolean,
     sharedTransitionEnabled: Boolean = transitionEnabled,
+    sourceCaptureEnabled: Boolean = sharedTransitionEnabled,
     isFollowing: Boolean = false,
     showUpBadge: Boolean = true,
     durationStyle: com.android.purebilibili.core.store.HomeDurationStyle =
@@ -155,7 +157,7 @@ internal fun HomeStyleSingleColumnVideoCard(
     val coverCoordinates = remember { object { var value: LayoutCoordinates? = null } }
     val infoCoordinates = remember { object { var value: LayoutCoordinates? = null } }
     val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(
-        video.bvid, enabled = sharedTransitionEnabled,
+        video.bvid, enabled = sourceCaptureEnabled,
     )
     // 透明横卡的圆角属于封面，不能再叠加整行外框裁剪；有底板的紧凑卡保留原形状。
     val cardShape = if (compactPartition) AppShapes.container(ContainerLevel.Card)
@@ -261,7 +263,7 @@ internal fun HomeStyleSingleColumnVideoCard(
             .onPlaced { coordinates ->
                 cardCoordinates.value = coordinates
             }
-            .videoCardSourceAnchor(video.bvid, cardShape)
+            .videoCardSourceAnchor(video.bvid, cardShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
             .then(nativeCardSnapshot.modifier)
             .clip(cardShape)
             .then(

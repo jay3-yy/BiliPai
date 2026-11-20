@@ -198,3 +198,7 @@ internal fun resolveLinkedDockGeometry(
         height = top + barHeight,
     )
 }
+
+/** 其他搜索页的键盘不属于首页 dock，返回时不能推动它的落点。 */
+internal fun shouldLinkedDockAvoidIme(phase: LinkedDockPhase, isTopLevelDestination: Boolean): Boolean =
+    isTopLevelDestination && phase == LinkedDockPhase.Search

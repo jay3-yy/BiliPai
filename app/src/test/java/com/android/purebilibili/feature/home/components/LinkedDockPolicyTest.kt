@@ -7,6 +7,18 @@ import kotlin.test.assertTrue
 
 class LinkedDockPolicyTest {
     @Test
+    fun onlyTheActiveDockSearchAvoidsTheKeyboard() {
+        assertTrue(shouldLinkedDockAvoidIme(LinkedDockPhase.Search, isTopLevelDestination = true))
+        LinkedDockPhase.entries.forEach { phase ->
+            // 顶部搜索覆盖首页时，即便 dock 曾处于输入态也不能跟随该页的键盘。
+            assertFalse(shouldLinkedDockAvoidIme(phase, isTopLevelDestination = false))
+            if (phase != LinkedDockPhase.Search) {
+                assertFalse(shouldLinkedDockAvoidIme(phase, isTopLevelDestination = true))
+            }
+        }
+    }
+
+    @Test
     fun glassHandoffIsContinuousMonotonicAndBoundedInBothDirections() {
         assertEquals(0f, resolveLinkedDockGlassHandoffProgress(-0.1f))
         assertEquals(1f, resolveLinkedDockGlassHandoffProgress(1.1f))

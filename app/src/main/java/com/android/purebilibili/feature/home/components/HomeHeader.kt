@@ -50,10 +50,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance  //  状态栏亮度计算
 import androidx.compose.ui.layout.ContentScale
@@ -66,19 +68,20 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.ui.components.AppExactTouchTargets
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.LocalSystemReduceMotion
-import com.android.purebilibili.core.ui.motion.continuityTween
-import com.android.purebilibili.core.ui.motion.softLandingSpring
+import com.android.purebilibili.core.ui.transition.navigationReturnLandingPressureSpec
 import com.android.purebilibili.core.ui.rememberVisualWorkActive
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.feature.home.HomeHeaderControl
+import com.android.purebilibili.navigation3.neighborMotionModifier
 import com.android.purebilibili.feature.home.HomeHeaderReturn
 import com.android.purebilibili.core.store.LiquidGlassStyle
 import com.android.purebilibili.navigation3.BiliPaiNavKey
@@ -1542,7 +1545,7 @@ private fun HomeTopRightActionButton(
 }
 
 @Composable
-private fun HomeTopAvatarButton(
+internal fun HomeTopAvatarButton(
     touchSize: Dp,
     visualSize: Dp,
     anchor: Modifier,
@@ -1550,16 +1553,20 @@ private fun HomeTopAvatarButton(
     onClick: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    Box(Modifier.size(touchSize), contentAlignment = Alignment.Center) {
+    Box(
+        Modifier.size(touchSize).appActionClickable(onClick = onClick)
+            .semantics { contentDescription = "个人中心" },
+        contentAlignment = Alignment.Center,
+    ) {
         Box(
-            modifier = Modifier.matchParentSize()
-                .appElasticPress(visualSize = visualSize)
-                .then(returnMotion)
-                .appActionClickable(onClick = onClick)
-                .semantics { contentDescription = "个人中心" },
+            modifier = Modifier.size(visualSize).then(returnMotion),
             contentAlignment = Alignment.Center,
         ) {
-            content()
+            Box(
+                modifier = Modifier.matchParentSize()
+                    .appElasticPress(visualSize = visualSize),
+                contentAlignment = Alignment.Center,
+            ) { content() }
         }
         if (anchor != Modifier) Box(Modifier.size(visualSize).then(anchor))
     }
@@ -1672,9 +1679,16 @@ internal fun HomeHeader(
     val avatarSource = rememberSystemWindowControlSource(avatarTarget)
     val searchSource = rememberSystemWindowControlSource(searchTarget)
     val endSource = rememberSystemWindowControlSource(endTarget)
-    val avatarAnchor = avatarSource.anchorModifier(edgeButtonShape)
-    val searchAnchor = searchSource.anchorModifier(resolveHomeTopSearchContainerShape(topChromePolicy))
-    val topRightActionSourceModifier = endSource.anchorModifier(edgeButtonShape)
+    val headerMotionGroup = remember { Any() }
+    val avatarAnchor = avatarSource.anchorModifier(edgeButtonShape, animateNeighbors = false, neighborActive = headerActive, returnHandledByOwner = true, motionGroup = headerMotionGroup)
+    val searchAnchor = searchSource.anchorModifier(resolveHomeTopSearchContainerShape(topChromePolicy), neighborActive = headerActive, returnHandledByOwner = true, motionGroup = headerMotionGroup)
+    val topRightActionSourceModifier = endSource.anchorModifier(edgeButtonShape, animateNeighbors = false, neighborActive = headerActive, returnHandledByOwner = true, motionGroup = headerMotionGroup)
+    val avatarSharedContainer = com.android.purebilibili.navigation3.navigationSharedContainerSourceModifier(
+        avatarSource?.sharedSource, edgeButtonShape,
+    )
+    val endSharedContainer = com.android.purebilibili.navigation3.navigationSharedContainerSourceModifier(
+        endSource?.sharedSource, edgeButtonShape,
+    )
     fun navigate(target: BiliPaiNavKey, control: HomeHeaderControl, source: SystemWindowCardSource?) {
         onNavigate(target, control) { source?.record() == true }
     }
@@ -1697,30 +1711,88 @@ internal fun HomeHeader(
     val returnPressure = remember { Animatable(0f) }
     val motionEnabled = LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current
     val windowActive = rememberVisualWorkActive()
-    LaunchedEffect(headerReturn, headerActive, windowActive, motionEnabled) {
-        returnPressure.snapTo(0f)
-        if (headerReturn == null || !headerActive || !windowActive || !headerReturn.consume() || !motionEnabled) {
+    val systemReturnPhase = headerReturn?.systemPhase
+    val entryNavigationRunning =
+        com.android.purebilibili.core.ui.LocalVideoDetailNavigationTransitionScope.current?.isRunning == true
+    val landingOrigin = when (headerReturn?.source) {
+        HomeHeaderControl.AVATAR -> avatarSource
+        HomeHeaderControl.SEARCH -> searchSource
+        HomeHeaderControl.END_ACTION -> endSource
+        null -> null
+    }?.sharedSource?.origin
+    val sharedNavigationRunning by remember(landingOrigin) {
+        derivedStateOf {
+            landingOrigin?.sharedBounds?.let {
+                it.navigationScope.value.isRunning || it.transition.currentState != it.transition.targetState
+            } == true
+        }
+    }
+    val headerNavigationRunning = entryNavigationRunning || sharedNavigationRunning
+    LaunchedEffect(headerReturn, systemReturnPhase, headerNavigationRunning, headerActive, windowActive, motionEnabled) {
+        if (!motionEnabled || !headerActive || !windowActive) {
+            returnPressure.snapTo(0f)
             return@LaunchedEffect
         }
-        // 系统窗口把首页交还时，按钮已在接近落点的位置，从回弹前的压缩幅度接上。
-        if (headerReturn.landingFromSystemWindow) returnPressure.snapTo(0.65f)
-        returnPressure.animateTo(1f, continuityTween(if (headerReturn.landingFromSystemWindow) 55 else 90))
-        returnPressure.animateTo(0f, softLandingSpring())
+        if (headerReturn == null || !headerReturn.consumeWhenLanded(headerNavigationRunning)) {
+            // 返回途中只恢复顶栏姿态；取消手势不补发落位冲量。
+            returnPressure.animateTo(0f, AppMotionTokens.folmeSpringSpec(damping = 1f, response = 0.25f))
+            return@LaunchedEffect
+        }
+        // 事件一旦开始播放就已消费。焦点恢复时只收回当前形变。
+        returnPressure.snapTo(0f)
+        returnPressure.animateTo(0f, navigationReturnLandingPressureSpec())
     }
-    val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current ==
-        androidx.compose.ui.unit.LayoutDirection.Rtl
-    fun returnSqueeze(control: HomeHeaderControl): Modifier {
+    fun linkedControlMotion(control: HomeHeaderControl, sharedContent: Boolean = true): Modifier {
+        val neighborMotion = when (control) {
+            HomeHeaderControl.AVATAR -> avatarSource.neighborMotionModifier()
+            HomeHeaderControl.END_ACTION -> endSource.neighborMotionModifier()
+            HomeHeaderControl.SEARCH -> Modifier // 搜索框的锚点直接包裹可见内容。
+        }
+        val sharedContainer = when (control) {
+            HomeHeaderControl.AVATAR -> avatarSharedContainer
+            HomeHeaderControl.END_ACTION -> endSharedContainer
+            HomeHeaderControl.SEARCH -> Modifier
+        }
+        return if (sharedContent) neighborMotion.then(sharedContainer) else neighborMotion
+    }
+    fun landingMotion(control: HomeHeaderControl): Modifier {
         val source = headerReturn?.source ?: return Modifier
-        if (source == control) return Modifier
-        val direction = if ((control.ordinal > source.ordinal) != isRtl) 1f else -1f
-        return Modifier.graphicsLayer {
+        val searchCompressionLimitPx = with(density) { 8.dp.toPx() }
+        val neighborTravelPx = with(density) { 4.dp.toPx() }
+        // 外层只变换完整的可见内容，转场落点和原生点击槽位继续使用原始几何。
+        return Modifier.drawWithContent {
             val pressure = returnPressure.value
+            if (pressure == 0f || size.width == 0f) {
+                drawContent()
+                return@drawWithContent
+            }
             val isSearch = control == HomeHeaderControl.SEARCH
-            scaleX = 1f - pressure * (if (isSearch) 0.055f else 0.10f)
-            scaleY = 1f + pressure * (if (isSearch) 0.03f else 0.055f)
-            translationX = direction * pressure * (if (isSearch) 4.dp else 2.dp).toPx()
+            val compression = when {
+                isSearch -> minOf(0.04f, searchCompressionLimitPx / size.width)
+                control == source -> 0.14f
+                else -> 0.10f
+            }
+            val direction = when {
+                isSearch || control == source -> 0f
+                (control.ordinal > source.ordinal) != (layoutDirection == LayoutDirection.Rtl) -> 1f
+                else -> -1f
+            }
+            val translation = direction * neighborTravelPx * pressure
+            withTransform({
+                translate(left = translation)
+                scale(
+                    scaleX = 1f - pressure * compression,
+                    scaleY = 1f - pressure * if (isSearch) 0.04f else compression,
+                    pivot = center,
+                )
+            }) {
+                this@drawWithContent.drawContent()
+            }
         }
     }
+    val avatarMotion = landingMotion(HomeHeaderControl.AVATAR).then(linkedControlMotion(HomeHeaderControl.AVATAR))
+    val endActionLandingMotion = landingMotion(HomeHeaderControl.END_ACTION)
+    val endActionLinkedMotion = linkedControlMotion(HomeHeaderControl.END_ACTION)
     val useLegacyHomeTopTabs = shouldUseLegacyHomeTopTabs(
         liquidGlassEnabled = topChromeLiquidGlassEnabled,
         bottomBarFloating = linkedBottomBarAppearance.isFloating,
@@ -2669,7 +2741,7 @@ internal fun HomeHeader(
                     touchSize = 48.dp,
                     visualSize = resolveHomeTopAvatarInnerSize(),
                     anchor = avatarAnchor,
-                    returnMotion = returnSqueeze(HomeHeaderControl.AVATAR),
+                    returnMotion = avatarMotion,
                     onClick = openAvatar,
                 ) {
                     Box(
@@ -2693,8 +2765,8 @@ internal fun HomeHeader(
                     visualSize = topRightActionSize,
                     elasticState = topActionElasticState,
                     transformInBackdrop = topActionGlassActive,
-                    modifier = Modifier.size(48.dp),
-                    returnMotion = returnSqueeze(HomeHeaderControl.END_ACTION),
+                    modifier = Modifier.size(48.dp).then(endActionLandingMotion),
+                    returnMotion = endActionLinkedMotion,
                     overlay = {
                         if (endSource != null) {
                             // 转场从 36dp 可见按钮展开，按压形变和 48dp 点击区保留各自的尺寸。
@@ -2709,8 +2781,8 @@ internal fun HomeHeader(
                                 text = topRightUnreadBadge,
                                 layout = topRightUnreadBadgeLayout,
                                 borderColor = AppSurfaceTokens.cardContainer(),
-                                        modifier = Modifier.align(Alignment.TopEnd)
-                                            .then(returnSqueeze(HomeHeaderControl.END_ACTION)),
+                                modifier = Modifier.align(Alignment.TopEnd)
+                                    .then(linkedControlMotion(HomeHeaderControl.END_ACTION, sharedContent = false)),
                             )
                         }
                     },
@@ -2934,7 +3006,7 @@ internal fun HomeHeader(
                                 touchSize = resolveHomeTopAvatarOuterSize(),
                                 visualSize = resolveHomeTopAvatarInnerSize(),
                                 anchor = avatarAnchor,
-                                returnMotion = returnSqueeze(HomeHeaderControl.AVATAR),
+                                returnMotion = avatarMotion,
                                 onClick = openAvatar,
                             ) {
                                 Box(
@@ -3044,12 +3116,12 @@ internal fun HomeHeader(
                                         // 原生搜索入口使用自身高度；玻璃与 MD3 继续使用紧凑边缘控件尺寸。
                                         .height(if (nativeMiuixSearch) top.yukonga.miuix.kmp.basic.SearchBarDefaults.InputFieldMinHeight
                                             else resolveHomeTopEdgeControlHeight())
+                                        .then(landingMotion(HomeHeaderControl.SEARCH))
                                         .then(searchAnchor),
                                 ) {
                                     BottomBarMatchedReusableLiquidDock(
                                         shape = resolveHomeTopSearchContainerShape(topChromePolicy),
                                         modifier = Modifier.matchParentSize()
-                                            .then(returnSqueeze(HomeHeaderControl.SEARCH))
                                             .then(
                                                 if (useTopControlBlur && !useBottomBarMatchedTopControls) {
                                                     Modifier.homeTopChromeSurface(
@@ -3147,6 +3219,7 @@ internal fun HomeHeader(
                                             hasUnreadBadge = topRightUnreadBadge != null
                                         )
                                     )
+                                    .then(endActionLandingMotion)
                             ) {
                                 HomeTopRightActionButton(
                                     nativeMiuix = useNativeTopAction,
@@ -3159,7 +3232,7 @@ internal fun HomeHeader(
                                         .align(Alignment.CenterStart)
                                         .size(topRightActionSize)
                                         .then(topRightActionSourceModifier),
-                                    returnMotion = returnSqueeze(HomeHeaderControl.END_ACTION),
+                                    returnMotion = endActionLinkedMotion,
                                     surfaceModifier = topActionSurfaceModifier,
                                 ) {
                                     // Keep the glyph inside the moving shell. Sampling an unmoving
@@ -3186,7 +3259,7 @@ internal fun HomeHeader(
                                         borderColor = AppSurfaceTokens.cardContainer(),
                                         modifier = Modifier
                                             .align(Alignment.TopEnd)
-                                            .then(returnSqueeze(HomeHeaderControl.END_ACTION))
+                                            .then(linkedControlMotion(HomeHeaderControl.END_ACTION, sharedContent = false))
                                             .offset(
                                                 x = topRightUnreadBadgeLayout.offsetX,
                                                 y = topRightUnreadBadgeLayout.offsetY

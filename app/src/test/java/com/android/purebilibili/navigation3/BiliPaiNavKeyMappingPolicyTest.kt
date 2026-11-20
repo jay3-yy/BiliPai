@@ -9,6 +9,22 @@ import kotlin.test.assertTrue
 
 class BiliPaiNavKeyMappingPolicyTest {
     @Test
+    fun pluginCenterSubpagesRestoreTheirOwnDestinationAndContainerSource() {
+        val owner = BiliPaiNavKey.PluginsSettings()
+        val targets = listOf(
+            BiliPaiNavKey.BuiltinPluginSettings("过滤 + 内容"),
+            BiliPaiNavKey.JsonPluginEditor(),
+            BiliPaiNavKey.JsonPluginEditor("规则/a"),
+            BiliPaiNavKey.PluginSkinCatalog,
+        )
+        for (target in targets) {
+            assertEquals(target, legacyRouteToBiliPaiNavKey(target.toLegacyRoute()))
+            assertEquals(BiliPaiNavEntryContentRole.PLUGIN_CENTER_DETAIL, resolveBiliPaiNavEntryContentRole(target))
+            assertTrue(isSettingsContainerBoundary(true, listOf(owner, target), target, owner))
+        }
+    }
+
+    @Test
     fun webUploadsRestoreOwnerAndCurrentCollectionWithoutBecomingAWebPage() {
         listOf(
             BiliPaiNavKey.SpaceWebVideos(42L, "UP + 空间 & 100%"),

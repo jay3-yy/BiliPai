@@ -21,6 +21,9 @@ internal val SETTINGS_SUBTREE_ROUTE_BASES: Set<String> = setOf(
     "login_activity_settings",
     "message_notification_settings",
     "plugins_settings",
+    "builtin_plugin_settings",
+    "json_plugin_editor",
+    "plugin_skin_catalog",
     "content_filter_history",
     "js_plugin",
     "external_media",
@@ -52,6 +55,9 @@ private val SETTINGS_DEPTH2_ROUTE_BASES: Set<String> = setOf(
 
 private val SETTINGS_DEPTH3_ROUTE_BASES: Set<String> = setOf(
     "icon_settings",
+    "builtin_plugin_settings",
+    "json_plugin_editor",
+    "plugin_skin_catalog",
     "content_filter_history",
     "js_plugin",
 )
@@ -105,6 +111,9 @@ private val ROUTE_TO_CATEGORY: Map<String, SettingsRootCategory> = mapOf(
     "settings_share" to SettingsRootCategory.STORAGE_BACKUP,
     "webdav_backup" to SettingsRootCategory.STORAGE_BACKUP,
     "plugins_settings" to SettingsRootCategory.PLUGINS_EXTENSIONS,
+    "builtin_plugin_settings" to SettingsRootCategory.PLUGINS_EXTENSIONS,
+    "json_plugin_editor" to SettingsRootCategory.PLUGINS_EXTENSIONS,
+    "plugin_skin_catalog" to SettingsRootCategory.PLUGINS_EXTENSIONS,
     "content_filter_history" to SettingsRootCategory.PLUGINS_EXTENSIONS,
     "js_plugin" to SettingsRootCategory.PLUGINS_EXTENSIONS,
     "external_media" to SettingsRootCategory.PLUGINS_EXTENSIONS,
@@ -142,6 +151,7 @@ internal fun resolveSettingsNavParentRoute(childRoute: String?): String? {
         "animation_settings" -> "appearance_settings"
         in SETTINGS_DEPTH2_ROUTE_BASES -> SETTINGS_CATEGORY_ROUTE_BASE
         "icon_settings" -> "appearance_settings"
+        "builtin_plugin_settings", "json_plugin_editor", "plugin_skin_catalog",
         "content_filter_history", "js_plugin" -> "plugins_settings"
         "external_media" -> "js_plugin"
         else -> null

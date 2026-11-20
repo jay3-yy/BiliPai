@@ -1,8 +1,10 @@
 package com.android.purebilibili.feature.home.components.cards
 
+import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
 import com.android.purebilibili.core.ui.common.copyPlainTextToClipboard
 import com.android.purebilibili.core.ui.components.VideoStatusBadges
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.ClientAiSummaryIcon
 
 
 import android.os.Build
@@ -111,6 +113,7 @@ import androidx.compose.animation.core.tween
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionEnabled
+import com.android.purebilibili.core.ui.transition.videoCardSourceCaptureEnabled
 import com.android.purebilibili.core.ui.videoCardTitleMaxLines
 import com.android.purebilibili.core.ui.videoCardTitleOverflow
 import com.android.purebilibili.core.ui.AppShapes
@@ -714,7 +717,9 @@ internal fun ElegantVideoCard(
             }
             if (video.cid > 0L && video.bvid.isNotBlank()) {
                 add(com.android.purebilibili.core.ui.components.AppWindowAction(
-                    label = "AI总结", onClick = { launchAiSummary() },
+                    label = "AI总结",
+                    onClick = launchAiSummary,
+                    iconContent = { ClientAiSummaryIcon(it.size(20.dp)) },
                 ))
             }
             if (video.owner.mid > 0L) {
@@ -1106,7 +1111,7 @@ internal fun ElegantVideoCard(
     val hasTrailingCardAction = onUnfavorite != null || hasOverflowMenu
     // 所有列表仅在输入准备期间或持有当前导航源身份时挂载转场图层。
     // 玻璃、MD3 和 Miuix 共用来源交接，材质与布局仍由各自分支决定。
-    val sourceEnabled = transitionEnabled && LocalSharedTransitionEnabled.current
+    val sourceEnabled = transitionEnabled && videoCardSourceCaptureEnabled()
     val sourceInteraction = remember(video.bvid, video.cid, effectiveSharedElementSourceRoute) {
         VideoCardSourceInteraction()
     }
@@ -1319,7 +1324,7 @@ internal fun ElegantVideoCard(
         propagateMinConstraints = true,
         modifier = modifier
             .fillMaxWidth()
-            .videoCardSourceAnchor(video.bvid, adaptiveHoverShape)
+            .videoCardSourceAnchor(video.bvid, adaptiveHoverShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
             .then(cardVisibility.observerModifier)
             .adaptiveCardHoverEffect(shape = adaptiveHoverShape)
             // 进场动画：挂载门控已含滚动/返回/切分类；与过渡并存时仅淡入不改几何
@@ -2401,7 +2406,7 @@ internal fun ElegantVideoCard(
                         // AI 总结（需要 cid 才能请求）
                         if (video.cid > 0L && video.bvid.isNotBlank()) {
                             AppDropdownMenuItem(
-                                leadingIcon = { AppIcon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(20.dp), tint = AppContentColors.primaryText()) },
+                                leadingIcon = { ClientAiSummaryIcon(Modifier.size(20.dp)) },
                                 text = { AppText("AI总结", color = AppContentColors.primaryText()) },
                                 onClick = {
                                     menu.expanded = false

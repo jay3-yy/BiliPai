@@ -188,6 +188,7 @@ fun BangumiPlayerView(
     onShowMessage: (String) -> Unit = {}
 ) {
     val keepPlaybackAwake = com.android.purebilibili.feature.video.screen.rememberVideoPlaybackKeepAwake(exoPlayer)
+    val sharedSurfaceVisible = com.android.purebilibili.navigation3.LocalNavigationSharedSurfaceVisible.current
     val context = LocalContext.current
     val playerInteractionSettings by SettingsManager.getPlayerInteractionSettings(context)
         .collectAsStateWithLifecycle(
@@ -667,6 +668,8 @@ fun BangumiPlayerView(
                         view.keepScreenOn = keepPlaybackAwake
                         view.resizeMode = currentAspectRatio.playerResizeMode
                         view.visibility = if (anime4kFrameVisible) View.INVISIBLE else View.VISIBLE
+                        view.alpha = if (sharedSurfaceVisible) 1f else 0f
+                        view.videoSurfaceView?.alpha = if (sharedSurfaceVisible) 1f else 0f
                         // MediaSource/Player 变化后确保直出绑定仍与播放器同步；
                         // Anime4K 接管期间不抢回绑定，避免与路由争抢 Surface。
                         if (view.player !== exoPlayer && !shouldRenderAnime4kPipeline) {
@@ -728,6 +731,7 @@ fun BangumiPlayerView(
                         surfaceView.updateFlip(features.isFlippedHorizontal, features.isFlippedVertical)
                         surfaceView.updateDisplayScaleMode(currentAspectRatio.toAnime4KDisplayScaleMode())
                         surfaceView.visibility = View.VISIBLE
+                        surfaceView.alpha = if (sharedSurfaceVisible) 1f else 0f
                     },
                     modifier = with(density) {
                         Modifier.requiredSize(
@@ -740,7 +744,7 @@ fun BangumiPlayerView(
         }
 
         // 弹幕层 - 使用 DanmakuRenderEngine
-        if (features.isAudioOnly) {
+        if (features.isAudioOnly || !sharedSurfaceVisible) {
             coil3.compose.AsyncImage(
                 model = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(coverUrl),
                 contentDescription = "番剧封面",
@@ -748,7 +752,7 @@ fun BangumiPlayerView(
                 modifier = Modifier.fillMaxSize().background(Color.Black),
             )
         }
-        if (danmakuEnabled && !features.isAudioOnly && !features.isInPipMode) {
+        if (danmakuEnabled && !features.isAudioOnly && !features.isInPipMode && sharedSurfaceVisible) {
             key(danmakuManager) {
                 AndroidView(
                     factory = { ctx ->

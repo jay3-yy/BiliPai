@@ -1,6 +1,7 @@
 // 聊天详情页面
 package com.android.purebilibili.feature.message
 
+import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
 import com.android.purebilibili.core.ui.AppContentColors
 import android.os.Build
 
@@ -1251,7 +1252,7 @@ private fun MessageLargeVideoCard(
     Column(
         modifier = modifier
             .onPlaced { cardCoordinates.value = it }
-            .videoCardSourceAnchor(preview.bvid, cardShape)
+            .videoCardSourceAnchor(preview.bvid, cardShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
             .then(nativeSnapshot.modifier)
             .clip(cardShape)
             .messageGlassContainer(

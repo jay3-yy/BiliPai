@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
 import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
@@ -233,7 +234,7 @@ fun VideoCardLarge(
 
     Column(
         modifier = modifier
-            .videoCardSourceAnchor(sourceIdentity, coverShape)
+            .videoCardSourceAnchor(sourceIdentity, coverShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
             .then(nativeCardSnapshot.modifier)
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates

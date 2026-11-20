@@ -1,6 +1,7 @@
 // 文件路径: feature/personal/PersonalCardVideoTransition.kt
 package com.android.purebilibili.feature.personal
 
+import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
 import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -120,7 +121,7 @@ internal fun rememberPersonalCardVideoTransition(
     )
     val boundsHolder = remember(bvid) { PersonalCardBoundsHolder() }
     val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(bvid)
-    val shellModifier = Modifier.videoCardSourceAnchor(bvid, clipShape)
+    val shellModifier = Modifier.videoCardSourceAnchor(bvid, clipShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     // 每次组合重建轻量包装：shellModifier 随 motionSpec 重建，避免持有过期 modifier。

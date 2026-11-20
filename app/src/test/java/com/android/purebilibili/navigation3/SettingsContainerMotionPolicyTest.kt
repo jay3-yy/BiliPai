@@ -3,9 +3,15 @@ package com.android.purebilibili.navigation3
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.animation.core.TargetBasedAnimation
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import com.android.purebilibili.feature.settings.SettingsSharedContainerOrigin
 import top.yukonga.miuix.kmp.nav.runtime.NavChange
 import top.yukonga.miuix.kmp.nav.transition.NavGesture
 import top.yukonga.miuix.kmp.nav.transition.NavRole
@@ -21,6 +27,34 @@ import kotlin.test.assertTrue
 class SettingsContainerMotionPolicyTest {
     private val source = Rect(16f, 220f, 384f, 300f)
     private val page = Rect(0f, 0f, 400f, 900f)
+
+    @Test
+    fun sharedContainerInterpolatesPhysicalCornersForOpeningAndReturn() {
+        val origin = SettingsSharedContainerOrigin(BiliPaiNavKey.Settings, Color.Black).apply {
+            topRadius = 12.dp
+            bottomRadius = 0.dp
+        }
+        val open = mutableFloatStateOf(0f)
+        val window = WindowCornerRadii(
+            topLeft = 48f, topRight = 56f, bottomRight = 40f, bottomLeft = 32f,
+        )
+        val shape = settingsSharedContainerShape(origin, open) { window }
+        fun radii(direction: LayoutDirection): List<Float> {
+            val outline = shape.createOutline(Size(400f, 500f), direction, Density(2f))
+                as Outline.Rounded
+            return with(outline.roundRect) {
+                listOf(topLeftCornerRadius.x, topRightCornerRadius.x, bottomRightCornerRadius.x, bottomLeftCornerRadius.x)
+            }
+        }
+        assertEquals(listOf(24f, 24f, 0f, 0f), radii(LayoutDirection.Ltr))
+        open.floatValue = 0.5f
+        val halfway = radii(LayoutDirection.Ltr)
+        assertEquals(listOf(36f, 40f, 20f, 16f), halfway)
+        open.floatValue = 1f
+        assertEquals(listOf(48f, 56f, 40f, 32f), radii(LayoutDirection.Rtl))
+        open.floatValue = 0.5f
+        assertEquals(halfway, radii(LayoutDirection.Rtl))
+    }
 
     @Test
     fun releasingOrRegrabbingContainerPreservesBoundsCornersAndContentAtTheSameDepth() {

@@ -8,11 +8,54 @@ import android.view.RoundedCorner
 import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.abs
+
+internal data class WindowCornerRadii(
+    val topLeft: Float = 0f,
+    val topRight: Float = 0f,
+    val bottomRight: Float = 0f,
+    val bottomLeft: Float = 0f,
+)
+
+/** 只把目标边界实际贴合的窗口圆角交给转场。 */
+internal fun resolveWindowCornerRadii(
+    view: View,
+    destinationInWindow: Rect,
+    isInMultiWindow: Boolean,
+): WindowCornerRadii {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        val insets = view.rootWindowInsets ?: return WindowCornerRadii()
+        fun radius(position: Int, destination: Offset, xSign: Int, ySign: Int): Float {
+            val corner = insets.getRoundedCorner(position) ?: return 0f
+            val center = corner.center
+            val x = center.x + xSign * corner.radius
+            val y = center.y + ySign * corner.radius
+            return if (abs(destination.x - x) <= 1f && abs(destination.y - y) <= 1f) {
+                corner.radius.toFloat()
+            } else 0f
+        }
+        return WindowCornerRadii(
+            topLeft = radius(RoundedCorner.POSITION_TOP_LEFT, destinationInWindow.topLeft, -1, -1),
+            topRight = radius(RoundedCorner.POSITION_TOP_RIGHT, destinationInWindow.topRight, 1, -1),
+            bottomRight = radius(RoundedCorner.POSITION_BOTTOM_RIGHT, destinationInWindow.bottomRight, 1, 1),
+            bottomLeft = radius(RoundedCorner.POSITION_BOTTOM_LEFT, destinationInWindow.bottomLeft, -1, 1),
+        )
+    }
+    // 旧系统的资源只提供整屏半径，无法定位分屏窗口的实际角点。
+    val root = view.rootView
+    if (isInMultiWindow || destinationInWindow != Rect(0f, 0f, root.width.toFloat(), root.height.toFloat())) {
+        return WindowCornerRadii()
+    }
+    val radius = getCornerRadiusBottom(view.context).toFloat()
+    return WindowCornerRadii(radius, radius, radius, radius)
+}
 
 /**
  * Dynamically calculates the device's physical corner radius.

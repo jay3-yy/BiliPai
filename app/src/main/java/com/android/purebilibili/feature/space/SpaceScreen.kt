@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.space
 
+import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.navigation.isTabSelectionInProgress
 import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
@@ -4592,7 +4593,7 @@ private fun SpaceHomeVideoCard(
 
     Column(
         modifier = modifier
-            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), coverShape)
+            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), coverShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
             .border(width = 3.dp, color = locateHighlightColor, shape = coverShape)
             .then(nativeCardSnapshot.modifier)
             .clip(coverShape)
@@ -4814,7 +4815,7 @@ private fun SpaceAggregateMediaCard(
     Column(
         modifier = modifier
             .padding(horizontal = 8.dp)
-            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), coverShape)
+            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), coverShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
             .then(nativeCardSnapshot.modifier)
             .clip(coverShape)
             .onGloballyPositioned { coordinates ->
@@ -5173,7 +5174,7 @@ private fun SpaceArchiveListItemRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), cardShellShape)
+            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), cardShellShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
             .then(nativeCardSnapshot.modifier)
             .clip(cardShellShape)
             .background(AppSurfaceTokens.cardContainer())

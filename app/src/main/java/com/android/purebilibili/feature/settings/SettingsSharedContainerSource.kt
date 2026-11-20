@@ -13,6 +13,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.transition.NavigationReturnLanding
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.SettingsSharedContainerBounds
 
@@ -23,6 +24,8 @@ internal class SettingsSharedContainerOrigin(val owner: BiliPaiNavKey, color: Co
     var topRadius by mutableStateOf(0.dp)
     var bottomRadius by mutableStateOf(0.dp)
     var sharedBounds by mutableStateOf<SettingsSharedContainerBounds?>(null)
+    val returnLanding = NavigationReturnLanding()
+    var returnLandingHandledByOwner = false
 }
 
 internal class SettingsSharedContainerSources {
@@ -39,6 +42,7 @@ internal class SettingsSharedContainerSources {
         ) != null
 
     fun capture(target: BiliPaiNavKey, origin: SettingsSharedContainerOrigin) {
+        origin.returnLanding.clear()
         val coordinates = origin.coordinates
         origin.available = coordinates != null && isAvailable(coordinates)
         if (origin.available) {

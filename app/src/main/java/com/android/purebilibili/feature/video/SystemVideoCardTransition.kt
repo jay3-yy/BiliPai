@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video
 
+import com.android.purebilibili.navigation3.SystemWindowMotionPhase
 import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Rect
@@ -12,6 +13,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.window.layout.WindowMetricsCalculator
+import com.android.purebilibili.core.ui.transition.VideoCardSourceAnchor
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSourceClipRadiusPx
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.Logger
@@ -85,19 +87,42 @@ internal object SystemVideoCardTransition {
         val openingBounds: Rect,
         val openingRadius: Float,
         val openingSeed: VideoDetailOpeningSeed?,
-        val onReturn: (() -> Unit)?,
+        val sourceAnchor: VideoCardSourceAnchor,
+        val onReturn: ((SystemWindowMotionPhase) -> Unit)?,
+        val neighborMotion: ((SystemWindowMotionPhase) -> Unit)?,
     ) {
         val requestedAtMs = SystemClock.uptimeMillis()
         @Volatile var openingEvent = "awaiting_start"
         var oplusOpening: OplusVideoCardTransition.Opening? = null
         var vivoOpening: VivoVideoCardTransition.Opening? = null
+        var returnMotionEnabled = false
+        var motionPhase: SystemWindowMotionPhase? = null
+
+        fun dispatchMotion(phase: SystemWindowMotionPhase) {
+            // SDK 回调可能来自 Binder；所有 Compose 状态变更统一回到主线程。
+            val deliver = Runnable {
+                if (phase.returning && !returnMotionEnabled) return@Runnable
+                if (motionPhase == phase || motionPhase == SystemWindowMotionPhase.RETURNED) return@Runnable
+                if (motionPhase?.returning == true && !phase.returning) return@Runnable
+                if (motionPhase == SystemWindowMotionPhase.RETURN_CANCELLED &&
+                    phase == SystemWindowMotionPhase.RETURNED
+                ) return@Runnable
+                motionPhase = phase
+                neighborMotion?.invoke(phase)
+                if (phase == SystemWindowMotionPhase.RETURNED) sourceAnchor.requestReturnLanding()
+                if (phase.returning) onReturn?.invoke(phase)
+            }
+            if (Looper.myLooper() == Looper.getMainLooper()) deliver.run()
+            else Handler(Looper.getMainLooper()).post(deliver)
+        }
     }
 
     private val sessions = mutableMapOf<String, Session>()
     private var latestWindowRequestToken: String? = null
 
     fun canAttempt(enabled: Boolean, source: VideoCardTransitionSession, activity: Activity? = null): Boolean {
-        val sourceReady = enabled && source.hasUsableSourceGeometry && source.sourceAnchor != null
+        val sourceReady = enabled && source.hasUsableSourceGeometry && source.sourceAnchor != null &&
+            source.sourcePixelOwner != null
         val capability = if (sourceReady) deviceCapability(activity) else null
         val supported = capability?.available
         val allowed = sourceReady && supported == true
@@ -150,7 +175,7 @@ internal object SystemVideoCardTransition {
         realtimeBlurEnabled: Boolean,
         sourceBackgroundColor: Int,
         isCurrent: () -> Boolean,
-        onReturn: (() -> Unit)? = null,
+        onReturn: ((SystemWindowMotionPhase) -> Unit)? = null,
     ): Boolean {
         fun rejected(reason: String): Boolean {
             Logger.i("SystemVideoCardTransition", "未请求系统展开: route=${source.sourceRoute} reason=$reason")
@@ -253,12 +278,22 @@ internal object SystemVideoCardTransition {
             openingBounds = Rect(bounds),
             openingRadius = radius,
             openingSeed = videoDetailOpeningSeed(thumbnail, source),
+            sourceAnchor = anchor,
             onReturn = onReturn,
+            neighborMotion = com.android.purebilibili.navigation3.SystemWindowControlNeighbors.capture(anchor),
         )
         // 启动请求成功不等于系统实际播放；分别记录打开、返回的启动、取消与结束。
         val listener = object : ViewAnimationListener {
             private fun record(event: String, animMode: Int) {
                 if (animMode == ViewAnimationManager.ANIM_MODE_OPEN) session.openingEvent = event
+                val returning = animMode == ViewAnimationManager.ANIM_MODE_BACK
+                if (returning || animMode == ViewAnimationManager.ANIM_MODE_OPEN) {
+                    session.dispatchMotion(when (event) {
+                        "start" -> if (returning) SystemWindowMotionPhase.RETURNING else SystemWindowMotionPhase.OPENING
+                        "cancel" -> if (returning) SystemWindowMotionPhase.RETURN_CANCELLED else SystemWindowMotionPhase.OPEN_CANCELLED
+                        else -> if (returning) SystemWindowMotionPhase.RETURNED else SystemWindowMotionPhase.OPENED
+                    })
+                }
                 val mode = when (animMode) {
                     ViewAnimationManager.ANIM_MODE_OPEN -> "OPEN"
                     ViewAnimationManager.ANIM_MODE_BACK -> "BACK"
@@ -292,6 +327,12 @@ internal object SystemVideoCardTransition {
                 activity, thumbnail, bounds, radius, sourceBackgroundColor,
             ) { event ->
                 if (event.startsWith("open_")) session.openingEvent = event
+                when (event) {
+                    "open_start" -> session.dispatchMotion(SystemWindowMotionPhase.OPENING)
+                    "open_end" -> session.dispatchMotion(SystemWindowMotionPhase.OPENED)
+                    "return_start" -> session.dispatchMotion(SystemWindowMotionPhase.RETURNING)
+                    "return_end" -> session.dispatchMotion(SystemWindowMotionPhase.RETURNED)
+                }
                 Logger.i("SystemVideoCardTransition", "session=$token protocol=rounded event=$event")
             }?.toBundle()
             else -> ViewAnimationManager.makeViewAnimationOptions(
@@ -301,7 +342,9 @@ internal object SystemVideoCardTransition {
         sessions[token] = session
         var launched = false
         try {
-            launched = VideoActivityLauncher.open(activity, windowRequest, optionsBundle, token) {
+            launched = VideoActivityLauncher.open(
+                activity, windowRequest, optionsBundle, token,
+            ) {
                 // 等待窗口恢复后再次核对请求和几何，不用旧截图打开已切换的卡片。
                     isCurrent() && activity.window.decorView.hasWindowFocus() &&
                         windowGeometry(activity) == sourceWindow && anchor.belongsToWindow(activity.window.decorView) &&
@@ -318,6 +361,7 @@ internal object SystemVideoCardTransition {
         } finally {
             if (!launched) {
                 sessions.remove(token)
+                session.dispatchMotion(SystemWindowMotionPhase.OPEN_CANCELLED)
                 session.vivoOpening?.abandon()
                 // 旧请求可能在新窗口请求提交后才响应协程取消，不能用全局接口结束新转场。
                 if (latestWindowRequestToken == token) {
@@ -351,7 +395,8 @@ internal object SystemVideoCardTransition {
             childWindow.displayId == session.sourceWindow.displayId &&
             childWindow.rotation == session.sourceWindow.rotation
         val sourceAvailable = returnToSource && sameWindow
-        if (sourceAvailable && motionEnabled) session?.onReturn?.invoke()
+        // 准备参数不等于系统已经开始返回，联动等待协议的真实回调。
+        session?.returnMotionEnabled = sourceAvailable && motionEnabled
         val bounds = session?.openingBounds?.takeIf { sourceAvailable }
         if (!sourceAvailable) {
             Logger.w("SystemVideoCardTransition", "返回窗口来源不可用: reason=$reason returnToSource=$returnToSource sameWindow=$sameWindow")

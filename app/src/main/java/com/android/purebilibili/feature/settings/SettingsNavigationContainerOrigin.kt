@@ -12,6 +12,8 @@ import com.android.purebilibili.core.ui.components.AppPreferenceGroupPresentatio
 import com.android.purebilibili.core.ui.components.LocalAppPreferenceGroupPresentation
 import com.android.purebilibili.core.ui.components.adaptivePreferenceGroupContainerColor
 import com.android.purebilibili.core.ui.components.rememberAdaptiveListVisualCapabilities
+import com.android.purebilibili.core.ui.transition.isVisibleReturnLanding
+import com.android.purebilibili.core.ui.transition.navigationReturnLanding
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.settingsSharedContainerBounds
 
@@ -52,6 +54,7 @@ internal fun SettingsNavigationContainerOrigin(
         onDispose {
             origin.coordinates = null
             origin.available = false
+            origin.returnLanding.clear()
         }
     }
     content(
@@ -59,6 +62,9 @@ internal fun SettingsNavigationContainerOrigin(
             .onGloballyPositioned {
                 origin.coordinates = it
                 origin.available = sources.isAvailable(it)
+            }
+            .navigationReturnLanding(origin.returnLanding, sharedBoundsReleased = origin.sharedBounds == null) {
+                origin.coordinates.isVisibleReturnLanding()
             }
             .then(settingsSharedContainerBounds(origin.sharedBounds)),
     ) {

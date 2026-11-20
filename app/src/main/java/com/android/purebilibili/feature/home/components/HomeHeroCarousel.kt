@@ -89,6 +89,7 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionEnabled
+import com.android.purebilibili.core.ui.transition.videoCardSourceCaptureEnabled
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
 import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
@@ -115,6 +116,7 @@ import com.android.purebilibili.feature.home.resolveHomeHeroCarouselItemOrNull
 import com.android.purebilibili.feature.home.resolveHomeHeroCarouselLayout
 import com.android.purebilibili.feature.home.resolveHomeHeroCarouselPreviewAlpha
 import com.android.purebilibili.feature.home.homeHeroBannerEntranceSpec
+import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
@@ -128,6 +130,7 @@ internal fun HomeHeroCarousel(
     onGestureActiveChange: (Boolean) -> Unit = {},
     dissolvingVideos: Set<String> = emptySet(),
     onDissolveComplete: (String) -> Unit = {},
+    dissolvePreset: DissolveAnimationPreset = DissolveAnimationPreset.TELEGRAM_FAST,
     onLongPress: ((VideoItem) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -215,6 +218,7 @@ internal fun HomeHeroCarousel(
                     activeForPlayback = activeForPlayback,
                     aspectRatio = aspectRatio,
                     isDissolving = isDissolving,
+                    dissolvePreset = dissolvePreset,
                     onVideoClick = { onVideoClick(video) },
                     onDissolveComplete = { onDissolveComplete(video.bvid) },
                     onLongPress = onLongPress,
@@ -278,6 +282,7 @@ private fun HomeHeroCarouselCard(
     activeForPlayback: Boolean,
     aspectRatio: Float,
     isDissolving: Boolean,
+    dissolvePreset: DissolveAnimationPreset,
     onVideoClick: () -> Unit,
     onDissolveComplete: () -> Unit,
     onLongPress: ((VideoItem) -> Unit)?,
@@ -301,7 +306,7 @@ private fun HomeHeroCarouselCard(
     val sharedSourceInstanceId = rememberSaveable(video.bvid) {
         CardPositionManager.newVideoCardSourceInstanceId()
     }
-    val sourceEnabled = LocalSharedTransitionEnabled.current
+    val sourceEnabled = videoCardSourceCaptureEnabled()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val sourceInteraction = remember(video.bvid, video.cid, sourceRoute) {
@@ -321,7 +326,7 @@ private fun HomeHeroCarouselCard(
     val prepareCardTransition = sourceEnabled && (preparingInput || isSharedReturnTarget)
     val captureState = if (prepareCardTransition) rememberVideoCardCaptureState(video.bvid) else null
     val captureScope = if (prepareCardTransition) rememberCoroutineScope() else null
-    val useCardShellSharedBounds = prepareCardTransition &&
+    val useCardShellSharedBounds = LocalSharedTransitionEnabled.current && prepareCardTransition &&
         (preparingInput || ownsSharedTransitionSource) &&
         sharedTransitionScope != null &&
         animatedVisibilityScope != null &&
@@ -475,7 +480,7 @@ private fun HomeHeroCarouselCard(
         isDissolving = isDissolving,
         onDissolveComplete = onDissolveComplete,
         cardId = video.bvid,
-        preset = com.android.purebilibili.core.ui.animation.DissolveAnimationPreset.TELEGRAM_FAST,
+        preset = dissolvePreset,
         collapseAfterDissolve = false,
         publishGlobalDissolveState = false,
         modifier = Modifier

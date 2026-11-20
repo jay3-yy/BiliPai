@@ -1178,10 +1178,7 @@ internal fun HomeScreen(
     var bottomBarVisibleBeforeDrawer by remember { mutableStateOf<Boolean?>(null) }
     var drawerOpenRequested by remember { mutableStateOf(false) }
     var drawerWasOpen by remember { mutableStateOf(false) }
-    var activeHeaderReturn by remember { mutableStateOf(headerReturn) }
-    LaunchedEffect(headerReturn) {
-        if (headerReturn != null) activeHeaderReturn = headerReturn
-    }
+    var drawerHeaderReturn by remember(headerReturn) { mutableStateOf<HomeHeaderReturn?>(null) }
 
     // 抽屉打开时隐藏全局底栏，避免覆盖侧边栏底部内容
     val isDrawerStateOpenOrOpening = shouldEnableHomeDrawerGestures(
@@ -1195,7 +1192,7 @@ internal fun HomeScreen(
             drawerOpenRequested = false
             if (drawerWasOpen) {
                 drawerWasOpen = false
-                activeHeaderReturn = HomeHeaderReturn(HomeHeaderControl.AVATAR)
+                drawerHeaderReturn = HomeHeaderReturn(HomeHeaderControl.AVATAR)
             }
         }
     }
@@ -2502,7 +2499,7 @@ internal fun HomeScreen(
             searchTarget = searchTarget,
             onOpenDrawer = openHomeDrawer,
             onNavigate = onHeaderNavigate,
-            headerReturn = activeHeaderReturn,
+            headerReturn = drawerHeaderReturn ?: headerReturn,
             headerActive = isTopLevelActive && pageOnScreen && !drawerMounted,
             topRightUnreadCount = messageUnreadDisplay,
             topCategories = localizedTopTabLabels,

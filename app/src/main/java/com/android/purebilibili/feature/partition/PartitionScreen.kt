@@ -131,6 +131,7 @@ import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import com.android.purebilibili.core.ui.skeleton.ContentMediaListSkeleton
 import com.android.purebilibili.core.util.resolveReplaceRefreshPage
 import com.android.purebilibili.core.ui.LocalSharedTransitionEnabled
+import com.android.purebilibili.core.ui.transition.LocalSystemVideoCardCaptureEnabled
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.rememberAppBackIcon
@@ -1574,6 +1575,7 @@ private fun PartitionVideoList(
         .getHomePublishTimeVisible(context)
         .collectAsStateWithLifecycle(initialValue = true)
     val sharedTransitionEnabled = LocalSharedTransitionEnabled.current
+    val sourceCaptureEnabled = sharedTransitionEnabled || LocalSystemVideoCardCaptureEnabled.current
     val sharedElementSourceRoute = LocalVideoCardSharedElementSourceRoute.current
         ?.takeIf { it.isNotBlank() }
         ?: "partition"
@@ -1630,6 +1632,7 @@ private fun PartitionVideoList(
                         sourceRoute = sharedElementSourceRoute,
                         coverAspectRatio = 16f / 10f,
                         transitionEnabled = sharedTransitionEnabled,
+                        sourceCaptureEnabled = sourceCaptureEnabled,
                         showUpBadge = showUpBadges,
                         durationStyle = homeDurationStyle,
                         showPublishTime = showHomePublishTime,

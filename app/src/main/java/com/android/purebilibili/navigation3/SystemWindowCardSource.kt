@@ -7,7 +7,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
@@ -28,6 +31,8 @@ internal class SystemWindowCardSource internal constructor(
     private val screenWidthPx: Float,
     private val screenHeightPx: Float,
     private val densityValue: Float,
+    internal val neighbor: SystemWindowControlNeighbor,
+    internal val sharedSource: NavigationSharedContainerSource?,
 ) {
     var coordinates: androidx.compose.ui.layout.LayoutCoordinates? = null
 
@@ -126,10 +131,31 @@ internal fun rememberSystemWindowControlSource(target: BiliPaiNavKey?): SystemWi
     if (LocalVideoCardSourceTrackingEnabled.current) rememberSystemWindowCardSource(target) else null
 
 @Composable
-internal fun SystemWindowCardSource?.anchorModifier(shape: Shape): Modifier {
+internal fun SystemWindowCardSource?.anchorModifier(
+    shape: Shape,
+    animateNeighbors: Boolean = true,
+    neighborActive: Boolean = true,
+    returnHandledByOwner: Boolean = false,
+    motionGroup: Any? = null,
+): Modifier {
     if (this == null) return Modifier
-    return Modifier.videoCardSourceAnchor(identity, shape) { coordinates = it }
+    ObserveSystemWindowControlNeighbor(neighbor, neighborActive, returnHandledByOwner, motionGroup)
+    return (if (animateNeighbors) neighbor.modifier else Modifier)
+        .videoCardSourceAnchor(
+            identity, shape,
+            onPositioned = { coordinates = it; neighbor.coordinates = it },
+            sharedSource = sharedSource,
+            drawSharedContent = animateNeighbors,
+            returnHandledByOwner = returnHandledByOwner,
+        )
+        .onGloballyPositioned {
+            val visible = it.boundsInWindow()
+            neighbor.inViewport = visible.width > 1f && visible.height > 1f
+        }
 }
+
+// 空锚点与可见内容分离的入口，把联动层显式放到可见内容上。
+internal fun SystemWindowCardSource?.neighborMotionModifier(): Modifier = this?.neighbor?.modifier ?: Modifier
 
 @Composable
 internal fun rememberSystemWindowCardSource(target: BiliPaiNavKey?): SystemWindowCardSource? {
@@ -137,8 +163,10 @@ internal fun rememberSystemWindowCardSource(target: BiliPaiNavKey?): SystemWindo
     val sourceRoute = LocalVideoCardSharedElementSourceRoute.current
     val configuration: Configuration = LocalConfiguration.current
     val density = LocalDensity.current
+    val view = LocalView.current
+    val sharedSource = rememberNavigationSharedContainerSource(identity)
     return remember(
-        identity, sourceRoute, configuration.screenWidthDp, configuration.screenHeightDp, density,
+        identity, sourceRoute, configuration.screenWidthDp, configuration.screenHeightDp, density, view, sharedSource,
     ) {
         SystemWindowCardSource(
             identity = identity,
@@ -146,6 +174,8 @@ internal fun rememberSystemWindowCardSource(target: BiliPaiNavKey?): SystemWindo
             screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() },
             screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() },
             densityValue = density.density,
+            neighbor = SystemWindowControlNeighbor(view, sourceRoute, density.density),
+            sharedSource = sharedSource,
         )
     }
 }

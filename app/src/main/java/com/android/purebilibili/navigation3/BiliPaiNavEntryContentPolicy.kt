@@ -23,6 +23,7 @@ internal enum class BiliPaiNavEntryContentRole {
     LOGIN_ACTIVITY_SETTINGS,
     MESSAGE_NOTIFICATION_SETTINGS,
     PLUGINS_SETTINGS,
+    PLUGIN_CENTER_DETAIL,
     CONTENT_FILTER_HISTORY,
     JS_PLUGIN_CONTENT,
     EXTERNAL_MEDIA,
@@ -107,6 +108,9 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         BiliPaiNavKey.LoginActivitySettings -> BiliPaiNavEntryContentRole.LOGIN_ACTIVITY_SETTINGS
         BiliPaiNavKey.MessageNotificationSettings -> BiliPaiNavEntryContentRole.MESSAGE_NOTIFICATION_SETTINGS
         is BiliPaiNavKey.PluginsSettings -> BiliPaiNavEntryContentRole.PLUGINS_SETTINGS
+        is BiliPaiNavKey.BuiltinPluginSettings,
+        is BiliPaiNavKey.JsonPluginEditor,
+        BiliPaiNavKey.PluginSkinCatalog -> BiliPaiNavEntryContentRole.PLUGIN_CENTER_DETAIL
         BiliPaiNavKey.ContentFilterHistory -> BiliPaiNavEntryContentRole.CONTENT_FILTER_HISTORY
         is BiliPaiNavKey.JsPluginContent -> BiliPaiNavEntryContentRole.JS_PLUGIN_CONTENT
         is BiliPaiNavKey.ExternalMedia -> BiliPaiNavEntryContentRole.EXTERNAL_MEDIA
