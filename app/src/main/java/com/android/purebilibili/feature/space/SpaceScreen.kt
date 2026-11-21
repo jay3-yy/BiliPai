@@ -4340,7 +4340,9 @@ private fun SpaceContributionVideoSummaryBar(
                     tint = AppContentColors.secondaryText()
                 )
                 AppText(
-                    text = resolveSpaceVideoSortCompactLabel(currentOrder) + "发布",
+                    // 排序芯片与菜单项共用 displayName：最新发布/最早发布/最多播放/最多收藏，
+                    // 不能用紧凑标签拼“发布”，播放/收藏排序会显示成“播放发布/收藏发布”。
+                    text = currentOrder.displayName,
                     style = MaterialTheme.typography.bodySmall,
                     color = AppContentColors.secondaryText()
                 )
