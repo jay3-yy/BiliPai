@@ -1,9 +1,12 @@
 package com.Android.purebilibili.feature.video.ui.components
 
 import android.content.Context
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.TextLayoutResult
@@ -17,6 +20,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
@@ -159,6 +163,117 @@ class SubReplyPreviewActionUiRegressionTest {
             assertTrue(openedThreads.isEmpty())
             assertEquals(listOf("99"), openedSpaces)
             assertEquals(listOf("https://example.com"), openedUrls)
+        }
+    }
+
+    @Test
+    fun tappingPlainTextAroundWrappedReplyMentionInPreviewOpensThreadNotSpace() {
+        val openedThreads = mutableListOf<Pair<Long, Long>>()
+        val openedSpaces = mutableListOf<String>()
+        val mentionName = "目标用户名字很长会换行"
+        val child = mentionReply().copy(
+            member = ReplyMember(mid = "31", uname = "非常长的评论作者名称"),
+            content = ReplyContent(
+                message = "回复 @$mentionName：这是正文",
+                atNameToMid = mapOf(mentionName to 99L),
+            ),
+        )
+        rule.setContent {
+            MaterialTheme {
+                Box(Modifier.width(340.dp)) {
+                    ReplyItemView(
+                        item = reply(total = 1, loaded = 1).copy(replies = listOf(child)),
+                        onClick = {},
+                        onSubClick = { root, target -> openedThreads += root.rpid to target },
+                        onAvatarClick = { openedSpaces += it },
+                    )
+                }
+            }
+        }
+
+        val layouts = mutableListOf<TextLayoutResult>()
+        rule.onNodeWithText("非常长的评论作者名称", substring = true, useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        val fullText = layout.layoutInput.text.text
+        val mentionStart = fullText.indexOf("@$mentionName")
+        val mentionEnd = mentionStart + mentionName.length + 1
+        assertTrue(layout.getLineForOffset(mentionStart) < layout.getLineForOffset(mentionEnd - 1))
+        val bodyStart = fullText.indexOf("这是正文")
+        assertTrue(bodyStart in 0 until layout.getLineEnd(layout.lineCount - 1, visibleEnd = true))
+
+        tapCharacter("非常长的评论作者名称", "非常长")
+        tapCharacter("非常长的评论作者名称", "回复")
+        tapCharacter("非常长的评论作者名称", "这是正文")
+        rule.runOnIdle {
+            assertTrue(openedSpaces.isEmpty())
+            assertEquals(List(3) { 100L to 301L }, openedThreads)
+        }
+
+        tapCharacter("非常长的评论作者名称", "@目标")
+        tapCharacter("非常长的评论作者名称", "会换行")
+        rule.runOnIdle {
+            assertEquals(listOf("99", "99"), openedSpaces)
+            assertEquals(3, openedThreads.size)
+        }
+    }
+
+    @Test
+    fun tappingAdjacentPlainTextNearShortReplyMentionInPreviewOpensThreadNotSpace() {
+        val openedThreads = mutableListOf<Pair<Long, Long>>()
+        val openedSpaces = mutableListOf<String>()
+        val child = mentionReply().copy(
+            member = ReplyMember(mid = "31", uname = "小A"),
+            content = ReplyContent(
+                message = "回复 @B：这是同一行的正文而且后面还有很长的第二行内容",
+                atNameToMid = mapOf("B" to 99L),
+            ),
+        )
+        rule.setContent {
+            MaterialTheme {
+                Box(Modifier.width(240.dp)) {
+                    ReplyItemView(
+                        item = reply(total = 1, loaded = 1).copy(replies = listOf(child)),
+                        onClick = {},
+                        onSubClick = { root, target -> openedThreads += root.rpid to target },
+                        onAvatarClick = { openedSpaces += it },
+                    )
+                }
+            }
+        }
+
+        val node = rule.onNodeWithText("小A", substring = true, useUnmergedTree = true)
+        node.assertIsDisplayed()
+        val layouts = mutableListOf<TextLayoutResult>()
+        node.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        val annotatedText = layout.layoutInput.text
+        val mentionStart = annotatedText.text.indexOf("@B")
+        val mentionEnd = mentionStart + 2
+        assertEquals(layout.getLineForOffset(mentionStart), layout.getLineForOffset(mentionEnd - 1))
+        assertTrue(layout.lineCount >= 2)
+
+        val mentionBox = layout.getBoundingBox(mentionStart)
+        val line1MidY = (layout.getLineTop(1) + layout.getLineBottom(1)) / 2f
+        val belowMentionOffset = Offset(mentionBox.center.x, line1MidY)
+        val offsetBelowMention = layout.getOffsetForPosition(belowMentionOffset)
+        assertTrue(offsetBelowMention in layout.getLineStart(1) until layout.getLineEnd(1, visibleEnd = true))
+        assertTrue(annotatedText.getLinkAnnotations(offsetBelowMention, offsetBelowMention + 1).isEmpty())
+        val nodeTopLeft = node.fetchSemanticsNode().boundsInRoot.topLeft
+
+        tapCharacter("小A", "小A")
+        tapCharacter("小A", "回复")
+        tapCharacter("小A", "这是")
+        rule.onRoot().performTouchInput { click(nodeTopLeft + belowMentionOffset) }
+        rule.runOnIdle {
+            assertTrue(openedSpaces.isEmpty())
+            assertEquals(List(4) { 100L to 301L }, openedThreads)
+        }
+
+        tapCharacter("小A", "@B")
+        rule.runOnIdle {
+            assertEquals(listOf("99"), openedSpaces)
+            assertEquals(4, openedThreads.size)
         }
     }
 
