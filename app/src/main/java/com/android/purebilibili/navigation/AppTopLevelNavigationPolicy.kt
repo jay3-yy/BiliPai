@@ -123,6 +123,24 @@ internal fun resolveBottomPagerPageForRoute(
         .takeIf { it >= 0 }
 }
 
+/**
+ * 底栏 Pager 初始页：恢复快照的底栏路由优先；系统卡片窗口的初始内容本身是底栏
+ * 目的地时（如头像入口的“我的”），选中项绑定窗口内容身份而非默认首页。
+ */
+internal fun resolveBottomBarInitialPage(
+    recoveredBottomRoute: String?,
+    windowInitialRoute: String?,
+    visibleItems: List<BottomNavItem>
+): Int {
+    recoveredBottomRoute?.let { recovered ->
+        visibleItems.indexOfFirst { item -> item.route == recovered }.takeIf { it >= 0 }
+    }?.let { return it }
+    return resolveBottomPagerPageForRoute(
+        route = windowInitialRoute,
+        visibleItems = visibleItems,
+    ) ?: 0
+}
+
 internal fun resolveBottomPagerItemForPage(
     page: Int,
     visibleItems: List<BottomNavItem>

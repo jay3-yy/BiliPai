@@ -963,8 +963,11 @@ fun AppNavigation(
         val mainBottomPagerState = key(memoryRecovery.snapshot?.savedAtMs) {
             rememberMainBottomPagerState(
                 pageCount = visibleBottomBarItems.size,
-                initialPage = visibleBottomBarItems.indexOfFirst { it.route == recoveredNavigation?.bottomRoute }
-                    .coerceAtLeast(0),
+                initialPage = resolveBottomBarInitialPage(
+                    recoveredBottomRoute = recoveredNavigation?.bottomRoute,
+                    windowInitialRoute = windowInitialKey?.toLegacyRoute(),
+                    visibleItems = visibleBottomBarItems,
+                ),
                 reduceMotion = systemReduceMotion,
             )
         }
@@ -1583,6 +1586,14 @@ fun AppNavigation(
             if (resolvedPrivacyAuthenticationEnabled != false &&
                 isPrivacyProtectedNavigationTarget(resolvedKey.toPrivacyNavigationTarget())
             ) return commitInApp()
+            // 导航卡片窗口（设置、个人主页等非播放窗口）不再嵌套打开同类窗口：每层窗口
+            // 复用同一套首页入口，放行会让头像等入口层层堆叠新窗口并逐级退出。播放窗口
+            // 的承接不受影响，来源窗口继续走原有准入校验。
+            if (hostActivity is com.android.purebilibili.navigation.NavigationCardActivity &&
+                !resolvedKey.isPlaybackWindowKey()
+            ) {
+                return commitInApp()
+            }
             val identity = com.android.purebilibili.navigation3.resolveSystemWindowCardIdentity(resolvedKey)
                 ?: return commitInApp()
             val session = captureVideoCardNavigationSession(
