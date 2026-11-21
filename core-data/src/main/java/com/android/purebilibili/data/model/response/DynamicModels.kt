@@ -536,7 +536,35 @@ object DynamicModulesFlexibleSerializer : KSerializer<DynamicModules> {
             "LINK_CARD_TYPE_UPOWER_LOTTERY" -> parseUpowerLotteryLinkCard(card, type)
             "LINK_CARD_TYPE_ITEM_NULL" -> parseItemNullLinkCard(card, type)
             else -> parseGenericLinkCard(card, type)
-        }.takeIf { it.title.isNotBlank() || it.cover.isNotBlank() || it.jumpUrl.isNotBlank() }
+        }.let(::withResolvedLinkCardJumpUrl)
+            .takeIf { it.title.isNotBlank() || it.cover.isNotBlank() || it.jumpUrl.isNotBlank() }
+    }
+
+    /**
+     * 专栏/视频卡有标题或封面、但 jump_url 为空时，用正数 oid 补站内地址。
+     * 小于 1_000_000_000_000_000 的专栏走 read/cv，视频走 video/av；更大的 id 走 opus。
+     * 已有 jump_url 的卡、投票和商品保持原样。
+     */
+    private fun withResolvedLinkCardJumpUrl(card: OpusLinkCard): OpusLinkCard {
+        if (card.jumpUrl.isNotBlank() || (card.title.isBlank() && card.cover.isBlank())) return card
+        val id = card.oid.toLongOrNull()?.takeIf { it > 0L } ?: return card
+        val jumpUrl = when (card.type) {
+            "LINK_CARD_TYPE_OPUS", "LINK_CARD_TYPE_EVA3_OPUS" ->
+                nativeArticleOrVideoJumpUrl(id, article = true)
+            "LINK_CARD_TYPE_UGC", "LINK_CARD_TYPE_EVA3_VIDEO" ->
+                nativeArticleOrVideoJumpUrl(id, article = false)
+            else -> return card
+        }
+        return card.copy(jumpUrl = jumpUrl)
+    }
+
+    private fun nativeArticleOrVideoJumpUrl(id: Long, article: Boolean): String {
+        if (id >= 1_000_000_000_000_000L) return "https://www.bilibili.com/opus/$id"
+        return if (article) {
+            "https://www.bilibili.com/read/cv$id"
+        } else {
+            "https://www.bilibili.com/video/av$id"
+        }
     }
 
     private fun parseEvaLinkCard(card: JsonObject, key: String, type: String): OpusLinkCard {

@@ -529,7 +529,12 @@ object BilibiliNavigationTargetParser {
 
         firstReadValue?.let { value ->
             parseArticleId(value)?.let { return BilibiliNavigationTarget.Article(it) }
-            if (value.equals("mobile", ignoreCase = true)) {
+            // /read/mobile/{id}、/read/native/{id} 与 id/cvid 查询一样是专栏。
+            if (value.equals("mobile", ignoreCase = true) || value.equals("native", ignoreCase = true)) {
+                val nextIndex = if (readIndex >= 0) readIndex + 2 else 1
+                pathSegments.getOrNull(nextIndex)?.let(::parseArticleId)?.let {
+                    return BilibiliNavigationTarget.Article(it)
+                }
                 resolveArticleIdFromQuery(queryMap)?.let {
                     return BilibiliNavigationTarget.Article(it)
                 }

@@ -507,6 +507,37 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
+    fun `resolved rich url title stays clickable when the token is already replaced`() {
+        val columnTitle = "后续专栏标题"
+        val columnUrl = "https://www.bilibili.com/read/cv8905947"
+        val column = buildRichCommentAnnotatedString(
+            text = columnTitle,
+            richUrls = mapOf(columnUrl to ReplyContentUrl(title = columnTitle)),
+        )
+        assertEquals(columnTitle, column.text)
+        val columnDestination = assertNotNull(column.firstCommentLinkTag(RICH_COMMENT_LINK_URL_PREFIX))
+        assertEquals(columnUrl, columnDestination)
+        assertEquals(
+            BilibiliLinkNavigationAction.NativeTarget(BilibiliNavigationTarget.Article(8905947L)),
+            resolveBilibiliLinkNavigationAction(columnDestination),
+        )
+
+        val videoTitle = "视频标题"
+        val videoUrl = "https://www.bilibili.com/video/BV1xx411c7mD"
+        val video = buildRichCommentAnnotatedString(
+            text = videoTitle,
+            richUrls = mapOf(videoUrl to ReplyContentUrl(title = videoTitle)),
+        )
+        assertEquals(videoTitle, video.text)
+        val videoDestination = assertNotNull(video.firstCommentLinkTag(RICH_COMMENT_LINK_URL_PREFIX))
+        assertEquals(videoUrl, videoDestination)
+        assertEquals(
+            BilibiliLinkNavigationAction.NativeTarget(BilibiliNavigationTarget.Video("BV1xx411c7mD")),
+            resolveBilibiliLinkNavigationAction(videoDestination),
+        )
+    }
+
+    @Test
     fun `shopping web destination wins over source video schema`() {
         val destination = "https://mall.bilibili.com/detail.html?itemsId=123&from=BV1xx411c7mD"
         assertEquals(
