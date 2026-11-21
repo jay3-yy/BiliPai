@@ -21,8 +21,8 @@ import org.junit.runner.RunWith
  * 出现——所以必须单独锁一条基线，否则针对它的改动没有回归护栏。
  *
  * 两个停留时长对应两条不同的代码路径：
- * - 短后台（3s）：触发切后台的图片缓存预算收敛 + 回前台安定窗口，但不到 45s。
- * - 长时间后台（50s）：跨过 BACKGROUND_IMAGE_TRIM_DELAY_MS，覆盖持续挂后台后的二次收敛。
+ * - 短后台（3s）：触发切后台的即时缓存预算收敛，但不到播放器重度后台优化门槛。
+ * - 长时间后台（50s）：覆盖后台音频/视频链路优化后的重建与回前台恢复。
  */
 @RunWith(AndroidJUnit4::class)
 class BiliPaiForegroundReturnPagerFrameTimingBenchmark {
@@ -103,10 +103,10 @@ class BiliPaiForegroundReturnPagerFrameTimingBenchmark {
     }
 
     private companion object {
-        /** 触发切后台预算收敛与回前台安定窗口，但不跨过 45s 的长时间挂后台门槛。 */
+        /** 触发切后台预算收敛与回前台安定窗口，但不跨过 15s 的播放器优化门槛。 */
         const val SHORT_BACKGROUND_DWELL_MS = 3_000L
 
-        /** 跨过 BACKGROUND_IMAGE_TRIM_DELAY_MS（45s），覆盖持续挂后台后的二次收敛。 */
+        /** 覆盖后台播放器优化与缓存回收后的回前台恢复。 */
         const val SUSTAINED_BACKGROUND_DWELL_MS = 50_000L
 
         const val SUSTAINED_BACKGROUND_BENCHMARK_ITERATIONS = 4

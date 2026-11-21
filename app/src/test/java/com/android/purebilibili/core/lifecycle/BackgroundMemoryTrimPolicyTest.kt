@@ -9,32 +9,6 @@ import org.junit.Test
 class BackgroundMemoryTrimPolicyTest {
 
     @Test
-    fun backgroundCacheBudget_preservesWarmCoversAndNeverGrowsTheCache() {
-        val mib = 1024L * 1024
-        // 切后台立刻收敛到 64 MiB，足以覆盖底栏所有页面的可见封面。
-        assertEquals(64 * mib, resolveBackgroundImageCacheTrimTargetBytes(200 * mib, 0L))
-        assertEquals(64 * mib, resolveBackgroundImageCacheTrimTargetBytes(200 * mib, 4_999L))
-        // 持续后台后进一步收敛到 32 MiB。
-        assertEquals(32 * mib, resolveBackgroundImageCacheTrimTargetBytes(200 * mib, 5_000L))
-        assertEquals(7 * mib, resolveBackgroundImageCacheTrimTargetBytes(7 * mib, 120_000L))
-        assertEquals(0L, resolveBackgroundImageCacheTrimTargetBytes(0L, 120_000L))
-    }
-
-    @Test
-    fun sustainedBackground_onlyTrimsAfterGracePeriod() {
-        assertFalse(shouldTrimImageCacheAfterBackgroundDelay(true, false, 4_999L))
-        assertTrue(shouldTrimImageCacheAfterBackgroundDelay(true, false, 5_000L))
-        assertTrue(shouldTrimImageCacheAfterBackgroundDelay(true, false, 120_000L))
-    }
-
-    @Test
-    fun foregroundOrPip_doesNotTrimEvenAfterGracePeriod() {
-        assertFalse(shouldTrimImageCacheAfterBackgroundDelay(false, false, 120_000L))
-        assertFalse(shouldTrimImageCacheAfterBackgroundDelay(true, true, 120_000L))
-        assertFalse(shouldTrimImageCacheAfterBackgroundDelay(false, true, 120_000L))
-    }
-
-    @Test
     fun uiHidden_leavesEveryCacheAlone() {
         val plan = resolveBackgroundMemoryTrimPlan(ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN)
         // 切到桌面不等于内存吃紧；后台预算收敛由 BackgroundManager 单独负责。

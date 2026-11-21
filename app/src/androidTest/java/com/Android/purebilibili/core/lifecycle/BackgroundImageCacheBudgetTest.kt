@@ -11,20 +11,18 @@ class BackgroundImageCacheBudgetTest {
     private val mib = 1024L * 1024
 
     @Test
-    fun writesStayWithinBackgroundLimitAndForegroundRestoresCapacity() {
+    fun backgroundImmediatelyEvictsOverBudgetAndForegroundRestoresCapacity() {
         val cache = MemoryCache.Builder().maxSizeBytes(96 * mib).build()
         val budget = BackgroundImageCacheBudget(cache)
         fun writeImages() {
             repeat(8) { cache[MemoryCache.Key("cover-$it")] = MemoryCache.Value(SizedImage(20 * mib)) }
         }
         writeImages()
-        budget.background(0L)
-        writeImages()
-        assertEquals(64 * mib, cache.maxSize)
-        assertTrue(cache.size <= 64 * mib)
-        budget.background(BACKGROUND_IMAGE_TRIM_DELAY_MS)
-        writeImages()
+        assertTrue(cache.size > 32 * mib)
+        budget.background()
         assertEquals(32 * mib, cache.maxSize)
+        assertTrue(cache.size <= 32 * mib)
+        writeImages()
         assertTrue(cache.size <= 32 * mib)
         val retainedBytes = cache.size
         budget.foreground()
@@ -36,9 +34,7 @@ class BackgroundImageCacheBudgetTest {
     fun backgroundNeverRaisesASmallDeviceCacheBudget() {
         val cache = MemoryCache.Builder().maxSizeBytes(16 * mib).build()
         val budget = BackgroundImageCacheBudget(cache)
-        budget.background(0L)
-        assertEquals(16 * mib, cache.maxSize)
-        budget.background(BACKGROUND_IMAGE_TRIM_DELAY_MS)
+        budget.background()
         assertEquals(16 * mib, cache.maxSize)
         budget.foreground()
         assertEquals(16 * mib, cache.maxSize)
