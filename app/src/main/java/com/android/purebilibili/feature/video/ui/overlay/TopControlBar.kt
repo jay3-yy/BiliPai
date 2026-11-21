@@ -207,7 +207,12 @@ fun TopControlBar(
             modifier = modifier.fillMaxWidth()
                 .windowInsetsPadding(playerControlHorizontalInsets(isFullscreen, isPortrait))
                 .playerControlTopSafeArea(isFullscreen, isPortrait, statusBarVisible)
-                .padding(vertical = (if (!isFullscreen && isPortrait) 8 else policy.verticalPaddingDp).dp),
+                // 竖屏全屏顶栏贴近挖孔，避免控件下压遮挡视频画面。
+                .padding(vertical = (when {
+                    isFullscreen && isPortrait -> 4
+                    !isFullscreen && isPortrait -> 8
+                    else -> policy.verticalPaddingDp
+                }).dp),
         ) {
             PiliHeaderSlots(
                 hasTitle = hasTitle,

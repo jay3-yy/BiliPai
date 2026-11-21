@@ -313,7 +313,12 @@ fun TopControlBar(
             )
             .padding(
                 horizontal = layoutPolicy.horizontalPaddingDp.dp,
-                vertical = layoutPolicy.verticalPaddingDp.dp
+                // 竖屏全屏顶栏贴近挖孔，避免控件下压遮挡视频画面。
+                vertical = if (isFullscreen && configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
+                    4.dp
+                } else {
+                    layoutPolicy.verticalPaddingDp.dp
+                }
             )
     ) {
         Row(

@@ -5,8 +5,6 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
-import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -39,7 +37,7 @@ internal fun playerControlHorizontalInsets(isFullscreen: Boolean, isPortrait: Bo
 internal fun shouldReserveHiddenPlayerStatusBar(isFullscreen: Boolean, isPortrait: Boolean): Boolean =
     isFullscreen && isPortrait
 
-/** 控件避让独立于视频画布；竖屏全屏隐藏系统栏后仍保留顶部挖孔与状态栏安全区。 */
+/** 控件避让独立于视频画布；竖屏全屏隐藏系统栏后按挖孔实际高度避让，不再多留整条状态栏高度。 */
 @Composable
 internal fun Modifier.playerControlTopSafeArea(
     isFullscreen: Boolean,
@@ -47,8 +45,7 @@ internal fun Modifier.playerControlTopSafeArea(
     statusBarVisible: Boolean,
 ): Modifier = when {
     shouldReserveHiddenPlayerStatusBar(isFullscreen, isPortrait) -> windowInsetsPadding(
-        WindowInsets.statusBarsIgnoringVisibility.union(WindowInsets.displayCutout)
-            .only(WindowInsetsSides.Top),
+        WindowInsets.displayCutout.only(WindowInsetsSides.Top),
     )
     statusBarVisible -> windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
     else -> this
