@@ -27,6 +27,7 @@ import com.android.purebilibili.core.network.buildDynamicRepostRequest
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.AccountSessionStore
 import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.core.store.home.DynamicSettingsStore
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
 import com.android.purebilibili.data.model.CommentFraudStatus
@@ -156,6 +157,10 @@ internal fun hasLoadedAllDynamicFollowings(
 class DynamicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appContext = getApplication<Application>()
+    internal val sidebarLiveUsersVisible: StateFlow<Boolean?> =
+        DynamicSettingsStore.observeSidebarLiveUsersVisible(appContext)
+            .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
     private var activeAccountIdentity = TokenManager.accountIdentity.value
     private var accountScope = CoroutineScope(
         viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job])
@@ -924,6 +929,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
      */
     fun toggleSidebar() {
         _isSidebarExpanded.value = !_isSidebarExpanded.value
+    }
+
+    internal fun toggleSidebarLiveUsers() {
+        viewModelScope.launch {
+            DynamicSettingsStore.toggleSidebarLiveUsersVisible(appContext)
+        }
     }
 
     fun togglePinUser(uid: Long) {

@@ -43,7 +43,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -173,6 +172,8 @@ fun DynamicSidebar(
     selfUid: Long = 0L,
     isExpanded: Boolean,
     userListState: androidx.compose.foundation.lazy.LazyListState,
+    showLiveUsers: Boolean?,
+    onToggleLiveUsers: () -> Unit,
     onUserClick: (Long?) -> Unit,
     onLiveClick: (Long, String, String) -> Unit,
     showHiddenUsers: Boolean,
@@ -235,10 +236,9 @@ fun DynamicSidebar(
     val restUsers = remember(users, selfUid) {
         users.filter { !it.isLive && !isDynamicUpPanelShortcut(it.uid, selfUid) }
     }
-    var showLiveUsers by remember { mutableStateOf(true) }
     val visibleUsers = remember(liveUsers, shortcutUsers, restUsers, showLiveUsers) {
         buildList {
-            if (showLiveUsers) addAll(liveUsers)
+            if (showLiveUsers == true) addAll(liveUsers)
             addAll(shortcutUsers)
             addAll(restUsers)
         }
@@ -387,10 +387,10 @@ fun DynamicSidebar(
                     }
                 }
 
-                if (liveUsers.isNotEmpty()) {
+                if (liveUsers.isNotEmpty() && showLiveUsers != null) {
                     item(key = "live_fold") {
                         AppTextButton(
-                            onClick = { showLiveUsers = !showLiveUsers },
+                            onClick = onToggleLiveUsers,
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(
                                 horizontal = AppSpacingTokens.None,

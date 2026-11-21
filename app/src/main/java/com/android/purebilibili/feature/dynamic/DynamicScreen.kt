@@ -398,6 +398,7 @@ fun DynamicScreen(
 
     //  布局模式状态（侧边栏/横向）
     val displayMode by viewModel.displayMode.collectAsStateWithLifecycle()
+    val sidebarLiveUsersVisible by viewModel.sidebarLiveUsersVisible.collectAsStateWithLifecycle()
     val upListVisible by remember(context) {
         com.android.purebilibili.core.store.home.DynamicSettingsStore.observeUpListVisible(context)
     }.collectAsStateWithLifecycle(initialValue = true)
@@ -811,6 +812,8 @@ fun DynamicScreen(
                                 selfUid = selfUid,
                                 isExpanded = isSidebarExpanded,
                                 userListState = sidebarUserListState,
+                                showLiveUsers = sidebarLiveUsersVisible,
+                                onToggleLiveUsers = viewModel::toggleSidebarLiveUsers,
                                 onLiveClick = onLiveClick,
                                 onUserClick = { userId ->
                                     handleUserSelection(userId)
