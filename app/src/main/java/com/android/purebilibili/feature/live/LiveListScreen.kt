@@ -395,7 +395,8 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
                 areaEntries = areaEntries,
                 page = page,
                 hasMore = snapshot.hasMore,
-                isLoading = !append && !complete,
+                // 刷新指示器随推荐内容就绪结束；关注补取结果由 complete 阶段单独落地，不拖住转圈。
+                isLoading = false,
                 initialLoadComplete = true,
                 contentLoadComplete = true,
                 isLoadingMore = false,
