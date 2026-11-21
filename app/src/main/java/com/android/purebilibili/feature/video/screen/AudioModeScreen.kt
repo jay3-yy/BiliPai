@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
@@ -315,7 +316,7 @@ fun AudioModeScreen(
     } else {
         null
     }
-    val player = standalonePlayerState?.player ?: viewModel.currentPlayer
+    val player = standalonePlayerState?.player ?: (viewModel.currentPlayer as? ExoPlayer)
     DisposableEffect(player) {
         val audioModePlayer = player
         val miniPlayerManager = MiniPlayerManager.getInstance(context)
