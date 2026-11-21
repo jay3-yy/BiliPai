@@ -42,6 +42,39 @@ class NavigationReturnLandingTest {
     }
 
     @Test
+    fun videoCardLandingResolvesLayoutTravelAndKeepsControlFallback() {
+        // 视频卡片按布局取与引擎一致的振幅：双列瓦片在 360dp 下是 1.1dp，而非旧固定 3dp。
+        assertEquals(
+            1.1f,
+            resolveNavigationReturnLandingEdgeTravelDp(
+                NavigationReturnLandingStyle.VIDEO_CARD,
+                longestEdgeDp = 360f,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+            ),
+            0.0001f,
+        )
+        // 未携带布局的系统接口调用回落到样式固定值；CONTROL 永远保持固定行程。
+        assertEquals(
+            3f,
+            resolveNavigationReturnLandingEdgeTravelDp(
+                NavigationReturnLandingStyle.VIDEO_CARD,
+                longestEdgeDp = 360f,
+                sourceLayout = null,
+            ),
+            0.0001f,
+        )
+        assertEquals(
+            1.5f,
+            resolveNavigationReturnLandingEdgeTravelDp(
+                NavigationReturnLandingStyle.CONTROL,
+                longestEdgeDp = 360f,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+            ),
+            0.0001f,
+        )
+    }
+
+    @Test
     fun finishingAnInterruptedReturnCannotDiscardTheNextReturn() {
         val landing = NavigationReturnLanding()
         landing.request()

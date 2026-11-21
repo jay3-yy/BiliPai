@@ -78,6 +78,7 @@ import com.android.purebilibili.core.ui.transition.resolveVideoCardTransitionExp
 import com.android.purebilibili.core.ui.transition.resolveVideoHeroMotionSpec
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionBackgroundPhase
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionSettleState
+import com.android.purebilibili.core.ui.transition.shouldPublishVideoCardReturnLanding
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics
 import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
 import com.android.purebilibili.core.ui.transition.resolvePredictiveBackGestureBlurProgress
@@ -541,6 +542,9 @@ internal fun BiliPaiNavDisplayHost(
             }
         }
     }
+    // 落位冲量是否已在本轮返回里发布过：morph 末段提前发布一次后，
+    // Idle 收尾与兜底路径不再重发，避免替换事件把压缩弹簧重置回起点。
+    val landingPublishedForReturn = remember { mutableStateOf(false) }
     LaunchedEffect(
         cardMorphAvailable,
         videoCardTransitionProgress,
@@ -550,11 +554,14 @@ internal fun BiliPaiNavDisplayHost(
     ) {
         if (!cardMorphAvailable) return@LaunchedEffect
         fun finishCardReturn() {
-            videoCardClock.landingFeedback.publish(
-                sourceKey = sourceMetadata.sourceKey,
-                sourceLayout = sourceMetadata.sourceLayout,
-                committedReturn = videoCardClock.phase == VideoCardTransitionBackgroundPhase.RETURNING,
-            )
+            if (!landingPublishedForReturn.value) {
+                videoCardClock.landingFeedback.publish(
+                    sourceKey = sourceMetadata.sourceKey,
+                    sourceLayout = sourceMetadata.sourceLayout,
+                    committedReturn = videoCardClock.phase == VideoCardTransitionBackgroundPhase.RETURNING,
+                    releaseVelocity = videoCardTransitionProgress.releaseVelocity(),
+                )
+            }
             videoCardClock.followNavigationDriver(VideoCardTransitionSettleState.Idle)
             videoCardTransitionProgress.clear()
         }
@@ -585,6 +592,40 @@ internal fun BiliPaiNavDisplayHost(
             VideoCardTransitionDiagnostics.onMotionPhase(
                 state, heroMotion, sourceMetadata.sourceLayout, diagnosticConfiguration,
             )
+        }
+    }
+    // 落位冲量提前发布：提交返回的 morph 进入末段（剩余行程低于阈值）就发布事件，
+    // 源卡压缩弹簧提前起跑，峰位压住落位尾巴；飞行壳卸层帧即为压缩近峰帧。
+    // 只读 settle 相位与缓存的 morph 帧，不推进状态机以外的任何写路径。
+    LaunchedEffect(
+        cardMorphAvailable,
+        videoCardTransitionProgress,
+        sourceMetadata.sourceKey,
+    ) {
+        if (!cardMorphAvailable) return@LaunchedEffect
+        snapshotFlow {
+            val state = videoCardTransitionProgress.settleStateOrNull()
+            val depth = if (state == VideoCardTransitionSettleState.AutoReturn) {
+                videoCardTransitionProgress.depthOrNull()
+            } else {
+                null
+            }
+            state to depth
+        }.collect { (state, depth) ->
+            if (state != VideoCardTransitionSettleState.AutoReturn) {
+                landingPublishedForReturn.value = false
+                return@collect
+            }
+            if (landingPublishedForReturn.value) return@collect
+            if (depth != null && shouldPublishVideoCardReturnLanding(depth)) {
+                landingPublishedForReturn.value = true
+                videoCardClock.landingFeedback.publish(
+                    sourceKey = sourceMetadata.sourceKey,
+                    sourceLayout = sourceMetadata.sourceLayout,
+                    committedReturn = videoCardClock.phase == VideoCardTransitionBackgroundPhase.RETURNING,
+                    releaseVelocity = videoCardTransitionProgress.releaseVelocity(),
+                )
+            }
         }
     }
     val stackHasCardMorphDestination = hasCardMorphDestination(stackSnapshot)

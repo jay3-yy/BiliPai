@@ -93,6 +93,7 @@ import com.android.purebilibili.core.ui.transition.videoCardSourceCaptureEnabled
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
 import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
+import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
 import com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.recordNativeVideoCardLayer
@@ -495,7 +496,12 @@ private fun HomeHeroCarouselCard(
         modifier = Modifier
             .testTag("home_hero_video_card")
             .adaptiveCardHoverEffect(shape = cardShape, hoverShadowElevation = AppSpacingTokens.None)
-            .videoCardSourceAnchor(video.bvid, cardShape)
+            .videoCardSourceAnchor(
+                video.bvid,
+                cardShape,
+                landingStyle = NavigationReturnLandingStyle.VIDEO_CARD,
+                sourceLayout = VideoCardSourceLayout.COVER_ONLY,
+            )
             // 折角覆盖层差只有 0.01，层级按离散的当前页固定即可；
             // 连续 z 会导致滑动全程逐帧重建 zIndex 修饰符。
             .zIndex(if (isCenterPage) 1f else 0.99f)

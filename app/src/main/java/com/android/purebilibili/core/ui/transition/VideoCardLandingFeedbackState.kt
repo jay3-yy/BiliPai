@@ -8,6 +8,8 @@ internal class VideoCardLandingEvent(
     val sourceKey: String,
     val sourceLayout: VideoCardSourceLayout,
     val createdAtNanos: Long,
+    /** 导航驱动提交速度（进度/秒）；返回键/程序化返回为 0。 */
+    val releaseVelocity: Float = 0f,
 )
 
 /** A short-lived, single-consumer handoff survives source-card disposal and re-creation. */
@@ -19,9 +21,14 @@ internal class VideoCardLandingFeedbackState(
     // Claiming must not invalidate snapshotFlow and cancel the animation it just started.
     private var claimedEvent: VideoCardLandingEvent? = null
 
-    fun publish(sourceKey: String?, sourceLayout: VideoCardSourceLayout, committedReturn: Boolean) {
+    fun publish(
+        sourceKey: String?,
+        sourceLayout: VideoCardSourceLayout,
+        committedReturn: Boolean,
+        releaseVelocity: Float = 0f,
+    ) {
         if (!committedReturn || sourceKey.isNullOrBlank()) return
-        event = VideoCardLandingEvent(sourceKey, sourceLayout, nowNanos())
+        event = VideoCardLandingEvent(sourceKey, sourceLayout, nowNanos(), releaseVelocity)
     }
 
     fun claim(candidate: VideoCardLandingEvent, sourceKey: String?): Boolean {

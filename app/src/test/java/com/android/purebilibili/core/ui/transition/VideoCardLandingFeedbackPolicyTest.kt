@@ -124,4 +124,56 @@ class VideoCardLandingFeedbackPolicyTest {
         assertEquals(1f + 2f * releaseCap / 200f, resolveVideoCardLandingScale(200f, 100f, 1f, -100f, stacked))
         assertEquals(1f, resolveVideoCardLandingScale(200f, 100f, 1f, Float.NaN, stacked))
     }
+
+    @Test
+    fun systemInterfaceLandingResolvesTheSamePerLayoutTravelAsTheEngine() {
+        for (layout in VideoCardSourceLayout.entries) {
+            for (longestEdgeDp in listOf(120f, 180f, 360f, 800f)) {
+                assertEquals(
+                    resolveVideoCardLandingEdgeCompressionDp(longestEdgeDp, longestEdgeDp, 1f, layout),
+                    resolveVideoCardLandingEdgeTravelDp(longestEdgeDp, layout),
+                    0.0001f,
+                )
+            }
+        }
+        // 双列瓦片在 360dp 最长边下取 1.1dp 布局预算，而不是旧系统接口的固定 3dp。
+        assertEquals(1.1f, resolveVideoCardLandingEdgeTravelDp(360f, stacked), 0.0001f)
+    }
+
+    @Test
+    fun impulseScaleFollowsReleaseVelocityInsideFixedBounds() {
+        assertEquals(1f, resolveVideoCardLandingImpulseScale(0f), 0.0001f)
+        assertEquals(1.1f, resolveVideoCardLandingImpulseScale(1f), 0.0001f)
+        assertEquals(1.4f, resolveVideoCardLandingImpulseScale(6f), 0.0001f)
+        assertEquals(0.85f, resolveVideoCardLandingImpulseScale(-4f), 0.0001f)
+        assertEquals(1f, resolveVideoCardLandingImpulseScale(Float.NaN), 0.0001f)
+        var previous = -1f
+        for (velocity in listOf(0f, 0.5f, 1f, 1.5f, 2f, 2.5f, 3f, 3.5f, 4f)) {
+            val scale = resolveVideoCardLandingImpulseScale(velocity)
+            assertTrue(scale >= previous)
+            previous = scale
+        }
+    }
+
+    @Test
+    fun scaledImpulseProportionallyScalesTheCompressionPeak() {
+        val motion = resolveVideoCardLandingMotion(stacked)
+        val spring = FloatSpringSpec(
+            dampingRatio = motion.dampingRatio,
+            stiffness = motion.stiffness,
+        )
+        val budget = resolveVideoCardLandingEdgeCompressionDp(360f, 480f, 1f, stacked)
+        val baseVelocity = resolveVideoCardLandingImpulseVelocity(budget, stacked)
+        var peak = 0f
+        for (ms in 0..500) {
+            peak = maxOf(peak, spring.getValueFromNanos(ms * 1_000_000L, 0f, 0f, baseVelocity))
+        }
+        assertEquals(budget, peak, 0.001f)
+        val fastVelocity = baseVelocity * resolveVideoCardLandingImpulseScale(3f)
+        var fastPeak = 0f
+        for (ms in 0..500) {
+            fastPeak = maxOf(fastPeak, spring.getValueFromNanos(ms * 1_000_000L, 0f, 0f, fastVelocity))
+        }
+        assertEquals(budget * resolveVideoCardLandingImpulseScale(3f), fastPeak, 0.001f)
+    }
 }

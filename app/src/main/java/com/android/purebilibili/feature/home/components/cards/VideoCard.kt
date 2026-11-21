@@ -1375,7 +1375,12 @@ internal fun ElegantVideoCard(
         propagateMinConstraints = true,
         modifier = modifier
             .fillMaxWidth()
-            .videoCardSourceAnchor(video.bvid, adaptiveHoverShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
+            .videoCardSourceAnchor(
+                video.bvid,
+                adaptiveHoverShape,
+                landingStyle = NavigationReturnLandingStyle.VIDEO_CARD,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+            )
             .then(cardVisibility.observerModifier)
             .adaptiveCardHoverEffect(shape = adaptiveHoverShape)
             // 进场动画：挂载门控已含滚动/返回/切分类；与过渡并存时仅淡入不改几何

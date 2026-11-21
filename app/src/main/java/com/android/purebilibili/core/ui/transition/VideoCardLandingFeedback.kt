@@ -6,9 +6,13 @@ import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
@@ -20,6 +24,7 @@ import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.core.ui.adaptive.MotionTier
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -64,7 +69,16 @@ internal fun Modifier.videoCardLandingFeedback(
     // shrink more than feed tiles. Read animated values only in the graphics layer.
     val edgeCompression = remember(layer, bvid, sourceRoute, density) { Animatable(0f, 0.015f) }
     val edgeRelease = remember(layer, bvid, sourceRoute, density) { Animatable(0f, 0.005f) }
+    // 同一事件只启动一次：morph 末段在 Returning 下已提前起弹簧，exposure 转 Idle
+    // 的那一帧不得把压缩重置归零，否则峰位被推回落位之后，空档又回来了。
+    var handledEvent by remember { mutableStateOf<VideoCardLandingEvent?>(null) }
+    // 动画放在收集器外启动：collectLatest 对每条新发射都会取消上一段处理，
+    // Returning→Idle 的同事件发射会打断提前起跑的压缩弹簧。
+    val feedbackScope = rememberCoroutineScope()
+    var feedbackAnimationJob by remember { mutableStateOf<Job?>(null) }
     LaunchedEffect(layer, bvid, sourceRoute, density, motionEnabled, landingFeedback) {
+        feedbackAnimationJob?.cancel()
+        feedbackAnimationJob = null
         edgeCompression.snapTo(0f)
         edgeRelease.snapTo(0f)
         if (!motionEnabled) return@LaunchedEffect
@@ -78,11 +92,30 @@ internal fun Modifier.videoCardLandingFeedback(
                 state.exposureProvider() to landingFeedback.event
             } else null
         }.collectLatest { frame ->
-            edgeCompression.snapTo(0f)
-            edgeRelease.snapTo(0f)
-            val readyFrame = frame ?: return@collectLatest
-            val event = readyFrame.second ?: return@collectLatest
-            if (readyFrame.first != VideoCardTransitionExposure.Idle) return@collectLatest
+            val readyFrame = frame ?: run {
+                feedbackAnimationJob?.cancel()
+                feedbackAnimationJob = null
+                edgeCompression.snapTo(0f)
+                edgeRelease.snapTo(0f)
+                return@collectLatest
+            }
+            val event = readyFrame.second
+            if (event == null || event === handledEvent) {
+                if (event == null) {
+                    feedbackAnimationJob?.cancel()
+                    feedbackAnimationJob = null
+                    edgeCompression.snapTo(0f)
+                    edgeRelease.snapTo(0f)
+                }
+                return@collectLatest
+            }
+            // Returning 期间事件已在 morph 末段发布：压缩弹簧提前起跑，峰位正好压住
+            // 落位尾巴；飞行壳未卸层时列表卡被盖住，图形层仍按 Idle 门控渲染 1x。
+            if (readyFrame.first != VideoCardTransitionExposure.Idle &&
+                readyFrame.first != VideoCardTransitionExposure.Returning
+            ) {
+                return@collectLatest
+            }
             var compressionDp = 0f
             // A recreated card may receive the event before its native layer's first draw.
             // Wait for geometry without consuming the event or subscribing composition to size.
@@ -97,6 +130,7 @@ internal fun Modifier.videoCardLandingFeedback(
                 withFrameNanos { }
             }
             if (compressionDp > 0f && landingFeedback.claim(event, background.value.sourceKeyProvider())) {
+                handledEvent = event
                 val motion = resolveVideoCardLandingMotion(event.sourceLayout)
                 val releaseDp = resolveVideoCardLandingReleaseDp(
                     widthPx = layer.size.width.toFloat(),
@@ -104,25 +138,30 @@ internal fun Modifier.videoCardLandingFeedback(
                     density = density,
                     sourceLayout = event.sourceLayout,
                 )
-                // Start together on the frame clock. New input cancels both children, so the
+                // Start together on the frame clock. A newer event cancels this job, so the
                 // outward response cannot survive its owning return or restart independently.
-                coroutineScope {
-                    launch {
-                        edgeCompression.animateTo(
-                            targetValue = 0f,
-                            animationSpec = spring(
-                                dampingRatio = motion.dampingRatio,
-                                stiffness = motion.stiffness,
-                                visibilityThreshold = 0.015f,
-                            ),
-                            initialVelocity = resolveVideoCardLandingImpulseVelocity(compressionDp, event.sourceLayout),
-                        )
-                    }
-                    launch {
-                        edgeRelease.animateTo(
-                            targetValue = 0f,
-                            animationSpec = videoCardLandingReleaseSpec(releaseDp),
-                        )
+                feedbackAnimationJob = feedbackScope.launch {
+                    edgeCompression.snapTo(0f)
+                    edgeRelease.snapTo(0f)
+                    coroutineScope {
+                        launch {
+                            edgeCompression.animateTo(
+                                targetValue = 0f,
+                                animationSpec = spring(
+                                    dampingRatio = motion.dampingRatio,
+                                    stiffness = motion.stiffness,
+                                    visibilityThreshold = 0.015f,
+                                ),
+                                initialVelocity = resolveVideoCardLandingImpulseVelocity(compressionDp, event.sourceLayout) *
+                                    resolveVideoCardLandingImpulseScale(event.releaseVelocity),
+                            )
+                        }
+                        launch {
+                            edgeRelease.animateTo(
+                                targetValue = 0f,
+                                animationSpec = videoCardLandingReleaseSpec(releaseDp),
+                            )
+                        }
                     }
                 }
             }

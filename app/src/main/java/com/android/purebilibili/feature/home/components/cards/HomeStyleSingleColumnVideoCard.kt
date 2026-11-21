@@ -267,7 +267,12 @@ internal fun HomeStyleSingleColumnVideoCard(
             .onPlaced { coordinates ->
                 cardCoordinates.value = coordinates
             }
-            .videoCardSourceAnchor(video.bvid, cardShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
+            .videoCardSourceAnchor(
+                video.bvid,
+                cardShape,
+                landingStyle = NavigationReturnLandingStyle.VIDEO_CARD,
+                sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+            )
             .then(nativeCardSnapshot.modifier)
             .clip(cardShape)
             .then(

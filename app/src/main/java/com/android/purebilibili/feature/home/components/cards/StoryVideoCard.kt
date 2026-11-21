@@ -2,6 +2,7 @@
 package com.android.purebilibili.feature.home.components.cards
 
 import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
+import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
@@ -378,7 +379,12 @@ internal fun StoryVideoCard(
             .then(cardVisibility.observerModifier)
             .fillMaxWidth()
             .adaptiveCardHoverEffect(shape = cardShellShape)
-            .videoCardSourceAnchor(video.bvid, cardShellShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
+            .videoCardSourceAnchor(
+                video.bvid,
+                cardShellShape,
+                landingStyle = NavigationReturnLandingStyle.VIDEO_CARD,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+            )
             .padding(horizontal = cardHorizontalPadding, vertical = AppSpacingTokens.Small)
             .animateEnter(
                 index = index,

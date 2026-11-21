@@ -99,6 +99,7 @@ internal fun rememberPersonalCardVideoTransition(
     bvid: String,
     transitionEnabled: Boolean,
     clipShape: Shape,
+    stacked: Boolean,
 ): PersonalCardVideoTransition {
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
@@ -126,7 +127,16 @@ internal fun rememberPersonalCardVideoTransition(
     )
     val boundsHolder = remember(bvid) { PersonalCardBoundsHolder() }
     val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(bvid)
-    val shellModifier = Modifier.videoCardSourceAnchor(bvid, clipShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
+    val shellModifier = Modifier.videoCardSourceAnchor(
+        bvid,
+        clipShape,
+        landingStyle = NavigationReturnLandingStyle.VIDEO_CARD,
+        sourceLayout = if (stacked) {
+            VideoCardSourceLayout.STACKED
+        } else {
+            VideoCardSourceLayout.SIDE_BY_SIDE
+        },
+    )
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     // 每次组合重建轻量包装：shellModifier 随 motionSpec 重建，避免持有过期 modifier。

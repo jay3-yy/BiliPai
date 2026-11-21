@@ -164,6 +164,8 @@ internal fun Modifier.videoCardSourceAnchor(
     enabled: Boolean = LocalVideoCardSourceTrackingEnabled.current,
     returnHandledByOwner: Boolean = false,
     landingStyle: NavigationReturnLandingStyle = NavigationReturnLandingStyle.CONTROL,
+    // 卡片自身布局：系统接口落位按它取与引擎一致的压缩行程。
+    sourceLayout: VideoCardSourceLayout? = null,
     onPositioned: ((LayoutCoordinates) -> Unit)? = null,
 ): Modifier {
     if (!enabled || bvid.isBlank()) return if (onPositioned == null) this else onPlaced(onPositioned)
@@ -186,6 +188,7 @@ internal fun Modifier.videoCardSourceAnchor(
     }.navigationReturnLanding(
         source.returnLanding,
         style = landingStyle,
+        sourceLayout = sourceLayout,
         isSourceVisible = { source.coordinates.isVisibleReturnLanding() },
     )
 }

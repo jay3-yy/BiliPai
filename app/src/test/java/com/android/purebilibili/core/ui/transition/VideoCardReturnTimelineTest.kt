@@ -1074,4 +1074,15 @@ class VideoCardReturnTimelineTest {
             )
         )
     }
+
+    @Test
+    fun landingPublishOpensOnlyInsideTheMorphTailWindow() {
+        assertTrue(shouldPublishVideoCardReturnLanding(0f))
+        assertTrue(shouldPublishVideoCardReturnLanding(0.003f))
+        assertTrue(shouldPublishVideoCardReturnLanding(VIDEO_CARD_RETURN_LANDING_MORPH_DEPTH))
+        assertFalse(shouldPublishVideoCardReturnLanding(0.006f))
+        assertFalse(shouldPublishVideoCardReturnLanding(0.5f))
+        assertFalse(shouldPublishVideoCardReturnLanding(1f))
+        assertFalse(shouldPublishVideoCardReturnLanding(Float.NaN))
+    }
 }

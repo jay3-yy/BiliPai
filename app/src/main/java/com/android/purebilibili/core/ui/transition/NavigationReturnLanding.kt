@@ -28,6 +28,21 @@ internal enum class NavigationReturnLandingStyle(val edgeTravelDp: Float) {
     VIDEO_CARD(3f),
 }
 
+/**
+ * 视频卡片落位行程与引擎路径共用同一按布局解析的振幅
+ * （[resolveVideoCardLandingEdgeTravelDp]），切「一镜到底接口」手感一致；
+ * 非卡片来源（CONTROL）与未携带布局的调用保持固定行程。
+ */
+internal fun resolveNavigationReturnLandingEdgeTravelDp(
+    style: NavigationReturnLandingStyle,
+    longestEdgeDp: Float,
+    sourceLayout: VideoCardSourceLayout?,
+): Float {
+    if (style != NavigationReturnLandingStyle.VIDEO_CARD) return style.edgeTravelDp
+    val layout = sourceLayout ?: return style.edgeTravelDp
+    return resolveVideoCardLandingEdgeTravelDp(longestEdgeDp, layout)
+}
+
 /** 只通知本次导航的实际来源。新的返回可以替换尚未播放的旧事件。 */
 internal class NavigationReturnLanding {
     var event by mutableStateOf<Any?>(null)
@@ -76,6 +91,7 @@ internal fun Modifier.navigationReturnLanding(
     landing: NavigationReturnLanding?,
     sharedBoundsReleased: Boolean = true,
     style: NavigationReturnLandingStyle = NavigationReturnLandingStyle.CONTROL,
+    sourceLayout: VideoCardSourceLayout? = null,
     isSourceVisible: () -> Boolean,
 ): Modifier {
     val state = landing ?: return this
@@ -109,7 +125,13 @@ internal fun Modifier.navigationReturnLanding(
         if (amount == 0f || !sourceVisible()) {
             drawContent()
         } else {
-            val scaleFactor = resolveNavigationReturnLandingScale(size.maxDimension, style.edgeTravelDp.dp.toPx(), amount)
+            // 行程按实际最长边解析：与引擎落位共用同一物理预算，宽卡不多压、瓦片不消失。
+            val edgeTravelDp = resolveNavigationReturnLandingEdgeTravelDp(
+                style = style,
+                longestEdgeDp = size.maxDimension / density,
+                sourceLayout = sourceLayout,
+            )
+            val scaleFactor = resolveNavigationReturnLandingScale(size.maxDimension, edgeTravelDp.dp.toPx(), amount)
             scale(scaleFactor, pivot = center) { this@drawWithContent.drawContent() }
         }
     }
