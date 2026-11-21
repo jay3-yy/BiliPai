@@ -290,6 +290,7 @@ internal fun HomeScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val currentCategory by viewModel.currentCategory.collectAsStateWithLifecycle()
     val displayedTabIndexFromState by viewModel.displayedTabIndex.collectAsStateWithLifecycle()
+    val displayedTabEntryFromState by viewModel.displayedTabEntry.collectAsStateWithLifecycle()
     val popularSubCategory by viewModel.popularSubCategory.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
     val refreshNewItemsCount by viewModel.refreshNewItemsCount.collectAsStateWithLifecycle()
@@ -390,7 +391,8 @@ internal fun HomeScreen(
     } ?: resolveHomeInitialTopTabPage(
         topTabEntries = topTabEntries,
         currentCategory = currentCategory,
-        displayedTabIndex = displayedTabIndexFromState
+        displayedTabIndex = displayedTabIndexFromState,
+        displayedTabEntry = displayedTabEntryFromState
     )
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { topTabEntries.size }
     LaunchedEffect(pendingMemoryRecovery?.id, topTabKeys) {
@@ -398,7 +400,7 @@ internal fun HomeScreen(
         val target = topTabEntries.indexOfFirst { it.id == saved.category }
         if (target < 0) viewModel.consumeMemoryRecovery(saved.id)
         else {
-            viewModel.updateDisplayedTabIndex(target)
+            viewModel.updateDisplayedTab(target, topTabEntries[target])
             pagerState.scrollToPage(target)
         }
     }
@@ -421,6 +423,7 @@ internal fun HomeScreen(
         topTabEntries = topTabEntries,
         currentCategory = currentCategory,
         initialPage = initialPage,
+        displayedTabEntry = displayedTabEntryFromState,
     )
     val latestHomeTopTabEntries by rememberUpdatedState(topTabEntries)
     val latestHomeTopLevelActive by rememberUpdatedState(isTopLevelActive)
@@ -438,8 +441,12 @@ internal fun HomeScreen(
             homeNavigationRevision++
             headerScrollState.setOffsetImmediately(headerOffsetProvider())
         }
-        viewModel.updateDisplayedTabIndex(index)
+        viewModel.updateDisplayedTab(index, selectedEntry)
         pagerCoordinator.retainedEntry = selectedEntry
+        pagerCoordinator.lastDrivenEntry = selectedEntry
+        if (selectedEntry is HomeTopTabEntry.Category) {
+            pagerCoordinator.lastDrivenCategory = selectedEntry.category
+        }
         if (pagerState.currentPage != index ||
             (nativeMd3TabMotion && pagerState.isScrollInProgress)
         ) {
@@ -561,9 +568,10 @@ internal fun HomeScreen(
         coordinator = pagerCoordinator,
         currentCategory = currentCategory,
         displayedTabIndex = displayedTabIndexFromState,
+        displayedTabEntry = displayedTabEntryFromState,
         isTopLevelActive = isTopLevelActive,
         animationSpec = homeTabSelectionAnimationSpec,
-        onDisplayedTabIndexChange = viewModel::updateDisplayedTabIndex,
+        onDisplayedTabChange = viewModel::updateDisplayedTab,
         onCategoryChange = viewModel::switchCategory,
     )
 

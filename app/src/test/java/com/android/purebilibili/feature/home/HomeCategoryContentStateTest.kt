@@ -20,9 +20,22 @@ class HomeCategoryContentStateTest {
             categoryStates = persistentMapOf(HomeCategory.FOLLOW to loading),
         ).selectHomeCategory(HomeCategory.FOLLOW)
         assertEquals(HomeCategory.FOLLOW, state.currentCategory)
+        assertEquals(HomeTopTabEntry.Category(HomeCategory.FOLLOW), state.displayedTabEntry)
         assertSame(loading.videos, state.videos)
         assertTrue(state.isLoading)
         assertEquals("following error", state.error)
+    }
+
+    @Test
+    fun switchingCategoryClearsPartitionDisplayedTabEntry() {
+        val state = HomeUiState(
+            currentCategory = HomeCategory.RECOMMEND,
+            displayedTabIndex = 1,
+            displayedTabEntry = HomeTopTabEntry.Partition,
+        ).selectHomeCategory(HomeCategory.POPULAR)
+
+        assertEquals(HomeCategory.POPULAR, state.currentCategory)
+        assertEquals(HomeTopTabEntry.Category(HomeCategory.POPULAR), state.displayedTabEntry)
     }
 
     @Test

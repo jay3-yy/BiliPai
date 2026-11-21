@@ -110,6 +110,9 @@ private class LiveRichEditText(context: Context) : EditText(context) {
         get() = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
 
     init {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            isForceDarkAllowed = false
+        }
         background = null
         setPadding(0, 0, 0, 0)
         gravity = Gravity.CENTER_VERTICAL

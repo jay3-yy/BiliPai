@@ -39,6 +39,7 @@ internal fun HomeFeedReturnEffects(
             }
             pagerCoordinator.hasSynced = false
             pagerCoordinator.lastDrivenCategory = null
+            pagerCoordinator.lastDrivenEntry = null
         }
     }
 
