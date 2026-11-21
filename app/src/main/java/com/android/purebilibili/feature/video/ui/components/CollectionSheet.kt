@@ -202,7 +202,6 @@ fun CollectionSheet(
                         currentBvid = currentBvid,
                         currentCid = currentCid
                     ),
-                    fontSize = MaterialTheme.typography.labelMedium.fontSize
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 EpisodeListNavigationActions(

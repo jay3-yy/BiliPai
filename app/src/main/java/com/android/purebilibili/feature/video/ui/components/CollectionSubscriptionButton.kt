@@ -6,16 +6,15 @@ import com.android.purebilibili.core.ui.AppContentColors
 
 import android.widget.Toast
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Box
-import androidx.compose.runtime.key
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.runtime.key
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.currentCoroutineContext
-import androidx.compose.material3.MaterialTheme
-import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppTextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,8 +26,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.data.repository.ActionRepository
@@ -39,7 +36,6 @@ internal fun CollectionSubscriptionButton(
     collectionId: Long,
     currentBvid: String,
     currentAid: Long,
-    fontSize: TextUnit,
     immersive: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
 ) {
@@ -118,31 +114,28 @@ internal fun CollectionSubscriptionButton(
             },
             contentPadding = contentPadding
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                // 按最长文案测量，缓存与服务器回填只更新文字，不改变合集行尾宽度。
-                AppText(
-                    text = "已订阅",
-                    fontSize = fontSize,
-                    maxLines = 1,
-                    softWrap = false,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.graphicsLayer { alpha = 0f }.clearAndSetSemantics {},
-                )
-                AppText(
-                    text = when (isSubscribed) { true -> "已订阅"; false -> "订阅"; null -> if (queryFailed) "重试" else "…" },
-                    color = if (immersive) {
-                        Color.White.copy(alpha = if (isSubscribed == true) 0.92f else 0.78f)
-                    } else if (isSubscribed == true) {
-                        AppContentColors.accent()
-                    } else {
-                        AppContentColors.secondaryText()
-                    },
-                    fontSize = fontSize,
-                    maxLines = 1,
-                    softWrap = false,
-                    fontWeight = FontWeight.Medium
-                )
-            }
+            // 与选集面板订阅动作同一组图标语义：已订阅显示关闭铃铛。
+            AppIcon(
+                imageVector = if (isSubscribed == true) {
+                    Icons.Default.NotificationsOff
+                } else {
+                    Icons.Default.NotificationsActive
+                },
+                contentDescription = when {
+                    isSubscribed == true -> "取消订阅合集"
+                    isSubscribed == false -> "订阅合集"
+                    queryFailed -> "重试订阅查询"
+                    else -> null
+                },
+                tint = if (immersive) {
+                    Color.White.copy(alpha = if (isSubscribed == true) 0.92f else 0.78f)
+                } else if (isSubscribed == true) {
+                    AppContentColors.accent()
+                } else {
+                    AppContentColors.secondaryText()
+                },
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }

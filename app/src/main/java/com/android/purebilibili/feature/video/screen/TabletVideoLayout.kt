@@ -1591,7 +1591,6 @@ private fun TabletCollectionPane(
                     collectionId = ugcSeason.id,
                     currentBvid = currentBvid,
                     currentAid = currentAid,
-                    fontSize = MaterialTheme.typography.labelMedium.fontSize,
                 )
             }
         }
