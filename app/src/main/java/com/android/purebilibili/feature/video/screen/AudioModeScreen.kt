@@ -55,6 +55,7 @@ import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
 import com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
+import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.PlayMode
 import com.android.purebilibili.feature.video.state.rememberVideoPlayerState
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
@@ -315,6 +316,14 @@ fun AudioModeScreen(
         null
     }
     val player = standalonePlayerState?.player ?: viewModel.currentPlayer
+    DisposableEffect(player) {
+        val audioModePlayer = player
+        val miniPlayerManager = MiniPlayerManager.getInstance(context)
+        audioModePlayer?.let(miniPlayerManager::enterAudioMode)
+        onDispose {
+            audioModePlayer?.let(miniPlayerManager::exitAudioMode)
+        }
+    }
 
     // 复用旧 Success 进入（如小横条展开）时播放器可能已被释放：无 player 且入口
     // 未携带 bvid 时，用缓存内容强制重载自愈，避免停留在只有封面的死页面。

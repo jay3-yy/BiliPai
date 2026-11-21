@@ -1024,6 +1024,8 @@ object LogCollector {
                     appendLine("构建: ${BuildConfig.BUILD_TYPE} / ${BuildConfig.BUILD_COMMIT_SHA}")
                     appendLine("设备信息: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
                     appendLine("Android版本: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+                    appendLine("系统构建指纹: ${android.os.Build.FINGERPRINT}")
+                    appendLine("应用目标 API: ${context.applicationInfo.targetSdkVersion}")
                     appendLine("基础诊断: 默认保留，滚动上限 64KB")
                     appendLine("增强诊断: ${if (Logger.areVerboseRuntimeLogsEnabled()) "已开启" else "未开启"}")
                     appendLine("内容: ${if (crashContent.isNullOrBlank()) "无崩溃快照" else "最近崩溃快照"}；" +
