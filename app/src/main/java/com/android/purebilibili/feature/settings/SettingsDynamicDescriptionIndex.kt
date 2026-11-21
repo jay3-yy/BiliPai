@@ -29,6 +29,7 @@ private val settingsDynamicDescriptionIndex = mapOf(
     "playback.app_screenshot_capture_mode" to AppScreenshotCaptureMode.entries.joinToString("；") { it.description },
     "playback.bottom_progress_behavior" to BottomProgressBehavior.entries.joinToString("；") { it.description },
     "help.auto_check_update_enabled" to listOf(true, false).joinToString("；") { resolveAutoCheckUpdateSubtitle(it) },
+    "help.github_mirror_enabled" to listOf(true, false).joinToString("；") { resolveGithubMirrorEnabledSubtitle(it) },
     // 副标题来自字符串资源或运行时插值,静态索引扫描不到,这里按状态手工登记
     "animation.page_transition_style" to "选择普通页面进入与返回的动画样式",
     "animation.back_preview_progress" to "页面切换动画选择 Miuix 时，可调整滑动返回的预览幅度",

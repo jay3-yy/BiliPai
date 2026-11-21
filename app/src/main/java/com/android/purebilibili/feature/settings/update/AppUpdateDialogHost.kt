@@ -80,11 +80,19 @@ internal fun AppUpdateDialogHost(
     val onPrimaryAction: () -> Unit = {
         if (!installIfReady()) {
             if (preferredAsset != null) {
+                val primaryMirrorUrl = resolvePrimaryAppUpdateMirrorUrl(
+                    mirrorEnabled = mirrorPreference.enabled,
+                    source = mirrorSource,
+                    customPrefix = mirrorPreference.customPrefix,
+                    assetUrl = preferredAsset.downloadUrl,
+                    expectedSha256 = expectedSha256,
+                )
                 AppUpdateDownloadCoordinator.enqueue(
                     context = context,
                     asset = preferredAsset,
                     releaseVersion = update.latestVersion,
                     expectedSha256 = expectedSha256,
+                    mirrorUrl = primaryMirrorUrl,
                 )
             } else {
                 uriHandler.openUri(update.releaseUrl)
@@ -97,6 +105,7 @@ internal fun AppUpdateDialogHost(
         preferredAssetName = preferredAsset?.name,
         hasAsset = preferredAsset != null,
         showReleaseNotesOnly = showReleaseNotesOnly,
+        mirrorEnabled = mirrorPreference.enabled,
         mirrorSource = mirrorSource,
     )
     val actions = AppUpdateDialogActions(
@@ -138,6 +147,7 @@ internal data class AppUpdateDialogState(
     val preferredAssetName: String?,
     val hasAsset: Boolean,
     val showReleaseNotesOnly: Boolean,
+    val mirrorEnabled: Boolean,
     val mirrorSource: AppUpdateMirror,
 ) {
     val showPrimaryAction: Boolean get() = !showReleaseNotesOnly || hasAsset

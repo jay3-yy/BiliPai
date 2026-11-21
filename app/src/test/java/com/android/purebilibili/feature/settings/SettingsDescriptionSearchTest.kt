@@ -20,6 +20,16 @@ class SettingsDescriptionSearchTest {
     }
 
     @Test
+    fun githubMirrorToggleIsSearchableByTitleAliasAndDescription() {
+        listOf("使用镜像源", "下载镜像源", "加速更新、装扮与壁纸归档").forEach { query ->
+            val result = resolveSettingsSearchResults(query, Int.MAX_VALUE)
+                .first { it.settingId == "help.github_mirror_enabled" }
+            assertEquals("设置 / 帮助与关于 / 更新", result.path)
+            assertEquals(SettingsRootCategory.SYSTEM_ABOUT, result.page)
+        }
+    }
+
+    @Test
     fun snippetShowsMatchingStateInsteadOfTheFirstState() {
         assertEquals("关闭后仅手动检查", resolveSettingsSearchDescriptionSnippet("进入应用时自动检查新版本；关闭后仅手动检查", "手动检查"))
     }

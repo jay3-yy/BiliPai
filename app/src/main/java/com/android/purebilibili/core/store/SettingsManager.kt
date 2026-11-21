@@ -7185,6 +7185,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     // ==========  应用更新 ==========
     private val KEY_APP_UPDATE_CHANNEL = intPreferencesKey("app_update_channel")
+    private val KEY_APP_UPDATE_MIRROR_ENABLED = booleanPreferencesKey("app_update_mirror_enabled")
     private val KEY_APP_UPDATE_MIRROR = stringPreferencesKey("app_update_mirror")
     private val KEY_APP_UPDATE_CUSTOM_MIRROR = stringPreferencesKey("app_update_custom_mirror")
 
@@ -7219,24 +7220,39 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences -> preferences[KEY_APP_UPDATE_CHANNEL] = channel.value }
     }
 
+    private fun Preferences.toAppUpdateMirrorPreference(): AppUpdateMirrorPreference =
+        AppUpdateMirrorPreference(
+            enabled = this[KEY_APP_UPDATE_MIRROR_ENABLED] ?: false,
+            source = AppUpdateMirror.fromValue(this[KEY_APP_UPDATE_MIRROR]),
+            customPrefix = this[KEY_APP_UPDATE_CUSTOM_MIRROR].orEmpty(),
+        )
+
     internal fun getAppUpdateMirrorPreference(context: Context): Flow<AppUpdateMirrorPreference> =
-        context.settingsDataStore.data.map { preferences ->
-            AppUpdateMirrorPreference(
-                source = AppUpdateMirror.fromValue(preferences[KEY_APP_UPDATE_MIRROR]),
-                customPrefix = preferences[KEY_APP_UPDATE_CUSTOM_MIRROR].orEmpty(),
-            )
-        }.distinctUntilChanged()
+        context.settingsDataStore.data
+            .map { preferences -> preferences.toAppUpdateMirrorPreference() }
+            .distinctUntilChanged()
+
+    internal suspend fun setAppUpdateMirrorEnabled(context: Context, enabled: Boolean) {
+        val updated = context.settingsDataStore.edit { preferences ->
+            preferences[KEY_APP_UPDATE_MIRROR_ENABLED] = enabled
+        }
+        GithubMirrorStore.save(context, updated.toAppUpdateMirrorPreference())
+    }
 
     internal suspend fun setAppUpdateMirror(context: Context, source: AppUpdateMirror) {
-        context.settingsDataStore.edit { preferences -> preferences[KEY_APP_UPDATE_MIRROR] = source.name }
+        val updated = context.settingsDataStore.edit { preferences ->
+            preferences[KEY_APP_UPDATE_MIRROR] = source.name
+        }
+        GithubMirrorStore.save(context, updated.toAppUpdateMirrorPreference())
     }
 
     internal suspend fun setAppUpdateCustomMirror(context: Context, prefix: String, useAsDefault: Boolean) {
         val normalizedPrefix = requireNotNull(normalizeAppUpdateMirrorPrefix(prefix))
-        context.settingsDataStore.edit { preferences ->
+        val updated = context.settingsDataStore.edit { preferences ->
             preferences[KEY_APP_UPDATE_CUSTOM_MIRROR] = normalizedPrefix
             if (useAsDefault) preferences[KEY_APP_UPDATE_MIRROR] = AppUpdateMirror.CUSTOM.name
         }
+        GithubMirrorStore.save(context, updated.toAppUpdateMirrorPreference())
     }
     
     // ==========  隐私无痕模式 ==========

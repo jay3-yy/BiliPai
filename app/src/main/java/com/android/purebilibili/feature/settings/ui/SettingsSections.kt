@@ -1961,7 +1961,7 @@ fun AboutSection(
     }
     var detailDialogContent by remember { mutableStateOf<AppBuildInfoDialogContent?>(null) }
     val easterEggTint = rememberSettingsEntryTint(AppSemanticAccentRole.TERTIARY, AppContentColors.warning())
-    val updateSiblingTints = rememberSettingsSiblingIconTints(6, paletteOffset = 3)
+    val updateSiblingTints = rememberSettingsSiblingIconTints(8, paletteOffset = 3)
     val licensesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_LICENSES)
     val openSourceHomeVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_HOME)
     val checkUpdateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CHECK_UPDATE)
@@ -2178,7 +2178,11 @@ fun AboutSection(
             onSelectionChange = onAppUpdateChannelChange
         )
         SettingsAdaptiveDivider()
-        AppUpdateMirrorPreferences(iconTint = updateSiblingTints[5])
+        AppUpdateMirrorPreferences(
+            switchIconTint = updateSiblingTints[5],
+            sourceIconTint = updateSiblingTints[6],
+            addressIconTint = updateSiblingTints[7],
+        )
     }
     Spacer(modifier = Modifier.height(12.dp))
 
@@ -2207,35 +2211,55 @@ fun AboutSection(
 }
 
 @Composable
-private fun AppUpdateMirrorPreferences(iconTint: Color) {
+private fun AppUpdateMirrorPreferences(
+    switchIconTint: Color,
+    sourceIconTint: Color,
+    addressIconTint: Color,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val preference = rememberAppUpdateMirrorPreference()
     var editCustomMirror by rememberSaveable { mutableStateOf(false) }
-    SettingsSingleChoicePreference(
-        title = "下载镜像源",
-        options = AppUpdateMirror.entries.map { mirror ->
-            com.android.purebilibili.core.ui.components.AppSegmentOption(value = mirror, label = mirror.label)
-        },
-        selectedValue = preference.source,
-        icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR),
-        iconTint = iconTint,
-        onSelectionChange = { mirror ->
-            if (mirror == AppUpdateMirror.CUSTOM && preference.customPrefix.isEmpty()) {
-                editCustomMirror = true
-            } else {
-                scope.launch { SettingsManager.setAppUpdateMirror(context, mirror) }
-            }
-        },
-    )
-    if (preference.source == AppUpdateMirror.CUSTOM) {
-        SettingsAdaptiveDivider()
-        SettingClickableItem(
-            icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR_ADDRESS),
-            title = "自定义源地址",
-            subtitle = preference.customPrefix.takeIf(String::isNotEmpty),
-            onClick = { editCustomMirror = true },
+    SettingsItemAnchor("help.github_mirror_enabled") {
+        SettingSwitchItem(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR_ENABLED),
+            title = settingItemTitle("help.github_mirror_enabled"),
+            subtitle = resolveGithubMirrorEnabledSubtitle(preference.enabled),
+            checked = preference.enabled,
+            onCheckedChange = { enabled ->
+                scope.launch { SettingsManager.setAppUpdateMirrorEnabled(context, enabled) }
+            },
+            iconTint = switchIconTint,
         )
+    }
+    if (preference.enabled) {
+        SettingsAdaptiveDivider()
+        SettingsSingleChoicePreference(
+            title = "镜像源",
+            options = AppUpdateMirror.entries.map { mirror ->
+                com.android.purebilibili.core.ui.components.AppSegmentOption(value = mirror, label = mirror.label)
+            },
+            selectedValue = preference.source,
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR),
+            iconTint = sourceIconTint,
+            onSelectionChange = { mirror ->
+                if (mirror == AppUpdateMirror.CUSTOM && preference.customPrefix.isEmpty()) {
+                    editCustomMirror = true
+                } else {
+                    scope.launch { SettingsManager.setAppUpdateMirror(context, mirror) }
+                }
+            },
+        )
+        if (preference.source == AppUpdateMirror.CUSTOM) {
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR_ADDRESS),
+                title = "自定义源地址",
+                subtitle = preference.customPrefix.takeIf(String::isNotEmpty) ?: "点击填写 HTTPS 镜像前缀",
+                iconTint = addressIconTint,
+                onClick = { editCustomMirror = true },
+            )
+        }
     }
     if (editCustomMirror) {
         AppUpdateCustomMirrorDialog(

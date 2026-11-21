@@ -48,6 +48,74 @@ class AppUpdateMirrorPolicyTest {
     }
 
     @Test
+    fun `mirror preference defaults to disabled with GHFast`() {
+        val preference = AppUpdateMirrorPreference()
+        assertFalse(preference.enabled)
+        assertEquals(AppUpdateMirror.GHFAST, preference.source)
+        assertEquals("", preference.customPrefix)
+    }
+
+    @Test
+    fun `primary update download uses mirror only when enabled with valid sha256 and prefix`() {
+        val sha256 = "a1b2".repeat(16)
+        assertNull(
+            resolvePrimaryAppUpdateMirrorUrl(
+                mirrorEnabled = false,
+                source = AppUpdateMirror.GHFAST,
+                customPrefix = "",
+                assetUrl = assetUrl,
+                expectedSha256 = sha256,
+            ),
+        )
+        assertNull(
+            resolvePrimaryAppUpdateMirrorUrl(
+                mirrorEnabled = true,
+                source = AppUpdateMirror.GHFAST,
+                customPrefix = "",
+                assetUrl = assetUrl,
+                expectedSha256 = null,
+            ),
+        )
+        assertNull(
+            resolvePrimaryAppUpdateMirrorUrl(
+                mirrorEnabled = true,
+                source = AppUpdateMirror.GHFAST,
+                customPrefix = "",
+                assetUrl = assetUrl,
+                expectedSha256 = "invalid",
+            ),
+        )
+        assertNull(
+            resolvePrimaryAppUpdateMirrorUrl(
+                mirrorEnabled = true,
+                source = AppUpdateMirror.CUSTOM,
+                customPrefix = "",
+                assetUrl = assetUrl,
+                expectedSha256 = sha256,
+            ),
+        )
+        assertEquals(
+            "https://ghfast.top/$assetUrl",
+            resolvePrimaryAppUpdateMirrorUrl(
+                mirrorEnabled = true,
+                source = AppUpdateMirror.GHFAST,
+                customPrefix = "",
+                assetUrl = assetUrl,
+                expectedSha256 = sha256,
+            ),
+        )
+    }
+
+    @Test
+    fun `mirror toggle subtitles stay non blank and distinct`() {
+        val enabledSubtitle = resolveGithubMirrorEnabledSubtitle(true)
+        val disabledSubtitle = resolveGithubMirrorEnabledSubtitle(false)
+        assertTrue(enabledSubtitle.isNotBlank())
+        assertTrue(disabledSubtitle.isNotBlank())
+        assertTrue(enabledSubtitle != disabledSubtitle)
+    }
+
+    @Test
     fun `mirror downloads require a full SHA-256 digest`() {
         assertTrue(isAppUpdateSha256("a1B2".repeat(16)))
         assertFalse(isAppUpdateSha256(null))

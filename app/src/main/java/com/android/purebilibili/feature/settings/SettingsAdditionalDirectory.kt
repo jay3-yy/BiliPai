@@ -204,6 +204,19 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("diagnostics.analytics_enabled", "使用情况统计", SettingsRootCategory.PLAYER_DIAGNOSTICS, "diagnostics_options", { context -> com.android.purebilibili.core.store.SettingsManager.getAnalyticsEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
     PlaybackSettingItem("diagnostics.enhanced_diagnostic_logging_enabled", "详细运行日志", SettingsRootCategory.PLAYER_DIAGNOSTICS, "diagnostics_options", { context -> com.android.purebilibili.core.store.SettingsManager.getEnhancedDiagnosticLoggingEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
     PlaybackSettingItem("help.auto_check_update_enabled", "自动检查更新", SettingsRootCategory.SYSTEM_ABOUT, "help_options", { context -> com.android.purebilibili.core.store.SettingsManager.getAutoCheckAppUpdate(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.ABOUT_SUPPORT, openCategory = true),
+    PlaybackSettingItem(
+        settingId = "help.github_mirror_enabled",
+        title = "使用镜像源",
+        page = SettingsRootCategory.SYSTEM_ABOUT,
+        sectionKey = "help_options",
+        observeValue = { context ->
+            com.android.purebilibili.core.store.SettingsManager.getAppUpdateMirrorPreference(context)
+                .map { if (it.enabled) "开启 · ${it.source.label}" else "关闭" }
+        },
+        aliases = listOf("镜像源", "下载镜像源", "镜像下载", "GitHub镜像", "GitHub加速", "GHFast", "GH-Proxy", "HiWiki", "自定义源", "mirror"),
+        target = SettingsSearchTarget.ABOUT_SUPPORT,
+        openCategory = true,
+    ),
     PlaybackSettingItem("help.easter_egg_enabled", "趣味彩蛋", SettingsRootCategory.SYSTEM_ABOUT, "help_options", { context -> com.android.purebilibili.core.store.SettingsManager.getEasterEggEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.ABOUT_SUPPORT, openCategory = true),
     PlaybackSettingItem("playback.video_codec_preference", "优先使用", SettingsRootCategory.VIDEO_DECODER, SettingsSearchFocusIds.PLAYBACK_DECODER, { context -> com.android.purebilibili.core.store.SettingsManager .getVideoCodec(context).map { when (it) { "avc1" -> "AVC"; "hev1" -> "HEVC"; "av01" -> "AV1"; else -> it } } }, target = SettingsSearchTarget.PLAYBACK),
     PlaybackSettingItem("playback.video_second_codec_preference", "无法播放时改用", SettingsRootCategory.VIDEO_DECODER, SettingsSearchFocusIds.PLAYBACK_DECODER, { context -> com.android.purebilibili.core.store.SettingsManager .getVideoSecondCodec(context).map { when (it) { "avc1" -> "AVC"; "hev1" -> "HEVC"; "av01" -> "AV1"; else -> it } } }, target = SettingsSearchTarget.PLAYBACK),
