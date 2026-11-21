@@ -189,53 +189,7 @@ internal fun HomeStyleSingleColumnVideoCard(
             .diskCacheKey(stationaryCoverUrl)
             .build()
     }
-    val triggerClick by rememberUpdatedState(appActionWithFeedback {
-        if (CardPositionManager.isVideoNavigationDebounceActive()) {
-            // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
-            return@appActionWithFeedback
-        }
-        cardCoordinates.value?.takeIf { it.isAttached }?.let { coordinates ->
-            val bounds = coordinates.videoCardSourceBoundsInRoot()
-            val sourceCoverBounds = coverCoordinates.value
-                ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
-            CardPositionManager.recordVideoCardPosition(
-                bvid = video.bvid,
-                sourceRoute = sourceRoute,
-                bounds = bounds,
-                screenWidth = screenWidthPx,
-                screenHeight = screenHeightPx,
-                density = density.density,
-                sourceCornerDp = cardCornerDp.value.roundToInt(),
-                coverBounds = sourceCoverBounds,
-                sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
-                infoBounds = infoCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
-                sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
-                    title = video.title,
-                    ownerName = video.owner.name,
-                    ownerFaceUrl = video.owner.face,
-                    recommendationReason = video.recommendationReason,
-                    viewText = FormatUtils.formatStat(video.stat.view.toLong()),
-                    danmakuText = FormatUtils.formatStat(video.stat.danmaku.toLong()),
-                    durationText = FormatUtils.formatDuration(video.duration),
-                    followed = isFollowing || video.isFollowed,
-                    // Single-column paints play/danmaku in the info column (not on cover only).
-                    infoPresentation = com.android.purebilibili.core.ui.transition
-                        .resolveVideoCardSourceInfoPresentation(
-                            publishTimeText = publishTimeText,
-                            showStatsInInfo = true,
-                            showOverflowMenu = onMoreClick != null || trailingContent != null,
-                        ),
-                    coverPresentation = VideoCardSourceCoverPresentation(
-                        cornerRadiusDp = coverCornerDp.value,
-                        showDurationOnCover = durationStyle !=
-                            com.android.purebilibili.core.store.HomeDurationStyle.HIDDEN,
-                    ),
-                    coverUrl = stationaryCoverUrl,
-                    coverCacheKey = stationaryCoverUrl,
-                ).withMeasuredCoverDecodeSize(sourceCoverBounds),
-            )
-            nativeCardSnapshot.capture()
-        }
+    val continueNavigation: () -> Unit = {
         if (sharedTransitionEnabled && !transitionEnabled) {
             forceSharedTransitionForClick = true
             clickScope.launch {
@@ -246,7 +200,57 @@ internal fun HomeStyleSingleColumnVideoCard(
         } else {
             latestOnClick.value()
         }
-        Unit
+    }
+    val triggerClick by rememberUpdatedState(appActionWithFeedback {
+        if (CardPositionManager.isVideoNavigationDebounceActive()) {
+            // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
+            return@appActionWithFeedback
+        }
+        val coordinates = cardCoordinates.value?.takeIf { it.isAttached }
+            ?: run {
+                continueNavigation()
+                return@appActionWithFeedback
+            }
+        val bounds = coordinates.videoCardSourceBoundsInRoot()
+        val sourceCoverBounds = coverCoordinates.value
+            ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
+        CardPositionManager.recordVideoCardPosition(
+            bvid = video.bvid,
+            sourceRoute = sourceRoute,
+            bounds = bounds,
+            screenWidth = screenWidthPx,
+            screenHeight = screenHeightPx,
+            density = density.density,
+            sourceCornerDp = cardCornerDp.value.roundToInt(),
+            coverBounds = sourceCoverBounds,
+            sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+            infoBounds = infoCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
+            sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                title = video.title,
+                ownerName = video.owner.name,
+                ownerFaceUrl = video.owner.face,
+                recommendationReason = video.recommendationReason,
+                viewText = FormatUtils.formatStat(video.stat.view.toLong()),
+                danmakuText = FormatUtils.formatStat(video.stat.danmaku.toLong()),
+                durationText = FormatUtils.formatDuration(video.duration),
+                followed = isFollowing || video.isFollowed,
+                // Single-column paints play/danmaku in the info column (not on cover only).
+                infoPresentation = com.android.purebilibili.core.ui.transition
+                    .resolveVideoCardSourceInfoPresentation(
+                        publishTimeText = publishTimeText,
+                        showStatsInInfo = true,
+                        showOverflowMenu = onMoreClick != null || trailingContent != null,
+                    ),
+                coverPresentation = VideoCardSourceCoverPresentation(
+                    cornerRadiusDp = coverCornerDp.value,
+                    showDurationOnCover = durationStyle !=
+                        com.android.purebilibili.core.store.HomeDurationStyle.HIDDEN,
+                ),
+                coverUrl = stationaryCoverUrl,
+                coverCacheKey = stationaryCoverUrl,
+            ).withMeasuredCoverDecodeSize(sourceCoverBounds),
+        )
+        nativeCardSnapshot.captureThen(continueNavigation)
     })
     val moreHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.MENUS)
     HorizontalVideoCardFrame(

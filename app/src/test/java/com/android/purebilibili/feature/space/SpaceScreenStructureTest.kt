@@ -138,7 +138,7 @@ class SpaceScreenStructureTest {
         listOf(homeCard, aggregateCard, topCard, archiveCard).forEach { card ->
             assertTrue(card.contains("rememberNativeVideoCardSnapshotController("))
             assertTrue(card.contains("nativeCardSnapshot.modifier"))
-            assertTrue(card.contains("nativeCardSnapshot.capture()"))
+            assertTrue(card.contains("nativeCardSnapshot.captureThen("))
         }
         assertTrue(homeCard.contains("nativeCardSnapshot.coverOverlayModifier"))
     }

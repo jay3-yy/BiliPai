@@ -279,57 +279,57 @@ fun RelatedVideoItem(
             // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
             return@relatedClick
         }
-        cardCoordinatesRef.value
+        val bounds = cardCoordinatesRef.value
             ?.takeIf { it.isAttached }
             ?.videoCardSourceBoundsInRoot()
-            ?.let { bounds ->
-                val sourceCoverBounds = coverCoordinatesRef.value
-                    ?.takeIf { it.isAttached }
-                    ?.videoCardSourceBoundsInRoot()
-                CardPositionManager.recordVideoCardPosition(
-                    bvid = video.bvid,
-                    sourceRoute = sourceRoute,
-                    bounds = bounds,
-                    screenWidth = screenWidthPx,
-                    screenHeight = screenHeightPx,
-                    density = densityValue,
-                    sourceCornerDp = cardCornerRadiusDp,
-                    coverBounds = sourceCoverBounds,
-                    sourceLayout = if (stacked) {
-                        VideoCardSourceLayout.STACKED
-                    } else {
-                        VideoCardSourceLayout.SIDE_BY_SIDE
-                    },
-                    infoBounds = infoCoordinatesRef.value
-                        ?.takeIf { it.isAttached }
-                        ?.videoCardSourceBoundsInRoot(),
-                    sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
-                        title = video.title,
-                        ownerName = video.owner.name,
-                        ownerFaceUrl = video.owner.face,
-                        viewText = FormatUtils.formatStat(video.stat.view.toLong()),
-                        danmakuText = FormatUtils.formatStat(video.stat.danmaku.toLong()),
-                        durationText = FormatUtils.formatDuration(video.duration),
-                        followed = isFollowed,
-                        // Related horizontal card keeps play/danmaku in the info column.
-                        infoPresentation = com.android.purebilibili.core.ui.transition
-                            .resolveVideoCardSourceInfoPresentation(
-                                publishTimeText = FormatUtils.formatPublishTime(video.pubdate),
-                                showStatsInInfo = true,
-                                showOverflowMenu = onMoreClick != null,
-                            ),
-                        coverPresentation = VideoCardSourceCoverPresentation(
-                            cornerRadiusDp = coverCornerDp.value,
-                            showDurationOnCover = true,
-                        ),
-                        coverUrl = stationaryCoverUrl,
-                        coverCacheKey = stationaryCoverUrl,
-                    ).withMeasuredCoverDecodeSize(sourceCoverBounds),
-                )
-                nativeCardSnapshot.capture()
+            ?: run {
+                onClick()
+                return@relatedClick
             }
-        onClick()
-        Unit
+        val sourceCoverBounds = coverCoordinatesRef.value
+            ?.takeIf { it.isAttached }
+            ?.videoCardSourceBoundsInRoot()
+        CardPositionManager.recordVideoCardPosition(
+            bvid = video.bvid,
+            sourceRoute = sourceRoute,
+            bounds = bounds,
+            screenWidth = screenWidthPx,
+            screenHeight = screenHeightPx,
+            density = densityValue,
+            sourceCornerDp = cardCornerRadiusDp,
+            coverBounds = sourceCoverBounds,
+            sourceLayout = if (stacked) {
+                VideoCardSourceLayout.STACKED
+            } else {
+                VideoCardSourceLayout.SIDE_BY_SIDE
+            },
+            infoBounds = infoCoordinatesRef.value
+                ?.takeIf { it.isAttached }
+                ?.videoCardSourceBoundsInRoot(),
+            sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                title = video.title,
+                ownerName = video.owner.name,
+                ownerFaceUrl = video.owner.face,
+                viewText = FormatUtils.formatStat(video.stat.view.toLong()),
+                danmakuText = FormatUtils.formatStat(video.stat.danmaku.toLong()),
+                durationText = FormatUtils.formatDuration(video.duration),
+                followed = isFollowed,
+                // Related horizontal card keeps play/danmaku in the info column.
+                infoPresentation = com.android.purebilibili.core.ui.transition
+                    .resolveVideoCardSourceInfoPresentation(
+                        publishTimeText = FormatUtils.formatPublishTime(video.pubdate),
+                        showStatsInInfo = true,
+                        showOverflowMenu = onMoreClick != null,
+                    ),
+                coverPresentation = VideoCardSourceCoverPresentation(
+                    cornerRadiusDp = coverCornerDp.value,
+                    showDurationOnCover = true,
+                ),
+                coverUrl = stationaryCoverUrl,
+                coverCacheKey = stationaryCoverUrl,
+            ).withMeasuredCoverDecodeSize(sourceCoverBounds),
+        )
+        nativeCardSnapshot.captureThen(onClick)
     }
     // 排版对齐首页单列卡片:标题用 feed 紧凑级,统计用 labelSmall。
     val contentTypography = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography()

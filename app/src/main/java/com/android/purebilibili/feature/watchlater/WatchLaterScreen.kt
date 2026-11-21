@@ -1828,52 +1828,55 @@ private fun WatchLaterVideoCard(
     }
     val cardCornerRadiusDp = AppShapes.containerCornerDp(ContainerLevel.Card).value.toInt()
     val cardClick = watchLaterCardClick@{
-        if (!isBatchMode) {
-            if (CardPositionManager.isVideoNavigationDebounceActive()) {
-                // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
-                return@watchLaterCardClick
-            }
-            cardBoundsRef.value?.let { bounds ->
-                val sourceCoverBounds = coverBoundsRef.value
-                CardPositionManager.recordVideoCardPosition(
-                    bvid = item.bvid,
-                    sourceRoute = sourceRoute,
-                    bounds = bounds,
-                    screenWidth = screenWidthPx,
-                    screenHeight = screenHeightPx,
-                    sourceCornerDp = cardCornerRadiusDp,
-                    coverBounds = sourceCoverBounds,
-                    sourceLayout = if (stacked) VideoCardSourceLayout.STACKED else VideoCardSourceLayout.SIDE_BY_SIDE,
-                    sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
-                        title = item.title,
-                        ownerName = item.owner.name.ifBlank { "未知UP主" },
-                        ownerFaceUrl = item.owner.face,
-                        viewText = formatNumber(item.stat.view),
-                        danmakuText = formatNumber(item.stat.danmaku),
-                        durationText = formatDuration(item.duration),
-                        infoPresentation = com.android.purebilibili.core.ui.transition
-                            .resolveVideoCardSourceInfoPresentation(
-                                publishTimeText = "",
-                                showStatsInInfo = true,
-                                showOverflowMenu = false,
-                            ),
-                        coverPresentation = VideoCardSourceCoverPresentation(
-                            showDurationOnCover = true,
-                            showHistoryProgressBar = item.duration > 0 && item.progress > 0,
-                            historyProgressFraction = if (item.duration > 0) {
-                                (item.progress.toFloat() / item.duration).coerceIn(0f, 1f)
-                            } else {
-                                0f
-                            },
-                        ),
-                        coverUrl = stationaryCoverUrl,
-                        coverCacheKey = stationaryCoverUrl,
-                    ).withMeasuredCoverDecodeSize(sourceCoverBounds),
-                )
-                nativeCardSnapshot.capture()
-            }
+        if (isBatchMode) {
+            onClick()
+            return@watchLaterCardClick
         }
-        onClick()
+        if (CardPositionManager.isVideoNavigationDebounceActive()) {
+            // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
+            return@watchLaterCardClick
+        }
+        val bounds = cardBoundsRef.value ?: run {
+            onClick()
+            return@watchLaterCardClick
+        }
+        val sourceCoverBounds = coverBoundsRef.value
+        CardPositionManager.recordVideoCardPosition(
+            bvid = item.bvid,
+            sourceRoute = sourceRoute,
+            bounds = bounds,
+            screenWidth = screenWidthPx,
+            screenHeight = screenHeightPx,
+            sourceCornerDp = cardCornerRadiusDp,
+            coverBounds = sourceCoverBounds,
+            sourceLayout = if (stacked) VideoCardSourceLayout.STACKED else VideoCardSourceLayout.SIDE_BY_SIDE,
+            sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                title = item.title,
+                ownerName = item.owner.name.ifBlank { "未知UP主" },
+                ownerFaceUrl = item.owner.face,
+                viewText = formatNumber(item.stat.view),
+                danmakuText = formatNumber(item.stat.danmaku),
+                durationText = formatDuration(item.duration),
+                infoPresentation = com.android.purebilibili.core.ui.transition
+                    .resolveVideoCardSourceInfoPresentation(
+                        publishTimeText = "",
+                        showStatsInInfo = true,
+                        showOverflowMenu = false,
+                    ),
+                coverPresentation = VideoCardSourceCoverPresentation(
+                    showDurationOnCover = true,
+                    showHistoryProgressBar = item.duration > 0 && item.progress > 0,
+                    historyProgressFraction = if (item.duration > 0) {
+                        (item.progress.toFloat() / item.duration).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    },
+                ),
+                coverUrl = stationaryCoverUrl,
+                coverCacheKey = stationaryCoverUrl,
+            ).withMeasuredCoverDecodeSize(sourceCoverBounds),
+        )
+        nativeCardSnapshot.captureThen(onClick)
     }
     val useCardShellSharedBounds = shouldUseVideoCardShellSharedBounds(
         sourceRoute = sourceRoute,

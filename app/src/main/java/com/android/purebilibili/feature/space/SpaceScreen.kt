@@ -4651,36 +4651,37 @@ private fun SpaceHomeVideoCard(
                     // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
                     return@spaceCardClick
                 }
-                cardBounds?.let { bounds ->
-                    CardPositionManager.recordVideoCardPosition(
-                        bvid = sharedTransitionKey.orEmpty(),
-                        sourceRoute = sourceRoute,
-                        bounds = bounds,
-                        screenWidth = screenWidthPx,
-                        screenHeight = screenHeightPx,
-                        density = densityValue,
-                        sourceCornerDp = cardCornerRadiusDp,
-                        coverBounds = coverBounds,
-                        sourceLayout = VideoCardSourceLayout.STACKED,
-                        sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
-                            title = video.title,
-                            ownerName = video.author,
-                            ownerFaceUrl = "",
-                            viewText = FormatUtils.formatStat(video.play.toLong()),
-                            danmakuText = FormatUtils.formatStat(video.comment.toLong()),
-                            durationText = video.length,
-                            infoPresentation = com.android.purebilibili.core.ui.transition
-                                .resolveVideoCardSourceInfoPresentation(
-                                    publishTimeText = FormatUtils.formatPublishTime(video.created),
-                                    showStatsInInfo = true,
-                                ),
-                            coverUrl = stationaryCoverUrl,
-                            coverCacheKey = stationaryCoverUrl,
-                        ).withMeasuredCoverDecodeSize(coverBounds),
-                    )
-                    nativeCardSnapshot.capture()
+                val bounds = cardBounds ?: run {
+                    onClick()
+                    return@spaceCardClick
                 }
-                onClick()
+                CardPositionManager.recordVideoCardPosition(
+                    bvid = sharedTransitionKey.orEmpty(),
+                    sourceRoute = sourceRoute,
+                    bounds = bounds,
+                    screenWidth = screenWidthPx,
+                    screenHeight = screenHeightPx,
+                    density = densityValue,
+                    sourceCornerDp = cardCornerRadiusDp,
+                    coverBounds = coverBounds,
+                    sourceLayout = VideoCardSourceLayout.STACKED,
+                    sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                        title = video.title,
+                        ownerName = video.author,
+                        ownerFaceUrl = "",
+                        viewText = FormatUtils.formatStat(video.play.toLong()),
+                        danmakuText = FormatUtils.formatStat(video.comment.toLong()),
+                        durationText = video.length,
+                        infoPresentation = com.android.purebilibili.core.ui.transition
+                            .resolveVideoCardSourceInfoPresentation(
+                                publishTimeText = FormatUtils.formatPublishTime(video.created),
+                                showStatsInInfo = true,
+                            ),
+                        coverUrl = stationaryCoverUrl,
+                        coverCacheKey = stationaryCoverUrl,
+                    ).withMeasuredCoverDecodeSize(coverBounds),
+                )
+                nativeCardSnapshot.captureThen(onClick)
             }
     ) {
         Box(
@@ -4872,36 +4873,37 @@ private fun SpaceAggregateMediaCard(
                     // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
                     return@spaceCardClick
                 }
-                cardBounds?.let { bounds ->
-                    CardPositionManager.recordVideoCardPosition(
-                        bvid = sharedTransitionKey.orEmpty(),
-                        sourceRoute = sourceRoute,
-                        bounds = bounds,
-                        screenWidth = screenWidthPx,
-                        screenHeight = screenHeightPx,
-                        density = densityValue,
-                        sourceCornerDp = cardCornerRadiusDp,
-                        coverBounds = coverBounds,
-                        sourceLayout = VideoCardSourceLayout.STACKED,
-                        sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
-                            title = item.title,
-                            ownerName = item.author,
-                            ownerFaceUrl = "",
-                            viewText = FormatUtils.formatStat(item.play.toLong()),
-                            danmakuText = FormatUtils.formatStat(item.danmaku.toLong()),
-                            durationText = item.length,
-                            infoPresentation = com.android.purebilibili.core.ui.transition
-                                .resolveVideoCardSourceInfoPresentation(
-                                    publishTimeText = "",
-                                    showStatsInInfo = true,
-                                ),
-                            coverUrl = stationaryCoverUrl,
-                            coverCacheKey = stationaryCoverUrl,
-                        ).withMeasuredCoverDecodeSize(coverBounds),
-                    )
-                    nativeCardSnapshot.capture()
+                val bounds = cardBounds ?: run {
+                    onClick()
+                    return@spaceCardClick
                 }
-                onClick()
+                CardPositionManager.recordVideoCardPosition(
+                    bvid = sharedTransitionKey.orEmpty(),
+                    sourceRoute = sourceRoute,
+                    bounds = bounds,
+                    screenWidth = screenWidthPx,
+                    screenHeight = screenHeightPx,
+                    density = densityValue,
+                    sourceCornerDp = cardCornerRadiusDp,
+                    coverBounds = coverBounds,
+                    sourceLayout = VideoCardSourceLayout.STACKED,
+                    sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                        title = item.title,
+                        ownerName = item.author,
+                        ownerFaceUrl = "",
+                        viewText = FormatUtils.formatStat(item.play.toLong()),
+                        danmakuText = FormatUtils.formatStat(item.danmaku.toLong()),
+                        durationText = item.length,
+                        infoPresentation = com.android.purebilibili.core.ui.transition
+                            .resolveVideoCardSourceInfoPresentation(
+                                publishTimeText = "",
+                                showStatsInInfo = true,
+                            ),
+                        coverUrl = stationaryCoverUrl,
+                        coverCacheKey = stationaryCoverUrl,
+                    ).withMeasuredCoverDecodeSize(coverBounds),
+                )
+                nativeCardSnapshot.captureThen(onClick)
             }
     ) {
         Box(
@@ -5233,43 +5235,44 @@ private fun SpaceArchiveListItemRow(
                     // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
                     return@spaceCardClick
                 }
-                cardBounds?.let { bounds ->
-                    CardPositionManager.recordVideoCardPosition(
-                        bvid = sharedTransitionKey.orEmpty(),
-                        sourceRoute = sourceRoute,
-                        bounds = bounds,
-                        screenWidth = screenWidthPx,
-                        screenHeight = screenHeightPx,
-                        density = densityValue,
-                        sourceCornerDp = cardCornerRadiusDp,
-                        coverBounds = coverBounds,
-                        sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
-                        sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
-                            title = title,
-                            ownerName = "",
-                            ownerFaceUrl = "",
-                            viewText = FormatUtils.formatStat(play),
-                            danmakuText = FormatUtils.formatStat(secondaryCount),
-                            durationText = duration,
-                            infoPresentation = com.android.purebilibili.core.ui.transition
-                                .resolveVideoCardSourceInfoPresentation(
-                                    publishTimeText = publishTime,
-                                    showStatsInInfo = true,
-                                    showOverflowMenu = true,
-                                ),
-                            coverPresentation = VideoCardSourceCoverPresentation(
-                                showDurationOnCover = duration.isNotBlank(),
-                                premiumBadgeText = badgeLabel.orEmpty(),
-                                showHistoryProgressBar = progressState?.showProgressBar == true,
-                                historyProgressFraction = progressState?.progressFraction ?: 0f,
-                            ),
-                            coverUrl = stationaryCoverUrl,
-                            coverCacheKey = stationaryCoverUrl,
-                        ).withMeasuredCoverDecodeSize(coverBounds),
-                    )
-                    nativeCardSnapshot.capture()
+                val bounds = cardBounds ?: run {
+                    onClick()
+                    return@spaceCardClick
                 }
-                onClick()
+                CardPositionManager.recordVideoCardPosition(
+                    bvid = sharedTransitionKey.orEmpty(),
+                    sourceRoute = sourceRoute,
+                    bounds = bounds,
+                    screenWidth = screenWidthPx,
+                    screenHeight = screenHeightPx,
+                    density = densityValue,
+                    sourceCornerDp = cardCornerRadiusDp,
+                    coverBounds = coverBounds,
+                    sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                    sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                        title = title,
+                        ownerName = "",
+                        ownerFaceUrl = "",
+                        viewText = FormatUtils.formatStat(play),
+                        danmakuText = FormatUtils.formatStat(secondaryCount),
+                        durationText = duration,
+                        infoPresentation = com.android.purebilibili.core.ui.transition
+                            .resolveVideoCardSourceInfoPresentation(
+                                publishTimeText = publishTime,
+                                showStatsInInfo = true,
+                                showOverflowMenu = true,
+                            ),
+                        coverPresentation = VideoCardSourceCoverPresentation(
+                            showDurationOnCover = duration.isNotBlank(),
+                            premiumBadgeText = badgeLabel.orEmpty(),
+                            showHistoryProgressBar = progressState?.showProgressBar == true,
+                            historyProgressFraction = progressState?.progressFraction ?: 0f,
+                        ),
+                        coverUrl = stationaryCoverUrl,
+                        coverCacheKey = stationaryCoverUrl,
+                    ).withMeasuredCoverDecodeSize(coverBounds),
+                )
+                nativeCardSnapshot.captureThen(onClick)
             },
         coverModifier = Modifier
                 .onGloballyPositioned { coordinates ->

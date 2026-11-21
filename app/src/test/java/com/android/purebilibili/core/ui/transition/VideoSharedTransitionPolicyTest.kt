@@ -547,7 +547,7 @@ class VideoSharedTransitionPolicyTest {
                 "$path is missing native snapshot capture",
             )
             assertTrue(
-                source.contains("nativeCardSnapshot.capture()"),
+                source.contains("nativeCardSnapshot.captureThen("),
                 "$path does not freeze native pixels after recording position",
             )
         }

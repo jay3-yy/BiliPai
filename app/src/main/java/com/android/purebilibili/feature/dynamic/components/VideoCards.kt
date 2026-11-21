@@ -137,47 +137,51 @@ fun VideoCardLarge(
             // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
             return@dynamicCardClick
         }
-        cardBoundsRef.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()?.let { bounds ->
-            val sourceCoverBounds = coverBoundsRef.value
-                ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
-            CardPositionManager.recordVideoCardPosition(
-                bvid = sourceIdentity,
-                sourceRoute = sourceRoute,
-                bounds = bounds,
-                screenWidth = screenWidthPx,
-                screenHeight = screenHeightPx,
-                density = density.density,
-                sourceCornerDp = 10,
-                coverBounds = sourceCoverBounds,
-                infoBounds = infoBoundsRef.value
-                    ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
-                sourceLayout = VideoCardSourceLayout.STACKED,
-                sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
-                    title = archive.title,
-                    ownerName = collectionTitle.takeIf { isCollection }.orEmpty(),
-                    ownerFaceUrl = "",
-                    viewText = archive.stat.play,
-                    danmakuText = archive.stat.danmaku,
-                    durationText = archive.duration_text,
-                    infoPresentation = com.android.purebilibili.core.ui.transition
-                        .resolveVideoCardSourceInfoPresentation(
-                            publishTimeText = "",
-                            // Dynamic cards paint duration/stats on the cover, not below it.
-                            showStatsInInfo = false,
-                        ),
-                    coverPresentation = VideoCardSourceCoverPresentation(
-                        showGradientMask = true,
-                        showStatsOnCover = true,
-                        showSecondaryStatOnCover = true,
-                        showDurationOnCover = true,
+        val bounds = cardBoundsRef.value
+            ?.takeIf { it.isAttached }
+            ?.videoCardSourceBoundsInRoot()
+            ?: run {
+                onClick()
+                return@dynamicCardClick
+            }
+        val sourceCoverBounds = coverBoundsRef.value
+            ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
+        CardPositionManager.recordVideoCardPosition(
+            bvid = sourceIdentity,
+            sourceRoute = sourceRoute,
+            bounds = bounds,
+            screenWidth = screenWidthPx,
+            screenHeight = screenHeightPx,
+            density = density.density,
+            sourceCornerDp = 10,
+            coverBounds = sourceCoverBounds,
+            infoBounds = infoBoundsRef.value
+                ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
+            sourceLayout = VideoCardSourceLayout.STACKED,
+            sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                title = archive.title,
+                ownerName = collectionTitle.takeIf { isCollection }.orEmpty(),
+                ownerFaceUrl = "",
+                viewText = archive.stat.play,
+                danmakuText = archive.stat.danmaku,
+                durationText = archive.duration_text,
+                infoPresentation = com.android.purebilibili.core.ui.transition
+                    .resolveVideoCardSourceInfoPresentation(
+                        publishTimeText = "",
+                        // Dynamic cards paint duration/stats on the cover, not below it.
+                        showStatsInInfo = false,
                     ),
-                    coverUrl = coverUrl,
-                    coverCacheKey = coverUrl,
-                ).withMeasuredCoverDecodeSize(sourceCoverBounds),
-            )
-            nativeCardSnapshot.capture()
-        }
-        onClick()
+                coverPresentation = VideoCardSourceCoverPresentation(
+                    showGradientMask = true,
+                    showStatsOnCover = true,
+                    showSecondaryStatOnCover = true,
+                    showDurationOnCover = true,
+                ),
+                coverUrl = coverUrl,
+                coverCacheKey = coverUrl,
+            ).withMeasuredCoverDecodeSize(sourceCoverBounds),
+        )
+        nativeCardSnapshot.captureThen(onClick)
     }
 
     var modifier = Modifier

@@ -228,9 +228,11 @@ internal fun HistoryPersonalCard(
                     coverUrl = stationaryCoverUrl,
                     coverCacheKey = stationaryCoverUrl,
                 ),
+                onClick = onClick,
             )
+        } else {
+            onClick()
         }
-        onClick()
     }
 
     val contentContainer = containerTarget?.let {

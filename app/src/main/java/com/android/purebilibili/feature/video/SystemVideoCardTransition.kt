@@ -44,6 +44,7 @@ internal data class SystemVideoCardCapability(
     /** 标准 SDK 与原生无缝门面并存，使用该门面的返回更新契约。 */
     val oplusSdkWindow: Boolean = false,
     val systemConditionSummary: String? = null,
+    val officialSupport: Int? = null,
 ) {
     val available: Boolean get() = method != CardTransitionMethod.STANDARD
 }
@@ -143,13 +144,14 @@ internal object SystemVideoCardTransition {
         activity: Activity,
         method: CardTransitionMethod,
     ): Boolean {
-        val sourceReady = enabled && source.hasUsableSourceGeometry && source.sourceAnchor != null &&
-            source.sourcePixelOwner != null
+        val hasPixelOwner = source.sourcePixelOwner != null
+        val sourceReady = enabled && source.hasUsableSourceGeometry && source.sourceAnchor != null && hasPixelOwner
         val capability = if (sourceReady) deviceCapability(activity, method) else null
         val supported = capability?.available
         val allowed = sourceReady && supported == true
         Logger.i("SystemVideoCardTransition", "入口判定: route=${source.sourceRoute} enabled=$enabled geometry=${source.hasUsableSourceGeometry} " +
-            "anchor=${source.sourceAnchor != null} requested=$method resolved=${capability?.method} allowed=$allowed " +
+            "anchor=${source.sourceAnchor != null} pixelOwner=$hasPixelOwner requested=$method " +
+            "resolved=${capability?.method} allowed=$allowed officialSupport=${capability?.officialSupport} " +
             "conditions=${capability?.systemConditionSummary}")
         return allowed
     }
@@ -165,33 +167,31 @@ internal object SystemVideoCardTransition {
         if (conditions?.blocked == true) {
             return SystemVideoCardCapability(systemConditionSummary = summary)
         }
-        if (checksOfficial && ViewAnimationManager.isViewAnimationSupported() > 0) {
+        val officialSupport = if (checksOfficial) ViewAnimationManager.isViewAnimationSupported() else null
+        val capability = SystemVideoCardCapability(systemConditionSummary = summary, officialSupport = officialSupport)
+        if (officialSupport != null && officialSupport > 0) {
             val extras = ViewAnimationManager.getViewAnimationExtras()
-            return SystemVideoCardCapability(
+            return capability.copy(
                 method = CardTransitionMethod.OFFICIAL,
                 configurableBlur = extras?.containsKey(ViewAnimationExtras.EXTRA_BLUR) == true,
                 backAnimMetadata = extras?.get(ViewAnimationExtras.EXTRA_BACK_ANIM_TYPE),
                 oplusSdkWindow = oplusSystemManager,
-                systemConditionSummary = summary,
             )
         }
         if (checksOplus && OplusVideoCardTransition.available) {
-            return SystemVideoCardCapability(
-                method = CardTransitionMethod.OPLUS_LEGACY,
-                systemConditionSummary = summary,
-            )
+            return capability.copy(method = CardTransitionMethod.OPLUS_LEGACY)
         }
         if ((automatic || method == CardTransitionMethod.VIVO_ONESHOT) && VivoVideoCardTransition.available) {
-            return SystemVideoCardCapability(
+            return capability.copy(
                 method = CardTransitionMethod.VIVO_ONESHOT,
                 configurableBlur = VivoVideoCardTransition.configurableBlur,
             )
         }
         // 保留可用的系统卡片展开。旧圆角协议的背景效果由系统控制。
         if ((automatic || method == CardTransitionMethod.XIAOMI_ROUNDED) && RoundedVideoCardTransition.available) {
-            return SystemVideoCardCapability(method = CardTransitionMethod.XIAOMI_ROUNDED)
+            return capability.copy(method = CardTransitionMethod.XIAOMI_ROUNDED)
         }
-        return SystemVideoCardCapability(systemConditionSummary = summary)
+        return capability
     }
 
     /** false 表示未启动窗口，调用方继续原有应用内导航；失效请求不得继续导航。 */

@@ -66,6 +66,7 @@ class VideoCardSourceAnchorUiTest {
     @Test
     fun partiallyVisibleCardKeepsCompleteSystemSourceWithInAppMorphDisabled() {
         var bounds: Rect? = null
+        var captureContinued = false
         lateinit var snapshot: NativeVideoCardSnapshotController
         val bvid = "BV1partial"
         compose.setContent {
@@ -84,15 +85,18 @@ class VideoCardSourceAnchorUiTest {
             }
         }
         compose.runOnIdle {
+            CardPositionManager.recordVideoCardPosition(
+                bvid = bvid,
+                sourceRoute = "home",
+                bounds = requireNotNull(bounds),
+                screenWidth = 360f,
+                screenHeight = 640f,
+            )
+            snapshot.captureThen { captureContinued = true }
+        }
+        compose.waitUntil(timeoutMillis = 2_000) { captureContinued }
+        compose.runOnIdle {
             try {
-                CardPositionManager.recordVideoCardPosition(
-                    bvid = bvid,
-                    sourceRoute = "home",
-                    bounds = requireNotNull(bounds),
-                    screenWidth = 360f,
-                    screenHeight = 640f,
-                )
-                snapshot.capture()
                 val anchor = requireNotNull(VideoCardSourceInstances.takeAnchor(bvid))
                 assertNull(anchor.boundsInRoot())
                 assertEquals(bounds, anchor.boundsInRoot(allowPartial = true))

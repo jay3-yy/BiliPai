@@ -40,27 +40,36 @@ internal object OplusVideoCardTransition {
     )
 
     private val protocol: Protocol? by lazy {
+        var member = "com.oplus.animation.OplusViewSeamless"
         try {
-            val facade = Class.forName("com.oplus.animation.OplusViewSeamless", false, null)
-            val callback = Class.forName("com.oplus.animation.OplusViewSeamless\$AnimationCallback", false, null)
-            Protocol(
-                facade.getMethod("setSeamlessView", View::class.java, Context::class.java,
-                    Bundle::class.java, callback),
-                facade.getMethod("skipBackAnim", Activity::class.java),
-                facade.getMethod("finishCurrentAnimation"),
-                ActivityOptions::class.java.getMethod("fromBundle", Bundle::class.java),
-                ActivityOptions::class.java.getMethod("getRemoteTransition"),
-                callback,
+            val facade = Class.forName(member, false, null)
+            member = "com.oplus.animation.OplusViewSeamless\$AnimationCallback"
+            val callback = Class.forName(member, false, null)
+
+            member = "OplusViewSeamless.setSeamlessView"
+            val open = facade.getMethod(
+                "setSeamlessView", View::class.java, Context::class.java, Bundle::class.java, callback,
             )
-        } catch (_: ClassNotFoundException) {
+            member = "OplusViewSeamless.skipBackAnim"
+            val skipBack = facade.getMethod("skipBackAnim", Activity::class.java)
+            member = "OplusViewSeamless.finishCurrentAnimation"
+            val cancel = facade.getMethod("finishCurrentAnimation")
+            member = "ActivityOptions.fromBundle"
+            val fromBundle = ActivityOptions::class.java.getMethod("fromBundle", Bundle::class.java)
+            member = "ActivityOptions.getRemoteTransition"
+            val remoteTransition = ActivityOptions::class.java.getMethod("getRemoteTransition")
+            Protocol(open, skipBack, cancel, fromBundle, remoteTransition, callback)
+        } catch (error: ClassNotFoundException) {
+            if (hasSystemManager) Logger.w(TAG, "旧无缝窗口协议类查找失败: member=$member error=$error")
             null
-        } catch (_: NoSuchMethodException) {
+        } catch (error: NoSuchMethodException) {
+            Logger.w(TAG, "旧无缝窗口协议方法查找失败: member=$member error=$error")
             null
         } catch (error: SecurityException) {
-            Logger.w(TAG, "系统不允许访问旧无缝窗口协议", error)
+            Logger.w(TAG, "系统不允许访问旧无缝窗口协议: member=$member", error)
             null
         } catch (error: LinkageError) {
-            Logger.w(TAG, "旧无缝窗口协议依赖不可用", error)
+            Logger.w(TAG, "旧无缝窗口协议依赖不可用: member=$member", error)
             null
         }
     }

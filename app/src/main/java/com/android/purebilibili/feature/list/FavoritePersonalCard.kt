@@ -135,10 +135,12 @@ internal fun FavoritePersonalCard(
                     ),
                     coverUrl = stationaryCoverUrl,
                     coverCacheKey = stationaryCoverUrl,
-                )
+                ),
+                onClick = onClick,
             )
+        } else {
+            onClick()
         }
-        onClick()
     }
 
     PersonalMediaCardFrame(

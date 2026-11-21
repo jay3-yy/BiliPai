@@ -1219,38 +1219,38 @@ private fun MessageLargeVideoCard(
         key = preview.bvid,
         enabled = preview.bvid.isNotBlank(),
     )
-    val openVideo = {
+    val openVideo = openVideo@{
         if (!CardPositionManager.isVideoNavigationDebounceActive()) {
-            if (preview.bvid.isNotBlank()) {
-                cardCoordinates.value?.takeIf { it.isAttached }?.let { coordinates ->
-                    val coverBounds = coverCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
-                    CardPositionManager.recordVideoCardPosition(
-                        bvid = preview.bvid,
-                        sourceRoute = sourceRoute,
-                        bounds = coordinates.videoCardSourceBoundsInRoot(),
-                        screenWidth = with(density) { configuration.screenWidthDp.dp.toPx() },
-                        screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() },
-                        density = density.density,
-                        sourceCornerDp = cardCorner.value.roundToInt(),
-                        coverBounds = coverBounds,
-                        infoBounds = infoCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
-                        sourceLayout = VideoCardSourceLayout.STACKED,
-                        sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
-                            title = preview.title,
-                            ownerName = preview.subtitle,
-                            durationText = preview.duration.takeIf { it > 0 }?.let(::formatDuration).orEmpty(),
-                            coverUrl = preview.cover,
-                            coverCacheKey = preview.cover,
-                            coverPresentation = VideoCardSourceCoverPresentation(
-                                showDurationOnCover = preview.duration > 0,
-                                cornerRadiusDp = cardCorner.value,
-                            ),
-                        ).withMeasuredCoverDecodeSize(coverBounds),
-                    )
-                    nativeSnapshot.capture()
-                }
+            val coordinates = cardCoordinates.value?.takeIf { it.isAttached }
+            if (preview.bvid.isBlank() || coordinates == null) {
+                onClick()
+                return@openVideo
             }
-            onClick()
+            val coverBounds = coverCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
+            CardPositionManager.recordVideoCardPosition(
+                bvid = preview.bvid,
+                sourceRoute = sourceRoute,
+                bounds = coordinates.videoCardSourceBoundsInRoot(),
+                screenWidth = with(density) { configuration.screenWidthDp.dp.toPx() },
+                screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() },
+                density = density.density,
+                sourceCornerDp = cardCorner.value.roundToInt(),
+                coverBounds = coverBounds,
+                infoBounds = infoCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
+                sourceLayout = VideoCardSourceLayout.STACKED,
+                sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                    title = preview.title,
+                    ownerName = preview.subtitle,
+                    durationText = preview.duration.takeIf { it > 0 }?.let(::formatDuration).orEmpty(),
+                    coverUrl = preview.cover,
+                    coverCacheKey = preview.cover,
+                    coverPresentation = VideoCardSourceCoverPresentation(
+                        showDurationOnCover = preview.duration > 0,
+                        cornerRadiusDp = cardCorner.value,
+                    ),
+                ).withMeasuredCoverDecodeSize(coverBounds),
+            )
+            nativeSnapshot.captureThen(onClick)
         }
     }
 
