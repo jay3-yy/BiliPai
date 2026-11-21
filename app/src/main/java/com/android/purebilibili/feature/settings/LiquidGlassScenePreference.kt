@@ -72,7 +72,7 @@ internal fun LiquidGlassScenePreference(enabled: Boolean) {
     val countLabel = "${AppLiquidGlassScene.entries.count(settings::isEnabled)}/${AppLiquidGlassScene.entries.size}"
     SettingsItemAnchor(LIQUID_GLASS_SCENES_SETTING_ID) {
         AppPreference(
-            icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.ANDROID_LIQUID_GLASS),
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.LIQUID_GLASS_SCENES),
             title = LIQUID_GLASS_SCENES_TITLE,
             subtitle = if (enabled) "按使用场景选择玻璃效果，横竖屏共用选择" else "总开关已关闭，可预先选择需要开启的场景",
             value = countLabel.takeUnless { glassAvailable },
@@ -176,7 +176,7 @@ private fun LiquidGlassSceneList(
         AppLiquidGlassScene.entries.forEachIndexed { index, scene ->
             SettingsItemAnchor(scene.settingId) {
                 AppSwitchPreference(
-                    icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.GLASS_SCENE_SWITCH),
+                    icon = rememberSettingsSemanticIcon(scene.iconRole),
                     title = scene.title,
                     subtitle = scene.description,
                     checked = settings.isEnabled(scene),
@@ -187,3 +187,15 @@ private fun LiquidGlassSceneList(
         }
     }
 }
+
+private val AppLiquidGlassScene.iconRole: SettingsIconRole
+    get() = when (this) {
+        AppLiquidGlassScene.BOTTOM_DOCK -> SettingsIconRole.GLASS_BOTTOM_DOCK
+        AppLiquidGlassScene.HOME_TOP_BAR -> SettingsIconRole.TOP_DOCK_GLASS
+        AppLiquidGlassScene.HOME_SEARCH -> SettingsIconRole.HOME_SEARCH_GLASS
+        AppLiquidGlassScene.COMMENT_BAR -> SettingsIconRole.INTERACTION_COMMENT
+        AppLiquidGlassScene.OTHER_COMPONENTS -> SettingsIconRole.GLASS_GENERAL_COMPONENTS
+        AppLiquidGlassScene.PLAYER_CONTROLS -> SettingsIconRole.PLAYBACK
+        AppLiquidGlassScene.MENUS_DIALOGS -> SettingsIconRole.CHOICE_MENU_STYLE
+        AppLiquidGlassScene.NOW_PLAYING -> SettingsIconRole.NOW_PLAYING_BAR
+    }

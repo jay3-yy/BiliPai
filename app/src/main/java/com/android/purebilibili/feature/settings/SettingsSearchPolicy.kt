@@ -667,10 +667,10 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     SettingsSearchEntry(
         settingId = "legacy.041",
         target = SettingsSearchTarget.HOME_FEED,
-        title = "卡片跟随背景变色",
-        subtitle = "独立控制视频卡片跟随壁纸或封面颜色",
+        title = "视频卡片背景",
+        subtitle = "选择跟随取色或固定高斯模糊",
         section = settingsDestinationCopy(SettingsSearchTarget.HOME_FEED).title,
-        aliases = listOf("卡片动态取色", "卡片取色", "封面取色", "视频卡片动态取色"),
+        aliases = listOf("卡片跟随背景变色", "卡片动态取色", "壁纸取色", "封面取色", "固定高斯模糊"),
         focusId = SettingsSearchFocusIds.HOME_OVERVIEW,
     ),
     SettingsSearchEntry(

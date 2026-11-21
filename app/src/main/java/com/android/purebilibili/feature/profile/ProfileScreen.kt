@@ -93,9 +93,12 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -162,6 +165,9 @@ import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import com.android.purebilibili.core.ui.AppSplitLayout
 import com.android.purebilibili.core.ui.TopReadabilityChrome
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.resolveGlobalWallpaperProtectiveColor
+import com.android.purebilibili.core.ui.wallpaper.sharedGlobalWallpaperBackground
 import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppBookmarkIcon
@@ -197,6 +203,7 @@ import com.android.purebilibili.core.ui.components.AppPreference
 import com.android.purebilibili.core.ui.components.AppPreferenceGridItem
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.R
 import com.android.purebilibili.core.store.StoredAccountSession
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.data.model.response.FavFolder
@@ -205,7 +212,10 @@ import com.android.purebilibili.data.model.response.SpaceAggregateArchiveItem
 import com.android.purebilibili.data.model.response.SpaceDynamicItem
 import com.android.purebilibili.data.model.response.SpaceVideoItem
 import com.android.purebilibili.feature.dynamic.DynamicDeleteAction
+import com.android.purebilibili.feature.settings.rememberSettingsVector
 import com.android.purebilibili.feature.space.resolveSpaceAggregateVideoId
+import com.android.purebilibili.feature.space.resolveSpaceBannerAlignment
+import com.android.purebilibili.feature.space.resolveSpaceBannerColorFilter
 import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.core.ui.common.contentTabPagerGestures
 import com.android.purebilibili.core.ui.common.rememberContentTabPager
@@ -237,6 +247,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.unit.times
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.AppShapes
@@ -350,8 +361,9 @@ internal fun resolveProfileSkinBackgroundImagePath(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(
+internal fun ProfileScreen(
     viewModel: ProfileViewModel = viewModel(),
+    avatarEntrance: ProfileAvatarEntrance? = null,
     isCurrentPage: Boolean = true,
     accountSessionRefreshGeneration: Int = 0,
     initialEditAccount: Boolean = false,
@@ -400,6 +412,7 @@ fun ProfileScreen(
     ) {
         ProfileScreenContent(
             viewModel = viewModel,
+            avatarEntrance = avatarEntrance,
             isCurrentPage = isCurrentPage,
             accountSessionRefreshGeneration = accountSessionRefreshGeneration,
             initialEditAccount = initialEditAccount,
@@ -436,6 +449,7 @@ fun ProfileScreen(
 @Composable
 private fun ProfileScreenContent(
     viewModel: ProfileViewModel = viewModel(),
+    avatarEntrance: ProfileAvatarEntrance?,
     isCurrentPage: Boolean = true,
     accountSessionRefreshGeneration: Int = 0,
     initialEditAccount: Boolean = false,
@@ -472,12 +486,16 @@ private fun ProfileScreenContent(
         com.android.purebilibili.core.ui.LocalAppThemeConfig.current.headerBlurEnabled
     val accounts by viewModel.accounts.collectAsStateWithLifecycle()
     val activeAccountMid by viewModel.activeAccountMid.collectAsStateWithLifecycle()
+    val accountIdentity by com.android.purebilibili.core.store.TokenManager.accountIdentity.collectAsStateWithLifecycle()
     val playbackAccountMid by viewModel.playbackAccountMid.collectAsStateWithLifecycle()
     val purposeAccountMids by viewModel.purposeAccountMids.collectAsStateWithLifecycle()
     val view = LocalView.current
     var showAccountSwitchDialog by remember { mutableStateOf(false) }
     var accountPopupSource by remember { mutableStateOf<com.android.purebilibili.core.ui.components.AppGlassMenuSource?>(null) }
     val windowSizeClass = LocalWindowSizeClass.current
+    val photoState = remember(
+        accountIdentity.mid, windowSizeClass.shouldUseSplitLayout, LocalConfiguration.current.orientation, LocalDensity.current,
+    ) { ProfileAvatarExpansionState() }
     val skinProfileBackgroundPath = remember(
         windowSizeClass.shouldUseSplitLayout,
         skinBackgroundImagePath,
@@ -489,7 +507,25 @@ private fun ProfileScreenContent(
             squaredImagePath = skinSquaredBackgroundImagePath,
         )
     }
+    val preferSkinBackground by remember(context) { SettingsManager.getProfileBgUseSkin(context) }
+        .collectAsStateWithLifecycle(initialValue = false)
+    val hasSkinBackground = skinProfileBackgroundPath != null || !skinVideoBackgroundPath.isNullOrBlank()
+    val useSkinBackground = preferSkinBackground && hasSkinBackground
+    val selectedSkinImagePath = skinProfileBackgroundPath.takeIf { useSkinBackground }
+    val selectedSkinVideoPath = skinVideoBackgroundPath.takeIf { useSkinBackground }
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val signedInProfile = state as? ProfileUiState.Success
+    val accountHeaderImages = signedInProfile?.accountHeaderImages
+    val accountHeaderPhotos = remember(accountHeaderImages, isDarkTheme) {
+        resolveProfileAccountHeaderPhotos(accountHeaderImages, isDarkTheme)
+    }
+    var accountHeaderIndex by rememberSaveable(signedInProfile?.user?.mid, accountHeaderPhotos) {
+        mutableIntStateOf(0)
+    }
+    val accountHeaderPhoto = (accountHeaderPhotos.getOrNull(accountHeaderIndex) ?: accountHeaderPhotos.firstOrNull())
+        .takeIf {
+            !useSkinBackground && signedInProfile?.user?.topPhoto.isNullOrEmpty()
+        }
     val isLoggedOut = state is ProfileUiState.LoggedOut
     val privacyModeEnabled by remember(context) { SettingsManager.getPrivacyModeEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = SettingsManager.isPrivacyModeEnabledSync(context))
@@ -515,8 +551,8 @@ private fun ProfileScreenContent(
         }
     }
     val isImmersiveMobileProfile = !windowSizeClass.shouldUseSplitLayout &&
-        (skinProfileBackgroundPath != null || !skinVideoBackgroundPath.isNullOrBlank() ||
-            (state as? ProfileUiState.Success)?.user?.topPhoto?.isNotEmpty() == true)
+        (useSkinBackground ||
+            signedInProfile?.user?.topPhoto?.isNotEmpty() == true || accountHeaderPhoto != null)
     val shouldControlSystemBars = isLoggedOut || isImmersiveMobileProfile
     val lightStatusBars = resolveProfileLightStatusBars(
         isImmersive = shouldControlSystemBars,
@@ -815,10 +851,11 @@ private fun ProfileScreenContent(
                 }
             }
             is ProfileUiState.Success -> {
-                val decoratedUser = remember(currentUiState.user, skinProfileBackgroundPath) {
-                    currentUiState.user.copy(
-                        topPhoto = skinProfileBackgroundPath ?: currentUiState.user.topPhoto
-                    )
+                val displayedTopPhoto = selectedSkinImagePath
+                    ?: accountHeaderPhoto?.header
+                    ?: currentUiState.user.topPhoto
+                val decoratedUser = remember(currentUiState.user, displayedTopPhoto) {
+                    currentUiState.user.copy(topPhoto = displayedTopPhoto)
                 }
                 val scrollBehavior = if (shouldPinProfileTopBarOnScroll(windowSizeClass.shouldUseSplitLayout)) {
                     TopAppBarDefaults.pinnedScrollBehavior()
@@ -841,7 +878,9 @@ private fun ProfileScreenContent(
                 AppScaffold(
                     topBarIconBackdropSource = profileProgressiveChrome.source,
                     modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-                    containerColor = MaterialTheme.colorScheme.background,
+                    containerColor = if (LocalGlobalWallpaperBackdropVisible.current) {
+                        Color.Transparent
+                    } else MaterialTheme.colorScheme.background,
                     // [Immersive] Mobile hides default TopBar, Tablet keeps it
                     topBar = {
                         if (windowSizeClass.shouldUseSplitLayout) {
@@ -910,9 +949,10 @@ private fun ProfileScreenContent(
                         if (windowSizeClass.shouldUseSplitLayout) {
                             ProfileBackground(
                                 user = decoratedUser,
+                                accountHeaderPhoto = accountHeaderPhoto,
                                 viewModel = viewModel,
                                 deferImmersiveRenderBudget = deferImmersiveRenderBudget,
-                                skinVideoBackgroundPath = skinVideoBackgroundPath,
+                                skinVideoBackgroundPath = selectedSkinVideoPath,
                                 skinVideoPlayMode = skinVideoPlayMode,
                                 playSkinVideo = isCurrentPage && !initialEditAccount,
                             )
@@ -920,9 +960,23 @@ private fun ProfileScreenContent(
 
                         ProfileSpaceContent(
                             viewModel = viewModel,
+                            avatarEntrance = avatarEntrance,
+                            photoState = photoState,
+                            pageActive = isCurrentPage,
                             initialEditAccount = initialEditAccount,
                             user = decoratedUser,
                             accountFace = currentUiState.user.face,
+                            accountHeaderPhotos = accountHeaderPhotos,
+                            accountHeaderIndex = accountHeaderIndex,
+                            onAccountHeaderIndexChanged = { accountHeaderIndex = it },
+                            preferSkinBackground = preferSkinBackground,
+                            onSkinBackgroundChange = if (hasSkinBackground) {
+                                { enabled ->
+                                    profileActionScope.launch {
+                                        SettingsManager.setProfileBgUseSkin(context, enabled)
+                                    }
+                                }
+                            } else null,
                             space = currentUiState.space,
                             editableAccount = currentUiState.editableAccount,
                             favoriteFolderShortcuts = favoriteFolderShortcuts,
@@ -968,9 +1022,10 @@ private fun ProfileScreenContent(
                                 if (!windowSizeClass.shouldUseSplitLayout) {
                                     ProfileBackground(
                                         user = decoratedUser,
+                                        accountHeaderPhoto = accountHeaderPhoto,
                                         viewModel = viewModel,
                                         deferImmersiveRenderBudget = deferImmersiveRenderBudget,
-                                        skinVideoBackgroundPath = skinVideoBackgroundPath,
+                                        skinVideoBackgroundPath = selectedSkinVideoPath,
                                         skinVideoPlayMode = skinVideoPlayMode,
                                         playSkinVideo = isCurrentPage && !initialEditAccount,
                                     )
@@ -992,6 +1047,7 @@ private fun BoxScope.ProfileBackground(
     skinVideoBackgroundPath: String? = null,
     skinVideoPlayMode: String? = null,
     playSkinVideo: Boolean = true,
+    accountHeaderPhoto: ProfileAccountHeaderPhoto? = null,
 ) {
     val windowSizeClass = LocalWindowSizeClass.current
     val isTablet = windowSizeClass.shouldUseSplitLayout
@@ -1004,16 +1060,16 @@ private fun BoxScope.ProfileBackground(
     val density = LocalDensity.current
     val colorScheme = MaterialTheme.colorScheme
     val isDarkTheme = colorScheme.surface.luminance() < 0.5f
+    val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
     val heroHeight = resolveProfileHeroHeightDp(
         screenHeightDp = configuration.screenHeightDp,
         widthSizeClass = windowSizeClass.widthSizeClass
     ).dp
     val backgroundVisible by remember(headerMotion, heroHeight, density) {
         derivedStateOf {
-            // Expanded photos leave the statistics background visible. Pause media
-            // only when scrolling has actually removed the whole header.
             headerMotion == null || headerMotion.scrollOffsetPx() <
-                with(density) { heroHeight.toPx() } + headerMotion.pullOffsetPx()
+                (headerMotion.wallpaperBoundaryPx?.invoke() ?: with(density) { heroHeight.toPx() }) +
+                headerMotion.pullOffsetPx()
         }
     }
     val wallpaperDecodeSize = remember(configuration.screenWidthDp, density.density) {
@@ -1025,15 +1081,16 @@ private fun BoxScope.ProfileBackground(
     val wallpaperModel = remember(user.topPhoto) {
         File(user.topPhoto).takeIf(File::isAbsolute) ?: user.topPhoto
     }
-    val wallpaperRequest = remember(context, wallpaperModel, wallpaperDecodeSize) {
-        ImageRequest.Builder(context)
+    val usesAccountHeader = accountHeaderPhoto != null
+    val wallpaperRequest = remember(context, wallpaperModel, wallpaperDecodeSize, usesAccountHeader) {
+        val builder = ImageRequest.Builder(context)
             .data(wallpaperModel)
             .size(wallpaperDecodeSize.first, wallpaperDecodeSize.second)
             .scale(Scale.FILL)
             // Profile wallpaper is persistent chrome. Fading a local skin asset in from the
             // surface color makes every bottom-tab entry look like a full-screen flash.
             .crossfade(false)
-            .build()
+        if (usesAccountHeader) builder.buildForProfileFusion() else builder.build()
     }
     val heroChrome = remember(hasWallpaper, isDarkTheme, colorScheme.onSurface, colorScheme.onSurfaceVariant) {
         resolveProfileHeroChrome(
@@ -1044,11 +1101,9 @@ private fun BoxScope.ProfileBackground(
         )
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .globalWallpaperAwareBackground(colorScheme.surface)
-    )
+    if (!globalWallpaperVisible) {
+        Box(Modifier.fillMaxSize().background(colorScheme.surface))
+    }
 
     Box(
         modifier = Modifier
@@ -1057,7 +1112,19 @@ private fun BoxScope.ProfileBackground(
             .align(Alignment.TopCenter)
     ) {
         if (shouldRenderProfileImmersiveBackground(user.topPhoto.isNotEmpty(), deferImmersiveRenderBudget)) {
-            if (user.topPhoto.isNotEmpty()) {
+            if (accountHeaderPhoto != null) {
+                AsyncImage(
+                    model = wallpaperRequest,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alignment = resolveSpaceBannerAlignment(accountHeaderPhoto.verticalBias),
+                    colorFilter = resolveSpaceBannerColorFilter(
+                        isLight = !isDarkTheme,
+                        hasFilter = accountHeaderPhoto.filterForTheme,
+                    ),
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else if (user.topPhoto.isNotEmpty()) {
                 com.android.purebilibili.core.ui.wallpaper.WallpaperMedia(
                     uri = user.topPhoto,
                     imageModel = wallpaperRequest,
@@ -1182,9 +1249,17 @@ private fun ProfileSkinVideoBackground(
 @Composable
 private fun ProfileSpaceContent(
     viewModel: ProfileViewModel,
+    avatarEntrance: ProfileAvatarEntrance?,
+    photoState: ProfileAvatarExpansionState,
+    pageActive: Boolean,
     initialEditAccount: Boolean = false,
     user: UserState,
     accountFace: String,
+    accountHeaderPhotos: List<ProfileAccountHeaderPhoto>,
+    accountHeaderIndex: Int,
+    onAccountHeaderIndexChanged: (Int) -> Unit,
+    preferSkinBackground: Boolean,
+    onSkinBackgroundChange: ((Boolean) -> Unit)?,
     space: ProfileSpaceUiState,
     editableAccount: ProfileEditableAccountState,
     favoriteFolderShortcuts: List<ProfileFavoriteFolderShortcut>,
@@ -1265,7 +1340,18 @@ private fun ProfileSpaceContent(
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var showPhotoPickerDialog by remember { mutableStateOf(false) }
     var showWallpaperActionSheet by remember { mutableStateOf(false) }
+    val accountHeaderUrls = remember(accountHeaderPhotos) { accountHeaderPhotos.map { it.fullCover } }
+    var accountHeaderPreviewIndex by remember(user.mid, accountHeaderUrls) { mutableStateOf<Int?>(null) }
 
+    accountHeaderPreviewIndex?.let { index ->
+        ImagePreviewDialog(
+            images = accountHeaderUrls,
+            initialIndex = index,
+            publicContent = true,
+            onPageSelected = onAccountHeaderIndexChanged,
+            onDismiss = { accountHeaderPreviewIndex = null },
+        )
+    }
     if (showEditDialog) {
         ProfileEditAccountDialog(
             state = editableAccount,
@@ -1377,7 +1463,20 @@ private fun ProfileSpaceContent(
                 showWallpaperActionSheet = false
                 viewModel.clearCustomBackground()
             },
-            isResetEnabled = !customBackgroundUri.isNullOrEmpty()
+            isResetEnabled = preferSkinBackground || !customBackgroundUri.isNullOrEmpty(),
+            preferSkinBackground = preferSkinBackground,
+            onToggleSkinBackground = if (onSkinBackgroundChange == null) null else {
+                {
+                    showWallpaperActionSheet = false
+                    onSkinBackgroundChange(!preferSkinBackground)
+                }
+            },
+            onAccountHeaderClick = if (accountHeaderUrls.isEmpty()) null else {
+                {
+                    showWallpaperActionSheet = false
+                    accountHeaderPreviewIndex = accountHeaderIndex.coerceIn(accountHeaderUrls.indices)
+                }
+            },
         )
     }
     if (showPhotoPickerDialog) {
@@ -1482,16 +1581,23 @@ private fun ProfileSpaceContent(
     val photoConfiguration = LocalConfiguration.current
     // Pull-down avatar expansion belongs to the portrait phone header.
     // Both MD3/Miuix and both glass states use this same geometry and gesture logic.
-    val photoExpansionEnabled = !isTablet &&
-        photoConfiguration.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE && user.face.isNotBlank()
-    val photoState = remember(user.mid, user.face, isTablet, photoConfiguration.orientation, density) {
-        ProfileAvatarExpansionState()
-    }
+    val useFullWidthPhoto = !isTablet &&
+        photoConfiguration.orientation != android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val photoExpansionEnabled = useFullWidthPhoto && user.face.isNotBlank()
     val photoRangeProvider: () -> Float = {
         (photoState.viewportWidthPx - profileStatsTopProvider()).coerceAtLeast(0f)
     }
+    val avatarEntranceScale = rememberProfileAvatarEntranceScale(
+        entrance = avatarEntrance,
+        pageActive = pageActive,
+        photoState = photoState.takeIf { useFullWidthPhoto },
+        photoUrl = user.face,
+        photoRangeProvider = photoRangeProvider,
+        listState = mobileListState,
+    )
     val photoFractionProvider: () -> Float = { photoState.fraction(photoRangeProvider()) }
     val photoBottomProvider: () -> Float = { profileStatsTopProvider() + photoState.visualOffsetPx }
+    val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
     val backgroundMotion = ProfileBackgroundMotion(
         scrollOffsetPx = {
             if (mobileListState.firstVisibleItemIndex > 0) Float.POSITIVE_INFINITY
@@ -1504,8 +1610,11 @@ private fun ProfileSpaceContent(
                     (1f - profileExpandedFractionProvider())
             }
         },
+        wallpaperBoundaryPx = profileStatsTopProvider.takeIf { globalWallpaperVisible },
     )
-    val photoConnection = rememberProfileAvatarExpansionConnection(photoState, mobileListState, photoExpansionEnabled, photoRangeProvider)
+    val photoConnection = rememberProfileAvatarExpansionConnection(
+        photoState, mobileListState, photoExpansionEnabled, photoRangeProvider, user.face,
+    )
     val photoScope = rememberCoroutineScope()
     val photoMotion = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
         !com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion() &&
@@ -1515,7 +1624,10 @@ private fun ProfileSpaceContent(
     }
     val photoVisible by remember(photoState) { derivedStateOf { photoState.offsetPx > 0f } }
     androidx.activity.compose.BackHandler(enabled = photoVisible) { collapsePhoto() }
-    LaunchedEffect(photoState, scrollToTopRequestId, space.selectedTab) { photoState.reset() }
+    val photoResetRequest = rememberUpdatedState(scrollToTopRequestId to space.selectedTab)
+    LaunchedEffect(photoState) {
+        snapshotFlow { photoResetRequest.value }.drop(1).collect { photoState.reset() }
+    }
     val profileHeaderFling = rememberProfileHeaderFlingBehavior(mobileListState, profileCollapseRangeProvider)
     val isMobileScrolling by remember(mobileListState) {
         derivedStateOf { mobileListState.isScrollInProgress }
@@ -1534,8 +1646,8 @@ private fun ProfileSpaceContent(
             .nestedScroll(photoConnection)
             .onSizeChanged {
                 if (photoState.viewportWidthPx != it.width) {
-                    photoState.reset()
                     photoState.viewportWidthPx = it.width
+                    photoState.updateExpandedRange(photoRangeProvider())
                 }
             },
     ) {
@@ -1561,6 +1673,7 @@ private fun ProfileSpaceContent(
                         editableAccount = editableAccount,
                         onAvatarClick = openAvatarPreview,
                         avatarSourceRect = avatarSourceRect,
+                        avatarEntranceScale = avatarEntranceScale,
                         compact = true,
                         heroChrome = heroChrome,
                         showWallpaperAction = true,
@@ -1621,7 +1734,10 @@ private fun ProfileSpaceContent(
                     .fillMaxSize()
                     .profileProgressiveBackdrop(progressiveTopChrome)
                     .then(if (hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier)
-                    .globalWallpaperAwareBackground(colorScheme.surface),
+                    .then(
+                        if (globalWallpaperVisible) Modifier.sharedGlobalWallpaperBackground(Color.Transparent)
+                        else Modifier.background(colorScheme.surface)
+                    ),
             ) {
                 Box(
                     modifier = Modifier
@@ -1792,17 +1908,22 @@ private fun ProfileSpaceContent(
                 statsTopProvider = profileStatsTopProvider,
                 collapseRangeProvider = profileCollapseRangeProvider,
                 onIdentityMeasured = { nameHeight, uidHeight ->
-                    identityStatsTopPx = resolveProfileIdentityStatsTopPx(
+                    val statsTop = resolveProfileIdentityStatsTopPx(
                         statusBarTopPx = with(density) { statusBarTopPadding.toPx() },
                         density = density.density,
                         nameHeightPx = nameHeight,
                         uidHeightPx = uidHeight,
                     )
+                    if (identityStatsTopPx != statsTop) {
+                        identityStatsTopPx = statsTop
+                        photoState.updateExpandedRange(photoRangeProvider())
+                    }
                 },
                 listState = mobileListState,
                 flingBehavior = profileHeaderFling,
                 onAvatarClick = openAvatarPreview,
                 avatarSourceRect = avatarSourceRect,
+                avatarEntranceScale = avatarEntranceScale,
                 photoState = photoState.takeIf { photoExpansionEnabled },
                 photoFractionProvider = photoFractionProvider,
                 photoBottomProvider = photoBottomProvider,
@@ -1900,8 +2021,13 @@ private fun ProfilePinnedSpaceTopBar(
         if (showQrAuthorization) {
             OfficialQrAuthorizationDialog(onDismiss = { showQrAuthorization = false })
         }
-        AppIconButton(onClick = { showQrAuthorization = true }) {
-            ProfilePhotoToolbarIcon(Icons.Rounded.QrCodeScanner, "扫码授权登录", topBarIconColor, photoFractionProvider)
+        AppIconButton(onClick = onBack) {
+            ProfilePhotoToolbarIcon(
+                rememberAppBackIcon(),
+                stringResource(R.string.common_back),
+                topBarIconColor,
+                photoFractionProvider,
+            )
         }
         Spacer(modifier = Modifier.weight(1f))
         AppWindowActionMenu(
@@ -1915,6 +2041,7 @@ private fun ProfilePinnedSpaceTopBar(
                         label = "账号与记录",
                         children = listOf(
                             AppWindowAction(label = "切换账号", onClick = onAccountManageClick),
+                            AppWindowAction(label = "扫码授权登录", onClick = { showQrAuthorization = true }),
                         ) + ledgerMenuActions(openLedger, openComments),
                     ),
                 ),
@@ -1928,7 +2055,6 @@ private fun ProfilePinnedSpaceTopBar(
                         ),
                     ),
                     AppWindowAction(label = "设置", onClick = onSettingsClick),
-                    AppWindowAction(label = "返回", onClick = onBack),
                 ),
             ),
         ) {
@@ -2233,8 +2359,8 @@ private fun ProfileSpaceHeroHeader(
     val configuration = LocalConfiguration.current
     val windowSizeClass = LocalWindowSizeClass.current
     val colorScheme = MaterialTheme.colorScheme
-    // The separate phone identity overlay owns wallpaper/photo colors. Statistics
-    // use an opaque page surface in both native themes and both glass states.
+    // 头像区保留头图，统计区过渡到正文使用的全局壁纸。
+    val statisticsBackground = profileContentBackgroundColor(colorScheme.surface)
     val statisticsChrome = if (!showIdentity) resolveProfileHeroChrome(
         hasWallpaper = false,
         isDarkTheme = colorScheme.surface.luminance() < 0.5f,
@@ -2255,7 +2381,7 @@ private fun ProfileSpaceHeroHeader(
                     if (!showIdentity) {
                         val top = identityReserve.toPx().coerceIn(0f, size.height)
                         drawRect(
-                            color = colorScheme.surface,
+                            color = statisticsBackground,
                             topLeft = androidx.compose.ui.geometry.Offset(0f, top),
                             size = androidx.compose.ui.geometry.Size(size.width, size.height - top),
                         )
@@ -2298,9 +2424,7 @@ private fun ProfileContentSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // An opaque, uniform content plane meets the
-            // clipped colored header. It does not inherit the header's gradient.
-            .background(contentChrome.surfaceColor)
+            .background(profileContentBackgroundColor(contentChrome.surfaceColor))
             .padding(
                 top = layoutTokens.contentSheetTopPaddingDp.dp,
                 bottom = layoutTokens.contentSheetBottomPaddingDp.dp
@@ -2309,6 +2433,12 @@ private fun ProfileContentSheet(
         content = content
     )
 }
+
+@Composable
+private fun profileContentBackgroundColor(surface: Color): Color =
+    if (LocalGlobalWallpaperBackdropVisible.current) {
+        resolveGlobalWallpaperProtectiveColor(surface, lightAlpha = 0.65f, darkAlpha = 0.72f)
+    } else surface
 
 @Composable
 private fun ProfileSpaceHeader(
@@ -2327,6 +2457,7 @@ private fun ProfileSpaceHeader(
     onDynamicsClick: () -> Unit,
     modifier: Modifier = Modifier,
     showIdentity: Boolean = true,
+    avatarEntranceScale: () -> Float = { 1f },
 ) = NavigationControlMotionGroup {
     val openLedger = LocalProfileLedgerNavigation.current
     val textColor = heroChrome.textColor
@@ -2360,7 +2491,12 @@ private fun ProfileSpaceHeader(
                     contentDescription = "${user.name}的头像，查看大图",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(96.dp)
+                        .size(PROFILE_EXPANDED_AVATAR_SIZE_DP.dp)
+                        .graphicsLayer {
+                            val scale = avatarEntranceScale()
+                            scaleX = scale
+                            scaleY = scale
+                        }
                         .imagePreviewSourceBounds(avatarSourceRect)
                         .alpha(if (isImagePreviewSourceHidden(avatarSourceRect.value)) 0f else 1f)
                         .clip(CircleShape)
@@ -4599,7 +4735,10 @@ private fun ProfileWallpaperActionSheet(
     onOfficialWallpaperClick: () -> Unit,
     onLocalAlbumClick: () -> Unit,
     onResetWallpaperClick: () -> Unit,
-    isResetEnabled: Boolean
+    isResetEnabled: Boolean,
+    onAccountHeaderClick: (() -> Unit)? = null,
+    preferSkinBackground: Boolean = false,
+    onToggleSkinBackground: (() -> Unit)? = null,
 ) {
     AppModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -4610,6 +4749,7 @@ private fun ProfileWallpaperActionSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -4630,6 +4770,23 @@ private fun ProfileWallpaperActionSheet(
                 icon = rememberAppFolderIcon(),
                 onClick = onLocalAlbumClick
             )
+            if (onAccountHeaderClick != null) {
+                ProfileWallpaperSheetActionRow(
+                    title = stringResource(R.string.profile_view_account_space_header),
+                    icon = rememberSettingsVector(R.drawable.ph_images_24, R.drawable.ms_photo_library_24),
+                    onClick = onAccountHeaderClick,
+                )
+            }
+            if (onToggleSkinBackground != null) {
+                ProfileWallpaperSheetActionRow(
+                    title = stringResource(
+                        if (preferSkinBackground) R.string.profile_disable_skin_background
+                        else R.string.profile_use_skin_background
+                    ),
+                    icon = rememberSettingsVector(R.drawable.ph_palette_24, R.drawable.ms_palette_24),
+                    onClick = onToggleSkinBackground,
+                )
+            }
             ProfileWallpaperSheetActionRow(
                 title = "恢复默认",
                 icon = rememberAppRestoreIcon(),

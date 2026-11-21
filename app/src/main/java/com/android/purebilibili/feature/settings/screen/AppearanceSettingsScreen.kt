@@ -70,6 +70,9 @@ import com.android.purebilibili.core.store.HomeFeedCardStyle
 import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
 import com.android.purebilibili.core.store.HomeWallpaperEffectScope
+import com.android.purebilibili.core.store.HomeCardBackgroundMode
+import com.android.purebilibili.feature.settings.homeCardBackgroundModeLabel
+import com.android.purebilibili.feature.profile.ALPINE_PAGE_WALLPAPER_URI
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.SettingsIconGlyphs
 import com.android.purebilibili.core.store.ThemeModeRoleOverrides
@@ -502,7 +505,13 @@ fun AppearanceSettingsContent(
     val homeRefreshUndoVisible = homeConfiguration.homeRefreshUndoVisible
     val fullVideoCardContentVisible = homeConfiguration.showFullVideoCardContent
     val videoCardLongPressActionEnabled = homeConfiguration.videoCardLongPressActionEnabled
-    val homeCardDynamicTintEnabled = homeConfiguration.homeCardDynamicTintEnabled
+    val homeCardBackgroundMode = HomeCardBackgroundMode.fromSettings(
+        dynamicTint = homeConfiguration.homeCardDynamicTintEnabled,
+        fixedBlur = homeConfiguration.homeCardFixedBlurEnabled,
+    )
+    val homeCardBackgroundOptions = HomeCardBackgroundMode.entries.map { mode ->
+        AppSegmentOption(mode, stringResource(homeCardBackgroundModeLabel(mode)))
+    }
     val homeDurationStyle = homeConfiguration.homeDurationStyle
     val homeFeedCardStyle = homeConfiguration.homeFeedCardStyle
     val homeHeroCarouselEnabled = homeConfiguration.homeHeroCarouselEnabled
@@ -2177,6 +2186,8 @@ fun AppearanceSettingsContent(
                                 )
                                 AppText(
                                     text = when {
+                                        dedicatedHomeWallpaperUri == ALPINE_PAGE_WALLPAPER_URI ->
+                                            context.getString(R.string.appearance_wallpaper_alpine_daylight)
                                         dedicatedHomeWallpaperUri.isNotBlank() -> context.getString(R.string.appearance_home_wallpaper_dedicated)
                                         homeWallpaperFollowsSplash -> context.getString(R.string.appearance_home_wallpaper_follows_splash)
                                         else -> context.getString(R.string.appearance_home_wallpaper_source)
@@ -2301,21 +2312,19 @@ fun AppearanceSettingsContent(
                         // 「卡片背景模糊」位于「动效与反馈」页的液态玻璃与磨砂分组。
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.home_card_dynamic_tint_enabled") {
-                            AppSwitchPreference(
+                            SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_CARD_DYNAMIC_TINT),
                                 title = settingItemTitle("appearance.home_card_dynamic_tint_enabled"),
-                                subtitle = if (homeCardDynamicTintEnabled) {
-                                    context.getString(R.string.appearance_wallpaper_card_tint_on)
-                                } else {
-                                    context.getString(R.string.appearance_wallpaper_card_tint_off)
+                                subtitle = stringResource(when (homeCardBackgroundMode) {
+                                    HomeCardBackgroundMode.OFF -> R.string.appearance_wallpaper_card_tint_off
+                                    HomeCardBackgroundMode.FOLLOW_IMAGE -> R.string.appearance_wallpaper_card_tint_on
+                                    HomeCardBackgroundMode.FIXED_BLUR -> R.string.appearance_card_background_fixed_summary
+                                }),
+                                options = homeCardBackgroundOptions,
+                                selectedValue = homeCardBackgroundMode,
+                                onSelectionChange = { mode ->
+                                    scope.launch { SettingsManager.setHomeCardBackgroundMode(context, mode) }
                                 },
-                                checked = homeCardDynamicTintEnabled,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        SettingsManager.setHomeCardDynamicTintEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
                             )
                         }
                     }

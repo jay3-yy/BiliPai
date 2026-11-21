@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.dynamic.components
 
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -24,7 +24,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import coil3.network.NetworkHeaders
 import coil3.network.httpHeaders
 import coil3.request.ImageRequest
@@ -55,6 +54,7 @@ import kotlinx.serialization.json.Json
 @Composable
 fun LiveCard(
     liveRcmd: LiveRcmdMajor,
+    modifier: Modifier = Modifier,
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit = { _, _, _ -> }
 ) {
     // 解析直播内容 JSON
@@ -77,12 +77,13 @@ fun LiveCard(
             title = playInfo?.title,
             coverUrl = playInfo?.cover,
             viewerCount = playInfo?.online,
+            modifier = modifier,
             onLiveClick = onLiveClick,
         )
     } else {
         // 无法解析时显示占位
         AppCard(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = modifier,
             shape = AppCardShape.Semantic(ContainerLevel.Card),
             colors = AppCardDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -115,6 +116,7 @@ fun LiveCard(
 @Composable
 fun LiveMajorCard(
     live: LiveMajor,
+    modifier: Modifier = Modifier,
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit = { _, _, _ -> }
 ) {
     val roomId = live.id.trim().toLongOrNull() ?: 0L
@@ -124,6 +126,7 @@ fun LiveMajorCard(
         title = live.title.ifBlank { "直播间" },
         coverUrl = live.cover,
         viewerCount = null,
+        modifier = modifier,
         onLiveClick = onLiveClick,
     )
 }
@@ -134,8 +137,8 @@ private fun DynamicLiveRoomCard(
     title: String?,
     coverUrl: String?,
     viewerCount: Int?,
+    modifier: Modifier,
     onLiveClick: (roomId: Long, title: String, uname: String) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     val transition = rememberLiveCardContainerTransition(
@@ -148,72 +151,68 @@ private fun DynamicLiveRoomCard(
     )
     AppCard(
         modifier = modifier
-            .fillMaxWidth()
             .then(transition.modifier)
             .appActionClickable(onClick = transition.onClick),
         shape = AppCardShape.Semantic(ContainerLevel.Card),
         colors = AppCardDefaults.colors(containerColor = containerColor),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(AppSpacingTokens.Small),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
         ) {
-            LiveRoomCover(
-                modifier = Modifier
-                    .widthIn(max = 120.dp)
-                    .clip(AppShapes.container(ContainerLevel.Chip)),
-            ) {
-                if (!coverUrl.isNullOrBlank()) {
-                    val context = LocalContext.current
-                    val request = remember(context, coverUrl) {
-                        val url = if (coverUrl.startsWith("http://")) {
-                            coverUrl.replaceFirst("http://", "https://")
-                        } else {
-                            coverUrl
-                        }
-                        ImageRequest.Builder(context)
-                            .data(url)
-                            .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
-                            .crossfade(true)
-                            .build()
+            if (!coverUrl.isNullOrBlank()) {
+                val context = LocalContext.current
+                val request = remember(context, coverUrl) {
+                    val url = if (coverUrl.startsWith("http://")) {
+                        coverUrl.replaceFirst("http://", "https://")
+                    } else {
+                        coverUrl
                     }
+                    ImageRequest.Builder(context)
+                        .data(url)
+                        .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
+                        .crossfade(true)
+                        .build()
+                }
+                LiveRoomCover(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(AppShapes.container(ContainerLevel.Chip))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                ) {
                     PageAwareAsyncImage(
                         model = request,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                     )
-                }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(AppSpacingTokens.ExtraSmall)
-                        .background(AppContentColors.accent(), AppShapes.container(ContainerLevel.Tag))
-                        .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.Micro),
-                ) {
-                    AppText(
-                        text = "直播中",
-                        fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                        color = AppContentColors.onAccent(),
-                        fontWeight = FontWeight.Bold,
+                    DynamicLiveBadge(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(AppSpacingTokens.Small),
                     )
                 }
+            } else {
+                DynamicLiveBadge()
             }
-            Spacer(modifier = Modifier.width(AppSpacingTokens.Small + AppSpacingTokens.Micro))
-            Column(modifier = Modifier.weight(1f)) {
+
+            Column(verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)) {
                 AppText(
                     text = title ?: "直播中",
-                    fontSize = MaterialTheme.typography.labelMedium.fontSize,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     color = AppContentColors.primaryText(),
                 )
                 if (viewerCount != null) {
-                    val viewerColor = AppContentColors.secondaryText().copy(alpha = 0.6f)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    val viewerColor = AppContentColors.secondaryText()
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         AppIcon(
                             rememberAppPlayIcon(),
                             contentDescription = null,
@@ -222,7 +221,7 @@ private fun DynamicLiveRoomCard(
                         )
                         AppText(
                             text = "$viewerCount 人观看",
-                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                            style = MaterialTheme.typography.labelSmall,
                             color = viewerColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -232,4 +231,17 @@ private fun DynamicLiveRoomCard(
             }
         }
     }
+}
+
+@Composable
+private fun DynamicLiveBadge(modifier: Modifier = Modifier) {
+    AppText(
+        text = "直播中",
+        modifier = modifier
+            .background(AppContentColors.accent(), AppShapes.container(ContainerLevel.Tag))
+            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.Micro),
+        style = MaterialTheme.typography.labelSmall,
+        color = AppContentColors.onAccent(),
+        fontWeight = FontWeight.Bold,
+    )
 }

@@ -8,9 +8,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
@@ -33,27 +34,38 @@ private data class WallpaperReplayElement(val source: ChromeBackdropSource) : Mo
 private class WallpaperReplayNode(var source: ChromeBackdropSource) :
     Modifier.Node(), DrawModifierNode, GlobalPositionAwareModifierNode {
     private var coordinates: LayoutCoordinates? = null
-    private var windowPosition = Offset.Unspecified
+    private var rootPosition = Offset.Unspecified
+    private var rootScale = Offset(1f, 1f)
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
-        val position = coordinates.positionInWindow()
-        if (this.coordinates !== coordinates || windowPosition != position) {
+        val position = coordinates.positionInRoot()
+        val size = coordinates.size
+        val extent = coordinates.localToRoot(Offset(size.width.toFloat(), size.height.toFloat())) - position
+        val scale = if (size.width > 0 && size.height > 0 && extent.x > 0f && extent.y > 0f) {
+            Offset(extent.x / size.width, extent.y / size.height)
+        } else Offset(1f, 1f)
+        if (this.coordinates !== coordinates || rootPosition != position || rootScale != scale) {
             this.coordinates = coordinates
-            windowPosition = position
+            rootPosition = position
+            rootScale = scale
             invalidateDraw()
         }
     }
 
     override fun onDetach() {
         coordinates = null
-        windowPosition = Offset.Unspecified
+        rootPosition = Offset.Unspecified
+        rootScale = Offset(1f, 1f)
     }
 
     override fun ContentDrawScope.draw() {
         val replayCoordinates = coordinates
         clipRect {
-            with(source.backdrop) {
-                drawBackdrop(density = this@draw, coordinates = replayCoordinates)
+            // 导航只缩放页面及圆角裁剪，回放的壁纸仍与根层像素对齐。
+            scale(1f / rootScale.x, 1f / rootScale.y, pivot = Offset.Zero) {
+                with(source.backdrop) {
+                    drawBackdrop(density = this@scale, coordinates = replayCoordinates)
+                }
             }
         }
         drawContent()

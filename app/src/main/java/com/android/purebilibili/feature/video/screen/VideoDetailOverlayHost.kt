@@ -963,7 +963,7 @@ internal fun DetachedVideoCommentThreadHost(
     /** 横屏期间被隐藏过：恢复时跳过进场动画，直接显示原样。 */
     instantRestore: Boolean = false,
     successState: VideoPlaybackUiState.Success?,
-    commentState: CommentUiState,
+    commentStateHandle: State<CommentUiState>,
     commentViewModel: VideoCommentViewModel,
     forceInitialize: Boolean,
     viewModel: VideoPlaybackViewModel,
@@ -972,7 +972,7 @@ internal fun DetachedVideoCommentThreadHost(
     onSearchKeywordClick: (String) -> Unit,
     onOpenBilibiliLink: ((String) -> Unit)?,
     screenHeightPx: Int,
-    topReservedPx: Int,
+    topReservedPx: State<Int>,
     onTimestampClick: (Long) -> Unit,
     onBackToTop: () -> Unit = {},
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
@@ -981,6 +981,13 @@ internal fun DetachedVideoCommentThreadHost(
     if (!visible) return
 
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
+    val commentSummary by remember(commentStateHandle) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            val state = commentStateHandle.value
+            state.upMid to state.replyCount
+        }
+    }
+    val (upMid, replyCount) = commentSummary
 
     VideoCommentSheetHost(
         instantRestore = instantRestore,
@@ -993,8 +1000,8 @@ internal fun DetachedVideoCommentThreadHost(
         onDismiss = { commentViewModel.closeSubReply() },
         commentViewModel = commentViewModel,
         aid = successState?.info?.aid ?: 0L,
-        upMid = commentState.upMid,
-        expectedReplyCount = commentState.replyCount,
+        upMid = upMid,
+        expectedReplyCount = replyCount,
         emoteMap = successState?.emoteMap ?: emptyMap(),
         onRootCommentClick = { viewModel.openRootCommentComposer() },
         onReplyClick = { replyItem ->
@@ -1007,7 +1014,7 @@ internal fun DetachedVideoCommentThreadHost(
         onSearchKeywordClick = onSearchKeywordClick,
         onOpenBilibiliLink = onOpenBilibiliLink,
         screenHeightPx = screenHeightPx,
-        topReservedPx = topReservedPx,
+        topReservedPx = topReservedPx.value,
         onTimestampClick = onTimestampClick,
         maxTimestampMs = successState?.videoDurationMs?.takeIf { it > 0L },
         onBackToTop = onBackToTop,

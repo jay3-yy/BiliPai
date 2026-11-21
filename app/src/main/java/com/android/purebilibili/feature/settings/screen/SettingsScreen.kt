@@ -94,6 +94,7 @@ fun SettingsScreen(
     onNavigateToBottomBarSettings: () -> Unit = {},
     onTipsClick: () -> Unit = {},
     onKeyboardShortcutsClick: () -> Unit = {},
+    onProcessMemoryClick: () -> Unit = {},
     onPerformanceHistoryClick: () -> Unit = {},
     onReplayOnboardingClick: () -> Unit = {},
     onCategoryClick: (SettingsRootCategory) -> Unit = {},
@@ -790,6 +791,7 @@ fun SettingsScreen(
                     onNavigateToBottomBarSettings = onNavigateToBottomBarSettings,
                     onTipsClick = onTipsClick,
                     onKeyboardShortcutsClick = onKeyboardShortcutsClick,
+                    onProcessMemoryClick = onProcessMemoryClick,
                     onPerformanceHistoryClick = onPerformanceHistoryClick,
                     onPluginsClick = onPluginsClick,
                     onExportLogsClick = onExportLogsAction,
@@ -986,6 +988,7 @@ private fun MobileSettingsNavLayout(
     onNavigateToBottomBarSettings: () -> Unit,
     onTipsClick: () -> Unit,
     onKeyboardShortcutsClick: () -> Unit,
+    onProcessMemoryClick: () -> Unit,
     onPerformanceHistoryClick: () -> Unit,
     onPluginsClick: () -> Unit,
     onExportLogsClick: () -> Unit,
@@ -1120,6 +1123,7 @@ private fun MobileSettingsNavLayout(
         onReplayOnboardingClick = onReplayOnboardingClick,
         onTipsClick = onTipsClick,
         onKeyboardShortcutsClick = onKeyboardShortcutsClick,
+        onProcessMemoryClick = onProcessMemoryClick,
         onPerformanceHistoryClick = onPerformanceHistoryClick,
         onOpenLinksClick = onOpenLinksClick,
         onPrivacyModeChange = onPrivacyModeChange,
@@ -1181,6 +1185,8 @@ private fun MobileSettingsNavLayout(
         dynamicTabOrder = dynamicTabOrder,
     )
 
+    val pinGlassSearch = destination == SettingsNavDestination.Home && useSettingsSearchContentBackdrop()
+
     @Composable
     fun SettingsRootContent(
         onAboutHeaderAppearanceClick: () -> Unit,
@@ -1189,7 +1195,7 @@ private fun MobileSettingsNavLayout(
         when (destination) {
             SettingsNavDestination.Home -> {
                 Column {
-                    SettingsHomeSearchEntry(onClick = onSearchOpen)
+                    if (!pinGlassSearch) SettingsHomeSearchEntry(onClick = onSearchOpen)
                     Box(modifier = Modifier.padding(top = 8.dp).entrance()) {
                         SettingsRootCategoryListSection(
                             categories = sectionOrder,
@@ -1233,6 +1239,9 @@ private fun MobileSettingsNavLayout(
             onBack = onBack,
             backContentDescription = backLabel,
             bottomContentPadding = bottomInset,
+            glassSearchHeader = if (pinGlassSearch) {
+                { backdrop -> SettingsHomeSearchEntry(onClick = onSearchOpen, contentBackdrop = backdrop) }
+            } else null,
             topBarStyle = when {
                 destination == SettingsNavDestination.Home &&
                     com.android.purebilibili.core.ui.isMiuixNonGlassEnabled() -> {

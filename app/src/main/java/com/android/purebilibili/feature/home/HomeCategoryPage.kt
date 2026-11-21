@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.home
 import androidx.compose.foundation.layout.offset
 
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.resolveGlobalWallpaperProtectiveColor
 
 import com.android.purebilibili.core.ui.components.AppButton
 
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.*
@@ -35,7 +38,7 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import com.android.purebilibili.core.ui.blur.ChromeBackdropSource
 import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
 import com.android.purebilibili.core.ui.components.PageAwareAsyncImage
 import com.android.purebilibili.core.ui.rememberVisualWorkActive
@@ -46,6 +49,7 @@ import androidx.compose.ui.semantics.onClick as semanticClick
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalConfiguration
@@ -58,6 +62,8 @@ import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
 import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.motion.continuityTween
+import com.android.purebilibili.core.ui.motion.scrollCompactExpansionSpring
 import com.android.purebilibili.core.ui.performance.TrackScrollJank
 import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
@@ -93,7 +99,10 @@ import androidx.compose.ui.Alignment
 import com.android.purebilibili.feature.home.components.LastPositionPill
 import kotlinx.coroutines.yield
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.platform.LocalDensity
 
 internal fun resolveHomeCategoryVideoGridKey(
@@ -229,6 +238,7 @@ internal fun HomeCategoryPageContent(
     downloadSelection: HomeDownloadSelection? = null,
     displayMode: Int,
     cardAnimationEnabled: Boolean,
+    refreshedCardKeys: Flow<Set<String>>? = null,
     cardMotionTier: MotionTier = MotionTier.Normal,
     cardTransitionEnabled: Boolean,
     isReturningFromVideoDetail: Boolean = false,
@@ -258,6 +268,9 @@ internal fun HomeCategoryPageContent(
     oldContentAnchorBvid: String? = null,
     oldContentStartIndex: Int? = null,
     oldContentLocatorRefreshKey: Long = 0L,
+    oldContentLocatorDismissed: Boolean = false,
+    onOldContentLocatorDismiss: () -> Unit = {},
+    refreshPillBackdropSource: ChromeBackdropSource? = null,
     onOldContentDividerClick: () -> Unit = {},
     todayWatchEnabled: Boolean = false,
     todayWatchMode: TodayWatchMode = TodayWatchMode.RELAX,
@@ -417,10 +430,6 @@ internal fun HomeCategoryPageContent(
     }
     val oldContentLocatorScope = rememberCoroutineScope()
 
-    var oldContentLocatorDismissed by rememberSaveable(oldContentLocatorRefreshKey) {
-        mutableStateOf(false)
-    }
-
     // Share key extraction for cover load ranges and full-width header visibility.
     val visibleLazyItemKeys = remember(gridState) {
         derivedStateOf { gridState.visibleItemKeys() }
@@ -483,6 +492,36 @@ internal fun HomeCategoryPageContent(
     val visualWorkActive = rememberVisualWorkActive()
     val reduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
     val componentMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+    val refreshMotionAllowed = isActive && pageOnScreen && visualWorkActive &&
+        componentMotionEnabled && !reduceMotion &&
+        com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled
+    val refreshOffset = remember(gridState) { Animatable(0f) }
+    var liftingCardKeys by remember(gridState) { mutableStateOf(emptySet<String>()) }
+    val latestGridVideos by rememberUpdatedState(visibleGridVideos)
+    val latestVideoRanges by rememberUpdatedState(videoRangesByLazyKey)
+    val refreshLiftPx = with(LocalDensity.current) { 14.dp.toPx() }
+    LaunchedEffect(refreshedCardKeys, gridState, refreshMotionAllowed, refreshLiftPx) {
+        if (refreshedCardKeys == null || !refreshMotionAllowed) return@LaunchedEffect
+        refreshedCardKeys.collectLatest { newKeys ->
+            // 等本轮数据进入视口，短时间内没有可见新卡片就结束这轮入场。
+            val visibleNewKeys = withTimeoutOrNull(160L) {
+                snapshotFlow {
+                    visibleLazyItemKeys.value.asSequence().filterIsInstance<String>().filter { key ->
+                        val index = latestVideoRanges[key]?.first ?: return@filter false
+                        HomeFeedMergePolicy.keyOf(latestGridVideos[index]) in newKeys
+                    }.toSet()
+                }.first { it.isNotEmpty() }
+            } ?: return@collectLatest
+            refreshOffset.snapTo(0f)
+            liftingCardKeys = visibleNewKeys
+            try {
+                refreshOffset.animateTo(-refreshLiftPx, continuityTween(90))
+                refreshOffset.animateTo(0f, scrollCompactExpansionSpring())
+            } finally {
+                liftingCardKeys = emptySet()
+            }
+        }
+    }
     val auxiliaryWorkAllowed = rememberHomeCardAuxiliaryWorkAllowed(
         pageActive = pageImageWorkAllowed,
         isScrolling = gridState.isScrollInProgress || pageScrollInProgress?.value == true,
@@ -520,6 +559,13 @@ internal fun HomeCategoryPageContent(
             propagateMinConstraints = gridState.regularLayout,
             modifier = itemModifier
                 .then(if (index == 0) firstGridItemModifier else Modifier)
+                .then(
+                    if (refreshMotionAllowed && lazyItemKey in liftingCardKeys) {
+                        Modifier.graphicsLayer {
+                            translationY = if (lazyItemKey in visibleLazyItemKeys.value) refreshOffset.value else 0f
+                        }
+                    } else Modifier
+                )
         ) {
             CompositionLocalProvider(
                 LocalHomeCardVisibility provides cardVisibility,
@@ -556,6 +602,7 @@ internal fun HomeCategoryPageContent(
                             coverRequestSpec = coverRequestSpec,
                             showCoverGlassBadges = showCoverGlassBadges,
                             showInfoGlassBadges = showInfoGlassBadges,
+                            wallpaperVisible = wallpaperTintEnabled,
                             showUpBadge = showUpBadges,
                             showUpAvatar = showUpAvatars,
                             homeDurationStyle = if (isNativeNonVideoCard && video.duration <= 0) {
@@ -722,7 +769,9 @@ internal fun HomeCategoryPageContent(
                 contentPadding = contentPadding,
                 horizontalArrangement = horizontalArrangement,
                 verticalItemSpacing = cardLayout.verticalItemSpacingDp.dp,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(refreshPillBackdropSource?.modifier ?: Modifier)
             ) {
                 // 首屏骨架直接铺在内容网格里：同一个 LazyLayout、同一个 gridState，
                 // 骨架 → 卡片是一次 item 原地替换，而不是整棵网格重建。
@@ -967,9 +1016,10 @@ internal fun HomeCategoryPageContent(
         if (oldContentGridItemIndex != null && !oldContentLocatorDismissed) {
             LastPositionPill(
                 refreshKey = oldContentLocatorRefreshKey,
+                backdrop = refreshPillBackdropSource?.takeIf { it.isReady }?.backdrop,
                 // 内容可见性与后台任务门控分开，任务暂停不销毁按钮或重放入场。
                 visible = pageOnScreen,
-                onDismiss = { oldContentLocatorDismissed = true },
+                onDismiss = onOldContentLocatorDismiss,
                 onClick = {
                     oldContentLocatorScope.launch {
                         gridState.animateScrollToItem(oldContentGridItemIndex)
@@ -1011,6 +1061,15 @@ private fun PopularSubCategorySegmentedControl(
         // Glass owns content-sized slots; center the actual rail, not a wider wrapper
         // whose child dock is start-aligned. Disabled materials retain the equal-slot path.
         if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
+            // 页内标签栏只取壁纸层，避免采到包含自身的首页内容录制层。
+            val wallpaperBackdrop = LocalHomeWallpaperBackdrop.current
+            val glassContainerColor = wallpaperBackdrop?.let {
+                resolveGlobalWallpaperProtectiveColor(
+                    baseColor = AppSurfaceTokens.cardContainer(),
+                    lightAlpha = 0.28f,
+                    darkAlpha = 0.38f,
+                )
+            }
             com.android.purebilibili.core.ui.components.AppLiquidAwareTabRow(
                 // Glass indicator fills the measured slot; native geometry keeps its defaults.
                 liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
@@ -1020,6 +1079,8 @@ private fun PopularSubCategorySegmentedControl(
                 selectedValue = selectedSubCategory,
                 onSelectionChange = onSubCategoryChange,
                 role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
+                miuixBackdrop = wallpaperBackdrop,
+                glassContainerColor = glassContainerColor,
                 // 仅玻璃热门子分类上移，原生槽位及列表卡片位置保持原参数。
                 modifier = Modifier
                     .widthIn(max = 400.dp)

@@ -43,8 +43,8 @@ class HomeSettingsStoreParityTest {
         assertFalse(result.showHomeInfoGlassBadges)
         assertEquals(HomeCardBadgeEffectMode.OFF, result.homeCardBadgeEffectMode)
         assertEquals(HomeCardInfoGlassMode.OFF, result.homeCardInfoGlassMode)
-        assertEquals(HomeWallpaperEffectMode.SOFT_BLUR, result.homeWallpaperEffectMode)
-        assertEquals(HomeWallpaperEffectScope.HOME_ONLY, result.homeWallpaperEffectScope)
+        assertEquals(HomeWallpaperEffectMode.OFF, result.homeWallpaperEffectMode)
+        assertEquals(HomeWallpaperEffectScope.GLOBAL, result.homeWallpaperEffectScope)
         assertFalse(result.showHomeUpBadges)
         assertFalse(result.showHomeUpAvatars)
         assertTrue(result.showHomePublishTime)
@@ -57,7 +57,7 @@ class HomeSettingsStoreParityTest {
             intPreferencesKey("home_card_badge_effect_mode") to HomeCardBadgeEffectMode.LIGHT_BLUR.value,
             intPreferencesKey("home_card_info_glass_mode") to HomeCardInfoGlassMode.REALTIME_BLUR.value,
             intPreferencesKey("home_wallpaper_effect_mode") to HomeWallpaperEffectMode.OFF.value,
-            intPreferencesKey("home_wallpaper_effect_scope") to HomeWallpaperEffectScope.GLOBAL.value,
+            intPreferencesKey("home_wallpaper_effect_scope") to HomeWallpaperEffectScope.HOME_ONLY.value,
             booleanPreferencesKey("home_up_badges_visible") to false,
             booleanPreferencesKey("home_up_avatars_visible") to false,
             booleanPreferencesKey("home_video_duration_badges_visible") to false
@@ -70,7 +70,7 @@ class HomeSettingsStoreParityTest {
         assertEquals(HomeCardBadgeEffectMode.OFF, result.homeCardBadgeEffectMode)
         assertEquals(HomeCardInfoGlassMode.OFF, result.homeCardInfoGlassMode)
         assertEquals(HomeWallpaperEffectMode.OFF, result.homeWallpaperEffectMode)
-        assertEquals(HomeWallpaperEffectScope.GLOBAL, result.homeWallpaperEffectScope)
+        assertEquals(HomeWallpaperEffectScope.HOME_ONLY, result.homeWallpaperEffectScope)
         assertEquals(false, result.showHomeUpBadges)
         assertEquals(false, result.showHomeUpAvatars)
         assertEquals(HomeDurationStyle.HIDDEN, result.homeDurationStyle)

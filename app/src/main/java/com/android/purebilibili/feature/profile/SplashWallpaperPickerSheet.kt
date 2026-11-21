@@ -38,12 +38,15 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import com.android.purebilibili.R
+import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.core.store.SettingsManager
 import androidx.compose.material.icons.Icons
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -87,13 +90,15 @@ fun SplashWallpaperPickerSheet(
     val saveState by viewModel.splashSaveState.collectAsStateWithLifecycle()
 
     var selectedUrl by remember { mutableStateOf<String?>(null) }
+    val offersBundledWallpaper = target == WallpaperPickerTarget.HOME
+    val bundledWallpaperSelected = selectedUrl == ALPINE_PAGE_WALLPAPER_URI
     var saveToGallery by remember { mutableStateOf(false) }
     var showSplashAdjustmentSheet by remember { mutableStateOf(false) }
     var showHomeAdjustmentSheet by remember { mutableStateOf(false) }
     val homeSelection by SettingsManager.getHomeWallpaperSelection(context)
         .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.home.HomeWallpaperSelection())
     val homeEffectMode by SettingsManager.getHomeWallpaperEffectMode(context)
-        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeWallpaperEffectMode.SOFT_BLUR)
+        .collectAsStateWithLifecycle(initialValue = HomeWallpaperEffectMode.SOFT_BLUR)
     var isImportingWallpaper by remember { mutableStateOf(false) }
     var importedWallpaper by remember { mutableStateOf<File?>(null) }
     val importScope = rememberCoroutineScope()
@@ -147,12 +152,12 @@ fun SplashWallpaperPickerSheet(
     }
     val titleText = when (target) {
         WallpaperPickerTarget.SPLASH -> "选择开屏壁纸"
-        WallpaperPickerTarget.HOME -> "选择首页壁纸"
+        WallpaperPickerTarget.HOME -> stringResource(R.string.appearance_home_wallpaper_choose)
         WallpaperPickerTarget.SUBSCRIPTION_ARTICLE -> "选择正文壁纸"
     }
     val actionText = when (target) {
         WallpaperPickerTarget.SPLASH -> "设为开屏壁纸"
-        WallpaperPickerTarget.HOME -> "设为首页壁纸"
+        WallpaperPickerTarget.HOME -> stringResource(R.string.appearance_home_wallpaper_apply)
         WallpaperPickerTarget.SUBSCRIPTION_ARTICLE -> "设为正文壁纸"
     }
 
@@ -226,7 +231,7 @@ fun SplashWallpaperPickerSheet(
                 }
             }
 
-            if (error != null && officialWallpapers.isNotEmpty()) {
+            if (error != null && (offersBundledWallpaper || officialWallpapers.isNotEmpty())) {
                 AppText(
                     text = error.orEmpty(),
                     color = AppContentColors.error(),
@@ -237,7 +242,7 @@ fun SplashWallpaperPickerSheet(
 
             // 2. 内容区
             when {
-                isLoading && officialWallpapers.isEmpty() -> {
+                !offersBundledWallpaper && isLoading && officialWallpapers.isEmpty() -> {
                     Column(
                         modifier = Modifier.fillMaxSize().weight(1f),
                         verticalArrangement = Arrangement.Center,
@@ -252,7 +257,7 @@ fun SplashWallpaperPickerSheet(
                         AdaptiveLoadingIndicator()
                     }
                 }
-                error != null && officialWallpapers.isEmpty() -> {
+                !offersBundledWallpaper && error != null && officialWallpapers.isEmpty() -> {
                     Column(
                         modifier = Modifier.fillMaxSize().weight(1f),
                         verticalArrangement = Arrangement.Center,
@@ -271,7 +276,7 @@ fun SplashWallpaperPickerSheet(
                         }
                     }
                 }
-                officialWallpapers.isEmpty() -> {
+                !offersBundledWallpaper && officialWallpapers.isEmpty() -> {
                     Column(
                         modifier = Modifier.fillMaxSize().weight(1f),
                         verticalArrangement = Arrangement.Center,
@@ -299,6 +304,23 @@ fun SplashWallpaperPickerSheet(
                                 isSelected = isUserSelectedSplashWallpaperUri(selectedUrl),
                                 onClick = openCustomWallpaperPicker
                             )
+                        }
+
+                        if (offersBundledWallpaper) {
+                            item(key = ALPINE_PAGE_WALLPAPER_URI) {
+                                WallpaperSelectionTile(
+                                    isSelected = (selectedUrl ?: homeSelection.uri) == ALPINE_PAGE_WALLPAPER_URI,
+                                    onClick = { selectedUrl = ALPINE_PAGE_WALLPAPER_URI },
+                                    title = stringResource(R.string.appearance_wallpaper_alpine_daylight),
+                                ) {
+                                    AsyncImage(
+                                        model = ALPINE_PAGE_WALLPAPER_URI,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
                         }
 
                         items(officialWallpapers, key = { resolveOfficialWallpaperDetailUrl(it) }) { item ->
@@ -373,7 +395,9 @@ fun SplashWallpaperPickerSheet(
                                 else com.android.purebilibili.core.ui.wallpaper.WallpaperTransform(),
                             initialTabletTransform = if (sameSelection) homeSelection.tabletTransform
                                 else com.android.purebilibili.core.ui.wallpaper.WallpaperTransform(),
-                            effectMode = homeEffectMode,
+                            effectMode = if (bundledWallpaperSelected && homeEffectMode == HomeWallpaperEffectMode.OFF) {
+                                HomeWallpaperEffectMode.ORIGINAL
+                            } else homeEffectMode,
                             saving = isSaving,
                             saveError = (saveState as? WallpaperSaveState.Error)?.message,
                             onDismiss = { showHomeAdjustmentSheet = false },
@@ -383,8 +407,8 @@ fun SplashWallpaperPickerSheet(
                                     onDismiss()
                                     Toast.makeText(context, "壁纸设置成功", Toast.LENGTH_SHORT).show()
                                 }
-                                if (isUserSelectedSplashWallpaperUri(previewUri)) {
-                                    viewModel.setCustomHomeWallpaper(
+                                if (bundledWallpaperSelected || isUserSelectedSplashWallpaperUri(previewUri)) {
+                                    viewModel.setLocalHomeWallpaper(
                                         uri = previewUri,
                                         mobileTransform = mobile,
                                         tabletTransform = tablet,
@@ -445,7 +469,7 @@ fun SplashWallpaperPickerSheet(
 
                     // 保存到相册开关
                     AnimatedVisibility(
-                        visible = !isUserSelectedSplashWallpaperUri(selectedUrl)
+                        visible = !bundledWallpaperSelected && !isUserSelectedSplashWallpaperUri(selectedUrl)
                     ) {
                         Row(
                             modifier = Modifier

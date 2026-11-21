@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.SettingsManager
 import kotlin.math.roundToInt
+import top.yukonga.miuix.kmp.blur.Backdrop
 
 
 private const val CloseHitTargetSizeDp = 22
@@ -65,12 +66,14 @@ private const val TextCloseGapDp = 6
  * @param onClick 点击胶囊本体的定位动作，例如滚动到上次刷新位置。触发后胶囊立即收起，
  * 不播放消散动画。
  * @param modifier 外部布局修饰符，负责胶囊的停靠位置与底部避让。
+ * @param backdrop 独立于胶囊的内容源。为 null 时绘制原生实色按钮。
  */
 @Composable
 internal fun LastPositionPill(
     refreshKey: Any,
     onDismiss: () -> Unit,
     onClick: () -> Unit,
+    backdrop: Backdrop?,
     modifier: Modifier = Modifier,
     visible: Boolean = true,
 ) {
@@ -138,6 +141,7 @@ internal fun LastPositionPill(
             },
         ) {
             HomeOverlayPillButton(
+                backdrop = backdrop,
                 onClick = {
                     if (!dissolving) {
                         onClick()

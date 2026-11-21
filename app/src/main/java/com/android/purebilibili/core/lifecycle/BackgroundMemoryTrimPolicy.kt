@@ -2,7 +2,7 @@ package com.android.purebilibili.core.lifecycle
 
 import android.content.ComponentCallbacks2
 
-/** 短暂切换保留热图片；持续后台在缓存进程可能冻结前释放页面像素并收紧预算。 */
+/** 切到后台先释放页面像素并保留热缓存；持续后台时再收紧图片预算。 */
 internal const val BACKGROUND_IMAGE_TRIM_DELAY_MS = 5_000L
 internal const val BACKGROUND_IMAGE_CACHE_LIGHT_MAX_BYTES = 64L * 1024 * 1024
 internal const val BACKGROUND_IMAGE_CACHE_MAX_BYTES = 32L * 1024 * 1024

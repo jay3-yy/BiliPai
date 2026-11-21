@@ -1913,7 +1913,7 @@ class MainActivity : AppCompatActivity() {
                         com.android.purebilibili.feature.video.screen.VideoDetailPipParamsEffect(
                             context = this@MainActivity,
                             activity = this@MainActivity,
-                            playerBounds = miniPlayerManager.miniPlayerSourceBoundsPx,
+                            playerBoundsProvider = { miniPlayerManager.miniPlayerSourceBoundsPx },
                             pipModeEnabled = miniPlayerManager.shouldEnterPip(),
                             player = miniPlayerManager.player
                         )

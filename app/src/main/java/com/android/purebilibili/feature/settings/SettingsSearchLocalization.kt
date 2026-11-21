@@ -5,9 +5,11 @@ import com.android.purebilibili.R
 
 @StringRes
 internal fun settingsSearchResultTitleResource(settingId: String): Int? = when (settingId) {
+    PROCESS_MEMORY_SETTING_ID -> R.string.process_memory_title
     SUB_REPLY_STYLE_SETTING_ID -> R.string.sub_reply_style_title
     "animation.predictive_back_enabled" -> R.string.animation_predictive_back_title
     "animation.card_transition_enabled" -> R.string.animation_title_card_transition
+    CARD_TRANSITION_METHOD_SETTING_ID -> R.string.animation_card_transition_method_title
     CARD_REMOVAL_DISSOLVE_SETTING_ID -> R.string.animation_card_removal_dissolve_title
     "animation.app_navigation_settings.settings_container_morph_enabled" -> R.string.animation_settings_container_title
     "animation.page_transition_style" -> R.string.animation_back_title
@@ -48,6 +50,7 @@ internal fun settingsSearchResultTitleResource(settingId: String): Int? = when (
 
 @StringRes
 internal fun settingsSearchResultSummaryResource(settingId: String): Int? = when (settingId) {
+    PROCESS_MEMORY_SETTING_ID -> R.string.process_memory_summary
     SUB_REPLY_STYLE_SETTING_ID -> R.string.sub_reply_style_summary
     CARD_REMOVAL_DISSOLVE_SETTING_ID -> R.string.animation_card_removal_dissolve_summary
     SETTINGS_ICON_GLYPHS_SETTING_ID -> R.string.appearance_settings_icon_glyphs_summary

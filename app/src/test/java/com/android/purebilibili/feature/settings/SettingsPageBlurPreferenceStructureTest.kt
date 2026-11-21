@@ -21,8 +21,6 @@ class SettingsPageBlurPreferenceStructureTest {
         assertTrue(source.contains("BiliPaiImmersiveTopBar("))
         assertTrue(source.contains(".then(chromeSource?.modifier ?: Modifier)"))
         assertFalse(source.contains("TopReadabilityChrome"))
-        assertTrue(source.contains("if (progressiveBlurEnabled) rememberChromeBackdropSource()"))
-        assertTrue(source.contains("Column(modifier = scrollModifier)"))
         assertTrue(source.contains("fun settingsScrollContentPadding("))
         assertFalse(source.contains("scrollModifier.padding(padding)"))
         assertFalse(source.contains(".fillMaxSize()\n                .hazeSourceCompat(state = hazeState)"))

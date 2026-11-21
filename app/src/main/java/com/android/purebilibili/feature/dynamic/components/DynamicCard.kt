@@ -21,6 +21,8 @@ import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.resolveGlobalWallpaperProtectiveColor
 
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
@@ -541,10 +543,23 @@ fun DynamicCardV2(
         )
     }
 
+    val wallpaperSurface = if (!isDetail && LocalGlobalWallpaperBackdropVisible.current) {
+        Modifier
+            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.ExtraSmall)
+            .background(
+                resolveGlobalWallpaperProtectiveColor(
+                    AppSurfaceTokens.chromeBackground(),
+                    lightAlpha = 0.71f,
+                    darkAlpha = 0.78f,
+                ),
+                AppShapes.container(ContainerLevel.Card),
+            )
+    } else Modifier
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = resolveDynamicCardOuterPadding())
+            .then(wallpaperSurface)
     ) {
         Column(
             modifier = Modifier
@@ -1880,6 +1895,7 @@ fun DynamicCardV2(
         content?.major?.live_rcmd?.let { liveRcmd ->
             LiveCard(
                 liveRcmd = liveRcmd,
+                modifier = Modifier.fillMaxWidth(),
                 onLiveClick = { roomId, title, uname ->
                     dispatchDynamicCardPrimaryAction(
                         action = DynamicCardPrimaryAction.OpenLive(roomId, title, uname),
@@ -1898,6 +1914,7 @@ fun DynamicCardV2(
         content?.major?.live?.let { live ->
             LiveMajorCard(
                 live = live,
+                modifier = Modifier.fillMaxWidth(),
                 onLiveClick = { roomId, title, uname ->
                     dispatchDynamicCardPrimaryAction(
                         action = DynamicCardPrimaryAction.OpenLive(roomId, title, uname),
@@ -1916,6 +1933,7 @@ fun DynamicCardV2(
         content?.major?.subscription_new?.live_rcmd?.let { liveRcmd ->
             LiveCard(
                 liveRcmd = liveRcmd,
+                modifier = Modifier.fillMaxWidth(),
                 onLiveClick = { roomId, title, uname ->
                     dispatchDynamicCardPrimaryAction(
                         action = DynamicCardPrimaryAction.OpenLive(roomId, title, uname),

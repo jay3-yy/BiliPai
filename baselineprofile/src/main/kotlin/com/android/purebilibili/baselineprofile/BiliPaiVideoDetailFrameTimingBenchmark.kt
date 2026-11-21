@@ -6,6 +6,7 @@ import android.view.MotionEvent
 import androidx.benchmark.macro.CompilationMode
 import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.MacrobenchmarkScope
+import androidx.benchmark.macro.StartupTimingMetric
 import androidx.benchmark.macro.StartupMode.WARM
 import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -42,6 +43,22 @@ class BiliPaiVideoDetailFrameTimingBenchmark {
     fun playerSwipeGesture_compilationFull() = benchmarkPlayerSwipeGesture(
         compilationMode = CompilationMode.Full()
     )
+
+    @Test
+    fun videoDetailDirectOpen_compilationPartial() = benchmarkRule.measureRepeated(
+        packageName = TARGET_PACKAGE_NAME,
+        metrics = listOf(StartupTimingMetric(), FrameTimingMetric()),
+        compilationMode = CompilationMode.Partial(),
+        iterations = FRAME_TIMING_BENCHMARK_ITERATIONS,
+        startupMode = WARM,
+        setupBlock = { pressHome() },
+    ) {
+        startActivityAndWait { intent ->
+            intent.setClassName(TARGET_PACKAGE_NAME, "com.android.purebilibili.feature.video.VideoActivity")
+            intent.putExtra("bvid", resolveBenchmarkBvid())
+        }
+        requireNotNull(device.wait(Until.findObject(By.desc("返回")), UI_WAIT_TIMEOUT_MS))
+    }
 
     @Test
     fun videoCardOpen_compilationPartial() = benchmarkVideoCardTransition(

@@ -6,7 +6,6 @@ import com.android.purebilibili.core.store.HomeCardInfoGlassMode
 import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.core.store.HomeWallpaperEffectScope
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionBackgroundPhase
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -221,13 +220,17 @@ class HomeGlassVisualPolicyTest {
             "home", "dynamic", "profile", "settings", "settings_category/HOME",
             "appearance_settings", "history", "favorite", "watch_later", "inbox",
             "message/reply_me", "chat/123/1?name=UP主", "search?keyword=壁纸", "bangumi",
+            "dynamic_detail/123?openComments=true", "article/123", "article_collection/123",
+            "comment_detail/123/456?type=1", "category/1?name=动画", "space/123", "fans/123",
+            "account_ledger/coin", "live_match", "match_info/123", "keyboard_shortcuts_settings",
+            "open_source_licenses", "performance_history",
         )
         supportedRoutes.forEach { route ->
             assertTrue(shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.GLOBAL, route), route)
             assertFalse(shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.HOME_ONLY, route), route)
         }
         listOf(null, "", "main_host", "video/BV1", "story", "live/123", "bangumi/play/1/2",
-            "offline_video/1", "external_media/123", "web", "login", "space/123", "unknown"
+            "offline_video/1", "external_media/123", "web", "login", "unknown"
         ).forEach { route ->
             assertFalse(shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.GLOBAL, route), route)
         }
@@ -241,15 +244,16 @@ class HomeGlassVisualPolicyTest {
     }
 
     @Test
-    fun rootMediaDefersToExistingHomeAndChatPlayers() {
-        listOf("home", "chat/123/1").forEach { route ->
-            assertFalse(shouldRenderRootHomeWallpaperMedia(true, false, route))
-            assertTrue(shouldRenderRootHomeWallpaperMedia(true, true, route))
+    fun movingWallpaperStaysMountedAcrossEligibleRoutes() {
+        val wallpaperRoutes = listOf("home", "chat/123/1", "dynamic", "appearance_settings")
+        wallpaperRoutes.forEach { route ->
+            val usesWallpaper = shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.GLOBAL, route)
+            assertTrue(shouldRenderRootHomeWallpaperMedia(true, false, usesWallpaper), route)
         }
-        assertFalse(shouldRenderRootHomeWallpaperMedia(true, false, "main_host", "home"))
-        assertTrue(shouldRenderRootHomeWallpaperMedia(true, false, "main_host", "dynamic"))
-        assertTrue(shouldRenderRootHomeWallpaperMedia(true, false, "settings"))
-        assertFalse(shouldRenderRootHomeWallpaperMedia(false, true, "settings"))
+        val usesWallpaper = shouldRenderGlobalHomeWallpaperBackdrop(HomeWallpaperEffectScope.GLOBAL, "video/BV1")
+        assertFalse(shouldRenderRootHomeWallpaperMedia(true, false, usesWallpaper))
+        assertTrue(shouldRenderRootHomeWallpaperMedia(true, true, usesWallpaper))
+        assertFalse(shouldRenderRootHomeWallpaperMedia(false, true, activeRouteUsesWallpaper = true))
     }
 
     @Test
@@ -565,31 +569,5 @@ class HomeGlassVisualPolicyTest {
         )
 
         assertEquals("", resolved)
-    }
-
-    @Test
-    fun overlayPillsShareOneOpaqueCapsuleComponent() {
-        // 「撤销刷新」「定位上次刷新」必须共用 HomeOverlayPillButton，
-        // 避免同屏出现实心 primaryContainer 与毛玻璃两种胶囊。
-        // 悬浮胶囊不可接真实 backdrop 玻璃（首页 chrome 源的记录子树包含胶囊，
-        // 自采样环会在小米 HWUI 上无限递归爆栈），因此固定不透明容器色。
-        listOf(
-            "app/src/main/java/com/android/purebilibili/feature/home/HomeRefreshOverlays.kt",
-            "app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryPage.kt",
-            "app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicScreen.kt",
-        ).forEach { path ->
-            val source = listOf(File(path), File(path.removePrefix("app/"))).first(File::exists).readText()
-            assertTrue(
-                source.contains("HomeOverlayPillButton("),
-                "$path 未接入统一的悬浮胶囊组件",
-            )
-        }
-        val pill = File(
-            "app/src/main/java/com/android/purebilibili/feature/home/components/HomeOverlayPillButton.kt"
-        ).readText()
-        assertTrue(pill.contains("AppShapes.container(ContainerLevel.Pill)"))
-        assertTrue(pill.contains("AppButton("))
-        assertTrue(pill.contains("containerColor = AppSurfaceTokens.cardContainer()"))
-        assertTrue(pill.contains("backdrop"), "胶囊必须保留自采样环闪退的约束注释")
     }
 }

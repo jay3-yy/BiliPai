@@ -33,11 +33,12 @@ import androidx.compose.ui.graphics.takeOrElse
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.ui.AppIcons
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.rememberAppCommentIcon
 import com.android.purebilibili.core.ui.rememberAppDownloadIcon
 import com.android.purebilibili.core.ui.rememberAppShareIcon
@@ -255,7 +256,7 @@ fun ActionButtonsRow(
                 contentAlignment = Alignment.Center
             ) {
                 TripleProgressActionButton(
-                    icon = AppIcons.BiliCoin,
+                    icon = ImageVector.vectorResource(R.drawable.ic_video_detail_coin_outline_24),
                     text = FormatUtils.formatStat(info.stat.coin.toLong()),
                     isActive = coinCount > 0,
                     activeColor = activeColors.primaryAction,
@@ -595,7 +596,7 @@ private fun TripleLikeActionButton(
             exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.scaleOut()
         ) {
             TripleProgressIcon(
-                icon = AppIcons.BiliCoin,
+                icon = ImageVector.vectorResource(R.drawable.ic_video_detail_coin_outline_24),
                 text = coinCount,
                 progress = longPressProgress,
                 progressColor = AppContentColors.accent(),

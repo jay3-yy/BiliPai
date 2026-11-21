@@ -100,6 +100,16 @@ internal class VideoCardSourceAnchor(source: VideoCardSourceInstance) {
     fun radiusPx(): Float? = reference.get()
         ?.takeIf { VideoCardSourceInstances.isAttached(it) }?.radiusPx()
 
+    fun matchesWindowGeometry(
+        decor: View,
+        expectedBounds: AndroidRect,
+        expectedRadiusPx: Float,
+        windowCoordinates: Boolean,
+        allowPartial: Boolean,
+    ): Boolean = belongsToWindow(decor) &&
+        bounds(windowCoordinates, allowPartial) == expectedBounds &&
+        radiusPx() == expectedRadiusPx
+
     fun cornerRadiusDp(): Int? = reference.get()?.takeIf { VideoCardSourceInstances.isAttached(it) }
         ?.let { (it.radiusPx() / it.density.density).roundToInt() }
 

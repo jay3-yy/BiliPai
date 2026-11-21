@@ -1294,6 +1294,8 @@ fun DynamicScreen(
                 com.android.purebilibili.feature.home.components.LastPositionPill(
                     refreshKey = locatorRefreshKey,
                     visible = isCurrentPage,
+                    // 内容录制在 AnimatedContent 内，定位按钮在其外侧。
+                    backdrop = activeDynamicBackdrop,
                     onDismiss = { oldContentLocatorDismissed = true },
                     onClick = {
                         val gridIndex = resolveDynamicRefreshDividerGridIndex(oldContentDividerIndex)

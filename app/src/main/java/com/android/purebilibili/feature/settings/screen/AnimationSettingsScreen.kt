@@ -38,6 +38,7 @@ import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.CardRemovalDissolveMode
+import com.android.purebilibili.core.store.CardTransitionMethod
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.AppAlertDialog
@@ -232,17 +233,31 @@ fun AnimationSettingsContent(
         .collectAsStateWithLifecycle(initialValue = themeConfiguration.globalTextTapCopyEnabled)
     val appNavigationSettings = rememberSettingsNavigationConfiguration()
     val transitionWindowConfiguration = LocalConfiguration.current
-    val videoTransitionCapability = remember(context, transitionWindowConfiguration, state.cardTransitionEnabled) {
-        SystemVideoCardTransition.deviceCapability(context.findHostActivity())
+    val transitionMethod = homeConfiguration.cardTransitionMethod
+    val videoTransitionCapability = remember(context, transitionWindowConfiguration, transitionMethod, state.cardTransitionEnabled) {
+        SystemVideoCardTransition.deviceCapability(context.findHostActivity(), transitionMethod)
     }
     val systemReduceMotion = rememberSystemReduceMotion()
-    val cardTransitionSourceDescription = stringResource(
-        when {
-            systemReduceMotion -> R.string.animation_card_transition_source_reduced_motion
-            videoTransitionCapability.available -> R.string.animation_card_transition_source_official
-            else -> R.string.animation_card_transition_source_fallback
-        },
-    )
+    val lastTransitionMethod by SystemVideoCardTransition.lastOpenedMethod.collectAsStateWithLifecycle()
+    val transitionMethodStatus = when {
+        systemReduceMotion -> stringResource(R.string.animation_card_transition_source_reduced_motion)
+        !state.cardTransitionEnabled -> stringResource(R.string.animation_card_transition_method_disabled)
+        !videoTransitionCapability.available &&
+            transitionMethod != CardTransitionMethod.AUTO &&
+            transitionMethod != CardTransitionMethod.STANDARD ->
+            stringResource(R.string.animation_card_transition_source_fallback)
+        else -> stringResource(
+            R.string.animation_card_transition_method_current,
+            stringResource(cardTransitionMethodLabel(videoTransitionCapability.method)),
+        )
+    }
+    val transitionMethodSummary = lastTransitionMethod?.let { last ->
+        stringResource(
+            R.string.animation_card_transition_method_status,
+            transitionMethodStatus,
+            stringResource(cardTransitionMethodLabel(last)),
+        )
+    } ?: transitionMethodStatus
     val transitionBlurDescription = stringResource(
         when {
             !videoTransitionCapability.available -> R.string.animation_transition_blur_summary
@@ -689,13 +704,33 @@ fun AnimationSettingsContent(
                                 title = localizedAnimationSettingTitle("animation.card_transition_enabled"),
                                 subtitle = stringResource(R.string.animation_card_transition_summary),
                                 checked = state.cardTransitionEnabled,
-                                onCheckedChange = { enabled ->
-                                    viewModel.toggleCardTransition(enabled)
-                                    if (enabled) {
-                                        Toast.makeText(context, cardTransitionSourceDescription, Toast.LENGTH_LONG).show()
-                                    }
-                                },
+                                onCheckedChange = { enabled -> viewModel.toggleCardTransition(enabled) },
                                 iconTint = AppContentColors.secondaryText()
+                            )
+                        }
+                        AppPreferenceDivider()
+
+                        SettingsItemAnchor(CARD_TRANSITION_METHOD_SETTING_ID) {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_TRANSITION_METHOD),
+                                title = stringResource(R.string.animation_card_transition_method_title),
+                                subtitle = transitionMethodSummary,
+                                options = CardTransitionMethod.entries.map { method ->
+                                    AppSegmentOption(
+                                        value = method,
+                                        label = stringResource(cardTransitionMethodLabel(method)),
+                                        description = when (method) {
+                                            CardTransitionMethod.AUTO -> stringResource(R.string.animation_card_transition_method_auto_summary)
+                                            CardTransitionMethod.XIAOMI_ROUNDED -> stringResource(R.string.animation_card_transition_method_xiaomi_summary)
+                                            else -> null
+                                        },
+                                    )
+                                },
+                                selectedValue = transitionMethod,
+                                onSelectionChange = { method ->
+                                    scope.launch { SettingsManager.setCardTransitionMethod(context, method) }
+                                },
+                                iconTint = AppContentColors.secondaryText(),
                             )
                         }
                         AppPreferenceDivider()

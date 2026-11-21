@@ -118,15 +118,31 @@ internal object SystemWindowControlNeighbors {
             !it.pressure.isRunning && it.motion?.phase?.running != true
         }
 
-    private fun captureGroupLanding(source: SystemWindowControlNeighbor): (() -> Unit)? {
+    private fun captureGroupLanding(
+        source: SystemWindowControlNeighbor,
+        sourceBounds: Rect,
+        neighbors: List<Pair<SystemWindowControlNeighbor, Offset>>,
+    ): (() -> Unit)? {
         val group = source.motionGroup as? NavigationControlMotionGroupState ?: return null
         val sourceReference = WeakReference(source)
-        val members = controls.filter {
-            it.eligible && it.motionGroup === group && it.view === source.view && it.route == source.route
-        }.map(::WeakReference)
+        val members = if (group.landAdjacentOnly) {
+            // 同一方向只回弹最近的控件，避免可见列表整列响应。
+            val nearest = neighbors.groupBy { it.second }.values.map { candidates ->
+                candidates.minBy { (neighbor, _) ->
+                    val center = requireNotNull(neighbor.visibleBounds()).center
+                    (center - sourceBounds.center).getDistance()
+                }.first
+            }
+            listOf(source) + nearest
+        } else {
+            controls.filter {
+                it.eligible && it.motionGroup === group && it.view === source.view && it.route == source.route
+            }
+        }
+        val memberReferences = members.map(::WeakReference)
         return {
             val current = sourceReference.get()
-            if (current != null && current in controls) members.forEach { reference ->
+            if (current != null && current in controls) memberReferences.forEach { reference ->
                 reference.get()?.takeIf { it in controls && it.motionGroup === group }?.let {
                     it.groupLanding.request()
                 }
@@ -138,11 +154,12 @@ internal object SystemWindowControlNeighbors {
         val source = controls.firstOrNull { anchor.hasCoordinates(it.coordinates) } ?: return null
         if (!source.eligible) return null
         val bounds = source.visibleBounds() ?: return null
-        val neighbors = controls.mapNotNull { candidate ->
+        val candidates = controls.mapNotNull { candidate ->
             val direction = direction(source, bounds, candidate) ?: return@mapNotNull null
-            WeakReference(candidate) to direction
+            candidate to direction
         }
-        val groupLanding = captureGroupLanding(source)?.let(::ControlGroupLandingDelivery)
+        val groupLanding = captureGroupLanding(source, bounds, candidates)?.let(::ControlGroupLandingDelivery)
+        val neighbors = candidates.map { (candidate, direction) -> WeakReference(candidate) to direction }
         if (neighbors.isEmpty() && groupLanding == null) return null
         val sourceReference = WeakReference(source)
         return { phase ->

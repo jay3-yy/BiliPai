@@ -51,5 +51,6 @@ fun PortraitCommentSheet(
         onReplyClick = onReplyClick,
         onUserClick = onUserClick,
         onOpenBilibiliLink = onOpenBilibiliLink,
+        pullToRefreshFromTopOnly = true,
     )
 }

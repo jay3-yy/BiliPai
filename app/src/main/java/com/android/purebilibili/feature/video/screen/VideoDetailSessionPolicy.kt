@@ -375,14 +375,16 @@ internal data class VideoPlayerSectionTarget(
      * Shared-element identity for the player shell. Keep route-entry bvid stable during in-page
      * collection switches so SharedTransition does not rekey the live surface into a black hole.
      */
-    val sharedElementBvid: String
+    val sharedElementBvid: String,
+    val requestCid: Long,
 )
 
 internal fun resolveVideoPlayerSectionTarget(
     routeBvid: String,
     routeCoverUrl: String,
     currentBvid: String,
-    switchedCoverUrl: String = ""
+    switchedCoverUrl: String = "",
+    requestCid: Long = 0L,
 ): VideoPlayerSectionTarget {
     val normalizedCurrentBvid = currentBvid.trim()
     val normalizedRouteBvid = routeBvid.trim()
@@ -399,6 +401,7 @@ internal fun resolveVideoPlayerSectionTarget(
     return VideoPlayerSectionTarget(
         bvid = resolvedBvid,
         entryCoverUrl = resolvedCoverUrl,
-        sharedElementBvid = sharedElementBvid
+        sharedElementBvid = sharedElementBvid,
+        requestCid = requestCid,
     )
 }

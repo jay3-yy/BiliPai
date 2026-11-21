@@ -29,7 +29,7 @@ internal fun settingItemPath(item: PlaybackSettingItem): String {
         "appearance_splash_icon" -> "开屏与图标"
         "appearance_language" -> "语言"
         "home_list" -> "首页与列表"
-        "home_wallpaper" -> "首页壁纸"
+        "home_wallpaper" -> "页面壁纸"
         "home_recommendation" -> "内容与推荐流"
         "home_browsing" -> "浏览交互与手势"
         "home_options" -> "推荐与动态"

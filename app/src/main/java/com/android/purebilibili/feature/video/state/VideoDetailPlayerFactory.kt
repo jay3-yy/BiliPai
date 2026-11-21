@@ -99,7 +99,8 @@ internal suspend fun prepareVideoDetailPlayer(context: Context): PendingResource
     var handedOff = false
     try {
         withContext(Dispatchers.Default) {
-            created = createVideoDetailPlayer(context.applicationContext)
+            created = com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics
+                .measureWork("player_construct") { createVideoDetailPlayer(context.applicationContext) }
         }
         val player = requireNotNull(created)
         val pending = PendingResource(player) { it.release() }

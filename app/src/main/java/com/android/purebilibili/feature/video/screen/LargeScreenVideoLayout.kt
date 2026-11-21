@@ -134,6 +134,7 @@ internal fun LargeScreenVideoLayout(
     externalQueueTitle: String = "播放列表",
     externalQueueContent: (@Composable () -> Unit)? = null,
     transitionChromeAlphaProvider: () -> Float = { 1f },
+    wallpaperCardBackingAlpha: (() -> Float)? = null,
 ) {
     val pageColor = AppSurfaceTokens.chromeBackground()
     // With a supplied transition host, backing pixels must move inside its media clip.
@@ -157,7 +158,7 @@ internal fun LargeScreenVideoLayout(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(pageColor),
+            .videoDetailBacking(pageColor, wallpaperCardBackingAlpha),
     ) {
         // 舞台 dock 的播放页 backdrop 出口：VideoPlayerSection 采样门控变化时写回，
         // dock 玻璃路径据此采样真实折射并随控制条显隐。

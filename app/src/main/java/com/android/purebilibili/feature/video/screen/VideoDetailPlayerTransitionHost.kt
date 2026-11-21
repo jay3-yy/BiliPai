@@ -284,6 +284,7 @@ internal fun PortraitInlineVideoPlayerHost(
                 danmakuComposerInitialMode = fullscreenExtras?.danmakuComposerInitialMode ?: 1,
                 danmakuComposerInitialFontSize = fullscreenExtras?.danmakuComposerInitialFontSize ?: 25,
                 bvid = videoPlayerSectionTarget.bvid,
+                requestCid = videoPlayerSectionTarget.requestCid,
                 coverUrl = videoPlayerSectionTarget.entryCoverUrl,
                 stationaryListCoverUrl = residentCoverSource?.url.orEmpty(),
                 stationaryListCoverCacheKey = residentCoverSource?.cacheKey.orEmpty(),

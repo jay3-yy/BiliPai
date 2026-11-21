@@ -63,6 +63,10 @@ internal fun ProfileExpandedAvatar(
         !com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion() &&
         !com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced() &&
         com.android.purebilibili.core.ui.blur.shouldAllowRenderEffectBackedHazeEffect(android.os.Build.VERSION.SDK_INT)
+    fun circularSizeDp(progress: Float): Float {
+        val start = state.entranceSourceSize?.value ?: PROFILE_EXPANDED_AVATAR_SIZE_DP
+        return start + (138f - start) * min(1f, progress * 3f)
+    }
     Layout(
         modifier = modifier,
         content = {
@@ -70,7 +74,7 @@ internal fun ProfileExpandedAvatar(
                 modifier = Modifier
                     .graphicsLayer {
                         val progress = fractionProvider()
-                        val circularSize = (96f + (138f - 96f) * min(1f, progress * 3f))
+                        val circularSize = circularSizeDp(progress)
                         alpha = if (progress > 0f) 1f else 0f
                         shadowElevation = 16.dp.toPx() * progress * (1f - progress)
                         shape = RoundedCornerShape((circularSize / 2f * (1f - progress)).dp)
@@ -112,8 +116,12 @@ internal fun ProfileExpandedAvatar(
                     model = request,
                     contentDescription = "${user.name}的头像大图，点按收起",
                     contentScale = ContentScale.Crop,
-                    onSuccess = { state.photoReady = true },
-                    onError = { state.photoReady = false; state.reset() },
+                    onLoading = { state.reportPhotoLoad(user.face, ProfileAvatarPhotoLoadStatus.Loading) },
+                    onSuccess = { state.reportPhotoLoad(user.face, ProfileAvatarPhotoLoadStatus.Ready) },
+                    onError = {
+                        state.reportPhotoLoad(user.face, ProfileAvatarPhotoLoadStatus.Failed)
+                        state.reset()
+                    },
                     modifier = Modifier.matchParentSize(),
                 )
                 if (blurEnabled) {
@@ -150,7 +158,7 @@ internal fun ProfileExpandedAvatar(
         },
     ) { measurables, constraints ->
         val progress = fractionProvider()
-        val circularSize = (96f + (138f - 96f) * min(1f, progress * 3f)).dp.toPx()
+        val circularSize = circularSizeDp(progress).dp.toPx()
         val imageWidth = (circularSize + (constraints.maxWidth - circularSize) * progress).roundToInt().coerceAtLeast(1)
         val imageHeight = (circularSize + (photoBottomProvider() - circularSize) * progress).roundToInt().coerceAtLeast(1)
         val image = measurables.single().measure(Constraints.fixed(imageWidth, imageHeight))

@@ -23,7 +23,7 @@ internal class ControlGroupLandingDelivery(private val deliver: () -> Unit) {
     }
 }
 
-internal class NavigationControlMotionGroupState {
+internal class NavigationControlMotionGroupState(val landAdjacentOnly: Boolean) {
     var systemReturn by mutableStateOf<ControlGroupLandingDelivery?>(null)
 }
 
@@ -32,13 +32,21 @@ internal val LocalNavigationControlMotionGroup =
 
 /** 只提供分组，不新增布局或材质；手机、大屏和窄窗口使用各自原有排版。 */
 @Composable
-internal fun NavigationControlMotionGroup(content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalNavigationControlMotionGroup provides rememberNavigationControlMotionGroup(), content = content)
+internal fun NavigationControlMotionGroup(
+    landAdjacentOnly: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(
+        LocalNavigationControlMotionGroup provides rememberNavigationControlMotionGroup(landAdjacentOnly),
+        content = content,
+    )
 }
 
 @Composable
-internal fun rememberNavigationControlMotionGroup(): NavigationControlMotionGroupState {
-    val group = remember { NavigationControlMotionGroupState() }
+internal fun rememberNavigationControlMotionGroup(
+    landAdjacentOnly: Boolean = false,
+): NavigationControlMotionGroupState {
+    val group = remember(landAdjacentOnly) { NavigationControlMotionGroupState(landAdjacentOnly) }
     val entry = rememberUpdatedState(LocalVideoDetailNavigationTransitionScope.current)
     val systemReturn = group.systemReturn
     LaunchedEffect(group, systemReturn) {

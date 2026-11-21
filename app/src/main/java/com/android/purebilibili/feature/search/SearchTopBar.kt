@@ -11,7 +11,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
@@ -52,7 +51,6 @@ import com.android.purebilibili.core.ui.rememberAppSearchIcon
 import androidx.compose.ui.text.style.TextOverflow
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.motion.continuityTween
-import kotlinx.coroutines.flow.collect
 
 // 顶部搜索栏：输入状态持有选区，搜索逻辑只订阅文字变化。
 @Composable
@@ -62,7 +60,6 @@ fun SearchTopBar(
     onSearch: (String) -> Unit,
     onClearQuery: () -> Unit,
     onFocusChanged: (Boolean) -> Unit = {},
-    onEditRequested: () -> Unit = {},
     placeholder: String = resolveSearchDefaultPlaceholder(),
     suggestedKeyword: String = "",
     focusRequester: androidx.compose.ui.focus.FocusRequester = remember { androidx.compose.ui.focus.FocusRequester() },
@@ -89,15 +86,6 @@ fun SearchTopBar(
         resolveSearchTopBarRowMinHeightDp(inputHeightDp)
     }
     val searchInteractionSource = remember { MutableInteractionSource() }
-    val latestOnEditRequested by rememberUpdatedState(onEditRequested)
-    // 点按才表示主动重新编辑；输入框搬移、焦点恢复不会触发页面导航。
-    LaunchedEffect(searchInteractionSource) {
-        searchInteractionSource.interactions.collect { interaction ->
-            if (interaction is PressInteraction.Press) {
-                latestOnEditRequested()
-            }
-        }
-    }
     val inputText = textFieldState.text.toString()
     val backIcon = rememberAppBackIcon()
     val density = LocalDensity.current

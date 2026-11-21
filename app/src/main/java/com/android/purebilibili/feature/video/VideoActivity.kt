@@ -79,6 +79,11 @@ open class VideoActivity : FragmentActivity() {
     internal val hasOfficialCardSession: Boolean
         get() = SystemVideoCardTransition.hasSession(intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION))
 
+    internal val profileAvatarEntrance: com.android.purebilibili.feature.profile.ProfileAvatarEntrance?
+        get() = SystemVideoCardTransition.profileAvatarEntrance(
+            intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION)
+        )
+
     internal val usesOfficialCardReturnAtRoot: Boolean
         get() = officialCardReturnAtRoot && officialReturnMotionEnabled &&
             intent.hasExtra(SystemVideoCardTransition.EXTRA_SESSION)
@@ -238,6 +243,9 @@ open class VideoActivity : FragmentActivity() {
             val cardDynamicTintEnabled by SettingsManager
                 .getHomeCardDynamicTintEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = false)
+            val cardBackgroundMode by SettingsManager
+                .getHomeCardBackgroundMode(this@VideoActivity)
+                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeCardBackgroundMode.OFF)
             val cardFrostedGlassEnabled by SettingsManager
                 .getHomeCardFrostedGlassEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = false)
@@ -384,6 +392,8 @@ open class VideoActivity : FragmentActivity() {
                         com.android.purebilibili.core.ui.components.BiliPaiPopupSurfaceRenderer,
                     com.android.purebilibili.feature.home.components.cards.LocalHomeCardDynamicTintEnabled provides
                         cardDynamicTintEnabled,
+                    com.android.purebilibili.feature.home.components.cards.LocalHomeCardFixedBlurEnabled provides
+                        (cardBackgroundMode == com.android.purebilibili.core.store.HomeCardBackgroundMode.FIXED_BLUR),
                     com.android.purebilibili.feature.home.components.cards.LocalHomeCardFrostedGlassEnabled provides
                         cardFrostedGlassEnabled,
                 ) {

@@ -49,6 +49,7 @@ internal data class VideoPlayerSectionState(
     val danmakuComposerInitialMode: Int = 1,
     val danmakuComposerInitialFontSize: Int = 25,
     val bvid: String = "",
+    val requestCid: Long = 0L,
     val coverUrl: String = "",
     val stationaryListCoverUrl: String = "",
     val stationaryListCoverCacheKey: String = "",

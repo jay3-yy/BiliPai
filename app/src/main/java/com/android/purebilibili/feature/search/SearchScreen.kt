@@ -1264,13 +1264,6 @@ fun SearchScreen(
             searchFieldFocused = focused
             if (focused) autoFocusConsumed = true
         },
-        onEditRequested = {
-            if (viewModel.uiState.value.showResults) {
-                pendingLandingFocusRestore = true
-                viewModel.exitResultsToLanding()
-                viewModel.onQueryChange(searchInputState.text.toString())
-            }
-        },
         onEntryMotionFinished = onEntryMotionConsumed,
         onExitMotionFinished = { completedKey ->
             if (exitMotionInProgress && completedKey == exitMotionKey) {
@@ -1295,7 +1288,6 @@ fun SearchScreen(
                 onSearch = callbacks.onSearch,
                 onClearQuery = callbacks.onClearQuery,
                 onFocusChanged = callbacks.onFocusChanged,
-                onEditRequested = callbacks.onEditRequested,
                 focusRequester = placement.focusRequester,
                 placeholder = placement.placeholder,
                 suggestedKeyword = placement.suggestedKeyword,
@@ -1885,7 +1877,6 @@ private class SearchTopBarCallbacks(
     val onSearch: (String) -> Unit,
     val onClearQuery: () -> Unit,
     val onFocusChanged: (Boolean) -> Unit,
-    val onEditRequested: () -> Unit,
     val onEntryMotionFinished: (Int) -> Unit,
     val onExitMotionFinished: (Int) -> Unit,
     val isScrollInProgressProvider: () -> Boolean,

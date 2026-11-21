@@ -1,6 +1,7 @@
 // 文件路径: data/repository/VideoRepository.kt
 package com.android.purebilibili.data.repository
 
+import androidx.collection.LruCache
 import com.android.purebilibili.core.cache.PlayUrlCache
 import com.android.purebilibili.core.coroutines.AppScope
 import com.android.purebilibili.core.network.AccountCookieSession
@@ -41,7 +42,6 @@ import okhttp3.CacheControl
 import okhttp3.Request
 import java.io.InputStream
 import java.util.TreeMap
-import java.util.concurrent.ConcurrentHashMap
 
 internal fun shouldStartHomePreload(
     hasPreloadedData: Boolean,
@@ -254,6 +254,7 @@ object VideoRepository {
     fun clearVideoDetailCaches() {
         SharedContentRepository.clearDetailCache()
         VideoCatalogRepository.clearRelatedVideosCache()
+        verticalVideoCache.evictAll()
     }
 
     fun invalidateVideoLoadCaches(bvid: String, aid: Long, cid: Long) {
@@ -269,8 +270,9 @@ object VideoRepository {
         }
     }
     private val api = NetworkModule.api
-    // Subtitle cache is shared with TV by SubtitleContentRepository.
-    private val verticalVideoCache = ConcurrentHashMap<String, Boolean>()
+
+    private const val VERTICAL_VIDEO_CACHE_MAX_ENTRIES = 1_024
+    private val verticalVideoCache = LruCache<String, Boolean>(VERTICAL_VIDEO_CACHE_MAX_ENTRIES)
 
     // 横竖屏判定的预取调度：列表加载后后台并发预热，让详情页在转场开始前就能拿到结论。
     private val verticalPrefetchScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -1064,7 +1066,7 @@ object VideoRepository {
                 }
                 viewResp.data?.dimension?.isVertical == true
             }
-            verticalVideoCache[cacheKey] = isVertical
+            verticalVideoCache.put(cacheKey, isVertical)
             isVertical
         } catch (_: Exception) {
             false

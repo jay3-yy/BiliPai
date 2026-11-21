@@ -53,6 +53,8 @@ import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import com.android.purebilibili.feature.home.shouldRenderGlobalHomeWallpaperBackdrop
 import com.android.purebilibili.core.store.HomeWallpaperEffectScope
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
+import com.android.purebilibili.core.ui.wallpaper.sharedGlobalWallpaperBackground
 import com.android.purebilibili.core.ui.LocalSharedTransitionEnabled
 import com.android.purebilibili.core.ui.transition.LocalSystemVideoCardCaptureEnabled
 import com.android.purebilibili.core.ui.LocalVideoDetailNavigationTransitionScope
@@ -952,6 +954,7 @@ internal fun BiliPaiNavDisplayHost(
     val interceptPredictiveBack =
         (!predictiveGestureEnabled || style == BiliPaiPredictiveBackAnimationStyle.NONE) && backStack.size > 1
     val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
+    val hasSharedWallpaperBacking = LocalGlobalWallpaperBackdropSource.current != null
     val clickToPlayEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getClickToPlay(context) }
         .collectAsStateWithLifecycle(
             initialValue = com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(LocalContext.current)
@@ -1028,6 +1031,7 @@ internal fun BiliPaiNavDisplayHost(
             liveContainerSources,
             latestLiveContainerTransitions,
             globalWallpaperVisible,
+            hasSharedWallpaperBacking,
             latestMainHostRoute,
             videoCardClock,
             transitionBackgroundState,
@@ -1063,6 +1067,14 @@ internal fun BiliPaiNavDisplayHost(
                 val opaqueVideoChild = remember(key) {
                     shouldUseOpaqueVideoChildBackground(key, backStack)
                 }
+                // 静态壁纸回放本身就是不透明底图，可遮住栈底播放器。
+                val entryWallpaperVisible = globalWallpaperVisible &&
+                    (!opaqueVideoChild || hasSharedWallpaperBacking) &&
+                    shouldRenderGlobalHomeWallpaperBackdrop(
+                        effectScope = HomeWallpaperEffectScope.GLOBAL,
+                        currentRoute = key.toLegacyRoute(),
+                        mainHostTabRoute = latestMainHostRoute.value,
+                    )
                 // 每个直播 entry 固定表面类型，返回动画或目录清理时不重新绑定播放器。
                 val liveContainerEntry = remember(key) { latestLiveContainerTransitions.value.containsKey(key) }
                 ProvideBiliPaiMotionEntry(
@@ -1081,13 +1093,7 @@ internal fun BiliPaiNavDisplayHost(
                         LocalSettingsContainerSources provides
                             (if (settingsContainerEnabled) settingsContainerSources else null),
                         LocalSettingsContainerOwner provides key,
-                        LocalGlobalWallpaperBackdropVisible provides
-                            (globalWallpaperVisible && !opaqueVideoChild &&
-                                shouldRenderGlobalHomeWallpaperBackdrop(
-                                    effectScope = HomeWallpaperEffectScope.GLOBAL,
-                                    currentRoute = key.toLegacyRoute(),
-                                    mainHostTabRoute = latestMainHostRoute.value,
-                                )),
+                        LocalGlobalWallpaperBackdropVisible provides entryWallpaperVisible,
                         LocalVideoCardSharedElementSourceRoute provides key.toLegacyRoute(),
                         LocalVideoCardTransitionClock provides videoCardClock,
                         LocalVideoCardTransitionBackgroundState provides transitionBackgroundState,
@@ -1105,20 +1111,32 @@ internal fun BiliPaiNavDisplayHost(
                             // 仍保留内容入场节奏，避免页面既无容器也无入场动画。
                             val useSettingsContainer = settingsTransition != null && settingsContainerEnabled &&
                                 settingsTransition.origin.available
+                            val replayWallpaperInsideContainer =
+                                useSettingsContainer && entryWallpaperVisible && hasSharedWallpaperBacking
                             val containerBounds = if (settingsTransition != null && settingsContainerEnabled) {
                                 settingsSharedContainerDestination(
                                     origin = settingsTransition.origin,
                                     navScope = LocalNavTransitionScope.current,
-                                    color = settingsContainerPageColor.value,
+                                    // 全局壁纸固定在窗口中，展开容器时让来源底色淡出到壁纸。
+                                    color = if (entryWallpaperVisible) {
+                                        Color.Transparent
+                                    } else {
+                                        settingsContainerPageColor.value
+                                    },
                                     destinationZIndex = settingsTransition.destinationZIndex,
+                                    wallpaperBacking = if (replayWallpaperInsideContainer) {
+                                        Modifier.sharedGlobalWallpaperBackground(settingsContainerPageColor.value)
+                                    } else Modifier,
                                 )
                             } else Modifier
                             Box(
                                 modifier = Modifier.fillMaxSize().then(containerBounds).then(
-                                    if (opaqueVideoChild) {
-                                        Modifier.background(AppSurfaceTokens.groupedListContainer().copy(alpha = 1f))
-                                    } else if (LocalGlobalWallpaperBackdropVisible.current) {
+                                    if (replayWallpaperInsideContainer) {
+                                        Modifier
+                                    } else if (entryWallpaperVisible) {
                                         Modifier.globalWallpaperAwareBackground()
+                                    } else if (opaqueVideoChild) {
+                                        Modifier.background(AppSurfaceTokens.groupedListContainer().copy(alpha = 1f))
                                     } else Modifier
                                 ),
                             ) {

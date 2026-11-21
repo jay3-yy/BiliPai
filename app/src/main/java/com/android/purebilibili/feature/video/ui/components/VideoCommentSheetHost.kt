@@ -30,7 +30,7 @@ import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
+import com.android.purebilibili.feature.video.screen.VideoCommentRefreshContainer
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.android.purebilibili.core.ui.components.AppIcon
@@ -369,6 +369,7 @@ fun VideoCommentSheetHost(
     handleFraudEvents: Boolean = true,
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
     threadListModifier: Modifier = Modifier,
+    pullToRefreshFromTopOnly: Boolean = false,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -806,6 +807,7 @@ fun VideoCommentSheetHost(
                                     maxTimestampMs = maxTimestampMs,
                                     onImagePreview = previewCallback,
                                     onRefresh = commentViewModel::refreshComments,
+                                    pullToRefreshFromTopOnly = pullToRefreshFromTopOnly,
                                     headerDragModifier = Modifier.pointerInput(
                                         mainSheetVisible,
                                         hostContent,
@@ -1008,6 +1010,7 @@ internal fun VideoCommentMainList(
     maxTimestampMs: Long?,
     onImagePreview: (List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit,
     onRefresh: () -> Unit,
+    pullToRefreshFromTopOnly: Boolean = false,
     headerDragModifier: Modifier = Modifier,
     onBackToTop: () -> Unit = {},
     scrollToTopRequest: Int = 0,
@@ -1068,9 +1071,12 @@ internal fun VideoCommentMainList(
                     .fillMaxWidth()
                     .weight(1f),
             ) {
-                AdaptivePullToRefreshBox(
+                VideoCommentRefreshContainer(
                     isRefreshing = state.isRepliesRefreshing,
                     onRefresh = onRefresh,
+                    enabled = true,
+                    refreshGestureListState = listState.takeIf { pullToRefreshFromTopOnly },
+                    allowContentScrollWhileRefreshing = false,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     LazyColumn(

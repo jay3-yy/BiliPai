@@ -8,6 +8,8 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
@@ -23,7 +25,18 @@ data class WallpaperPalette(
     val dominantColor: Color = topColor,
     val stops: List<Color> = listOf(topColor, bottomColor),
     val readability: WallpaperReadabilityProfile? = null,
+    val blurredViewport: WallpaperBlurSample? = null,
 )
+
+@Immutable
+data class WallpaperBlurSample(
+    val image: ImageBitmap,
+    val viewport: IntSize,
+    val colorBounds: WallpaperBackdropColorBounds,
+)
+
+@Immutable
+data class WallpaperBackdropColorBounds(val lower: Color, val upper: Color)
 
 /**
  * CompositionLocal 共享当前全局壁纸调色板（单向只读数据，杜绝视图层循环采样）
@@ -34,12 +47,15 @@ val LocalWallpaperPalette = staticCompositionLocalOf<WallpaperPalette?> { null }
  * CompositionLocal 分别控制卡片动态取色和毛玻璃。
  */
 val LocalHomeCardDynamicTintEnabled = staticCompositionLocalOf { false }
+val LocalHomeCardFixedBlurEnabled = staticCompositionLocalOf { false }
 val LocalHomeCardFrostedGlassEnabled = staticCompositionLocalOf { false }
 
 @Composable
 @ReadOnlyComposable
 internal fun isGlobalWallpaperVisibleForHomeCard(): Boolean =
-    LocalGlobalWallpaperBackdropVisible.current && LocalHomeCardFrostedGlassEnabled.current &&
+    LocalGlobalWallpaperBackdropVisible.current &&
+        (LocalHomeCardDynamicTintEnabled.current || LocalHomeCardFixedBlurEnabled.current ||
+            LocalHomeCardFrostedGlassEnabled.current) &&
         LocalGlobalWallpaperBackdropSource.current != null
 
 /**

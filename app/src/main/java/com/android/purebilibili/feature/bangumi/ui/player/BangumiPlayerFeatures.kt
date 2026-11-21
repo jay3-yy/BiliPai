@@ -49,6 +49,7 @@ data class BangumiPlayerFeatures(
     val onSaveCover: () -> Unit = {},
     val onDownloadAudio: () -> Unit = {},
     val sleepTimerMinutes: Int? = null,
+    val sleepDeadlineMs: () -> Long? = { null },
     val onSleepTimerChange: (Int?) -> Unit = {},
     val subtitle: BangumiSubtitleState = BangumiSubtitleState(),
 )

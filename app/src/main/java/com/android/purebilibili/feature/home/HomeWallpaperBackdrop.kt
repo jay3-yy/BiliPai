@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.IntSize
 import coil3.request.crossfade
 
 import com.android.purebilibili.core.ui.MediaContrastPalette
+import com.android.purebilibili.core.ui.rememberDecorativeAnimationGate
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import com.android.purebilibili.core.ui.wallpaper.resolveWallpaperBodyTintAlpha
 import com.android.purebilibili.core.ui.wallpaper.resolveWallpaperProtectionAlpha
 import com.android.purebilibili.feature.home.components.cards.LocalWallpaperPalette
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -45,6 +47,9 @@ import com.android.purebilibili.core.ui.transition.VideoCardTransitionBackground
 import com.android.purebilibili.core.ui.transition.resolveVideoCardTransitionExposure
 import com.android.purebilibili.core.ui.transition.videoCardTransitionBackgroundEffect
 import com.android.purebilibili.core.ui.wallpaper.isVideoWallpaper
+
+/** 开启全局动态壁纸时，首页和聊天共用导航根层的播放实例。 */
+internal val LocalRootOwnsMovingWallpaper = compositionLocalOf { false }
 
 /**
  * App 根层全局壁纸。
@@ -72,9 +77,13 @@ internal fun DepthSyncedGlobalHomeWallpaperBackdrop(
     )
     val motionTier =
         if (rememberSystemReduceMotion()) MotionTier.Reduced else MotionTier.Normal
+    val playbackGate = if (playbackEnabled && appearance.visible) {
+        rememberDecorativeAnimationGate(respectComponentMotion = false)
+    } else null
     Box(
         modifier = modifier
             .fillMaxSize()
+            .then(playbackGate?.modifier ?: Modifier)
             .then(
                 if (applyDepth) {
                     Modifier.videoCardTransitionBackgroundEffect(
@@ -103,7 +112,7 @@ internal fun DepthSyncedGlobalHomeWallpaperBackdrop(
             appearance = appearance,
             baseColor = baseColor,
             isDataSaverActive = isDataSaverActive,
-            playbackEnabled = playbackEnabled,
+            playbackEnabled = playbackGate?.active == true,
             reuseGlobalSource = false,
             playbackPriority = -10,
         )

@@ -4,6 +4,10 @@ import com.android.purebilibili.navigation3.NavigationControlMotionGroup
 import androidx.compose.foundation.border
 
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.resolveGlobalWallpaperProtectiveColor
+import com.android.purebilibili.core.ui.wallpaper.sharedGlobalWallpaperBackground
 import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 
 import android.app.Application
@@ -720,9 +724,20 @@ internal fun LiveListScreen(
             )
         }
     }
+    val wallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
+    val wallpaperScrim = resolveGlobalWallpaperProtectiveColor(
+        baseColor = AppSurfaceTokens.chromeBackground(),
+        lightAlpha = 0.47f,
+        darkAlpha = 0.56f,
+    )
+    val pageBackground = if (wallpaperVisible) {
+        Modifier
+            .sharedGlobalWallpaperBackground(Color.Transparent)
+            .background(wallpaperScrim)
+    } else Modifier.background(palette.backgroundBrush())
     if (embeddedInHome) {
-        // 首页负责顶栏及背景采样，嵌入页只提供内容内边距，不再缩短滚动视口。
-        Box(Modifier.fillMaxSize().background(palette.backgroundBrush())) {
+        // 首页负责顶栏，直播内容与独立入口共用同一张壁纸。
+        Box(Modifier.fillMaxSize().then(pageBackground)) {
             liveContent(contentTopPadding)
         }
     } else {
@@ -732,8 +747,9 @@ internal fun LiveListScreen(
         } else null
         ImmersiveAppScaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = palette.backgroundTop,
-            topBarSurfaceColor = palette.backgroundTop,
+            containerColor = if (wallpaperVisible) Color.Transparent else palette.backgroundTop,
+            topBarSurfaceColor = if (wallpaperVisible) wallpaperScrim.copy(alpha = 0.24f) else palette.backgroundTop,
+            wallpaperChrome = wallpaperVisible,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             blurContentReady = state.initialLoadComplete && state.contentLoadComplete,
             chromeBackdropSource = searchBackdrop,
@@ -759,7 +775,7 @@ internal fun LiveListScreen(
             Box(
                 Modifier.fillMaxSize()
                     .then(searchBackdrop?.modifier ?: Modifier)
-                    .background(palette.backgroundBrush())
+                    .then(pageBackground)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
             ) {
                 liveContent(padding.calculateTopPadding())
@@ -967,6 +983,9 @@ private fun LiveListHeader(
 ) = NavigationControlMotionGroup {
     val palette = rememberLiveChromePalette()
     val compactChrome = rememberAppTopChromePolicy().compactChromeSpec
+    val searchField = if (LocalGlobalWallpaperBackdropVisible.current) {
+        resolveGlobalWallpaperProtectiveColor(palette.searchField, lightAlpha = 0.64f, darkAlpha = 0.72f)
+    } else palette.searchField
     val searchShape = AppShapes.container(ContainerLevel.Pill)
     val search = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveSearch, searchShape, onSearchClick)
     val areas = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveArea, CircleShape, onAreaListClick)
@@ -1031,7 +1050,7 @@ private fun LiveListHeader(
                     // 玻璃外壳拥有材质；关闭时保留原生 Surface 的颜色、形状与点击行为。
                     AppSurface(
                         onClick = search.onClick,
-                        color = if (liquidChromeActive) Color.Transparent else palette.searchField,
+                        color = if (liquidChromeActive) Color.Transparent else searchField,
                         shape = searchShape,
                         modifier = Modifier.fillMaxWidth().height(compactChrome.primaryHeightDp.dp).then(search.modifier),
                     ) {

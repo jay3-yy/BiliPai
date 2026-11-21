@@ -9,6 +9,7 @@ import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.feature.home.LocalRootOwnsMovingWallpaper
 
 /**
  * Settings retain an opaque visual backing. Static global wallpaper replays the root
@@ -21,11 +22,14 @@ internal fun SettingsOpaqueSurfaceHost(
 ) {
     val sharedWallpaper = LocalGlobalWallpaperBackdropVisible.current &&
         LocalGlobalWallpaperBackdropSource.current != null
-    CompositionLocalProvider(LocalGlobalWallpaperBackdropVisible provides sharedWallpaper) {
+    val movingWallpaper = LocalGlobalWallpaperBackdropVisible.current && LocalRootOwnsMovingWallpaper.current
+    val backing = if (movingWallpaper) Modifier
+        else Modifier.globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer())
+    CompositionLocalProvider(LocalGlobalWallpaperBackdropVisible provides (sharedWallpaper || movingWallpaper)) {
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer()),
+                .then(backing),
         ) {
             content()
         }

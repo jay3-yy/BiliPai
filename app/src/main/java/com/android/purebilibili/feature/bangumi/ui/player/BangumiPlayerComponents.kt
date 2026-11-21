@@ -225,6 +225,7 @@ fun BangumiPlayerView(
     val scope = rememberCoroutineScope()
     com.android.purebilibili.feature.video.player.PlayerBackgroundPlaybackLifecycleEffect(
         player = exoPlayer, key = "video:$bvid", isInPipMode = features.isInPipMode,
+        sleepDeadlineMs = features.sleepDeadlineMs,
     )
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()

@@ -16,6 +16,15 @@ internal const val AUDIO_PAYLOAD = "payload"
 internal val backgroundAudioJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
 @Serializable
+internal sealed interface PlaybackSleepTimer {
+    @Serializable
+    data class Countdown(val minutes: Int, val deadlineMs: Long) : PlaybackSleepTimer
+
+    @Serializable
+    data class AfterCurrent(val bvid: String, val cid: Long) : PlaybackSleepTimer
+}
+
+@Serializable
 internal data class BackgroundAudioSnapshot(
     val queue: List<PlaylistItem>,
     val index: Int,
@@ -36,6 +45,7 @@ internal data class BackgroundAudioSnapshot(
     val savedShuffle: Boolean? = null,
     val backgroundPlaybackOverride: Boolean? = null,
     val backgroundOverrideBvid: String? = null,
+    val sleepTimer: PlaybackSleepTimer? = null,
 ) {
     val current: PlaylistItem? get() = queue.getOrNull(index)
 }
@@ -46,6 +56,7 @@ internal fun BackgroundAudioSnapshot.forPersistence(): BackgroundAudioSnapshot =
     shuffle = savedShuffle ?: shuffle,
     backgroundPlaybackOverride = null,
     backgroundOverrideBvid = null,
+    sleepTimer = null,
 )
 
 internal fun BackgroundAudioSnapshot.toAudioBundle(): Bundle = Bundle().apply {

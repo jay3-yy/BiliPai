@@ -674,6 +674,20 @@ enum class CardRemovalDissolveMode {
 }
 
 // 设置流加载前使用相同的轻量视觉默认值，避免首帧短暂启用模糊或卡片展开。
+enum class CardTransitionMethod(val storageValue: String) {
+    AUTO("auto"),
+    OFFICIAL("official"),
+    OPLUS_LEGACY("oplus_legacy"),
+    VIVO_ONESHOT("vivo_oneshot"),
+    XIAOMI_ROUNDED("xiaomi_rounded"),
+    STANDARD("standard");
+
+    companion object {
+        fun fromStorageValue(value: String?): CardTransitionMethod =
+            entries.firstOrNull { it.storageValue == value } ?: AUTO
+    }
+}
+
 data class HomeSettings(
     val displayMode: Int = 0,              // 展示模式 (0=网格, 1=故事卡片)
     val isBottomBarFloating: Boolean = false,
@@ -734,6 +748,7 @@ data class HomeSettings(
     val homeRefreshUndoVisible: Boolean = false, // 刷新后的撤销按钮默认隐藏
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = false,   // 卡片展开过渡按需开启
+    val cardTransitionMethod: CardTransitionMethod = CardTransitionMethod.AUTO,
     val cardRemovalDissolveMode: CardRemovalDissolveMode = CardRemovalDissolveMode.STANDARD,
     val videoSharedTransitionSpeed: VideoSharedTransitionSpeed = VideoSharedTransitionSpeed.STANDARD,
     val videoSharedTransitionCustomDurationMillis: Int =
@@ -752,13 +767,14 @@ data class HomeSettings(
     val homeCardBadgeEffectMode: HomeCardBadgeEffectMode = HomeCardBadgeEffectMode.OFF,
     val homeCardInfoGlassMode: HomeCardInfoGlassMode = HomeCardInfoGlassMode.OFF,
     val homeWallpaperEffectMode: HomeWallpaperEffectMode = HomeWallpaperEffectMode.OFF,
-    val homeWallpaperEffectScope: HomeWallpaperEffectScope = HomeWallpaperEffectScope.HOME_ONLY,
+    val homeWallpaperEffectScope: HomeWallpaperEffectScope = HomeWallpaperEffectScope.DEFAULT,
     val showHomeUpBadges: Boolean = false, // 首页和相关推荐 UP 主标识显示(默认关闭,设置后全局生效)
     val showHomeUpAvatars: Boolean = false, // 首页视频卡片 UP 主头像显示(默认关闭,设置后全局生效)
     val showHomePublishTime: Boolean = true, // 首页视频卡片发布时间（默认显示，可关闭）
     val showFullVideoCardContent: Boolean = false, // 视频卡片标题完整展示(默认关闭,设置后全局生效)
     val videoCardLongPressActionEnabled: Boolean = false, // 长按视频卡片快捷操作与预览（默认关闭）
     val homeCardDynamicTintEnabled: Boolean = false, // 卡片动态取色
+    val homeCardFixedBlurEnabled: Boolean = false,
     val homeCardFrostedGlassEnabled: Boolean = false, // 卡片毛玻璃
     val homeDurationStyle: HomeDurationStyle = HomeDurationStyle.OUTSIDE_COVER,
     val easterEggEnabled: Boolean = false, // 下拉刷新趣味提示开关
@@ -778,6 +794,20 @@ data class HomeSettings(
     val popupGlassEnabled: Boolean get() = isGlassSceneEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.MENUS_DIALOGS)
     val nowPlayingGlassEnabled: Boolean get() = isGlassSceneEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.NOW_PLAYING)
     val isLiquidGlassEnabled: Boolean get() = otherGlassEnabled
+}
+
+enum class HomeCardBackgroundMode {
+    OFF,
+    FOLLOW_IMAGE,
+    FIXED_BLUR;
+
+    companion object {
+        fun fromSettings(dynamicTint: Boolean, fixedBlur: Boolean): HomeCardBackgroundMode = when {
+            fixedBlur -> FIXED_BLUR
+            dynamicTint -> FOLLOW_IMAGE
+            else -> OFF
+        }
+    }
 }
 
 internal fun resolveHomeCardFrostedGlassEnabled(
@@ -889,8 +919,10 @@ enum class HomeWallpaperEffectScope(val value: Int, val label: String) {
     GLOBAL(1, "全局页面");
 
     companion object {
+        val DEFAULT = GLOBAL
+
         fun fromValue(value: Int): HomeWallpaperEffectScope =
-            entries.find { it.value == value } ?: HOME_ONLY
+            entries.find { it.value == value } ?: DEFAULT
     }
 }
 
@@ -1703,6 +1735,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey("maid_lottie_animation_enabled")
     //  [新增] 卡片过渡动画开关
     private val KEY_CARD_TRANSITION_ENABLED = booleanPreferencesKey("card_transition_enabled")
+    private val KEY_CARD_TRANSITION_METHOD = stringPreferencesKey("card_transition_method")
     private val KEY_CARD_REMOVAL_DISSOLVE_ENABLED = booleanPreferencesKey("card_removal_dissolve_enabled")
     private val KEY_CARD_REMOVAL_DISSOLVE_QUICK = booleanPreferencesKey("card_removal_dissolve_quick")
     // 实时画面转场：SDR 用 TextureView 一镜到底；HDR 仍 SurfaceView（不降画质），morph 走封面
@@ -1771,6 +1804,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey("video_card_long_press_action_enabled")
     private val KEY_HOME_CARD_DYNAMIC_TINT_ENABLED =
         booleanPreferencesKey("home_card_dynamic_tint_enabled")
+    private val KEY_HOME_CARD_FIXED_BLUR_ENABLED =
+        booleanPreferencesKey("home_card_fixed_blur_enabled")
     private val KEY_HOME_CARD_FROSTED_GLASS_ENABLED =
         booleanPreferencesKey("home_card_frosted_glass_enabled")
     private val KEY_HOME_VIDEO_DURATION_BADGES_VISIBLE =
@@ -1991,6 +2026,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             homeRefreshUndoVisible = preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: false,
             cardAnimationEnabled = preferences[KEY_CARD_ANIMATION_ENABLED] ?: false,
             cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: false,
+            cardTransitionMethod = CardTransitionMethod.fromStorageValue(preferences[KEY_CARD_TRANSITION_METHOD]),
             cardRemovalDissolveMode = readCardRemovalDissolveMode(preferences),
             videoSharedTransitionSpeed = VideoSharedTransitionSpeed.fromValue(
                 preferences[KEY_VIDEO_SHARED_TRANSITION_SPEED]
@@ -2016,7 +2052,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 preferences[KEY_HOME_WALLPAPER_EFFECT_MODE] ?: HomeWallpaperEffectMode.OFF.value
             ),
             homeWallpaperEffectScope = HomeWallpaperEffectScope.fromValue(
-                preferences[KEY_HOME_WALLPAPER_EFFECT_SCOPE] ?: HomeWallpaperEffectScope.HOME_ONLY.value
+                preferences[KEY_HOME_WALLPAPER_EFFECT_SCOPE] ?: HomeWallpaperEffectScope.DEFAULT.value
             ),
             showHomeUpBadges = preferences[KEY_HOME_UP_BADGES_VISIBLE] ?: false,
             showHomeUpAvatars = preferences[KEY_HOME_UP_AVATARS_VISIBLE] ?: false,
@@ -2024,6 +2060,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             showFullVideoCardContent = preferences[KEY_FULL_VIDEO_CARD_CONTENT_VISIBLE] ?: false,
             videoCardLongPressActionEnabled = preferences[KEY_VIDEO_CARD_LONG_PRESS_ACTION_ENABLED] ?: false,
             homeCardDynamicTintEnabled = preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED] ?: false,
+            homeCardFixedBlurEnabled = preferences[KEY_HOME_CARD_FIXED_BLUR_ENABLED] ?: false,
             homeCardFrostedGlassEnabled = resolveHomeCardFrostedGlassEnabled(
                 storedValue = preferences[KEY_HOME_CARD_FROSTED_GLASS_ENABLED],
                 legacyCombinedValue = preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED],
@@ -3619,6 +3656,14 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] = value }
     }
 
+    fun getCardTransitionMethod(context: Context): Flow<CardTransitionMethod> = context.settingsDataStore.data
+        .map { CardTransitionMethod.fromStorageValue(it[KEY_CARD_TRANSITION_METHOD]) }
+        .distinctUntilChanged()
+
+    suspend fun setCardTransitionMethod(context: Context, method: CardTransitionMethod) {
+        context.settingsDataStore.edit { it[KEY_CARD_TRANSITION_METHOD] = method.storageValue }
+    }
+
     private fun readCardRemovalDissolveMode(preferences: Preferences): CardRemovalDissolveMode = when {
         preferences[KEY_CARD_REMOVAL_DISSOLVE_ENABLED] == false -> CardRemovalDissolveMode.OFF
         preferences[KEY_CARD_REMOVAL_DISSOLVE_QUICK] == true -> CardRemovalDissolveMode.QUICK
@@ -3944,11 +3989,19 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         setHomeWallpaperSelection(context, HomeWallpaperSelection(uri = uri))
     }
 
-    suspend fun setHomeWallpaperSelection(context: Context, selection: HomeWallpaperSelection) {
+    suspend fun setHomeWallpaperSelection(
+        context: Context,
+        selection: HomeWallpaperSelection,
+        enableOriginalIfOff: Boolean = false,
+    ) {
         val mobile = sanitizeWallpaperTransform(selection.mobileTransform)
         val tablet = sanitizeWallpaperTransform(selection.tabletTransform)
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_HOME_WALLPAPER_URI] = selection.uri
+            val effectMode = preferences[KEY_HOME_WALLPAPER_EFFECT_MODE] ?: HomeWallpaperEffectMode.OFF.value
+            if (enableOriginalIfOff && effectMode == HomeWallpaperEffectMode.OFF.value) {
+                preferences[KEY_HOME_WALLPAPER_EFFECT_MODE] = HomeWallpaperEffectMode.ORIGINAL.value
+            }
             preferences[KEY_HOME_WALLPAPER_SCALE_MOBILE] = mobile.scale
             preferences[KEY_HOME_WALLPAPER_OFFSET_X_MOBILE] = mobile.offsetX
             preferences[KEY_HOME_WALLPAPER_OFFSET_Y_MOBILE] = mobile.offsetY
@@ -3974,7 +4027,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getHomeWallpaperEffectScope(context: Context): Flow<HomeWallpaperEffectScope> = context.settingsDataStore.data
         .map { preferences ->
             HomeWallpaperEffectScope.fromValue(
-                preferences[KEY_HOME_WALLPAPER_EFFECT_SCOPE] ?: HomeWallpaperEffectScope.HOME_ONLY.value
+                preferences[KEY_HOME_WALLPAPER_EFFECT_SCOPE] ?: HomeWallpaperEffectScope.DEFAULT.value
             )
         }
 
@@ -4062,13 +4115,22 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getHomeCardDynamicTintEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED] ?: false }
 
-    suspend fun setHomeCardDynamicTintEnabled(context: Context, value: Boolean) {
+    fun getHomeCardBackgroundMode(context: Context): Flow<HomeCardBackgroundMode> = context.settingsDataStore.data
+        .map { preferences ->
+            HomeCardBackgroundMode.fromSettings(
+                dynamicTint = preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED] ?: false,
+                fixedBlur = preferences[KEY_HOME_CARD_FIXED_BLUR_ENABLED] ?: false,
+            )
+        }.distinctUntilChanged()
+
+    suspend fun setHomeCardBackgroundMode(context: Context, mode: HomeCardBackgroundMode) {
         context.settingsDataStore.edit { preferences ->
             if (preferences[KEY_HOME_CARD_FROSTED_GLASS_ENABLED] == null) {
                 preferences[KEY_HOME_CARD_FROSTED_GLASS_ENABLED] =
                     preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED] ?: false
             }
-            preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED] = value
+            preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED] = mode == HomeCardBackgroundMode.FOLLOW_IMAGE
+            preferences[KEY_HOME_CARD_FIXED_BLUR_ENABLED] = mode == HomeCardBackgroundMode.FIXED_BLUR
         }
     }
 
@@ -8798,6 +8860,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     // ========== [New] 个人中心自定义背景 ==========
 
     private val KEY_PROFILE_BG_URI = stringPreferencesKey("profile_bg_uri")
+    private val KEY_PROFILE_BG_USE_SKIN = booleanPreferencesKey("profile_bg_use_skin")
     private val KEY_PROFILE_BG_SCALE_MOBILE = floatPreferencesKey("profile_bg_scale_mobile")
     private val KEY_PROFILE_BG_SCALE_TABLET = floatPreferencesKey("profile_bg_scale_tablet")
     private val KEY_PROFILE_BG_OFFSET_X_MOBILE = floatPreferencesKey("profile_bg_offset_x_mobile")
@@ -8809,11 +8872,26 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getProfileBgUri(context: Context): Flow<String?> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_PROFILE_BG_URI] }
 
+    fun getProfileBgUseSkin(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_PROFILE_BG_USE_SKIN] ?: false }
+        .distinctUntilChanged()
+
+    suspend fun setProfileBgUseSkin(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            if (enabled) {
+                preferences[KEY_PROFILE_BG_USE_SKIN] = true
+            } else {
+                preferences.remove(KEY_PROFILE_BG_USE_SKIN)
+            }
+        }
+    }
+
     /**
-     * 设置自定义个人中心背景图 URI
+     * 选择自定义背景或恢复默认时，同时退出皮肤背景模式。
      */
     suspend fun setProfileBgUri(context: Context, uri: String?) {
         context.settingsDataStore.edit { preferences ->
+            preferences.remove(KEY_PROFILE_BG_USE_SKIN)
             if (uri != null) {
                 preferences[KEY_PROFILE_BG_URI] = uri
             } else {

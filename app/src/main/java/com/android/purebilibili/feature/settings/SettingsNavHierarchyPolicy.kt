@@ -32,6 +32,7 @@ internal val SETTINGS_SUBTREE_ROUTE_BASES: Set<String> = setOf(
     "webdav_backup",
     "tips_settings",
     "open_source_licenses",
+    "process_memory",
     "performance_history",
 )
 
@@ -50,6 +51,7 @@ private val SETTINGS_DEPTH2_ROUTE_BASES: Set<String> = setOf(
     "webdav_backup",
     "tips_settings",
     "open_source_licenses",
+    "process_memory",
     "performance_history",
 )
 
@@ -120,6 +122,7 @@ private val ROUTE_TO_CATEGORY: Map<String, SettingsRootCategory> = mapOf(
     "external_media" to SettingsRootCategory.PLUGINS_EXTENSIONS,
     "tips_settings" to SettingsRootCategory.SYSTEM_ABOUT,
     "open_source_licenses" to SettingsRootCategory.SYSTEM_ABOUT,
+    "process_memory" to SettingsRootCategory.SYSTEM_ABOUT,
     "performance_history" to SettingsRootCategory.SYSTEM_ABOUT,
 )
 

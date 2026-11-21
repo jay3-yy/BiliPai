@@ -80,7 +80,10 @@ internal object PerformanceCapture {
         "video_detail:tab_swipe", "video_detail:intro_scroll", "video_detail:comment_scroll",
         "video_detail:player_swipe_collapse",
     )
-    private val navigationWorkStages = setOf("return_prepare", "player_create", "player_attach", "player_release", "playback_exit_cleanup")
+    private val navigationWorkStages = setOf(
+        "return_prepare", "player_construct", "player_create", "player_attach",
+        "player_view_create", "player_release", "playback_exit_cleanup",
+    )
     private data class NavigationWork(val token: PerformanceWorkToken, val durationNs: Long)
     private data class DataEvent(val timeNs: Long, val screen: String, val action: String, val windowId: Int, val page: String)
 

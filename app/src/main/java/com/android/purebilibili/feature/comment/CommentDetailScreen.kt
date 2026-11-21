@@ -29,6 +29,7 @@ import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.rememberAppBackIcon
@@ -159,7 +160,10 @@ fun CommentDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = paddingValues.calculateTopPadding())
-                .background(appearance.panelColor)
+                .then(
+                    if (LocalGlobalWallpaperBackdropVisible.current) Modifier
+                    else Modifier.background(appearance.panelColor)
+                )
         ) {
             val rootReply = subReplyState.rootReply
             when {

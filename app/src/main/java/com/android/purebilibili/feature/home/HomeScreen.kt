@@ -9,6 +9,9 @@ import com.android.purebilibili.core.plugin.BuiltinPluginIds
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
+import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperUri
 import android.os.SystemClock
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animate
@@ -25,6 +28,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.*  // 🌊 瀑布流布局
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
+import com.android.purebilibili.feature.home.components.refreshOverlayGlassEnabled
 import com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed
 import com.android.purebilibili.core.ui.blur.rememberPagerChromeBackdropRecordingAllowed
 import com.android.purebilibili.core.ui.common.HOME_PAGER_HORIZONTAL_LOCK_SLOP_MULTIPLIER
@@ -46,6 +50,11 @@ import com.android.purebilibili.core.util.animateScrollWhileActive
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import androidx.compose.material3.DrawerValue
@@ -154,8 +163,13 @@ import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.performance.TrackJankStateFlag
 import com.android.purebilibili.core.ui.performance.TrackJankStateValue
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
+import com.android.purebilibili.feature.home.components.cards.WallpaperPalette
+import com.android.purebilibili.feature.home.components.cards.WallpaperPaletteRequest
+import com.android.purebilibili.feature.home.components.cards.WallpaperPaletteStore
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged  //  性能优化：防止重复触发
 import kotlinx.coroutines.flow.first
@@ -188,6 +202,8 @@ val LocalHomeScrollChannel = compositionLocalOf<Channel<HomeScrollRequest>?> { n
 val LocalHomeWallpaperBackdrop = staticCompositionLocalOf<MiuixBackdrop?> { null }
 val LocalHomeWallpaperBackdropReady = staticCompositionLocalOf { false }
 val LocalHomeWallpaperIsStatic = staticCompositionLocalOf { false }
+internal val LocalHomeWallpaperViewport = staticCompositionLocalOf { IntSize.Zero }
+internal val LocalHomeWallpaperCoordinates = staticCompositionLocalOf<(() -> LayoutCoordinates?)?> { null }
 
 // [New] Global Scroll Offset for Liquid Glass Effect
 // Used to pass scroll position from HomeScreen to BottomBar without causing recomposition
@@ -205,6 +221,7 @@ internal fun HomeScreen(
     availableFeedWidth: Dp? = null,
     companionPaneEnabled: Boolean = true,
     onProfileClick: () -> Unit,
+    onDrawerProfileClick: (Dp) -> Unit,
     onLogout: (() -> Unit)? = null,
     onAccountSwitchClick: (() -> Unit)? = null,
     onSettingsClick: () -> Unit,
@@ -855,7 +872,8 @@ internal fun HomeScreen(
     val appUiStyle = com.android.purebilibili.core.theme.LocalAppUiStyle.current
     val isDataSaverActive = homePerformanceConfig.isDataSaverActive
     val preloadAheadCount = homePerformanceConfig.preloadAheadCount
-    val configuredHomeWallpaperUri = com.android.purebilibili.core.ui.wallpaper.LocalHomeWallpaperSelection.current.uri
+    val homeWallpaperSelection = com.android.purebilibili.core.ui.wallpaper.LocalHomeWallpaperSelection.current
+    val configuredHomeWallpaperUri = homeWallpaperSelection.uri
     val splashWallpaperUri by remember(context) {
         SettingsManager.getSplashWallpaperUri(context)
     }.collectAsStateWithLifecycle(initialValue = ""
@@ -867,6 +885,9 @@ internal fun HomeScreen(
         )
     }
     val homeWallpaperIsStatic = com.android.purebilibili.core.ui.wallpaper.rememberIsStaticWallpaper(homeWallpaperUri)
+    var homeWallpaperViewport by remember { mutableStateOf(IntSize.Zero) }
+    val homeWallpaperCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val homeWallpaperCoordinatesProvider = remember { { homeWallpaperCoordinates.value } }
     val wallpaperPalette = com.android.purebilibili.feature.home.components.cards.LocalWallpaperPalette.current
 
     val appNavigationSettings =
@@ -1023,12 +1044,46 @@ internal fun HomeScreen(
             isDataSaverActive = isDataSaverActive
         )
     }
-    val shouldCaptureHomeWallpaperBackdrop =
-        homeSettings.homeCardFrostedGlassEnabled &&
+    val rootOwnsMovingWallpaper = LocalRootOwnsMovingWallpaper.current &&
+        LocalGlobalWallpaperBackdropVisible.current && LocalGlobalWallpaperUri.current == homeWallpaperUri
+    val globalWallpaperBackdrop = if (
+        LocalGlobalWallpaperBackdropVisible.current && LocalGlobalWallpaperUri.current == homeWallpaperUri
+    ) LocalGlobalWallpaperBackdropSource.current else null
+    val usesLocalWallpaperCardBacking =
+        (homeSettings.homeCardDynamicTintEnabled || homeSettings.homeCardFixedBlurEnabled ||
+            homeSettings.homeCardFrostedGlassEnabled) &&
             homeWallpaperBackdropAppearance.visible &&
-            homeWallpaperUri.isNotBlank() &&
             homeWallpaperIsStatic &&
-            !isDataSaverActive
+            globalWallpaperBackdrop == null
+    val wallpaperTransform = if (windowSizeClass.isTablet) {
+        homeWallpaperSelection.tabletTransform
+    } else homeWallpaperSelection.mobileTransform
+    val localCardWallpaperRequest = if (
+        usesLocalWallpaperCardBacking && homeWallpaperViewport != IntSize.Zero &&
+        wallpaperPalette?.blurredViewport?.viewport?.let { it != homeWallpaperViewport } == true
+    ) {
+        WallpaperPaletteRequest(
+            uri = homeWallpaperUri,
+            viewport = homeWallpaperViewport,
+            transform = wallpaperTransform,
+            baseColor = backgroundColor,
+            includeBlurredViewport = true,
+        )
+    } else null
+    var localCardWallpaperPalette by remember(localCardWallpaperRequest) { mutableStateOf<WallpaperPalette?>(null) }
+    LaunchedEffect(context, localCardWallpaperRequest, isTopLevelActive, homeVisualWorkActive) {
+        if (localCardWallpaperRequest != null && isTopLevelActive && homeVisualWorkActive) {
+            kotlinx.coroutines.delay(140)
+            localCardWallpaperPalette = WallpaperPaletteStore.loadWallpaperPalette(context, localCardWallpaperRequest)
+        }
+    }
+    val capturesPopularTabWallpaper =
+        homeWallpaperBackdropAppearance.visible && homeWallpaperIsStatic && globalWallpaperBackdrop == null &&
+            currentCategory == HomeCategory.POPULAR &&
+            com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+            com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass(Build.VERSION.SDK_INT)
+    val shouldCaptureHomeWallpaperBackdrop =
+        capturesPopularTabWallpaper || (usesLocalWallpaperCardBacking && Build.VERSION.SDK_INT >= 31 && !isDataSaverActive)
     val homeWallpaperBackdropSource = if (shouldCaptureHomeWallpaperBackdrop) {
         // Key the recorder by URI so a wallpaper replacement cannot briefly reuse the old
         // backdrop while the new image is being recorded.
@@ -1036,7 +1091,8 @@ internal fun HomeScreen(
     } else {
         null
     }
-    val readyHomeWallpaperBackdrop = homeWallpaperBackdropSource?.takeIf { it.isReady }?.backdrop
+    val readyHomeWallpaperBackdrop =
+        (homeWallpaperBackdropSource ?: globalWallpaperBackdrop)?.takeIf { it.isReady }?.backdrop
 
     if (!view.isInEditMode && shouldApplyHomeSystemBars(isTopLevelActive)) {
         SideEffect {
@@ -1677,6 +1733,29 @@ internal fun HomeScreen(
     val homeFeedUnobscured = targetVideoItemState.value == null && pendingVideoShare.value == null &&
         downloadSelection.request == null &&
         !easterEggDialogVisible.value && !(isHomeDrawerEnabled && shouldKeepDrawerBottomBarHidden)
+    val refreshUndoVisible = homeSettings.homeRefreshUndoVisible &&
+        currentCategory == HomeCategory.RECOMMEND && viewModel.undoAvailable.collectAsStateWithLifecycle().value
+    var refreshUndoDismissed by remember(refreshNewItemsKey, homeSettings.homeRefreshUndoVisible) {
+        mutableStateOf(false)
+    }
+    val hasRefreshLocator = shouldShowRecommendOldContentDivider(
+        currentCategory = HomeCategory.RECOMMEND,
+        refreshNewItemsKey = refreshNewItemsKey,
+        revealedRefreshKey = recommendOldContentRevealKey,
+        anchorBvid = recommendOldContentAnchorBvid,
+        oldContentStartIndex = recommendOldContentStartIndex,
+        refreshTipVisible = homeSettings.homeRefreshTipVisible,
+    )
+    var refreshLocatorDismissed by rememberSaveable(refreshNewItemsKey) { mutableStateOf(false) }
+    val refreshLocatorVisible = hasRefreshLocator && !refreshLocatorDismissed
+    val refreshPillCaptureNeeded = currentCategory == HomeCategory.RECOMMEND &&
+        ((refreshUndoVisible && !refreshUndoDismissed) || refreshLocatorVisible)
+    // 此源只挂在推荐网格。撤销胶囊和定位胶囊都在它的录制子树之外。
+    val refreshPillBackdropSource = if (refreshPillCaptureNeeded && refreshOverlayGlassEnabled()) {
+        rememberChromeBackdropSource(
+            recordingEnabled = homeChromeRecordingAllowed && pageOnScreen && homeFeedUnobscured,
+        )
+    } else null
     val scaffoldLayout: @Composable () -> Unit = {
         // Composite header and feed before applying depth; separate blur layers form a seam.
         Box(modifier = Modifier.fillMaxSize().then(homeFeedSnapshotModifier)) {
@@ -1686,7 +1765,7 @@ internal fun HomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .nestedScroll(nestedScrollConnection),
-                containerColor = AppSurfaceTokens.chromeBackground(),
+                containerColor = if (rootOwnsMovingWallpaper) Color.Transparent else AppSurfaceTokens.chromeBackground(),
                 bottomBar = {
                    // BottomBar logic handled by parent
                 },
@@ -1703,11 +1782,16 @@ internal fun HomeScreen(
                                 homeFeedUnobscured
                         ),
                         LocalHomeWallpaperBackdrop provides readyHomeWallpaperBackdrop,
+                        LocalHomeWallpaperViewport provides homeWallpaperViewport,
+                        LocalHomeWallpaperCoordinates provides homeWallpaperCoordinatesProvider.takeIf {
+                            usesLocalWallpaperCardBacking
+                        },
                         LocalHomeWallpaperBackdropReady provides (readyHomeWallpaperBackdrop != null),
                         LocalHomeWallpaperIsStatic provides (
                             homeWallpaperUri.isNotBlank() && homeWallpaperIsStatic
                         ),
-                        com.android.purebilibili.feature.home.components.cards.LocalWallpaperPalette provides wallpaperPalette,
+                        com.android.purebilibili.feature.home.components.cards.LocalWallpaperPalette provides
+                            (localCardWallpaperPalette ?: wallpaperPalette),
                     ) {
                     Box(
                         modifier = Modifier
@@ -1724,14 +1808,20 @@ internal fun HomeScreen(
                                 }
                             )
                     ) {
-                    HomeWallpaperBackdrop(
-                        wallpaperUri = homeWallpaperUri,
-                        playbackEnabled = isTopLevelActive && homeFeedUnobscured && homeVisualWorkActive,
-                        appearance = homeWallpaperBackdropAppearance,
-                        baseColor = AppSurfaceTokens.chromeBackground(),
-                        isDataSaverActive = isDataSaverActive,
-                        modifier = homeWallpaperBackdropSource?.modifier ?: Modifier
-                    )
+                    if (!rootOwnsMovingWallpaper) {
+                        HomeWallpaperBackdrop(
+                            wallpaperUri = homeWallpaperUri,
+                            playbackEnabled = isTopLevelActive && homeFeedUnobscured && homeVisualWorkActive,
+                            appearance = homeWallpaperBackdropAppearance,
+                            baseColor = AppSurfaceTokens.chromeBackground(),
+                            isDataSaverActive = isDataSaverActive,
+                            modifier = (if (usesLocalWallpaperCardBacking) {
+                                Modifier
+                                    .onSizeChanged { homeWallpaperViewport = it }
+                                    .onPlaced { homeWallpaperCoordinates.value = it }
+                            } else Modifier).then(homeWallpaperBackdropSource?.modifier ?: Modifier),
+                        )
+                    }
                     // [Fix] Re-enabled default overscroll for better feedback
                         val homeTopPagerSwipeEnabled =
                             shouldEnableHomeTopPagerUserScroll(
@@ -1986,6 +2076,11 @@ internal fun HomeScreen(
                         } else {
                             gridStates.getValue(category)
                         }
+                        val refreshedCardKeys = remember(pageGridState) {
+                            MutableSharedFlow<Set<String>>(extraBufferCapacity = 1)
+                        }
+                        val refreshPageScope = rememberCoroutineScope()
+                        val activeRefreshGrid by rememberUpdatedState(pageGridState.takeIf { pageWork.runActiveWork })
 
                         //  把 GridState 提升给父级用于控制 Header?
 
@@ -1995,7 +2090,14 @@ internal fun HomeScreen(
                             isRefreshing = isRefreshing && currentCategory == category,
                             onRefresh = {
                                 recoverHomeInteractionGates()
-                                viewModel.refresh(category)
+                                viewModel.refresh(category, popularSubCategory) { newKeys ->
+                                    if (refreshPageScope.isActive && activeRefreshGrid === pageGridState &&
+                                        !pageGridState.canScrollBackward && !pageGridState.isScrollInProgress
+                                    ) {
+                                        pageGridState.keepTopOnNextLayout()
+                                    }
+                                    refreshedCardKeys.tryEmit(newKeys)
+                                }
                             },
                             state = pullRefreshState,
                             indicatorTopInset = embeddedPageTopPadding,
@@ -2278,6 +2380,7 @@ internal fun HomeScreen(
                                          displayMode = displayMode,
                                          // 刷新数据换位时不再同时启动整屏卡片 placement spring。
                                          cardAnimationEnabled = cardAnimationEnabled && !isPageRefreshing,
+                                         refreshedCardKeys = refreshedCardKeys.takeIf { cardAnimationEnabled },
                                          cardMotionTier = cardMotionTier,
                                          cardTransitionEnabled = cardTransitionEnabled,
                                          isReturningFromVideoDetail = isReturningFromVideoDetail,
@@ -2302,38 +2405,28 @@ internal fun HomeScreen(
                                          homeHeroCarouselAutoplayEnabled = homeSettings.homeHeroCarouselAutoplayEnabled,
                                          onHeroCarouselGestureActiveChange = onHeroCarouselGestureActiveChange,
                                          onGetPreviewUrl = { bvid, cid -> viewModel.getPreviewVideoUrl(bvid, cid) },
-                                         oldContentAnchorBvid = if (shouldShowRecommendOldContentDivider(
-                                                 currentCategory = category,
-                                                 refreshNewItemsKey = refreshNewItemsKey,
-                                                 revealedRefreshKey = recommendOldContentRevealKey,
-                                                 anchorBvid = recommendOldContentAnchorBvid,
-                                                 oldContentStartIndex = recommendOldContentStartIndex,
-                                                 refreshTipVisible = homeSettings.homeRefreshTipVisible
-                                             )
-                                         ) {
-                                             recommendOldContentAnchorBvid
-                                         } else {
-                                             null
+                                         oldContentAnchorBvid = recommendOldContentAnchorBvid.takeIf {
+                                             hasRefreshLocator && category == HomeCategory.RECOMMEND
                                          },
-                                         oldContentStartIndex = if (shouldShowRecommendOldContentDivider(
-                                                 currentCategory = category,
-                                                 refreshNewItemsKey = refreshNewItemsKey,
-                                                 revealedRefreshKey = recommendOldContentRevealKey,
-                                                 anchorBvid = recommendOldContentAnchorBvid,
-                                                 oldContentStartIndex = recommendOldContentStartIndex,
-                                                 refreshTipVisible = homeSettings.homeRefreshTipVisible
-                                             )
-                                         ) {
-                                             recommendOldContentStartIndex
-                                         } else {
-                                             null
+                                         oldContentStartIndex = recommendOldContentStartIndex.takeIf {
+                                             hasRefreshLocator && category == HomeCategory.RECOMMEND
                                          },
                                          oldContentLocatorRefreshKey = refreshNewItemsKey,
+                                         oldContentLocatorDismissed = refreshLocatorDismissed,
+                                         onOldContentLocatorDismiss = { refreshLocatorDismissed = true },
+                                         refreshPillBackdropSource = refreshPillBackdropSource.takeIf {
+                                             category == HomeCategory.RECOMMEND
+                                         },
                                          onOldContentDividerClick = {
-                                             coroutineScope.launch {
-                                                 contentGridState.animateScrollToTop()
+                                             val identity = currentHomeScrollRequestIdentity()
+                                             if (identity.entry == HomeTopTabEntry.Category(category)) {
+                                                 coroutineScope.launch {
+                                                     performHomeScrollRequest(
+                                                         identity,
+                                                         HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH,
+                                                     )
+                                                 }
                                              }
-                                             viewModel.refresh(category)
                                          },
                                          todayWatchEnabled = todayWatch.enabled,
                                          todayWatchMode = todayWatch.mode,
@@ -2558,18 +2651,14 @@ internal fun HomeScreen(
 
         if (homeSettings.homeRefreshUndoVisible) {
             HomeRefreshUndoHost(
-                viewModel = viewModel,
-                currentCategory = currentCategory,
+                undoVisible = refreshUndoVisible,
+                undoDismissed = refreshUndoDismissed,
                 refreshNewItemsKey = refreshNewItemsKey,
                 homeListBottomPadding = homeListBottomPadding,
-                oldContentLocatorVisible = shouldShowRecommendOldContentDivider(
-                    currentCategory = currentCategory,
-                    refreshNewItemsKey = refreshNewItemsKey,
-                    revealedRefreshKey = recommendOldContentRevealKey,
-                    anchorBvid = recommendOldContentAnchorBvid,
-                    oldContentStartIndex = recommendOldContentStartIndex,
-                    refreshTipVisible = homeSettings.homeRefreshTipVisible,
-                ),
+                oldContentLocatorVisible = hasRefreshLocator && currentCategory == HomeCategory.RECOMMEND,
+                backdrop = refreshPillBackdropSource?.takeIf { it.isReady }?.backdrop,
+                onUndo = viewModel::undoRefresh,
+                onUndoDismiss = { refreshUndoDismissed = true },
             )
         }
 
@@ -2628,7 +2717,7 @@ internal fun HomeScreen(
                         onWatchLaterClick = onWatchLaterClick,
                         onInboxClick = onInboxClick,
                         onSettingsClick = onSettingsClick,
-                        onProfileClick = onProfileClick,
+                        onProfileClick = onDrawerProfileClick,
                         onAccountSwitchClick = onAccountSwitchClick,
                         hazeState = readyHomeHaze,
                         isBlurEnabled = isHeaderBlurEnabled,

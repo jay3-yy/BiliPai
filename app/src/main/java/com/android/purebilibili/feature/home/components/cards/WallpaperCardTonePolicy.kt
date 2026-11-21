@@ -17,6 +17,7 @@ internal fun resolveWallpaperCardTint(
     titleColor: Color = if (defaultContainerColor.luminance() < 0.5f) Color.White else Color.Black,
     subtitleColor: Color = if (defaultContainerColor.luminance() < 0.5f) Color(0xFFCAC4D0) else Color(0xFF49454F),
     maxChroma: Double = Double.POSITIVE_INFINITY,
+    backdropColorBounds: WallpaperBackdropColorBounds? = null,
 ): Color {
     val dark = defaultContainerColor.luminance() < 0.5f
     val source = Hct.fromInt(wallpaperColor.toArgb())
@@ -27,7 +28,12 @@ internal fun resolveWallpaperCardTint(
     } else {
         source.chroma.coerceAtMost(if (frostedGlassEnabled) 28.0 else 36.0)
     }
-    val desiredTone = if (dark) 18.0 + source.tone * 0.06 else 88.0 + source.tone * 0.08
+    val desiredTone = when {
+        dark && frostedGlassEnabled -> 12.0 + source.tone * 0.035
+        frostedGlassEnabled -> 92.0 + source.tone * 0.035
+        dark -> 18.0 + source.tone * 0.06
+        else -> 88.0 + source.tone * 0.08
+    }
     val surfaceChroma = minOf(chroma, maxChroma)
     fun colorAt(tone: Double) = Color(Hct.from(source.hue, surfaceChroma, tone).toInt())
     // 为色点插值和 8 位颜色量化留少量余量，避免滚动中恰好跌破文字对比度要求。
@@ -53,12 +59,18 @@ internal fun resolveWallpaperCardTint(
     }
     if (!frostedGlassEnabled) return toned
 
-    // 玻璃下方可能同时有亮部与暗部；以两端检查遮罩强度，滚动时不反复切换文字色。
+    // 缓存模糊图的色域已知时，用实际边界约束衬色。实时采样仍以黑、白两端保护文字。
+    val lower = backdropColorBounds?.lower ?: Color.Black
+    val upper = backdropColorBounds?.upper ?: Color.White
     fun readableAt(alpha: Float): Boolean {
         val plate = toned.copy(alpha = alpha)
-        return readable(plate.compositeOver(Color.Black)) && readable(plate.compositeOver(Color.White))
+        return readable(plate.compositeOver(lower)) && readable(plate.compositeOver(upper))
     }
-    val minimumAlpha = if (isDataSaverActive) 0.76f else 0.42f
+    val minimumAlpha = when {
+        backdropColorBounds != null -> 0.24f
+        isDataSaverActive -> 0.76f
+        else -> 0.36f
+    }
     if (readableAt(minimumAlpha)) return toned.copy(alpha = minimumAlpha)
     var failingAlpha = minimumAlpha
     var passingAlpha = 1f
@@ -69,16 +81,33 @@ internal fun resolveWallpaperCardTint(
     return toned.copy(alpha = passingAlpha)
 }
 
+/** 固定模式只从当前主题选择衬色。底图亮度可用于维持文字对比度。 */
+internal fun resolveNeutralFrostedCardTint(
+    defaultContainerColor: Color,
+    titleColor: Color,
+    subtitleColor: Color,
+    backdropColorBounds: WallpaperBackdropColorBounds? = null,
+): Color = resolveWallpaperCardTint(
+    wallpaperColor = defaultContainerColor,
+    defaultContainerColor = defaultContainerColor,
+    frostedGlassEnabled = true,
+    titleColor = titleColor,
+    subtitleColor = subtitleColor,
+    maxChroma = 4.0,
+    backdropColorBounds = backdropColorBounds,
+)
+
 /** 保留封面色相，限制信息区色度，并为主题文字保留对比度。 */
 internal fun resolveCoverCardTint(
     coverColor: Color,
     defaultContainerColor: Color,
     titleColor: Color,
     subtitleColor: Color,
+    blurredCover: Boolean = false,
 ): Color = resolveWallpaperCardTint(
     wallpaperColor = coverColor,
     defaultContainerColor = defaultContainerColor,
-    frostedGlassEnabled = false,
+    frostedGlassEnabled = blurredCover,
     titleColor = titleColor,
     subtitleColor = subtitleColor,
     maxChroma = if (defaultContainerColor.luminance() < 0.5f) 10.0 else 18.0,
@@ -92,6 +121,7 @@ internal fun resolveWallpaperCardSurfacePalette(
     subtitleColor: Color,
     frostedGlassEnabled: Boolean,
     isDataSaverActive: Boolean,
+    backdropColorBounds: WallpaperBackdropColorBounds? = null,
 ): WallpaperPalette {
     val colors = mutableMapOf<Color, Color>()
     fun surface(color: Color): Color = colors.getOrPut(color) {
@@ -102,6 +132,7 @@ internal fun resolveWallpaperCardSurfacePalette(
             subtitleColor = subtitleColor,
             frostedGlassEnabled = frostedGlassEnabled,
             isDataSaverActive = isDataSaverActive,
+            backdropColorBounds = backdropColorBounds,
         )
     }
     return WallpaperPalette(

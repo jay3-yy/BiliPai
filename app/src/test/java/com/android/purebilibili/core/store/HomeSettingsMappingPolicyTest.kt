@@ -97,7 +97,7 @@ class HomeSettingsMappingPolicyTest {
         assertEquals(HomeFeedCardStyle.CURRENT, result.homeFeedCardStyle)
         assertEquals(HomeDurationStyle.OUTSIDE_COVER, result.homeDurationStyle)
         assertEquals(HomeWallpaperEffectMode.OFF, result.homeWallpaperEffectMode)
-        assertEquals(HomeWallpaperEffectScope.HOME_ONLY, result.homeWallpaperEffectScope)
+        assertEquals(HomeWallpaperEffectScope.GLOBAL, result.homeWallpaperEffectScope)
         assertFalse(result.lowQualityHomeCoverInDataSaver)
         assertFalse(result.showHomeUpBadges)
         assertFalse(result.showHomeUpAvatars)

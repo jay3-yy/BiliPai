@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,6 +19,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -95,37 +98,98 @@ fun AppCompactInputField(
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
             decorationBox = { innerTextField ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = height)
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (leadingIcon != null) {
-                        Box(Modifier.size(height), contentAlignment = Alignment.Center) { leadingIcon() }
-                    }
-                    Box(
-                        modifier = Modifier.weight(1f).padding(vertical = 8.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        if (value.isEmpty()) {
-                            AppText(
-                                placeholder,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = AppContentColors.secondaryText(),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        innerTextField()
-                    }
-                    if (trailingIcon != null) {
-                        Box(Modifier.size(height), contentAlignment = Alignment.Center) { trailingIcon() }
-                    }
-                }
+                AppCompactInputDecoration(
+                    height, placeholder, value.isEmpty(), leadingIcon, trailingIcon, innerTextField,
+                )
             },
         )
+    }
+}
+
+@Composable
+fun AppCompactSearchInputField(
+    state: TextFieldState,
+    onSearch: () -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    height: Dp = 40.dp,
+    leadingIcon: (@Composable () -> Unit)? = null,
+) {
+    val keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
+    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+        if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+            top.yukonga.miuix.kmp.basic.TextField(
+                state = state,
+                modifier = modifier.heightIn(min = height),
+                label = placeholder,
+                useLabelAsPlaceholder = true,
+                lineLimits = TextFieldLineLimits.SingleLine,
+                keyboardOptions = keyboardOptions,
+                onKeyboardAction = { onSearch() },
+                leadingIcon = leadingIcon,
+                colors = top.yukonga.miuix.kmp.basic.TextFieldDefaults.textFieldColors(
+                    backgroundColor = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.secondaryContainer,
+                ),
+            )
+        } else {
+            BasicTextField(
+                state = state,
+                modifier = modifier
+                    .heightIn(min = height)
+                    .clip(CircleShape)
+                    .background(AppSurfaceTokens.searchContainer()),
+                lineLimits = TextFieldLineLimits.SingleLine,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = AppContentColors.primaryText()),
+                cursorBrush = SolidColor(AppContentColors.accent()),
+                keyboardOptions = keyboardOptions,
+                onKeyboardAction = { onSearch() },
+                decorator = { innerTextField ->
+                    AppCompactInputDecoration(
+                        height, placeholder, state.text.isEmpty(), leadingIcon, null, innerTextField,
+                    )
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppCompactInputDecoration(
+    height: Dp,
+    placeholder: String,
+    isEmpty: Boolean,
+    leadingIcon: (@Composable () -> Unit)?,
+    trailingIcon: (@Composable () -> Unit)?,
+    innerTextField: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = height)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (leadingIcon != null) {
+            Box(Modifier.size(height), contentAlignment = Alignment.Center) { leadingIcon() }
+        }
+        Box(
+            modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            if (isEmpty) {
+                AppText(
+                    placeholder,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = AppContentColors.secondaryText(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            innerTextField()
+        }
+        if (trailingIcon != null) {
+            Box(Modifier.size(height), contentAlignment = Alignment.Center) { trailingIcon() }
+        }
     }
 }
 

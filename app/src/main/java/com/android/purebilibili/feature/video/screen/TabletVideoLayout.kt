@@ -294,6 +294,7 @@ internal fun TabletVideoLayout(
     externalQueueTitle: String = "播放列表",
     externalQueueContent: (@Composable () -> Unit)? = null,
     transitionChromeAlphaProvider: () -> Float = { 1f },
+    wallpaperCardBackingAlpha: (() -> Float)? = null,
 ) {
     val adaptiveInfo = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
     val companionPane = LocalVideoCompanionPane.current
@@ -355,7 +356,7 @@ internal fun TabletVideoLayout(
                     modifier = Modifier
                         .fillMaxSize()
                         .statusBarsPadding()
-                        .background(MaterialTheme.colorScheme.background)
+                        .videoDetailBacking(MaterialTheme.colorScheme.background, wallpaperCardBackingAlpha)
                 ) {
                 // 视频播放器（固定高度，不参与滚动）
 

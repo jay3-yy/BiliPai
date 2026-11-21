@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.SettingsManager
@@ -32,7 +34,7 @@ import kotlinx.coroutines.launch
 @Immutable
 internal data class VideoDetailInputOverlayLayoutInfo(
     val screenHeightPx: Int,
-    val topReservedPx: Int,
+    val topReservedPx: State<Int>,
 )
 
 @Immutable
@@ -84,12 +86,12 @@ internal fun VideoDetailInputOverlayAdapter(
     context: Context,
     configuration: Configuration,
     viewModel: VideoPlaybackViewModel,
-    commentState: CommentUiState,
+    commentStateHandle: State<CommentUiState>,
     showCommentInput: Boolean,
     isLandscape: Boolean,
     isFullscreenMode: Boolean,
     isPortraitFullscreen: Boolean,
-    videoPlayerRootBottomPx: Int,
+    videoPlayerRootBottomPx: State<Int>,
     hideStatusBars: Boolean,
     immersiveStatusBarBackdropEnabled: Boolean,
     currentVideoPositionMsProvider: () -> Long,
@@ -126,17 +128,17 @@ internal fun VideoDetailInputOverlayAdapter(
         isPortraitFullscreen,
         videoPlayerRootBottomPx,
         fallbackPlayerBottomPx,
-        immersiveStatusBarBackdropEnabled,
     ) {
-        resolveDanmakuDialogTopReservePx(
-            isLandscape = isLandscape,
-            isFullscreenMode = isFullscreenMode,
-            isPortraitFullscreen = isPortraitFullscreen,
-            playerBottomPx = videoPlayerRootBottomPx.takeIf { it > 0 },
-            fallbackPlayerBottomPx = fallbackPlayerBottomPx,
-        )
+        derivedStateOf(structuralEqualityPolicy()) {
+            resolveDanmakuDialogTopReservePx(
+                isLandscape = isLandscape,
+                isFullscreenMode = isFullscreenMode,
+                isPortraitFullscreen = isPortraitFullscreen,
+                playerBottomPx = videoPlayerRootBottomPx.value.takeIf { it > 0 },
+                fallbackPlayerBottomPx = fallbackPlayerBottomPx,
+            )
+        }
     }
-    val topReservedDp = with(LocalDensity.current) { topReservedPx.toDp() }
 
     VideoDetailDanmakuInputOverlayContent(
         snapshot = DanmakuInputSnapshot(
@@ -161,7 +163,7 @@ internal fun VideoDetailInputOverlayAdapter(
                 }
             },
         ),
-        topReservedSpace = topReservedDp,
+        topReservedPx = topReservedPx,
     )
 
     val isSendingComment by viewModel.isSendingComment.collectAsStateWithLifecycle()
@@ -176,6 +178,14 @@ internal fun VideoDetailInputOverlayAdapter(
     }
     val commentDraft = composerDrafts.comments.drafts[commentComposerDraftKey(draftReplyRpid)]
         ?: CommentComposerDraft()
+    val commentInputAvailability by remember(commentStateHandle, draftReplyRpid) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            val state = commentStateHandle.value
+            val hint = if (draftReplyRpid != null) state.childInputHint else state.rootInputHint
+            hint to state.canInputComment
+        }
+    }
+    val (commentInputHint, canInputComment) = commentInputAvailability
     VideoDetailCommentInputOverlayContent(
         snapshot = CommentInputSnapshot(
             // 竖屏全屏由当前 Pager 页持有输入框，底层详情不能同时弹出并争抢键盘焦点。
@@ -183,8 +193,8 @@ internal fun VideoDetailInputOverlayAdapter(
             draftKey = draftKey,
             isSending = isSendingComment,
             replyToName = replyingToComment?.member?.uname,
-            inputHint = if (replyingToComment != null) commentState.childInputHint else commentState.rootInputHint,
-            canInputComment = commentState.canInputComment,
+            inputHint = commentInputHint,
+            canInputComment = canInputComment,
             emotePackages = emotePackages,
             mentionUsers = mentionSearchState.users,
             isMentionSearching = mentionSearchState.isLoading,
@@ -222,7 +232,7 @@ internal fun VideoDetailInputOverlayAdapter(
 private fun VideoDetailDanmakuInputOverlayContent(
     snapshot: DanmakuInputSnapshot,
     actions: DanmakuInputActions,
-    topReservedSpace: Dp,
+    topReservedPx: State<Int>,
 ) {
     DanmakuSendDialog(
         visible = snapshot.visible,
@@ -237,7 +247,7 @@ private fun VideoDetailDanmakuInputOverlayContent(
         initialAttentionCommand = snapshot.initialAttentionCommand,
         onDraftChange = actions.updateDraft,
         onSelectionChange = actions.updateSelection,
-        topReservedSpace = topReservedSpace,
+        topReservedSpace = with(LocalDensity.current) { topReservedPx.value.toDp() },
     )
 }
 

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_view_account_space_header">查看空间头图</string>
+    <string name="profile_use_skin_background">使用皮肤背景</string>
+    <string name="profile_disable_skin_background">停用皮肤背景</string>
+</resources>

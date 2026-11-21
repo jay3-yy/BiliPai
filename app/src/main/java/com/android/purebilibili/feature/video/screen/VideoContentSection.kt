@@ -50,6 +50,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
@@ -136,6 +138,7 @@ import com.android.purebilibili.feature.video.note.VideoNoteEditorDocument
 import com.android.purebilibili.feature.video.note.VideoNoteUiState
 import com.android.purebilibili.feature.video.note.buildVideoNoteShareText
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
@@ -820,14 +823,10 @@ internal fun VideoContentSection(
 
     // 评论 Tab：「简介|评论」分段 nestedScroll 跟手折叠/展开，反向滑动立即打断。
     val density = LocalDensity.current
-    // 首次测量前使用单行占位；之后背景与列表只读取同一份真实高度。
-    val commentHeaderHeightPx = remember(density, liquidGlassEnabled) {
-        mutableFloatStateOf(with(density) { 46.dp.toPx() })
+    val chromeMeasurements = remember { VideoContentChromeMeasurements() }
+    val commentHeaderHeightProvider = remember(chromeMeasurements) {
+        { chromeMeasurements.commentHeightPx.toFloat() }
     }
-    val commentHeaderHeightProvider = remember(commentHeaderHeightPx) {
-        { commentHeaderHeightPx.floatValue }
-    }
-    var tabBarMaxHeightPx by remember { mutableFloatStateOf(0f) }
     // 标签栏不再随滚动收起；滚动折叠机制整体转移到浮动评论栏：
     // 「最热评论」标题文字不设开关、下滑必隐回顶出现，排序/搜索行由设置开关控制。
     val commentHeaderCollapseState = remember(commentListState) { mutableFloatStateOf(0f) }
@@ -879,17 +878,17 @@ internal fun VideoContentSection(
     val commentHeaderCollapseProgress = {
         resolveVideoContentTabBarCollapseProgress(
             collapsePx = commentHeaderCollapsePx,
-            maxCollapsePx = commentHeaderHeightPx.floatValue,
+            maxCollapsePx = commentHeaderHeightProvider(),
             selectedTabIndex = pagerState.currentPage,
             listAtTop = commentListAtTop,
             enabled = true,
         )
     }
     // 标签栏始终按完整测量高度占位，不再消费折叠位移。
-    val tabBarVisibleHeightPx = { tabBarMaxHeightPx }
+    val tabBarVisibleHeightPx = { chromeMeasurements.tabHeightPx.toFloat() }
     // 排序/搜索行仅在开关开启时随折叠收起；标题文字始终按进度隐藏。
     val commentHeaderVisibleHeightPx = {
-        val fullHeight = commentHeaderHeightPx.floatValue
+        val fullHeight = commentHeaderHeightProvider()
         if (tabBarScrollHideEnabled) {
             (fullHeight - commentHeaderCollapsePx).coerceAtLeast(0f)
         } else {
@@ -912,302 +911,296 @@ internal fun VideoContentSection(
             .fillMaxSize()
             .nestedScroll(tabBarCollapseConnection)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .miuixLayerBackdrop(videoContentMiuixBackdrop)
+        VideoContentChromeLayout(
+            measurements = chromeMeasurements,
+            modifier = Modifier.fillMaxSize(),
         ) {
             Box(
                 modifier = Modifier
-                    .matchParentSize()
-                    .background(MaterialTheme.colorScheme.surface)
-            )
-
-            HorizontalPager(
-                state = pagerState,
-                // 评论数据可提前获取。屏外评论行等翻页露出后再布局，避免与入场争用主线程。
-                beyondViewportPageCount = 0,
-                userScrollEnabled = false,
-                modifier = Modifier
                     .fillMaxSize()
-                    .verticalPriorityHorizontalPagerSwipe(
-                        state = pagerState,
-                        dragInteractionSource = contentPagerInteractions,
-                    )
-                    .then(
-                        if (immersiveVideoContentChromeEnabled) {
-                            Modifier
-                        } else {
-                            Modifier.videoContentTopPadding(tabBarVisibleHeightPx)
-                        }
-                    )
+                    .miuixLayerBackdrop(videoContentMiuixBackdrop)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(MaterialTheme.colorScheme.surface)
+                )
 
-            ) { page ->
-                when (page) {
-                    0 -> VideoIntroTab(
-                        listState = introListState,
-                        modifier = Modifier,
-                        info = info,
-                        relatedVideos = relatedVideos,
-                        relatedLoadState = data.relatedLoadState,
-                        relatedContentReady = presentationState.relatedContentReady,
-                        currentPageIndex = currentPageIndex,
-                        followingMids = followingMids,
-                        videoTags = videoTags,
-                        isFollowing = isFollowing,
-                        followStatusKnown = followStatusKnown,
-                        isFavorited = isFavorited,
-                        isLiked = isLiked,
-                        likeStatusKnown = likeStatusKnown,
-                        isDisliked = isDisliked,
-                        coinCount = coinCount,
-                        downloadProgress = downloadProgress,
-                        isInWatchLater = isInWatchLater,
-                        isLoggedIn = isLoggedIn,
-                        isVideoPlaying = isVideoPlaying,
-                        onFollowClick = onFollowClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onLikeClick = onLikeClick,
-                        onDislikeClick = onDislikeClick,
-                        onCoinClick = onCoinClick,
-                        onTripleClick = onTripleClick,
-                        onCommentClick = { onTabSelected(1) },
-                        onPageSelect = onPageSelect,
-                        onUpClick = onUpClick,
-                        onRelatedVideoClick = onRelatedVideoClick,
-                        onOpenCollectionSheet = { showCollectionSheet = true },
-                        onOpenPartsPanel = { showPartsPanel = true },
-                        onDownloadClick = onDownloadClick,
-                        onWatchLaterClick = onWatchLaterClick,
-                        onShareClick = onShareClick,
-                        contentPadding = pageContentPadding,
-                        transitionEnabled = transitionEnabled,
-                        isQuickReturnLimitedForSharedElements = isQuickReturnLimitedForSharedElements,
-                        sourceRouteForSharedElement = sourceRouteForSharedElement,
-                        ownerFollowerCount = ownerFollowerCount,
-                        ownerVideoCount = ownerVideoCount,
-                        showUpBadge = showUpBadge,
-                        onFavoriteLongClick = onFavoriteLongClick,
-                        sponsorVideoLabel = sponsorVideoLabel,
-                        aiSummary = aiSummary,
-                        aiSummaryPrompt = aiSummaryPrompt,
-                        onShowAiSummarySheet = { showAiSummarySheet = true },
-                        onShowNoteListSheet = { showNoteListSheet = true },
-                        onlineCount = onlineCount,
-                        showOnlineCount = showOnlineCount,
-                        onTimestampClick = onTimestampClick,
-                        onBgmClick = onBgmClick,
-                        onDescriptionUrlClick = onDescriptionUrlClick,
-                        onSearchKeywordClick = onSearchKeywordClick,
-                        showInteractionActions = showInteractionActions,
-                        animateVideoDetailLayout = animateVideoDetailLayout
-                    )
-                    1 -> VideoDetailCommentUpdates(commentUpdates) { pageComments ->
-                        VideoCommentTab(
-                            listState = commentListState,
-                            modifier = Modifier,
-                            upMid = info.owner.mid,
-                            maxTimestampMs = info.pages.firstOrNull { it.cid == info.cid }?.duration?.times(1000L)
-                                ?: info.pages.firstOrNull()?.duration?.times(1000L),
-                            replies = pageComments?.replies ?: replies,
-                            replyCount = replyCount,
-                            emoteMap = emoteMap,
-                            isRepliesLoading = pageComments?.isRepliesLoading ?: isRepliesLoading,
-                            isRepliesRefreshing = pageComments?.isRepliesRefreshing ?: isRepliesRefreshing,
-                            repliesError = if (pageComments != null) pageComments.repliesError else repliesError,
-                            isRepliesEnd = pageComments?.isRepliesEnd ?: isRepliesEnd,
-                            paginationPage = pageComments?.nextPage ?: commentState.nextPage,
-                            pageControl = pageComments?.pageControl ?: commentState.pageControl,
-                            pinnedReplyIds = pageComments?.pinnedReplyIds ?: commentState.pinnedReplyIds,
-                            voteCard = if (pageComments != null) pageComments.voteCard else voteCard,
-                            onUpClick = onUpClick,
-                            onSubReplyClick = onSubReplyClick,
-                            onCommentReplyClick = onCommentReplyClick,
-                            onLoadMoreReplies = onLoadMoreReplies,
-                            onRefreshReplies = onRefreshReplies,
-                            pullToRefreshEnabled = commentPullToRefreshEnabled,
-                            pullToRefreshFromTopOnly = true,
-                            onImagePreview = { images, index, rect, textContent ->
-                                previewImages = images
-                                previewInitialIndex = index
-                                sourceRect = rect
-                                previewTextContent = textContent
-                                showImagePreview = true
-                            },
-                            onTimestampClick = onTimestampClick,
-                            showUpFlag = pageComments?.showUpFlag ?: showUpFlag,
-                            contentPadding = pageContentPadding,
-                            currentMid = pageComments?.currentMid ?: currentMid,
-                            dissolvingIds = pageComments?.dissolvingIds ?: dissolvingIds,
-                            onDeleteComment = onDeleteComment,
-                            onDissolveStart = onDissolveStart,
-                            onCommentLike = onCommentLike,
-                            onCommentHate = onCommentHate,
-                            likedComments = pageComments?.likedComments ?: likedComments,
-                            hatedComments = pageComments?.hatedComments ?: hatedComments,
-                            onCommentUrlClick = onCommentUrlClick,
-                            onReportComment = onReportComment,
-                            onToggleTopComment = onToggleTopComment,
-                            onCheckCommentFraud = onCheckCommentFraud,
-                            showIdentityDecorations = showIdentityDecorations,
-                            lightweightCommentRendering = lightweightCommentRendering,
-                            sortMode = sortMode,
-                            onSortModeChange = onSortModeChange,
-                            showNativeSortHeader = !liquidGlassEnabled,
-                            showSortControlInHeader = true,
-                            // 详情页评论标题在玻璃开/关时统一使用紧凑字阶；仅影响这一处调用。
-                            compactSortHeader = true,
-                            // Glass title and sort share the sibling overlay. Keep its space as list
-                            // padding so hiding chrome cannot resize the list or move its anchors.
-                            showHeader = !immersiveVideoContentChromeEnabled && !liquidGlassEnabled,
-                            floatingHeaderContentPaddingPx = if (immersiveVideoContentChromeEnabled || liquidGlassEnabled) {
-                                commentHeaderHeightProvider
-                            } else null,
-                            onSearchClick = { showCommentSearchSheet = true },
+                HorizontalPager(
+                    state = pagerState,
+                    // 评论数据可提前获取。屏外评论行等翻页露出后再布局，避免与入场争用主线程。
+                    beyondViewportPageCount = 0,
+                    userScrollEnabled = false,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalPriorityHorizontalPagerSwipe(
+                            state = pagerState,
+                            dragInteractionSource = contentPagerInteractions,
                         )
+                        .then(
+                            if (immersiveVideoContentChromeEnabled) {
+                                Modifier
+                            } else {
+                                Modifier.videoContentTopPadding(tabBarVisibleHeightPx)
+                            }
+                        )
+
+                ) { page ->
+                    when (page) {
+                        0 -> VideoIntroTab(
+                            listState = introListState,
+                            modifier = Modifier,
+                            info = info,
+                            relatedVideos = relatedVideos,
+                            relatedLoadState = data.relatedLoadState,
+                            relatedContentReady = presentationState.relatedContentReady,
+                            currentPageIndex = currentPageIndex,
+                            followingMids = followingMids,
+                            videoTags = videoTags,
+                            isFollowing = isFollowing,
+                            followStatusKnown = followStatusKnown,
+                            isFavorited = isFavorited,
+                            isLiked = isLiked,
+                            likeStatusKnown = likeStatusKnown,
+                            isDisliked = isDisliked,
+                            coinCount = coinCount,
+                            downloadProgress = downloadProgress,
+                            isInWatchLater = isInWatchLater,
+                            isLoggedIn = isLoggedIn,
+                            isVideoPlaying = isVideoPlaying,
+                            onFollowClick = onFollowClick,
+                            onFavoriteClick = onFavoriteClick,
+                            onLikeClick = onLikeClick,
+                            onDislikeClick = onDislikeClick,
+                            onCoinClick = onCoinClick,
+                            onTripleClick = onTripleClick,
+                            onCommentClick = { onTabSelected(1) },
+                            onPageSelect = onPageSelect,
+                            onUpClick = onUpClick,
+                            onRelatedVideoClick = onRelatedVideoClick,
+                            onOpenCollectionSheet = { showCollectionSheet = true },
+                            onOpenPartsPanel = { showPartsPanel = true },
+                            onDownloadClick = onDownloadClick,
+                            onWatchLaterClick = onWatchLaterClick,
+                            onShareClick = onShareClick,
+                            contentPadding = pageContentPadding,
+                            transitionEnabled = transitionEnabled,
+                            isQuickReturnLimitedForSharedElements = isQuickReturnLimitedForSharedElements,
+                            sourceRouteForSharedElement = sourceRouteForSharedElement,
+                            ownerFollowerCount = ownerFollowerCount,
+                            ownerVideoCount = ownerVideoCount,
+                            showUpBadge = showUpBadge,
+                            onFavoriteLongClick = onFavoriteLongClick,
+                            sponsorVideoLabel = sponsorVideoLabel,
+                            aiSummary = aiSummary,
+                            aiSummaryPrompt = aiSummaryPrompt,
+                            onShowAiSummarySheet = { showAiSummarySheet = true },
+                            onShowNoteListSheet = { showNoteListSheet = true },
+                            onlineCount = onlineCount,
+                            showOnlineCount = showOnlineCount,
+                            onTimestampClick = onTimestampClick,
+                            onBgmClick = onBgmClick,
+                            onDescriptionUrlClick = onDescriptionUrlClick,
+                            onSearchKeywordClick = onSearchKeywordClick,
+                            showInteractionActions = showInteractionActions,
+                            animateVideoDetailLayout = animateVideoDetailLayout
+                        )
+                        1 -> VideoDetailCommentUpdates(commentUpdates) { pageComments ->
+                            VideoCommentTab(
+                                listState = commentListState,
+                                modifier = Modifier,
+                                upMid = info.owner.mid,
+                                maxTimestampMs = info.pages.firstOrNull { it.cid == info.cid }?.duration?.times(1000L)
+                                    ?: info.pages.firstOrNull()?.duration?.times(1000L),
+                                replies = pageComments?.replies ?: replies,
+                                replyCount = replyCount,
+                                emoteMap = emoteMap,
+                                isRepliesLoading = pageComments?.isRepliesLoading ?: isRepliesLoading,
+                                isRepliesRefreshing = pageComments?.isRepliesRefreshing ?: isRepliesRefreshing,
+                                repliesError = if (pageComments != null) pageComments.repliesError else repliesError,
+                                isRepliesEnd = pageComments?.isRepliesEnd ?: isRepliesEnd,
+                                paginationPage = pageComments?.nextPage ?: commentState.nextPage,
+                                pageControl = pageComments?.pageControl ?: commentState.pageControl,
+                                pinnedReplyIds = pageComments?.pinnedReplyIds ?: commentState.pinnedReplyIds,
+                                voteCard = if (pageComments != null) pageComments.voteCard else voteCard,
+                                onUpClick = onUpClick,
+                                onSubReplyClick = onSubReplyClick,
+                                onCommentReplyClick = onCommentReplyClick,
+                                onLoadMoreReplies = onLoadMoreReplies,
+                                onRefreshReplies = onRefreshReplies,
+                                pullToRefreshEnabled = commentPullToRefreshEnabled,
+                                pullToRefreshFromTopOnly = true,
+                                onImagePreview = { images, index, rect, textContent ->
+                                    previewImages = images
+                                    previewInitialIndex = index
+                                    sourceRect = rect
+                                    previewTextContent = textContent
+                                    showImagePreview = true
+                                },
+                                onTimestampClick = onTimestampClick,
+                                showUpFlag = pageComments?.showUpFlag ?: showUpFlag,
+                                contentPadding = pageContentPadding,
+                                currentMid = pageComments?.currentMid ?: currentMid,
+                                dissolvingIds = pageComments?.dissolvingIds ?: dissolvingIds,
+                                onDeleteComment = onDeleteComment,
+                                onDissolveStart = onDissolveStart,
+                                onCommentLike = onCommentLike,
+                                onCommentHate = onCommentHate,
+                                likedComments = pageComments?.likedComments ?: likedComments,
+                                hatedComments = pageComments?.hatedComments ?: hatedComments,
+                                onCommentUrlClick = onCommentUrlClick,
+                                onReportComment = onReportComment,
+                                onToggleTopComment = onToggleTopComment,
+                                onCheckCommentFraud = onCheckCommentFraud,
+                                showIdentityDecorations = showIdentityDecorations,
+                                lightweightCommentRendering = lightweightCommentRendering,
+                                sortMode = sortMode,
+                                onSortModeChange = onSortModeChange,
+                                showNativeSortHeader = !liquidGlassEnabled,
+                                showSortControlInHeader = true,
+                                // 详情页评论标题在玻璃开/关时统一使用紧凑字阶；仅影响这一处调用。
+                                compactSortHeader = true,
+                                // Glass title and sort share the sibling overlay. Keep its space as list
+                                // padding so hiding chrome cannot resize the list or move its anchors.
+                                showHeader = !immersiveVideoContentChromeEnabled && !liquidGlassEnabled,
+                                floatingHeaderContentPaddingPx = if (immersiveVideoContentChromeEnabled || liquidGlassEnabled) {
+                                    commentHeaderHeightProvider
+                                } else null,
+                                onSearchClick = { showCommentSearchSheet = true },
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        if (immersiveVideoContentChromeEnabled) {
-            // 顶部标签与评论标题/排序共用同一张渐进模糊材质，避免两个独立渐变
-            // 在相邻边界重新起算而形成断层。
-            // 液态玻璃开启时，播放器折叠/隐藏后 chrome 仍对滚动中的评论内容做
-            // 模糊采样；关闭时保持原有行为——折叠态使用内容页底色背景层。
-            // 背景与评论栏共用实际可见高度：整行收起时同步缩短，保留排序控件时仍覆盖该行。
-            // 在测量阶段读取连续高度，避免折叠结束后留下整行底色遮住评论。
-            val chromeBlurActive = !isPlayerCollapsed || liquidGlassEnabled
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .videoContentHeight {
-                        val commentFraction = resolveVideoContentCommentChromeHeightFraction(
-                            pagerState.currentPage + pagerState.currentPageOffsetFraction,
+            if (immersiveVideoContentChromeEnabled) {
+                // 顶部标签与评论标题/排序共用同一张渐进模糊材质，避免两个独立渐变
+                // 在相邻边界重新起算而形成断层。
+                // 液态玻璃开启时，播放器折叠/隐藏后 chrome 仍对滚动中的评论内容做
+                // 模糊采样；关闭时保持原有行为——折叠态使用内容页底色背景层。
+                // 背景与评论栏共用实际可见高度：整行收起时同步缩短，保留排序控件时仍覆盖该行。
+                // 在测量阶段读取连续高度，避免折叠结束后留下整行底色遮住评论。
+                val chromeBlurActive = !isPlayerCollapsed || liquidGlassEnabled
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .videoContentHeight {
+                            val commentFraction = resolveVideoContentCommentChromeHeightFraction(
+                                pagerState.currentPage + pagerState.currentPageOffsetFraction,
+                            )
+                            tabBarVisibleHeightPx() + commentHeaderVisibleHeightPx() * commentFraction
+                        }
+                        .background(
+                            if (isPlayerCollapsed && !liquidGlassEnabled) {
+                                MaterialTheme.colorScheme.surface
+                            } else {
+                                Color.Transparent
+                            }
                         )
-                        tabBarVisibleHeightPx() + commentHeaderVisibleHeightPx() * commentFraction
-                    }
-                    .background(
-                        if (isPlayerCollapsed && !liquidGlassEnabled) {
-                            MaterialTheme.colorScheme.surface
-                        } else {
-                            Color.Transparent
-                        }
-                    )
-                    .biliPaiProgressiveTopBlur(
-                        backdrop = videoContentMiuixBackdrop,
-                        enabled = progressiveCommentHeaderEnabled && chromeBlurActive,
-                        surfaceColor = Color.Transparent,
-                    )
-                    .topSolidProgressiveFade(
-                        surfaceColor = MaterialTheme.colorScheme.surface,
-                        enabled = solidProgressiveCommentHeaderEnabled && chromeBlurActive,
-                    ),
-            )
-        }
+                        .biliPaiProgressiveTopBlur(
+                            backdrop = videoContentMiuixBackdrop,
+                            enabled = progressiveCommentHeaderEnabled && chromeBlurActive,
+                            surfaceColor = Color.Transparent,
+                        )
+                        .topSolidProgressiveFade(
+                            surfaceColor = MaterialTheme.colorScheme.surface,
+                            enabled = solidProgressiveCommentHeaderEnabled && chromeBlurActive,
+                        ),
+                )
+            }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight(),
-            contentAlignment = Alignment.TopStart,
-        ) {
-            VideoContentTabBar(
-                tabs = tabs,
-                // 玻璃外壳对齐 UP 头像：MD3 为 16dp，Miuix 为 12dp；原生保留默认布局。
-                liquidGlassAlignShellStart = true,
-                liquidGlassTabsOffsetX = if (LocalAppUiStyle.current == AppUiStyle.MIUIX) (-4).dp else 0.dp,
-                measurementLabels = listOf(
-                    "简介",
-                    if (showVideoDetailCommentCount) {
-                        "评论 ${FormatUtils.formatStat(info.stat.reply.coerceAtLeast(0).toLong())}"
-                    } else "评论",
-                ),
-                replyCount = replyCount,
-                selectedTabIndex = pagerState.currentPage,
-                onTabSelected = onTabSelected,
-                sortMode = sortMode,
-                onSortModeChange = onSortModeChange,
-                onDanmakuSendClick = onDanmakuSendClick,
-                danmakuEnabled = danmakuEnabled,
-                onDanmakuToggle = onDanmakuToggle,
-                tabSwipeModifier = Modifier.verticalPriorityHorizontalPagerSwipe(
-                    state = pagerState,
-                    enabled = shouldEnableVideoContentHorizontalPagerSwipe(
-                        currentPage = pagerState.currentPage,
-                        commentPageIndex = 1,
-                        isPagerScrollInProgress = pagerState.isScrollInProgress,
-                    ),
-                    forceVerticalPriority = liquidGlassEnabled,
-                    dragInteractionSource = contentPagerInteractions,
-                    exposePageActions = false,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // 首帧就按自然高度测量，实测高度只用于布局占位，不再反向改变测量约束。
-                    .wrapContentHeight(unbounded = true)
-                    .onSizeChanged { size ->
-                        val measured = size.height.toFloat()
-                        if (measured > 0f &&
-                            (tabBarMaxHeightPx <= 0f || commentHeaderCollapsePx <= 0.5f)
-                        ) {
-                            tabBarMaxHeightPx = measured
-                        }
-                    },
-                isPlayerCollapsed = isPlayerCollapsed,
-                miuixBackdrop = videoContentMiuixBackdrop,
-                indicatorPositionProvider = {
-                    pagerState.tabIndicatorPosition
-                },
-                isScrollInProgressProvider = { pagerState.isScrollInProgress },
-                isPagerDraggingProvider = { pagerDragHeld },
-                pagerTargetPositionProvider = { pagerState.targetPage.toFloat() },
-            )
-        }
-
-        // Keep the glass dock outside the backdrop capture subtree to avoid recursive RenderNode
-        // sampling, while translating it with the comment page's actual pager position.
-        if (liquidGlassEnabled || immersiveVideoContentChromeEnabled) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .videoContentTopPadding(tabBarVisibleHeightPx)
-                    // 排序/搜索行由开关决定是否随折叠收起；关闭开关时整行保留，
-                    // 仅标题文字按折叠进度隐藏。
-                    .then(
-                        if (tabBarScrollHideEnabled) {
-                            Modifier
-                                .videoContentHeight(commentHeaderVisibleHeightPx)
-                                .graphicsLayer {
-                                    clip = commentHeaderCollapseProgress() > 0.001f
-                                }
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .graphicsLayer {
-                        translationX = pagerState.getOffsetDistanceInPages(1) * size.width
-                    },
+                    .wrapContentHeight()
+                    .layoutId(VideoContentChromeSlot.Tabs),
+                contentAlignment = Alignment.TopStart,
             ) {
-                VideoCommentFloatingHeader(
-                    count = replyCount,
+                VideoContentTabBar(
+                    tabs = tabs,
+                    // 玻璃外壳对齐 UP 头像：MD3 为 16dp，Miuix 为 12dp；原生保留默认布局。
+                    liquidGlassAlignShellStart = true,
+                    liquidGlassTabsOffsetX = if (LocalAppUiStyle.current == AppUiStyle.MIUIX) (-4).dp else 0.dp,
+                    measurementLabels = listOf(
+                        "简介",
+                        if (showVideoDetailCommentCount) {
+                            "评论 ${FormatUtils.formatStat(info.stat.reply.coerceAtLeast(0).toLong())}"
+                        } else "评论",
+                    ),
+                    replyCount = replyCount,
+                    selectedTabIndex = pagerState.currentPage,
+                    onTabSelected = onTabSelected,
                     sortMode = sortMode,
                     onSortModeChange = onSortModeChange,
-                    onSearchClick = { showCommentSearchSheet = true },
-                    backdrop = videoContentMiuixBackdrop,
-                    liquidGlassEnabled = liquidGlassEnabled,
-                    compactTitleTypography = true,
-                    titleCollapseProgress = commentHeaderCollapseProgress,
+                    onDanmakuSendClick = onDanmakuSendClick,
+                    danmakuEnabled = danmakuEnabled,
+                    onDanmakuToggle = onDanmakuToggle,
+                    tabSwipeModifier = Modifier.verticalPriorityHorizontalPagerSwipe(
+                        state = pagerState,
+                        enabled = shouldEnableVideoContentHorizontalPagerSwipe(
+                            currentPage = pagerState.currentPage,
+                            commentPageIndex = 1,
+                            isPagerScrollInProgress = pagerState.isScrollInProgress,
+                        ),
+                        forceVerticalPriority = liquidGlassEnabled,
+                        dragInteractionSource = contentPagerInteractions,
+                        exposePageActions = false,
+                    ),
                     modifier = Modifier
-                        // 子项按自然高度测量、折叠容器只做高度裁剪：否则收起时
-                        // 测量高度被同步压小，形成回环后回顶也无法恢复。
-                        .wrapContentHeight(unbounded = true)
-                        .onSizeChanged { size ->
-                            if (size.height > 0 && commentHeaderHeightPx.floatValue != size.height.toFloat()) {
-                                commentHeaderHeightPx.floatValue = size.height.toFloat()
+                        .fillMaxWidth()
+                        .wrapContentHeight(unbounded = true),
+                    isPlayerCollapsed = isPlayerCollapsed,
+                    miuixBackdrop = videoContentMiuixBackdrop,
+                    indicatorPositionProvider = {
+                        pagerState.tabIndicatorPosition
+                    },
+                    isScrollInProgressProvider = { pagerState.isScrollInProgress },
+                    isPagerDraggingProvider = { pagerDragHeld },
+                    pagerTargetPositionProvider = { pagerState.targetPage.toFloat() },
+                )
+            }
+
+            // Keep the glass dock outside the backdrop capture subtree to avoid recursive RenderNode
+            // sampling, while translating it with the comment page's actual pager position.
+            if (liquidGlassEnabled || immersiveVideoContentChromeEnabled) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .layoutId(VideoContentChromeSlot.CommentHeader)
+                        // 排序/搜索行由开关决定是否随折叠收起；关闭开关时整行保留，
+                        // 仅标题文字按折叠进度隐藏。
+                        .graphicsLayer {
+                            clip = tabBarScrollHideEnabled && commentHeaderCollapsePx > 0f
+                            translationX = pagerState.getOffsetDistanceInPages(1) * size.width
+                        }
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            chromeMeasurements.commentHeightPx = placeable.height
+                            val visibleHeight = if (tabBarScrollHideEnabled) {
+                                (placeable.height - commentHeaderCollapsePx).roundToInt().coerceAtLeast(0)
+                            } else {
+                                placeable.height
+                            }
+                            layout(placeable.width, visibleHeight) {
+                                placeable.placeRelative(0, 0)
                             }
                         },
-                )
+                ) {
+                    VideoCommentFloatingHeader(
+                        count = replyCount,
+                        sortMode = sortMode,
+                        onSortModeChange = onSortModeChange,
+                        onSearchClick = { showCommentSearchSheet = true },
+                        backdrop = videoContentMiuixBackdrop,
+                        liquidGlassEnabled = liquidGlassEnabled,
+                        compactTitleTypography = true,
+                        titleCollapseProgress = commentHeaderCollapseProgress,
+                        modifier = Modifier
+                            // 子项按自然高度测量、折叠容器只做高度裁剪：否则收起时
+                            // 测量高度被同步压小，形成回环后回顶也无法恢复。
+                            .wrapContentHeight(unbounded = true),
+                    )
+                }
             }
         }
 

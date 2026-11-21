@@ -1650,6 +1650,9 @@ fun rememberVideoPlayerState(
 
         // 当前会话可在进场期间绑定和暂停准备；正式播放仍等待入场许可。
         viewModel.attachPlayer(player)
+        if (resumeSameRemoteItem && remoteResume?.sleepTimer != null) {
+            miniPlayerManager.setSleepTimer(player, remoteResume.sleepTimer)
+        }
         Logger.d(
             "VideoPlayerState",
             "SUB_DBG attach player + decide restore/load: request=$bvid/$cid, reuse=$reuseFromMiniPlayerAtEntry, entryFinished=$entryTransitionFinished"

@@ -93,12 +93,15 @@ import com.android.purebilibili.core.store.home.HomeWallpaperSelection
 import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperUri
 import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
 import com.android.purebilibili.feature.home.shouldRenderRootHomeWallpaperMedia
+import com.android.purebilibili.feature.home.LocalRootOwnsMovingWallpaper
 import com.android.purebilibili.feature.home.DepthSyncedGlobalHomeWallpaperBackdrop
 import com.android.purebilibili.feature.home.resolveHomeWallpaperBackdropAppearance
 import com.android.purebilibili.feature.home.resolveHomeWallpaperUri
 import com.android.purebilibili.feature.home.shouldExposeGlobalHomeWallpaperChrome
 import com.android.purebilibili.feature.home.shouldRenderGlobalHomeWallpaperBackdrop
 import com.android.purebilibili.feature.login.LoginScreen
+import com.android.purebilibili.feature.home.components.resolveHomeTopAvatarInnerSize
+import com.android.purebilibili.feature.profile.ProfileAvatarEntrance
 import com.android.purebilibili.feature.profile.ProfileScreen
 import com.android.purebilibili.feature.profile.AccountSwitchDialog
 import com.android.purebilibili.feature.search.ArticleNavigationTarget
@@ -242,6 +245,12 @@ import com.android.purebilibili.core.store.navigation.NavigationSettingsStore
 import com.android.purebilibili.core.store.resolveEffectiveHomeSettings
 import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.navigation3.BiliPaiNavDisplayHost
+import com.android.purebilibili.navigation3.shouldUseOpaqueVideoChildBackground
+import com.android.purebilibili.feature.settings.SettingsRootCategory
+import com.android.purebilibili.feature.settings.canonicalSettingsRootCategory
+import com.android.purebilibili.feature.settings.screen.settingsHasPersistentPanes
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.navigation3.BiliPaiProgrammaticBackDispatcher
 import com.android.purebilibili.navigation3.BiliPaiNavCardSourceDirection
 import com.android.purebilibili.navigation3.BiliPaiNavEntryContentRole
@@ -714,6 +723,7 @@ fun AppNavigation(
         !systemReduceMotion && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled
     val sharedVideoCardTransitionEnabled = appearance.cardTransitionEnabled && !systemReduceMotion
     // 保留页面的点击回调也在点击时读取当前方式。
+    val systemCardTransitionMethod by rememberUpdatedState(homeSettings.cardTransitionMethod)
     val systemCardTransitionEnabled by rememberUpdatedState(
         sharedVideoCardTransitionEnabled,
     )
@@ -737,6 +747,8 @@ fun AppNavigation(
             LocalLiquidGlassRenderConfig provides liquidGlassRenderConfig,
             com.android.purebilibili.feature.home.components.cards.LocalHomeCardDynamicTintEnabled provides
                 effectiveHomeSettings.homeCardDynamicTintEnabled,
+            com.android.purebilibili.feature.home.components.cards.LocalHomeCardFixedBlurEnabled provides
+                effectiveHomeSettings.homeCardFixedBlurEnabled,
             com.android.purebilibili.feature.home.components.cards.LocalHomeCardFrostedGlassEnabled provides
                 effectiveHomeSettings.homeCardFrostedGlassEnabled,
             com.android.purebilibili.core.plugin.skin.LocalUiSkinState provides uiSkinState,
@@ -778,6 +790,7 @@ fun AppNavigation(
         fun replaceNavigation3BackStack(keys: List<BiliPaiNavKey>) {
             val replacementStack = keys.ifEmpty { listOf(BiliPaiNavKey.MainHost) }
             if (navigation3BackStack.toList() == replacementStack) return
+            videoNavigationRequests.invalidate()
             val removedStateKeys = resolveRemovedNavigation3SaveableStateKeys(
                 currentStack = navigation3BackStack,
                 replacementStack = replacementStack,
@@ -848,11 +861,15 @@ fun AppNavigation(
             else homeWallpaperSelection.mobileTransform
         val wallpaperEffectsEnabled = effectiveHomeSettings.homeWallpaperEffectMode !=
             com.android.purebilibili.core.store.HomeWallpaperEffectMode.OFF
+        val includeBlurredWallpaperViewport =
+            effectiveHomeSettings.homeCardDynamicTintEnabled || effectiveHomeSettings.homeCardFixedBlurEnabled ||
+                effectiveHomeSettings.homeCardFrostedGlassEnabled
         val wallpaperViewport = remember { mutableStateOf(IntSize.Zero) }
         var wallpaperPaletteResult by remember { mutableStateOf<WallpaperPaletteResult?>(null) }
         val wallpaperPalette = wallpaperPaletteResult?.takeIf {
             it.request.uri == globalHomeWallpaperUri && it.request.transform == wallpaperTransform &&
-                it.request.baseColor == backgroundColor && wallpaperIsStatic && wallpaperEffectsEnabled
+                it.request.viewport == wallpaperViewport.value && it.request.baseColor == backgroundColor &&
+                wallpaperIsStatic && wallpaperEffectsEnabled
         }?.palette
         val deferGlobalWallpaperPalette by remember(videoCardTransitionClock) {
             derivedStateOf {
@@ -865,7 +882,7 @@ fun AppNavigation(
             .isSettling
             .collectAsStateWithLifecycle()
         LaunchedEffect(globalHomeWallpaperUri, wallpaperTransform, backgroundColor, wallpaperIsStatic,
-            deferGlobalWallpaperPalette, foregroundSettling, wallpaperEffectsEnabled) {
+            deferGlobalWallpaperPalette, foregroundSettling, wallpaperEffectsEnabled, includeBlurredWallpaperViewport) {
             if (!wallpaperEffectsEnabled || !wallpaperIsStatic || globalHomeWallpaperUri.isBlank()) {
                 wallpaperPaletteResult = null
                 return@LaunchedEffect
@@ -875,7 +892,13 @@ fun AppNavigation(
                 if (viewport.width <= 0 || viewport.height <= 0) return@collectLatest
                 // Resize events cancel the previous request; never sample on every drag frame.
                 delay(140)
-                val request = WallpaperPaletteRequest(globalHomeWallpaperUri, viewport, wallpaperTransform, backgroundColor)
+                val request = WallpaperPaletteRequest(
+                    uri = globalHomeWallpaperUri,
+                    viewport = viewport,
+                    transform = wallpaperTransform,
+                    baseColor = backgroundColor,
+                    includeBlurredViewport = includeBlurredWallpaperViewport,
+                )
                 val palette = WallpaperPaletteStore.loadWallpaperPalette(context, request)
                 currentCoroutineContext().ensureActive()
                 wallpaperPaletteResult = WallpaperPaletteResult(request, palette)
@@ -945,6 +968,10 @@ fun AppNavigation(
                 reduceMotion = systemReduceMotion,
             )
         }
+        fun switchMainBottomPagerPage(page: Int) {
+            if (mainBottomPagerState.selectedPage != page) videoNavigationRequests.invalidate()
+            mainBottomPagerState.switchToPage(page)
+        }
         com.android.purebilibili.navigation3.RegisterFairMemoryNavigationState(
             activity = hostActivity,
             backStack = navigation3BackStack,
@@ -962,7 +989,7 @@ fun AppNavigation(
         LaunchedEffect(visibleBottomBarItems, mainBottomPagerState.selectedPage) {
             val lastPage = visibleBottomBarItems.lastIndex
             if (lastPage >= 0 && mainBottomPagerState.selectedPage > lastPage) {
-                mainBottomPagerState.switchToPage(lastPage)
+                switchMainBottomPagerPage(lastPage)
             }
         }
         val bottomPagerRenderBudget =
@@ -977,6 +1004,12 @@ fun AppNavigation(
             )
         }
         var homeHeaderReturn by remember { mutableStateOf<HomeHeaderReturn?>(null) }
+        var inAppProfileAvatarEntrance by remember { mutableStateOf<ProfileAvatarEntrance?>(null) }
+        val profileEntrySelected = currentNavigation3Key == BiliPaiNavKey.Profile ||
+            (currentNavigation3Key == BiliPaiNavKey.MainHost && currentBottomNavItem == BottomNavItem.PROFILE)
+        LaunchedEffect(profileEntrySelected, inAppProfileAvatarEntrance) {
+            if (!profileEntrySelected) inAppProfileAvatarEntrance = null
+        }
         com.android.purebilibili.feature.settings.highlights.UpdateHighlightsHost(
             allowAutomatic = !entryDialogsBlocked &&
                 currentRoute == ScreenRoutes.Home.route && currentBottomNavItem == BottomNavItem.HOME &&
@@ -989,11 +1022,6 @@ fun AppNavigation(
         // A new tab visit is distinct even if the history pager page was uncomposed
         // while away. Playback navigation leaves the selected tab and this identity intact.
         val historyBrowsingSessionKey = remember(currentBottomNavItem) { Any() }
-        val renderGlobalHomeWallpaperBackdrop = shouldRenderGlobalHomeWallpaperBackdrop(
-            effectScope = effectiveHomeSettings.homeWallpaperEffectScope,
-            currentRoute = currentRoute,
-            mainHostTabRoute = currentBottomNavItem.route,
-        )
         val exposeGlobalHomeWallpaperChrome = shouldExposeGlobalHomeWallpaperChrome(
             effectScope = effectiveHomeSettings.homeWallpaperEffectScope,
             hasWallpaperUri = globalHomeWallpaperUri.isNotBlank(),
@@ -1024,10 +1052,9 @@ fun AppNavigation(
             }
         } else null
         val renderRootWallpaper = shouldRenderRootHomeWallpaperMedia(
-            wallpaperVisible = sharedStaticWallpaper || (globalWallpaperEnabled && renderGlobalHomeWallpaperBackdrop),
-            isStaticWallpaper = sharedStaticWallpaper,
-            currentRoute = currentRoute,
-            mainHostTabRoute = currentBottomNavItem.route,
+            globalWallpaperEnabled = globalWallpaperEnabled,
+            isStaticWallpaper = wallpaperIsStatic,
+            activeRouteUsesWallpaper = exposeGlobalHomeWallpaperChrome,
         )
         val globalHomeWallpaperAppearance = remember(
             globalHomeWallpaperUri,
@@ -1043,6 +1070,12 @@ fun AppNavigation(
                 isDataSaverActive = isDataSaverActiveForGlobalWallpaper,
             )
         }
+        val aboutEntry = currentNavigation3Key as? BiliPaiNavKey.SettingsCategory
+        val customAboutCoversWallpaper = !wallpaperIsStatic && exposeGlobalHomeWallpaperChrome &&
+            aboutEntry != null && canonicalSettingsRootCategory(aboutEntry.category) == SettingsRootCategory.SYSTEM_ABOUT &&
+            LocalAppUiStyle.current == AppUiStyle.MIUIX && !settingsHasPersistentPanes()
+        val opaqueVideoChildCoversWallpaper = !wallpaperIsStatic && exposeGlobalHomeWallpaperChrome &&
+            currentNavigation3Key != null && shouldUseOpaqueVideoChildBackground(currentNavigation3Key, navigation3BackStack)
         val bottomBarItemColors = appNavigationSettings.bottomBarItemColors
         val bottomBarItemLabels = appNavigationSettings.bottomBarItemLabels
 
@@ -1406,6 +1439,7 @@ fun AppNavigation(
                     posture = appWindowAdaptiveInfo.posture,
                     shouldAvoidHinge = appWindowAdaptiveInfo.shouldAvoidHinge,
                 )) return false
+            videoNavigationRequests.invalidate()
             if (companionPaneState.mode != CompanionPaneMode.Split) companionPaneState.restoreSplit()
             navigationFocusManager.clearFocus()
             navigationKeyboardController?.hide()
@@ -1525,10 +1559,24 @@ fun AppNavigation(
             fallback: (() -> Unit)? = null,
             isCurrent: () -> Boolean = { true },
             onReturn: ((com.android.purebilibili.navigation3.SystemWindowMotionPhase) -> Unit)? = null,
+            profileAvatarEntrance: ProfileAvatarEntrance? = null,
         ) {
             if (tryOpenCompanionVideoDetail(key)) return
             val resolvedKey = com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(key)
+            val reportTransitionMethod = resolvedKey.isPlaybackWindowKey()
+            val navigationRequest = videoNavigationRequests.begin(
+                navigation3BackStack, navigation3ReturnSession.sourceGeneration,
+            )
+            val sourcePage = mainBottomPagerState.selectedPage
+            fun isNavigationCurrent(): Boolean =
+                mainBottomPagerState.selectedPage == sourcePage &&
+                    videoNavigationRequests.isCurrent(
+                        navigationRequest, navigation3BackStack, navigation3ReturnSession.sourceGeneration,
+                    ) && isCurrent()
             fun commitInApp() {
+                if (reportTransitionMethod && systemCardTransitionEnabled) {
+                    com.android.purebilibili.feature.video.SystemVideoCardTransition.recordStandardOpen()
+                }
                 if (fallback != null) fallback()
                 else latestPushNavigation3Key.value(resolvedKey, null)
             }
@@ -1543,8 +1591,9 @@ fun AppNavigation(
                 coverUrl = null,
                 useRecordedCardSource = useRecordedCardSource,
             )
+            val transitionMethod = systemCardTransitionMethod
             if (!com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
-                    systemCardTransitionEnabled, session, hostActivity,
+                    systemCardTransitionEnabled, session, hostActivity, transitionMethod,
                 )
             ) {
                 return commitInApp()
@@ -1561,16 +1610,16 @@ fun AppNavigation(
                     source = session,
                     realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                     sourceBackgroundColor = backgroundColor.toArgb(),
-                    isCurrent = { systemCardTransitionEnabled && isCurrent() },
+                    method = transitionMethod,
+                    reportMethod = reportTransitionMethod,
+                    isCurrent = { systemCardTransitionEnabled && isNavigationCurrent() },
                     onReturn = onReturn,
+                    profileAvatarEntrance = profileAvatarEntrance,
                 )
                 if (opened) {
                     officialVideoChildActive = true
-                } else if (
-                    CardPositionManager.isActiveVideoCardPixelOwner(
-                        session.sourcePixelOwner ?: return@launch,
-                    ) && isCurrent() && hostActivity.window.decorView.hasWindowFocus()
-                ) {
+                } else if (isNavigationCurrent() && hostActivity.window.decorView.hasWindowFocus()) {
+                    // 截图随窗口几何失效后，仍有效的点击继续走普通导航。
                     commitInApp()
                 }
             }
@@ -1589,16 +1638,13 @@ fun AppNavigation(
             if (key == BiliPaiNavKey.SettingsSearch && key in navigation3BackStack) return false
             val identity = com.android.purebilibili.navigation3.resolveSystemWindowCardIdentity(key) ?: return false
             if (!com.android.purebilibili.core.ui.transition.VideoCardSourceInstances.hasClickedAnchor(identity)) return false
-            val sourceStack = navigation3BackStack.toList()
-            val sourcePage = mainBottomPagerState.selectedPage
             navigateToSystemCardWindowOrPushImpl(
                 key,
                 useRecordedCardSource = true,
                 fallback = fallback,
                 isCurrent = {
-                    navigation3BackStack.toList() == sourceStack && mainBottomPagerState.selectedPage == sourcePage &&
-                        (resolvedPrivacyAuthenticationEnabled == false ||
-                            !isPrivacyProtectedNavigationTarget(key.toPrivacyNavigationTarget()))
+                    resolvedPrivacyAuthenticationEnabled == false ||
+                        !isPrivacyProtectedNavigationTarget(key.toPrivacyNavigationTarget())
                 },
             )
             return true
@@ -1631,7 +1677,7 @@ fun AppNavigation(
                 if (shouldResetNavigation3BackStackForBottomPager(navigation3BackStack)) {
                     replaceNavigation3BackStack(listOf(BiliPaiNavKey.MainHost))
                 }
-                mainBottomPagerState.switchToPage(page)
+                switchMainBottomPagerPage(page)
             }
             if (
                 shouldRequirePrivacyAuthentication(
@@ -1679,10 +1725,14 @@ fun AppNavigation(
         fun openHomeTopActionImpl(key: BiliPaiNavKey, control: HomeHeaderControl, recordSource: () -> Boolean) {
             val route = key.toLegacyRoute()
             if (!canNavigate(shouldBypassNavigationDebounceForRoute(route))) return
+            val profileAvatarEntrance = if (key == BiliPaiNavKey.Profile && control == HomeHeaderControl.AVATAR) {
+                ProfileAvatarEntrance(resolveHomeTopAvatarInnerSize())
+            } else null
             fun openInApp() {
                 val prepareNavigation: () -> Unit = {
                     // 顶栏搜索不能沿用上次底栏搜索的入场/退出来源。
                     if (control == HomeHeaderControl.SEARCH) searchEntryMotionSource = SearchEntryMotionSource.NONE
+                    if (profileAvatarEntrance != null) inAppProfileAvatarEntrance = profileAvatarEntrance
                 }
                 if (!requestBottomPagerPageForRoute(route, prepareNavigation)) {
                     latestPushNavigation3Key.value(key, prepareNavigation)
@@ -1696,15 +1746,15 @@ fun AppNavigation(
                 openInApp()
                 return
             }
-            val sourcePage = mainBottomPagerState.selectedPage
             var systemReturn: HomeHeaderReturn? = null
             navigateToSystemCardWindowOrPushImpl(
                 key = key,
                 useRecordedCardSource = true,
                 fallback = ::openInApp,
+                profileAvatarEntrance = profileAvatarEntrance,
                 isCurrent = {
                     navigation3BackStack.lastOrNull() == BiliPaiNavKey.MainHost &&
-                        mainBottomPagerState.selectedPage == sourcePage && canUseCardTransition()
+                        (!protected || resolvedPrivacyAuthenticationEnabled == false)
                 },
                 onReturn = { phase ->
                     val previous = systemReturn
@@ -1866,6 +1916,9 @@ fun AppNavigation(
                 else -> parsedKey
             }
             fun commitInAppVideoNavigation(targetKey: BiliPaiNavKey = key) {
+                if (targetKey is BiliPaiNavKey.VideoDetail && systemCardTransitionEnabled && !fromExternalLink) {
+                    com.android.purebilibili.feature.video.SystemVideoCardTransition.recordStandardOpen()
+                }
                 val videoBvid = videoKey?.bvid.orEmpty()
                 navigation3ReturnSession = navigation3ReturnSession
                     .recordTransitionSession(
@@ -1889,7 +1942,13 @@ fun AppNavigation(
                 return
             }
             suspend fun prepareAndCommitInAppVideoNavigation() {
-                if (key !is BiliPaiNavKey.VideoDetail) {
+                // 只有共享卡片入口需要让完整详情从形变首帧参与；普通导航先推入封面。
+                if (key !is BiliPaiNavKey.VideoDetail || key.sourceRoute.isNullOrBlank() ||
+                    !shouldEnableVideoDetailSharedTransition(
+                        cardTransitionEnabled = sharedVideoCardTransitionEnabled,
+                        sourceRoute = key.sourceRoute,
+                    )
+                ) {
                     commitInAppVideoNavigation()
                     return
                 }
@@ -1924,9 +1983,10 @@ fun AppNavigation(
                     }
                 }
             }
+            val transitionMethod = systemCardTransitionMethod
             if (key is BiliPaiNavKey.VideoDetail &&
                 com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
-                    systemCardTransitionEnabled, transitionSession, hostActivity,
+                    systemCardTransitionEnabled, transitionSession, hostActivity, transitionMethod,
                 )
             ) {
                 coroutineScope.launch {
@@ -1941,6 +2001,7 @@ fun AppNavigation(
                         source = transitionSession,
                         realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                         sourceBackgroundColor = backgroundColor.toArgb(),
+                        method = transitionMethod,
                         isCurrent = { systemCardTransitionEnabled && isCurrent() },
                     )
                     if (opened) {
@@ -2545,7 +2606,7 @@ fun AppNavigation(
                     // 若后切子分类,switchCategory 捕获的旧快照会把子分类覆盖回去)。
                     val homeIndex = visibleBottomBarItems.indexOf(BottomNavItem.HOME)
                     if (homeIndex >= 0) {
-                        mainBottomPagerState.switchToPage(homeIndex)
+                        switchMainBottomPagerPage(homeIndex)
                     }
                     homeViewModel.switchPopularSubCategory(
                         when (target.subCategoryKey) {
@@ -2957,6 +3018,7 @@ fun AppNavigation(
             LocalBottomBarVisible provides (finalBottomBarVisible && !driveBottomBarByProgress),
             LocalBottomBarContentPadding provides bottomBarContentPadding,
             LocalGlobalWallpaperBackdropVisible provides globalWallpaperEnabled,
+            LocalRootOwnsMovingWallpaper provides (globalWallpaperEnabled && !wallpaperIsStatic),
             LocalHomeWallpaperSelection provides homeWallpaperSelection,
             LocalWallpaperPlaybackCoordinator provides wallpaperPlaybackCoordinator,
             LocalGlobalWallpaperBackdropSource provides globalWallpaperSource,
@@ -3092,7 +3154,7 @@ fun AppNavigation(
                     AppSystemBackAction.RETURN_TO_HOME_TAB -> {
                         val homeIndex = visibleBottomBarItems.indexOf(BottomNavItem.HOME)
                         if (homeIndex >= 0) {
-                            mainBottomPagerState.switchToPage(homeIndex)
+                            switchMainBottomPagerPage(homeIndex)
                         }
                     }
                     AppSystemBackAction.NAVIGATE_UP -> {
@@ -3315,7 +3377,9 @@ fun AppNavigation(
                         isDataSaverActive = isDataSaverActiveForGlobalWallpaper,
                         isLightBackground = isLightBackground,
                         realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
-                        playbackEnabled = exposeGlobalHomeWallpaperChrome,
+                        playbackEnabled = !wallpaperIsStatic && exposeGlobalHomeWallpaperChrome &&
+                            hostWindowFocused && hostWindowResumed && !isInPipMode && !systemReduceMotion &&
+                            !officialVideoChildActive && !customAboutCoversWallpaper && !opaqueVideoChildCoversWallpaper,
                         modifier = Modifier
                             .onSizeChanged { wallpaperViewport.value = it }
                             .then(globalWallpaperSource?.modifier ?: Modifier),
@@ -3809,6 +3873,11 @@ fun AppNavigation(
                         companionPaneEnabled = videoCompanionEnabled,
                         onCompanionVideoClick = { request -> navigateToHomeVideoInNavigation3(request) },
                         onProfileClick = { pushNavigation3Target(BiliPaiNavKey.Profile) },
+                        onDrawerProfileClick = { avatarSize ->
+                            pushNavigation3Target(BiliPaiNavKey.Profile) {
+                                inAppProfileAvatarEntrance = ProfileAvatarEntrance(avatarSize)
+                            }
+                        },
                         onLogout = {
                             coroutineScope.launch {
                                 com.android.purebilibili.core.store.TokenManager.clear(context)
@@ -4396,7 +4465,13 @@ fun AppNavigation(
                     val navigateFromProfile: (BiliPaiNavKey) -> Unit = { target ->
                         pushNavigation3Target(target)
                     }
+                    val avatarEntrance = if (key == BiliPaiNavKey.Profile && profileEntrySelected) {
+                        inAppProfileAvatarEntrance ?: if (systemWindowEntry == key && !isBottomPagerHosted) {
+                            (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)?.profileAvatarEntrance
+                        } else null
+                    } else null
                     ProfileScreen(
+                        avatarEntrance = avatarEntrance,
                         initialEditAccount = key == BiliPaiNavKey.ProfileAccountEdit,
                         isCurrentPage = isBottomPagerPageActive,
                         accountSessionRefreshGeneration = accountSessionRefreshGeneration,
@@ -4471,9 +4546,6 @@ fun AppNavigation(
                     val videoKey = key as BiliPaiNavKey.VideoDetail
                     val activity = context as? android.app.Activity
                     val videoDetailOwner = LocalViewModelStoreOwner.current
-                    val videoPlaybackViewModel:
-                        com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel =
-                        viewModel()
                     var isNavigatingToAudioMode by remember(videoKey) { mutableStateOf(false) }
                     DisposableEffect(videoKey, videoDetailOwner) {
                         if (videoDetailOwner != null) {
@@ -4549,7 +4621,7 @@ fun AppNavigation(
 
                     VideoDetailScreen(
                         bvid = videoKey.bvid,
-                        takePreparedPlayer = { preparedVideoPlayers[videoKey.openId]?.take() },
+                        preparedPlayer = preparedVideoPlayers[videoKey.openId],
                         coverUrl = videoKey.coverUrl,
                         title = videoKey.title,
                         cid = videoKey.cid,
@@ -4608,7 +4680,7 @@ fun AppNavigation(
                                 // 再 pop 至 MainHost 触发与系统返回相同的横向过渡。
                                 val homeIndex = visibleBottomBarItems.indexOf(BottomNavItem.HOME)
                                 if (homeIndex >= 0) {
-                                    mainBottomPagerState.switchToPage(homeIndex)
+                                    switchMainBottomPagerPage(homeIndex)
                                 }
                                 replaceNavigation3BackStack(
                                     popBiliPaiNavKeyToRoot(navigation3BackStack)
@@ -4703,7 +4775,6 @@ fun AppNavigation(
                                 pushNavigation3Key(BiliPaiNavKey.Web(bgm.jumpUrl, "发现音乐"))
                             }
                         },
-                        viewModel = videoPlaybackViewModel,
                     )
                 }
 
@@ -4924,6 +4995,7 @@ fun AppNavigation(
                             onNavigateToBottomBarSettings = { pushNavigation3Key(BiliPaiNavKey.BottomBarSettings) },
                             onTipsClick = { pushNavigation3Key(BiliPaiNavKey.TipsSettings) },
                             onKeyboardShortcutsClick = { pushNavigation3Key(BiliPaiNavKey.KeyboardShortcutsSettings) },
+                            onProcessMemoryClick = { pushNavigation3Key(BiliPaiNavKey.ProcessMemory) },
                             onPerformanceHistoryClick = { pushNavigation3Key(BiliPaiNavKey.PerformanceHistory) },
                             onReplayOnboardingClick = { pushNavigation3Target(BiliPaiNavKey.Onboarding) },
                             onCategoryClick = { category ->
@@ -4968,6 +5040,7 @@ fun AppNavigation(
                             onNavigateToBottomBarSettings = { pushNavigation3Key(BiliPaiNavKey.BottomBarSettings) },
                             onTipsClick = { pushNavigation3Key(BiliPaiNavKey.TipsSettings) },
                             onKeyboardShortcutsClick = { pushNavigation3Key(BiliPaiNavKey.KeyboardShortcutsSettings) },
+                            onProcessMemoryClick = { pushNavigation3Key(BiliPaiNavKey.ProcessMemory) },
                             onPerformanceHistoryClick = { pushNavigation3Key(BiliPaiNavKey.PerformanceHistory) },
                             onReplayOnboardingClick = { pushNavigation3Target(BiliPaiNavKey.Onboarding) },
                             onCategoryClick = { category ->
@@ -6407,6 +6480,12 @@ fun AppNavigation(
                             RenderSettingsEntryContent(key, isBottomPagerHosted)
                         BiliPaiNavEntryContentRole.SETTINGS_CATEGORY ->
                             RenderSettingsCategoryEntryContent(key)
+                        BiliPaiNavEntryContentRole.PROCESS_MEMORY ->
+                            SettingsTabletEntry(key) {
+                                com.android.purebilibili.feature.settings.ProcessMemoryScreen(
+                                    onBack = { performSystemBackAction() }
+                                )
+                            }
                         BiliPaiNavEntryContentRole.PERFORMANCE_HISTORY ->
                             SettingsTabletEntry(key) {
                                 com.android.purebilibili.feature.settings.PerformanceHistoryScreen(
@@ -7188,7 +7267,7 @@ fun AppNavigation(
                 onReturnToHomeTab = {
                     val homeIndex = visibleBottomBarItems.indexOf(BottomNavItem.HOME)
                     if (homeIndex >= 0) {
-                        mainBottomPagerState.switchToPage(homeIndex)
+                        switchMainBottomPagerPage(homeIndex)
                     }
                 },
             )
@@ -7210,6 +7289,13 @@ fun AppNavigation(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(101f),
+            )
+
+            com.android.purebilibili.core.performance.ProcessMemoryOverlayHost(
+                canShow = hostWindowFocused && hostWindowResumed && !isInPipMode &&
+                    !entryDialogsBlocked && currentNavigation3Key != BiliPaiNavKey.ProcessMemory,
+                onOpenDetails = { pushNavigation3Key(BiliPaiNavKey.ProcessMemory) },
+                modifier = Modifier.fillMaxSize().zIndex(102f),
             )
 
             // 性能采集开启期间的全局录制提示，任意页面可见并可就地停止。

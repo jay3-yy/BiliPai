@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.settings
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 
 internal fun resolveSettingsSearchNavigation(result: SettingsSearchResult): BiliPaiNavKey? {
+    if (result.settingId == PROCESS_MEMORY_SETTING_ID) return BiliPaiNavKey.ProcessMemory
     if (result.settingId == com.android.purebilibili.core.performance.PERFORMANCE_HISTORY_SETTING_ID) {
         return BiliPaiNavKey.PerformanceHistory
     }

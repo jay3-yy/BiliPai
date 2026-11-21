@@ -163,6 +163,7 @@ internal data class SettingsRootCategoryActions(
     val onReplayOnboardingClick: () -> Unit,
     val onTipsClick: () -> Unit,
     val onKeyboardShortcutsClick: () -> Unit,
+    val onProcessMemoryClick: () -> Unit,
     val onPerformanceHistoryClick: () -> Unit,
     val onOpenLinksClick: () -> Unit,
     val onPrivacyModeChange: (Boolean) -> Unit,
@@ -769,7 +770,10 @@ private fun SettingsAboutCategoryContent(
     val performance: @Composable () -> Unit = {
         SettingsRootCategoryEntranceSection {
             SettingsDetailGroup(title = com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SECTION_TITLE) {
-                PerformanceCaptureSection(onOpenHistory = actions.onPerformanceHistoryClick)
+                PerformanceCaptureSection(
+                    onOpenMemory = actions.onProcessMemoryClick,
+                    onOpenHistory = actions.onPerformanceHistoryClick,
+                )
             }
         }
     }

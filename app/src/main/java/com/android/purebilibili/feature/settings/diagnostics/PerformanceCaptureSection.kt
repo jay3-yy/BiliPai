@@ -9,8 +9,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.R
 import com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SETTING_ID
 import com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_TITLE
 import com.android.purebilibili.core.performance.PerformanceCapture
@@ -32,7 +34,7 @@ import kotlinx.coroutines.withContext
 
 /** 复用偏好组件和自适应弹窗，玻璃、MD3、Miuix 使用相同功能与各自的容器样式。 */
 @Composable
-internal fun PerformanceCaptureSection(onOpenHistory: () -> Unit) {
+internal fun PerformanceCaptureSection(onOpenMemory: () -> Unit, onOpenHistory: () -> Unit) {
     val context = LocalContext.current
     val windowOwner = LocalView.current.rootView
     val status by PerformanceCapture.status.collectAsStateWithLifecycle()
@@ -70,6 +72,13 @@ internal fun PerformanceCaptureSection(onOpenHistory: () -> Unit) {
     }
 
     SettingsCardGroup {
+        AppPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.PROCESS_MEMORY),
+            title = stringResource(R.string.process_memory_title),
+            subtitle = stringResource(R.string.process_memory_summary),
+            onClick = onOpenMemory,
+        )
+        AppPreferenceDivider()
         SettingsItemAnchor(PERFORMANCE_CAPTURE_SETTING_ID) {
             AppSwitchPreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.PERFORMANCE_CAPTURE),

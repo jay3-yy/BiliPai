@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.settings
 import androidx.annotation.StringRes
 import com.android.purebilibili.R
 import com.android.purebilibili.core.store.CardRemovalDissolveMode
+import com.android.purebilibili.core.store.HomeCardBackgroundMode
 import com.android.purebilibili.core.store.SettingsManager
 import kotlinx.coroutines.flow.map
 import kotlin.math.roundToInt
@@ -22,10 +23,27 @@ internal fun cardRemovalDissolveModeLabel(mode: CardRemovalDissolveMode): Int = 
     CardRemovalDissolveMode.OFF -> R.string.animation_card_removal_dissolve_off
 }
 
+@StringRes
+internal fun homeCardBackgroundModeLabel(mode: HomeCardBackgroundMode): Int = when (mode) {
+    HomeCardBackgroundMode.OFF -> R.string.appearance_card_background_off
+    HomeCardBackgroundMode.FOLLOW_IMAGE -> R.string.appearance_card_background_follow
+    HomeCardBackgroundMode.FIXED_BLUR -> R.string.appearance_card_background_fixed
+}
+
 internal val additionalSettingsDirectory = listOf(
+    PlaybackSettingItem(
+        settingId = PROCESS_MEMORY_SETTING_ID,
+        title = PROCESS_MEMORY_TITLE,
+        page = SettingsRootCategory.SYSTEM_ABOUT,
+        sectionKey = com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SECTION,
+        observeValue = null,
+        aliases = listOf("内存占用", "内存浮窗", "全局内存", "PSS", "RSS", "堆内存", "交换内存", "memory usage", "memory overlay", "swap"),
+        target = SettingsSearchTarget.DIAGNOSTICS,
+        openCategory = true,
+    ),
     PlaybackSettingItem(com.android.purebilibili.core.performance.PERFORMANCE_HISTORY_SETTING_ID, com.android.purebilibili.core.performance.PERFORMANCE_HISTORY_TITLE, SettingsRootCategory.SYSTEM_ABOUT, com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SECTION, null, aliases = listOf("性能历史", "性能排行榜", "性能对比", "性能趋势", "返回首页性能"), target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
     PlaybackSettingItem(com.android.purebilibili.core.performance.PERFORMANCE_PREVIEW_SETTING_ID, com.android.purebilibili.core.performance.PERFORMANCE_PREVIEW_TITLE, SettingsRootCategory.SYSTEM_ABOUT, com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SECTION, null, aliases = listOf("卡顿页面排行", "性能报告摘要", "问题时段", "查看性能报告"), target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
-    PlaybackSettingItem(com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SETTING_ID, com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_TITLE, SettingsRootCategory.SYSTEM_ABOUT, com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SECTION, { _ -> com.android.purebilibili.core.performance.PerformanceCapture.status.map { if (it.recording) "采集中" else "关闭" } }, aliases = listOf("卡顿采集", "掉帧", "CPU", "内存", "性能报告", "性能测试"), target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
+    PlaybackSettingItem(com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SETTING_ID, com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_TITLE, SettingsRootCategory.SYSTEM_ABOUT, com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SECTION, { _ -> com.android.purebilibili.core.performance.PerformanceCapture.status.map { if (it.recording) "采集中" else "关闭" } }, aliases = listOf("卡顿采集", "掉帧", "CPU", "性能报告", "性能测试"), target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
     PlaybackSettingItem(ContentDisplaySetting.REMEMBER_PLAYER_ADJUSTMENTS, ContentDisplaySetting.title(ContentDisplaySetting.REMEMBER_PLAYER_ADJUSTMENTS), SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.ContentDisplayPreferences.rememberPlayerAdjustments(context).map { if (it) "按原设置保存" else "仅本次播放" } }, aliases = listOf("仅本次生效", "临时倍速", "临时比例", "临时后台播放", "临时播放顺序", "临时循环", "临时随机播放", "记住播放器设置", "保存范围"), target = SettingsSearchTarget.PLAYBACK),
     PlaybackSettingItem(ContentDisplaySetting.ROTATION_SENSITIVITY, ContentDisplaySetting.title(ContentDisplaySetting.ROTATION_SENSITIVITY), SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.ContentDisplayPreferences.rotationSensitivity(context).map { it.label } }, aliases = listOf("倾斜角度", "旋转阈值", "倾斜灵敏度", "自动旋转灵敏度"), target = SettingsSearchTarget.PLAYBACK),
 
@@ -67,7 +85,12 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("appearance.home_refresh_undo_visible", "撤销刷新按钮", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeRefreshUndoVisible(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.show_online_count", "卡片观看人数", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", { context -> com.android.purebilibili.core.store.SettingsManager.getShowCardOnlineCount(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.home_card_frosted_glass_enabled", "卡片背景模糊", SettingsRootCategory.ANIMATION_HAPTICS, "animation_glass", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeCardFrostedGlassEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.ANIMATION),
-    PlaybackSettingItem("appearance.home_card_dynamic_tint_enabled", "卡片跟随背景变色", SettingsRootCategory.HOME_RECOMMENDATION, "home_wallpaper", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeCardDynamicTintEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
+    PlaybackSettingItem(
+        "appearance.home_card_dynamic_tint_enabled", "视频卡片背景", SettingsRootCategory.HOME_RECOMMENDATION, "home_wallpaper",
+        { context -> SettingsManager.getHomeCardBackgroundMode(context).map { context.getString(homeCardBackgroundModeLabel(it)) } },
+        aliases = listOf("卡片跟随背景变色", "跟随取色", "固定高斯模糊"),
+        target = SettingsSearchTarget.HOME_FEED,
+    ),
     PlaybackSettingItem("appearance.home_hero_carousel_enabled", "首页顶部轮播封面", SettingsRootCategory.HOME_RECOMMENDATION, "home_recommendation", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeHeroCarouselEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.home_hero_carousel_autoplay_enabled", "轮播默认播放", SettingsRootCategory.HOME_RECOMMENDATION, "home_recommendation", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeHeroCarouselAutoplayEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.show_pgc_timeline", "追番时间表", SettingsRootCategory.HOME_RECOMMENDATION, "home_recommendation", { context -> com.android.purebilibili.core.store.SettingsManager.getShowPgcTimeline(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
@@ -81,6 +104,17 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("animation.global_text_tap_copy_enabled", "点按文字复制", SettingsRootCategory.APPEARANCE_THEME, "appearance_text_size", { context -> com.android.purebilibili.core.store.SettingsManager.getGlobalTextTapCopyEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.APPEARANCE, aliases = listOf("文字复制", "点按正文复制")),
     PlaybackSettingItem("animation.card_animation_enabled", "首页卡片淡入", SettingsRootCategory.ANIMATION_HAPTICS, "animation_card", null, target = SettingsSearchTarget.ANIMATION, readState = { state -> if (state.cardAnimationEnabled) "开启" else "关闭" }),
     PlaybackSettingItem("animation.card_transition_enabled", "一镜到底动画", SettingsRootCategory.ANIMATION_HAPTICS, "animation_card", null, aliases = listOf("卡片展开动画", "卡片过渡", "系统一镜到底", "金标"), target = SettingsSearchTarget.ANIMATION, readState = { state -> if (state.cardTransitionEnabled) "开启" else "关闭" }),
+    PlaybackSettingItem(
+        settingId = CARD_TRANSITION_METHOD_SETTING_ID,
+        title = "一镜到底接口",
+        page = SettingsRootCategory.ANIMATION_HAPTICS,
+        sectionKey = "animation_card",
+        observeValue = { context ->
+            SettingsManager.getCardTransitionMethod(context).map { context.getString(cardTransitionMethodLabel(it)) }
+        },
+        aliases = listOf("官方金标", "小米旧版", "OPPO", "vivo", "转场接口"),
+        target = SettingsSearchTarget.ANIMATION,
+    ),
     PlaybackSettingItem(
         settingId = CARD_REMOVAL_DISSOLVE_SETTING_ID,
         title = "卡片移除粒子消散",
@@ -221,7 +255,7 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("appearance.home_feed_card_width_preset", "推荐卡片宽度", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", null, target = SettingsSearchTarget.HOME_FEED, readState = { state -> state.homeFeedCardWidthPreset.toString() }),
     PlaybackSettingItem("appearance.home_feed_card_style", "卡片封面比例", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeFeedCardStyle(context).map { it.label } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.home_duration_style", "首页视频时长", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeDurationStyle(context).map { it.label } }, target = SettingsSearchTarget.HOME_FEED),
-    PlaybackSettingItem("appearance.home_wallpaper_effect_mode", "首页壁纸效果", SettingsRootCategory.HOME_RECOMMENDATION, "home_wallpaper", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeWallpaperEffectMode(context).map { it.toString() } }, target = SettingsSearchTarget.HOME_FEED),
+    PlaybackSettingItem("appearance.home_wallpaper_effect_mode", "壁纸效果", SettingsRootCategory.HOME_RECOMMENDATION, "home_wallpaper", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeWallpaperEffectMode(context).map { it.toString() } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.home_wallpaper_effect_scope", "壁纸作用范围", SettingsRootCategory.HOME_RECOMMENDATION, "home_wallpaper", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeWallpaperEffectScope(context).map { it.toString() } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.common_list_header_collapse_mode", "列表顶栏显示", SettingsRootCategory.HOME_RECOMMENDATION, "home_browsing", { context -> com.android.purebilibili.core.store.SettingsManager.getCommonListHeaderCollapseMode(context).map { it.toString() } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("navigation.visibility_mode", "显示模式", SettingsRootCategory.NAVIGATION_INTERACTION, "navigation_display", { context -> com.android.purebilibili.core.store.SettingsManager.getBottomBarVisibilityMode(context).map { it.toString() } }, target = SettingsSearchTarget.BOTTOM_BAR),

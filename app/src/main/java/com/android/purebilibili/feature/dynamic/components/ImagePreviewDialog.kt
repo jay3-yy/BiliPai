@@ -198,6 +198,7 @@ private data class ImagePreviewOverlayRequest(
     val onImageLongPress: ((String) -> Unit)?,
     val publicContent: Boolean = false,
     val sourcePageMotion: ImagePreviewPageMotion?,
+    val onPageSelected: ((Int) -> Unit)?,
     val onDismiss: () -> Unit
 )
 
@@ -349,9 +350,11 @@ internal fun ImagePreviewDialog(
     onImageLongPress: ((String) -> Unit)? = null,
     publicContent: Boolean = false,
     sourcePageMotion: ImagePreviewPageMotion? = null,
+    onPageSelected: ((Int) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val latestOnDismiss by rememberUpdatedState(onDismiss)
+    val latestOnPageSelected by rememberUpdatedState(onPageSelected)
     val requestToken = remember(images, initialIndex, sourceRect, sourceRects, sourceKey, sourceCornerRadiusDp, livePhotoVideos, publicContent, sourcePageMotion) { System.nanoTime() }
 
     DisposableEffect(requestToken) {
@@ -370,6 +373,9 @@ internal fun ImagePreviewDialog(
                 textContent = textContent,
                 defaultTextVisible = defaultTextVisible,
                 onImageLongPress = onImageLongPress,
+                onPageSelected = if (onPageSelected != null) {
+                    { index -> latestOnPageSelected?.invoke(index) }
+                } else null,
                 onDismiss = { latestOnDismiss() }
             )
         )
@@ -433,6 +439,7 @@ internal fun ImagePreviewOverlayHost(
                     onImageLongPress = request.onImageLongPress,
                     pageMotion = request.sourcePageMotion ?: pageMotion,
                     dismissRequestCount = dismissRequestCount,
+                    onPageSelected = request.onPageSelected,
                     onDismiss = {
                         ImagePreviewOverlayController.dismiss(request.token)
                         request.onDismiss()
@@ -462,6 +469,7 @@ private fun ImagePreviewOverlayContent(
     publicContent: Boolean = false,
     pageMotion: ImagePreviewPageMotion?,
     dismissRequestCount: Int = 0,
+    onPageSelected: ((Int) -> Unit)?,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -609,6 +617,10 @@ private fun ImagePreviewOverlayContent(
         initialPage = initialIndex,
         pageCount = { images.size }
     )
+
+    if (onPageSelected != null) {
+        LaunchedEffect(pagerState.settledPage) { onPageSelected(pagerState.settledPage) }
+    }
 
     var previewLoadFailed by remember(pagerState.currentPage) { mutableStateOf(false) }
 

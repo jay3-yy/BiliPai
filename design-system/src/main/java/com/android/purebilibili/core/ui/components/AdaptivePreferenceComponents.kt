@@ -131,6 +131,9 @@ val LocalAppPreferenceIconTreatment = staticCompositionLocalOf {
     AppPreferenceIconTreatment.TONAL
 }
 
+/** Miuix 设置分组在全局壁纸上仍保有独立的圆角衬底。 */
+val LocalMiuixPreferenceWallpaperGroups = staticCompositionLocalOf { false }
+
 val LocalAppPreferenceGroupPresentation = staticCompositionLocalOf {
     AppPreferenceGroupPresentation.CARD
 }
@@ -257,6 +260,13 @@ internal fun resolveAdaptiveGroupContainerColor(
         AppUiStyle.MIUIX -> colorScheme.surfaceContainer
         AppUiStyle.MATERIAL3 -> colorScheme.surfaceContainerLow
     }
+    if (globalWallpaperVisible && uiStyle == AppUiStyle.MIUIX) {
+        return com.android.purebilibili.core.ui.resolveGlobalWallpaperProtectiveColor(
+            baseColor = resolvedColor,
+            lightAlpha = 0.84f,
+            darkAlpha = 0.88f,
+        )
+    }
     return resolveGlobalWallpaperListContainerColor(
         containerColor = resolvedColor,
         colorScheme = colorScheme,
@@ -270,7 +280,8 @@ internal fun resolveAdaptiveGroupContainerColor(
 fun adaptivePreferenceGroupContainerColor(): Color = resolveAdaptiveGroupContainerColor(
     uiStyle = LocalAppUiStyle.current,
     colorScheme = MaterialTheme.colorScheme,
-    globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current && LocalAppUiStyle.current != AppUiStyle.MIUIX,
+    globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current &&
+        (LocalAppUiStyle.current != AppUiStyle.MIUIX || LocalMiuixPreferenceWallpaperGroups.current),
 )
 
 internal fun resolveAdaptiveSearchBarContainerColor(

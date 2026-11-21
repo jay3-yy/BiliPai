@@ -75,6 +75,7 @@ class BackgroundAudioService : MediaLibraryService() {
     private var errorRecovery: Job? = null
     private var retriedMediaId: String? = null
     private var pauseRelease: Job? = null
+    private var sleepTimerJob: Job? = null
     private var generation = 0L
     private var libraryRequestGeneration = 0L
     private var playedMs = 0L
@@ -245,15 +246,16 @@ class BackgroundAudioService : MediaLibraryService() {
         check(request.accountMid == TokenManager.midCache && ticket == libraryRequestGeneration && !nativeReleased)
         memoryTerminationCheckpointed = false
         val queue = request.queue.toMutableList().also { it[request.index] = selected.copy(cid = cid) }
-        snapshot = request.copy(queue = queue, audioUrl = "", reportHistory = reportHistory)
+        val next = request.copy(queue = queue, audioUrl = "", reportHistory = reportHistory)
+        snapshot = next
         committed = true
         libraryPlaybackOwned = true
         player.setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
         player.volume = request.volume
         player.setPlaybackSpeed(request.speed)
-        player.repeatMode = if (request.playMode == PlayMode.REPEAT_ONE ||
-            request.queue.size == 1 && request.playMode == PlayMode.REPEAT_ALL) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        applySleepPlaybackMode(next)
+        scheduleSleepCountdown()
         updateSessionActivity(selected.bvid)
         val sameSavedPart = saved?.current?.let { it.bvid == selected.bvid && it.cid == cid } == true
         val resumePosition = if (sameSavedPart) request.positionMs else checkpoint?.positionMs ?: request.positionMs
@@ -346,12 +348,18 @@ class BackgroundAudioService : MediaLibraryService() {
                             check(snapshot != null && player.playbackState == Player.STATE_READY)
                             committed = true
                             player.seekTo(args.getLong("position_ms", player.currentPosition))
-                            player.play()
+                            if (expireSleepCountdown()) {
+                                listener.onIsPlayingChanged(false)
+                            } else {
+                                player.play()
+                            }
+                            scheduleSleepCountdown()
                             persist()
                             prefetchNext()
                         }
                         AUDIO_RETURN -> {
                             restoring?.join()
+                            expireSleepCountdown()
                             persist()
                             val state = currentSnapshot()
                             committed = false
@@ -362,6 +370,7 @@ class BackgroundAudioService : MediaLibraryService() {
                         }
                         AUDIO_SNAPSHOT -> {
                             restoring?.join()
+                            if (committed) expireSleepCountdown()
                             result.set(SessionResult(SessionResult.RESULT_SUCCESS, currentSnapshot()?.toAudioBundle() ?: Bundle.EMPTY))
                             return@launch
                         }
@@ -394,8 +403,7 @@ class BackgroundAudioService : MediaLibraryService() {
                                     player.removeMediaItems(player.currentMediaItemIndex + 1, player.mediaItemCount)
                                 }
                                 if (player.currentMediaItemIndex > 0) player.removeMediaItems(0, player.currentMediaItemIndex)
-                                player.repeatMode = if (mode == PlayMode.REPEAT_ONE || next.queue.size == 1 &&
-                                    mode == PlayMode.REPEAT_ALL) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+                                applySleepPlaybackMode(next)
                                 prefetchNext()
                             }
                             persist()
@@ -427,6 +435,7 @@ class BackgroundAudioService : MediaLibraryService() {
         generation++
         nextLoad?.cancel()
         errorRecovery?.cancel()
+        sleepTimerJob?.cancel()
         snapshot = request
         committed = resume
         val item = request.current ?: error("Missing audio entry")
@@ -437,10 +446,45 @@ class BackgroundAudioService : MediaLibraryService() {
         player.volume = request.volume.coerceIn(0f, 1f)
         player.setMediaItem(media, request.positionMs.coerceAtLeast(0L))
         player.setPlaybackSpeed(request.speed.coerceIn(0.25f, 4f))
-        player.repeatMode = if (request.playMode == PlayMode.REPEAT_ONE ||
-            request.queue.size == 1 && request.playMode == PlayMode.REPEAT_ALL) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-        player.playWhenReady = resume
+        applySleepPlaybackMode(request)
+        player.playWhenReady = resume && !expireSleepCountdown()
+        scheduleSleepCountdown()
         player.prepare()
+    }
+
+    private fun applySleepPlaybackMode(state: BackgroundAudioSnapshot) {
+        val stopAfterCurrent = state.sleepTimer is PlaybackSleepTimer.AfterCurrent
+        player.setPauseAtEndOfMediaItems(stopAfterCurrent)
+        val repeatCurrent = state.playMode == PlayMode.REPEAT_ONE ||
+            (state.queue.size == 1 && state.playMode == PlayMode.REPEAT_ALL)
+        player.repeatMode = if (!stopAfterCurrent && repeatCurrent) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+    }
+
+    private fun scheduleSleepCountdown() {
+        sleepTimerJob?.cancel()
+        val timer = snapshot?.sleepTimer as? PlaybackSleepTimer.Countdown
+        sleepTimerJob = if (committed && timer != null) scope.launch {
+            delay((timer.deadlineMs - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+            expireSleepCountdown()
+        } else null
+    }
+
+    private fun expireSleepCountdown(): Boolean {
+        val state = snapshot ?: return false
+        val timer = state.sleepTimer as? PlaybackSleepTimer.Countdown ?: return false
+        if (timer.deadlineMs > android.os.SystemClock.elapsedRealtime()) return false
+        snapshot = state.copy(sleepTimer = null)
+        player.pause()
+        return true
+    }
+
+    private fun finishSleepAfterCurrent() {
+        val state = snapshot ?: return
+        if (state.sleepTimer !is PlaybackSleepTimer.AfterCurrent) return
+        val stopped = state.copy(sleepTimer = null)
+        snapshot = stopped
+        player.pause()
+        applySleepPlaybackMode(stopped)
     }
 
     private fun mediaItem(index: Int, entry: com.android.purebilibili.feature.video.player.PlaylistItem, url: String): MediaItem =
@@ -521,6 +565,7 @@ class BackgroundAudioService : MediaLibraryService() {
 
         override fun onPlaybackStateChanged(state: Int) {
             if (state == Player.STATE_ENDED && committed) {
+                finishSleepAfterCurrent()
                 prefetchNext()
                 onIsPlayingChanged(false)
             }
@@ -576,9 +621,14 @@ class BackgroundAudioService : MediaLibraryService() {
                 .takeIf { current.queue.getOrNull(it)?.bvid == bvid } ?: return
             if (index !in current.queue.indices) return
             val cid = media.mediaMetadata.extras?.getLong("cid") ?: 0L
-            snapshot = current.copy(index = index, queue = current.queue.toMutableList().also {
+            val timer = current.sleepTimer
+            val changedSleepTarget = timer is PlaybackSleepTimer.AfterCurrent &&
+                (timer.bvid != bvid || (timer.cid > 0L && timer.cid != cid))
+            val next = current.copy(index = index, queue = current.queue.toMutableList().also {
                 it[index] = it[index].copy(cid = cid)
-            }, audioUrl = "")
+            }, audioUrl = "", sleepTimer = timer.takeUnless { changedSleepTarget })
+            snapshot = next
+            if (changedSleepTarget) applySleepPlaybackMode(next)
             updateSessionActivity(bvid)
             generation++
             nextLoad?.cancel()
@@ -589,6 +639,9 @@ class BackgroundAudioService : MediaLibraryService() {
             if (committed) prefetchNext()
         }
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM && committed) {
+                finishSleepAfterCurrent()
+            }
             if (playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
                 memoryTerminationCheckpointed = false
             }
@@ -707,6 +760,7 @@ class BackgroundAudioService : MediaLibraryService() {
             nextLoad?.cancel()
             errorRecovery?.cancel()
             pauseRelease?.cancel()
+            sleepTimerJob?.cancel()
             snapshot = null
             player.pause()
             player.stop()

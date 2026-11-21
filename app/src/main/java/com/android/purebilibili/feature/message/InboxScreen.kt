@@ -7,6 +7,7 @@ import com.android.purebilibili.navigation3.rememberNavigationControlMotionGroup
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
 import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -164,7 +165,9 @@ fun InboxScreen(
     ) { if (pendingBatch == 1) viewModel.markAllRead() else viewModel.clearSessions(); pendingBatch = null }
     var lastAutoLoadEndTs by remember(accountIdentity) { mutableLongStateOf(0L) }
     var pendingRemoveSession by remember(accountIdentity) { mutableStateOf<SessionItem?>(null) }
-    val conversationMotionGroup = if (conversationWindowEnabled) rememberNavigationControlMotionGroup() else null
+    val conversationMotionGroup = if (conversationWindowEnabled) {
+        rememberNavigationControlMotionGroup(landAdjacentOnly = true)
+    } else null
 
     LaunchedEffect(uiState.sessions.firstOrNull()?.talker_id, uiState.isRefreshing, uiState.isLoading) {
         if (uiState.isRefreshing || uiState.isLoading) {
@@ -439,7 +442,7 @@ fun InboxScreen(
 private fun MessageCenterTopShortcutRow(
     items: List<MessageCenterTopItem>,
     onItemClick: (MessageCenterDestination) -> Unit
-) = NavigationControlMotionGroup {
+) = NavigationControlMotionGroup(landAdjacentOnly = true) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -663,6 +666,7 @@ internal fun SessionListItem(
 
     val shape = if (useGroupedListCards) AppShapes.container(ContainerLevel.Card) else RectangleShape
     val conversation = conversationTarget?.let { rememberSystemWindowNavigationControl(it, shape, onClick) }
+    val returnMotion = conversation?.modifier ?: rememberSystemWindowControlNeighborModifier()
     AppSurface(
         modifier = Modifier
             .fillMaxWidth()
@@ -672,7 +676,7 @@ internal fun SessionListItem(
             )
             .messageSecondaryClick { showMenu = true }
             .padding(horizontal = if (useGroupedListCards) 12.dp else 0.dp, vertical = if (useGroupedListCards) 3.dp else 0.dp)
-            .then(conversation?.modifier ?: Modifier),
+            .then(returnMotion),
         shape = shape,
         color = when {
             useGroupedListCards && session.top_ts > 0 -> AppSurfaceTokens.secondaryContainer().copy(alpha = 0.55f)

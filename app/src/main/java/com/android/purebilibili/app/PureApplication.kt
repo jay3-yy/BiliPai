@@ -121,10 +121,9 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
                 backgroundElapsedMs = SystemClock.elapsedRealtime() - enteredBackgroundForImageTrimAtMs,
             )
         ) {
-            // 页面引用与缓存分别释放；音频通知封面由播放会话独立持有，画中画在上方豁免。
-            AppPageImageMemory.release()
+            releasePageImageReferences()
             applyBackgroundImageCacheBudget(BACKGROUND_IMAGE_TRIM_DELAY_MS)
-            com.android.purebilibili.data.repository.DanmakuContentRepository.clearCache()
+            releaseRebuildableMemoryCaches()
             Logger.d(
                 PureApplicationRuntimeConfig.TAG,
                 "Sustained background: trimmed image cache to " +
@@ -136,10 +135,10 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         override fun onEnterBackground() {
             enteredBackgroundForImageTrimAtMs = SystemClock.elapsedRealtime()
             backgroundImageTrimHandler.removeCallbacks(delayedBackgroundImageTrim)
-            // A cached process may be frozen before the delayed task can execute. Apply
-            // the light budget synchronously while the process is still running.
+            // 缓存进程可能在延迟任务执行前被冻结。先释放页面引用，保留短时返回所需的热缓存。
             val miniPlayer = com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstanceOrNull()
             if (!StartupRecovery.isRecoveryMode && miniPlayer?.shouldKeepPlaybackForPipTransition() != true) {
+                releasePageImageReferences()
                 applyBackgroundImageCacheBudget(0L)
             }
             backgroundImageTrimHandler.postDelayed(delayedBackgroundImageTrim, BACKGROUND_IMAGE_TRIM_DELAY_MS)
@@ -156,12 +155,16 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         imageMemoryBudget?.background(elapsedMs)
     }
 
+    private fun releasePageImageReferences() {
+        if (!AppPageImageMemory.released) AppPageImageMemory.release()
+    }
+
     private fun releaseBackgroundPageImages() {
         if (BackgroundManager.isInBackground &&
             com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstanceOrNull()
                 ?.shouldKeepPlaybackForPipTransition() != true
         ) {
-            AppPageImageMemory.release()
+            releasePageImageReferences()
             applyBackgroundImageCacheBudget(BACKGROUND_IMAGE_TRIM_DELAY_MS)
         }
     }
@@ -681,6 +684,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         super.onTrimMemory(level)
         if (com.android.purebilibili.feature.message.notification.isLightweightServiceProcess(this)) return
         if (StartupRecovery.isRecoveryMode) return
+        // Android 14 起，前后台生命周期仍会主动回收，系统回调可补充清理。
         val plan = PureApplicationRuntimeConfig.resolveBackgroundMemoryTrimPlan(level)
         if (plan.clearImageMemoryCache) releaseBackgroundPageImages()
         if (plan.imageCacheTrimLevel != null) {

@@ -7,6 +7,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -314,6 +315,19 @@ internal fun rememberVideoDetailRouteSheetFrameProvider(
                 motion = effectiveMotion
             )
         }
+    }
+}
+
+/** Keep the regular detail backing outside wallpaper-card handoffs. */
+internal fun Modifier.videoDetailBacking(
+    color: Color,
+    alphaProvider: (() -> Float)?,
+): Modifier = if (alphaProvider == null) {
+    background(color)
+} else {
+    drawBehind {
+        val alpha = alphaProvider()
+        if (alpha > 0f) drawRect(color, alpha = alpha)
     }
 }
 

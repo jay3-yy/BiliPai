@@ -89,6 +89,10 @@ import com.android.purebilibili.feature.video.usecase.VideoPlaybackUseCase
 import com.android.purebilibili.feature.video.usecase.pausePlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
+import com.android.purebilibili.feature.audio.player.PlaybackSleepTimer
+import com.android.purebilibili.feature.video.viewmodel.shouldStopAfterCurrentPlayback
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 
 private const val TAG = "MiniPlayerManager"
@@ -802,6 +806,58 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     // --- 协程作用域 ---
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    internal data class LocalSleepTimer(val player: ExoPlayer, val timer: PlaybackSleepTimer)
+
+    private val _sleepTimer = MutableStateFlow<LocalSleepTimer?>(null)
+    internal val sleepTimer = _sleepTimer.asStateFlow()
+    private var sleepTimerJob: Job? = null
+
+    internal fun sleepTimerFor(target: ExoPlayer): PlaybackSleepTimer? =
+        _sleepTimer.value?.takeIf { it.player === target }?.timer
+
+    internal fun setSleepTimer(target: ExoPlayer, timer: PlaybackSleepTimer?) {
+        if (timer == null && sleepTimerFor(target) == null) return
+        sleepTimerJob?.cancel()
+        _sleepTimer.value = timer?.let { LocalSleepTimer(target, it) }
+        sleepTimerJob = when (timer) {
+            is PlaybackSleepTimer.Countdown -> scope.launch {
+                delay((timer.deadlineMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+                expireSleepCountdown(target)
+            }
+            is PlaybackSleepTimer.AfterCurrent -> {
+                target.repeatMode = Player.REPEAT_MODE_OFF
+                null
+            }
+            null -> null
+        }
+    }
+
+    private fun expireSleepCountdown(target: ExoPlayer) {
+        val timer = sleepTimerFor(target) as? PlaybackSleepTimer.Countdown ?: return
+        if (timer.deadlineMs > SystemClock.elapsedRealtime()) return
+        setSleepTimer(target, null)
+        pauseForSleepTimer(target)
+    }
+
+    private fun pauseForSleepTimer(target: ExoPlayer) {
+        if (backgroundOptimizationPlayer === target) foregroundResumeIntent = false
+        PlayerBackgroundPlaybackSessions.pauseForSleepTimer(target)
+        android.widget.Toast.makeText(context, "定时结束，已暂停播放", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    internal fun cancelSleepAfterCurrentForSwitch(target: ExoPlayer, bvid: String, cid: Long) {
+        val timer = sleepTimerFor(target) as? PlaybackSleepTimer.AfterCurrent ?: return
+        if (timer.bvid != bvid || (cid > 0L && timer.cid != cid)) setSleepTimer(target, null)
+    }
+
+    internal fun finishSleepAfterCurrent(target: ExoPlayer, bvid: String?, cid: Long): Boolean {
+        val timer = sleepTimerFor(target) as? PlaybackSleepTimer.AfterCurrent ?: return false
+        if (bvid == null || !shouldStopAfterCurrentPlayback(timer.bvid to timer.cid, bvid, cid)) return false
+        setSleepTimer(target, null)
+        pauseForSleepTimer(target)
+        return true
+    }
+
     private val remoteAudio = com.android.purebilibili.feature.audio.player.BackgroundAudioConnection(context) { remote ->
         val extras = remote.currentMediaItem?.mediaMetadata?.extras ?: android.os.Bundle.EMPTY
         val bvid = extras.getString("bvid")
@@ -852,6 +908,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             savedShuffle = PlaylistManager.savedTransport.value.shuffleEnabled,
             backgroundPlaybackOverride = PlayerBackgroundPlaybackSessions.selection(local, "video:$currentBvid"),
             backgroundOverrideBvid = currentBvid,
+            sleepTimer = sleepTimerFor(local),
         )
         if (!com.android.purebilibili.feature.audio.player.canTransferBackgroundAudio(
                 listening = AudioNowPlayingSession.active.value,
@@ -868,6 +925,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 transferred = remoteAudio.transfer(request) {
                     if (player !== local || pageOwnership.isRetained(local) || !AudioNowPlayingSession.active.value ||
                         !local.playWhenReady || !shouldContinueBackgroundAudio() ||
+                        sleepTimerFor(local) != request.sleepTimer ||
                         isLiveMode || isSystemPipActive || isMiniMode) null else {
                         val handoffPosition = local.currentPosition.coerceAtLeast(0L)
                         resetBackgroundOptimizationState()
@@ -880,6 +938,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     }
                 }
                 if (transferred) {
+                    setSleepTimer(local, null)
                     remoteBackgroundOverride = request.backgroundPlaybackOverride?.let { value ->
                         request.backgroundOverrideBvid?.let { it to value }
                     }
@@ -902,7 +961,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     remoteAudio.close()
                     if (stoppedLocal && player === local && !pageOwnership.isRetained(local)) {
                         local.prepare()
-                        local.playWhenReady = true
+                        local.playWhenReady = (request.sleepTimer as? PlaybackSleepTimer.Countdown)
+                            ?.let { it.deadlineMs > SystemClock.elapsedRealtime() } ?: true
                         updateMediaSession(local)
                     }
                 }
@@ -1268,6 +1328,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
     
     override fun onEnterForeground() {
         if (remoteAudio.active) return
+        player?.let(::expireSleepCountdown)
         backgroundPausedReleaseJob?.cancel()
         backgroundPausedReleaseJob = null
         if (!isLowMemoryMode) return
@@ -1698,6 +1759,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * 仅当外部播放器引用匹配目标实例时才清理，避免误清理新播放器引用。
      */
     fun clearExternalPlayerIfMatches(target: ExoPlayer): Boolean {
+        setSleepTimer(target, null)
         if (_externalPlayer === target) {
             resetBackgroundOptimizationState()
             Logger.d(TAG, "clearExternalPlayerIfMatches: cleared external player ${target.hashCode()}")
@@ -1716,7 +1778,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
     fun resetExternalPlayer() {
         resetBackgroundOptimizationState()
         Logger.d(TAG, " resetExternalPlayer: clearing external player reference")
-        _externalPlayer?.removeListener(playerListener)
+        _externalPlayer?.let {
+            setSleepTimer(it, null)
+            it.removeListener(playerListener)
+        }
         _externalPlayer = null
     }
 
@@ -2214,6 +2279,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             resetBackgroundOptimizationState()
             isActive = false
             playbackServiceRequested = false
+            _sleepTimer.value?.let { setSleepTimer(it.player, null) }
             _externalPlayer?.removeListener(playerListener)
             _externalPlayer = null
             releaseMediaSession()
@@ -2561,6 +2627,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
 
     private fun dismiss(taskRemoved: Boolean) {
+        _sleepTimer.value?.let { setSleepTimer(it.player, null) }
         PlayerBackgroundPlaybackSessions.clear(_externalPlayer)
         PlayerBackgroundPlaybackSessions.clear(_player)
         remoteBackgroundOverride = null
@@ -2659,6 +2726,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         if (player !== incomingPlayer) resetBackgroundOptimizationState()
         val previousPlayer = _externalPlayer
         if (previousPlayer != null && previousPlayer !== incomingPlayer) {
+            setSleepTimer(previousPlayer, null)
             previousPlayer.removeListener(playerListener)
             previousPlayer.pause()
             // Switching sessions must not invalidate a parent detail still on the back stack.
@@ -2922,6 +2990,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         rollbackIndex: Int
     ): Boolean {
         val currentPlayer = player ?: return false
+        val timerVersionAtLoadStart = PlayerBackgroundPlaybackSessions.timerPauseVersion(currentPlayer)
         backgroundSkipJob?.cancel()
         backgroundSkipJob = scope.launch {
             backgroundPlaybackUseCase.attachPlayer(currentPlayer)
@@ -2957,6 +3026,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 )
             ) {
                 is VideoLoadResult.Success -> {
+                    expireSleepCountdown(currentPlayer)
+                    cancelSleepAfterCurrentForSwitch(currentPlayer, loadResult.info.bvid, loadResult.info.cid)
+                    val startPlayback =
+                        timerVersionAtLoadStart == PlayerBackgroundPlaybackSessions.timerPauseVersion(currentPlayer)
                     // Queue navigation can outlive every detail ViewModel. Bind before preparing
                     // the next source so its real playback is recorded under its own identity.
                     PlayerHistorySessions.forPlayer(currentPlayer).bindMedia(
@@ -2968,13 +3041,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
                             videoUrl = loadResult.playUrl,
                             audioUrl = loadResult.audioUrl,
                             seekTo = 0L,
-                            playWhenReady = true
+                            playWhenReady = startPlayback
                         )
                     } else {
                         backgroundPlaybackUseCase.playVideo(
                             url = loadResult.playUrl,
                             seekTo = 0L,
-                            playWhenReady = true
+                            playWhenReady = startPlayback
                         )
                     }
                     currentBvid = loadResult.info.bvid
@@ -2993,7 +3066,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     currentLiveUname = ""
                     liveRestoreFullscreen = false
                     duration = loadResult.duration.coerceAtLeast(0L)
-                    isPlaying = true
+                    isPlaying = startPlayback
                     updateMediaMetadata(currentTitle, currentOwner, currentCover)
                     Logger.d(TAG, "🎵 direct background skip: ${currentTitle}")
                 }
@@ -3290,6 +3363,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     Logger.d(TAG, "Player ready, duration=$duration")
                 }
                 Player.STATE_ENDED -> {
+                    player?.takeUnless(pageOwnership::isRetained)?.let { target ->
+                        finishSleepAfterCurrent(target, currentBvid, currentCid)
+                    }
                     Logger.d(TAG, "Playback ended")
                     playbackServiceRequested = false
                     clearPlaybackNotificationArtifacts()

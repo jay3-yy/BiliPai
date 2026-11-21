@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -141,6 +142,8 @@ fun <T> AppLiquidAwareTabRow(
     liquidGlassAnimateLabelWidthChanges: Boolean = false,
     // Fixed slots apply to all renderers only when explicitly requested by a page.
     forceEqualWidth: Boolean = false,
+    // Applies only to the glass shell, independently of the native tab container.
+    glassContainerColor: Color? = null,
 ) {
     if (options.isEmpty()) return
     // Material boundary: glass-only spacing, wrapping and typography must never change
@@ -306,6 +309,7 @@ fun <T> AppLiquidAwareTabRow(
                     tapPressRefractionEnabled = tapPressRefractionEnabled,
                     onIndicatorDragStateChanged = { railIndicatorDragging = it },
                     miuixBackdrop = miuixBackdrop,
+                    containerColorOverride = glassContainerColor,
                     preferInlineContentStyle = preferInlineContentStyle,
                     compactMiuixWhenTwoOptions = compactMiuixWhenTwoOptions,
                     nativeIndicatorPresentation = nativePresentation,
@@ -387,6 +391,7 @@ fun <T> AppLiquidAwareTabRow(
                 dragSelectionEnabled = resolvedDragSelectionEnabled,
                 tapPressRefractionEnabled = tapPressRefractionEnabled,
                 miuixBackdrop = miuixBackdrop,
+                containerColorOverride = glassContainerColor,
                 preferInlineContentStyle = preferInlineContentStyle,
                 compactMiuixWhenTwoOptions = compactMiuixWhenTwoOptions,
                 nativeIndicatorPresentation = nativePresentation,

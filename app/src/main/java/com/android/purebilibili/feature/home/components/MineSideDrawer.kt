@@ -77,7 +77,7 @@ fun MineSideDrawer(
     onWatchLaterClick: () -> Unit,
     onInboxClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onProfileClick: () -> Unit,
+    onProfileClick: (Dp) -> Unit,
     onAccountSwitchClick: (() -> Unit)? = null,
     hazeState: HazeState? = null, // 毛玻璃效果状态
     isBlurEnabled: Boolean = true, // [新增] 模糊开关状态
@@ -279,7 +279,7 @@ fun MineSideDrawer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = layoutPolicy.sectionHorizontalPaddingDp.dp)
-                    .clickable { closeAndRun(onProfileClick) }
+                    .clickable { closeAndRun { onProfileClick(layoutPolicy.profileAvatarSizeDp.dp) } }
             ) {
                 Row(
                     modifier = Modifier

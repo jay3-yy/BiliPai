@@ -3611,23 +3611,41 @@ private fun VideoPlayerSectionContent(
         val autoPlayOnOpenEnabled by remember(context) {
             SettingsManager.getClickToPlay(context)
         }.collectAsStateWithLifecycle(initialValue = SettingsManager.getClickToPlaySync(context))
-        var hasManualStartPlaybackIntent by remember(bvid, (uiState as? VideoPlaybackUiState.Success)?.info?.cid) {
+        val currentMediaPrepared = playbackIdentityBvid == bvid &&
+            (state.requestCid <= 0L || playbackIdentityCid == state.requestCid)
+        var hasManualStartPlaybackIntent by remember(currentPlaybackIdentity, playerState.player) {
             mutableStateOf(
-                autoPlayOnOpenEnabled && playerState.player.mediaItemCount > 0 &&
+                currentMediaPrepared && playerState.player.mediaItemCount > 0 &&
                     (observedPlayWhenReady || observedIsPlaying)
             )
         }
-        LaunchedEffect(uiState, observedPlayWhenReady, observedIsPlaying) {
-            if (
-                playerState.player.mediaItemCount > 0 &&
-                (observedPlayWhenReady || observedIsPlaying)
-            ) {
+        LaunchedEffect(currentMediaPrepared, observedPlayWhenReady, observedIsPlaying) {
+            if (currentMediaPrepared && (observedPlayWhenReady || observedIsPlaying)) {
                 hasManualStartPlaybackIntent = true
             }
         }
-        val playFromManualStartCover = {
-            hasManualStartPlaybackIntent = true
-            playPlayerFromUserAction(playerState.player)
+        var manualStartPending by remember(bvid, state.requestCid, playerState.player) {
+            mutableStateOf(false)
+        }
+        val loadFailed = uiState is VideoPlaybackUiState.Error
+        val manualStartAvailable = !manualStartPending && !loadFailed
+        val playFromManualStartCover: () -> Unit = {
+            if (currentMediaPrepared) {
+                hasManualStartPlaybackIntent = true
+                playPlayerFromUserAction(playerState.player)
+            } else if (uiState is VideoPlaybackUiState.Loading) {
+                // The final prepare applies the saved autoplay setting. Start after the
+                // requested media is committed so prepare cannot overwrite the tap.
+                manualStartPending = true
+            }
+        }
+        LaunchedEffect(manualStartPending, currentMediaPrepared, loadFailed) {
+            if (manualStartPending && currentMediaPrepared) {
+                playFromManualStartCover()
+                manualStartPending = false
+            } else if (loadFailed) {
+                manualStartPending = false
+            }
         }
         val keepCoverForManualStart = shouldKeepCoverForManualStart(
             playWhenReady = observedPlayWhenReady,
@@ -3871,57 +3889,23 @@ private fun VideoPlayerSectionContent(
                 // Keep the viewport and cover mounted while the persisted surface choice loads.
                 if (isPlayerSurfaceReady) AndroidView(
                     factory = { ctx ->
-                        // 复用底部入口的播放器可能在绑定输出时立即派发首帧。
-                        // 先注册持久首帧监听，不能等父级 DisposableEffect 才订阅。
-                        playerState.attachPlayerListeners()
                         hasCurrentOutputFrame = false
-                        val basePlayerView = if (useTextureSurface) {
-                            LayoutInflater.from(ctx)
-                                .inflate(com.android.purebilibili.R.layout.view_player_texture, null, false) as PlayerView
-                        } else {
-                            PlayerView(ctx)
-                        }
-                        basePlayerView.apply {
-                            // Android 14 下同步 Compose 与 SurfaceView 的尺寸事务，避免分栏进入全屏后
-                            // 视频输出仍停留在旧栏位；TextureView 和其它系统版本不受此开关影响。
-                            setEnableComposeSurfaceSyncWorkaround(true)
-                            playerViewRef = this
-                            // 普通直出同步绑定 PlayerView；Anime4K 仅在输入 Surface 就绪后接管。
-                            // 合集换片会替换 Player，不能等待后续 effect 才补绑，否则解码器可能无输出窗口。
-                            player = if (shouldBindDirectPlayerView) playerState.player else null
-                            setKeepContentOnPlayerReset(
-                                shouldKeepInlinePlayerContentOnReset(
-                                    isPortraitFullscreen = isPortraitFullscreen,
-                                    forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation
-                                )
-                            )
-                            setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
-                            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
-                            useController = false
-                            keepScreenOn = keepVideoPlaybackAwake
-                            // 卡片开合、预测预览与取消恢复期间将 TextureView 设为半透明，
-                            // 允许底下的封面垫层透出防黑；动画落位后恢复为 opaque 提升正常播放性能与显存带宽。
-                            (videoSurfaceView as? TextureView)?.isOpaque = !isTransitionActive
-                            applyPlayerViewResizeMode(
-                                playerView = this,
-                                resizeMode = targetResizeMode,
-                                forceRelayout = false,
-                            )
-                            visibility = if (!handingOffToMiniPlayer && !anime4kFrameVisible && shouldShowInlinePlayerView(
-                                    isPortraitFullscreen = isPortraitFullscreen,
-                                    forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
-                                    shouldKeepCoverForManualStart = keepCoverForManualStart
-                                )
-                            ) {
-                                View.VISIBLE
-                            } else {
-                                View.INVISIBLE
+                        com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics
+                            .measureWork("player_view_create") {
+                                val layoutRes = if (useTextureSurface) {
+                                    com.android.purebilibili.R.layout.view_detail_player_texture
+                                } else {
+                                    com.android.purebilibili.R.layout.view_detail_player_surface
+                                }
+                                (LayoutInflater.from(ctx).inflate(layoutRes, null, false) as PlayerView).apply {
+                                    // Android 14 下同步 Compose 与 SurfaceView 的尺寸事务，避免分栏进全屏后仍停在旧栏位。
+                                    setEnableComposeSurfaceSyncWorkaround(true)
+                                }
                             }
-                        }
                     },
                     update = { playerView ->
-                        // 只隐藏输出层，保留 Surface 与解码绑定，取消返回时可直接恢复。
-                        // 同一 PlayerView 换用新的状态持有者时也必须先订阅再绑定。
+                        // AndroidView 首次挂载也会执行 update。统一在这里交接输出，
+                        // 在绑定可能立刻派发首帧的小窗播放器前，先注册持久监听。
                         playerState.attachPlayerListeners()
                         playerViewRef = playerView
                         playerView.player = if (shouldBindDirectPlayerView) playerState.player else null
@@ -4184,7 +4168,6 @@ private fun VideoPlayerSectionContent(
         resolvePreferredVideoCoverUrl(
             entryCoverUrl = coverUrl,
             detailCoverUrl = detailCoverUrl,
-            preferDetailCoverUrl = keepCoverForManualStart && isVerticalVideo
         )
     }
     // Never re-size via fixImageUrl when we already have the list card URL.
@@ -4193,7 +4176,7 @@ private fun VideoPlayerSectionContent(
     } else {
         FormatUtils.fixImageUrl(rawCoverUrl)
     }
-    val openingCoverPainter = rememberVideoDetailOpeningCoverImage(bvid == resolvedSharedElementBvid)?.painter
+    val openingCoverPainter = rememberVideoDetailOpeningCoverImage(bvid)?.painter
 
     // 封面揭开状态机：仅在 forceCover / 手动起播垫底时回退；首帧抖动不得清掉揭开。
     LaunchedEffect(
@@ -4386,18 +4369,16 @@ private fun VideoPlayerSectionContent(
         sourceRouteForSharedElement
     )
     val coverLayerZIndex = resolveVideoPlayerCoverLayerZIndex(
-        playbackIntent = videoSharedPlaybackIntent,
         forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
         shouldKeepCoverForManualStart = keepCoverForManualStart,
     )
 
-    val coverVisibility = remember(currentPlaybackIdentity) {
-        androidx.compose.animation.core.MutableTransitionState(
-            showCover && (currentCoverUrl.isNotEmpty() || entryPresentationSpec.showManualStartPlayButton),
-        )
+    val hasCoverContent = currentCoverUrl.isNotEmpty() || openingCoverPainter != null ||
+        entryPresentationSpec.showManualStartPlayButton
+    val coverVisibility = remember(bvid, state.requestCid, playerState.player) {
+        androidx.compose.animation.core.MutableTransitionState(showCover && hasCoverContent)
     }
-    coverVisibility.targetState = showCover &&
-        (currentCoverUrl.isNotEmpty() || entryPresentationSpec.showManualStartPlayButton)
+    coverVisibility.targetState = showCover && hasCoverContent
     AnimatedVisibility(
         visibleState = coverVisibility,
         enter = if (disableCoverFadeAnimation) {
@@ -4412,18 +4393,6 @@ private fun VideoPlayerSectionContent(
         },
         modifier = Modifier.zIndex(coverLayerZIndex)
     ) {
-        // 普通导航只保留视频面与封面的透明度交接，不再逐帧调色和重组封面。
-        // 卡片形变保留原有揭开效果；此边界与玻璃、MD3、Miuix 材质无关。
-        val coverRevealColorFilter = if (transitionEnabled) {
-            val coverRevealPolishProgress by animateFloatAsState(
-                targetValue = if (isSurfaceRevealSettling) 0f else 1f,
-                animationSpec = tween(revealMotionSpec.surfaceRevealDurationMillis),
-                label = "coverRevealPolish",
-            )
-            remember(coverRevealPolishProgress) {
-                resolveVideoPlayerCoverRevealColorFilter(coverRevealPolishProgress)
-            }
-        } else null
         val coverCardShape = RoundedCornerShape(
             resolveVideoPlayerCoverCornerDp(
                 sourceCornerDp = videoSharedTransitionVisualSpec.sourceCornerDp,
@@ -4478,7 +4447,9 @@ private fun VideoPlayerSectionContent(
             }
             Box(
                 modifier = coverContainerModifier
-                    .clickable(enabled = entryPresentationSpec.enableManualStartCoverOverlay) {
+                    .clickable(
+                        enabled = entryPresentationSpec.enableManualStartCoverOverlay && manualStartAvailable,
+                    ) {
                         playFromManualStartCover()
                     }
             ) {
@@ -4489,7 +4460,7 @@ private fun VideoPlayerSectionContent(
                         painter = openingCoverPainter,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        alignment = Alignment.TopCenter,
+                        alignment = Alignment.Center,
                         modifier = Modifier.matchParentSize(),
                     )
                 }
@@ -4515,19 +4486,14 @@ private fun VideoPlayerSectionContent(
                             .placeholderMemoryCacheKey(sharedCoverCacheKey)
                             .memoryCacheKey(sharedCoverCacheKey)
                             .diskCacheKey(sharedCoverCacheKey)
-                            .crossfade(
-                                shouldEnableCoverImageCrossfade(
-                                    forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
-                                    holdEntryCoverUnderlay = holdEntryCoverUnderlay,
-                                )
-                            )
+                            // 交接动画由视频层负责，封面请求在退场时也保持同一配置。
+                            .crossfade(false)
                             .build(),
                         contentDescription = null,
                         contentScale = when (entryPresentationSpec.coverContentScaleMode) {
                             VideoPlayerCoverContentScaleMode.Crop -> ContentScale.Crop
                             VideoPlayerCoverContentScaleMode.Fit -> ContentScale.Fit
                         },
-                        colorFilter = coverRevealColorFilter,
                         onSuccess = if (statusBarBackdrop != null) {
                             { success ->
                                 val bitmap = (success.result.image as? BitmapImage)?.bitmap
@@ -4538,15 +4504,9 @@ private fun VideoPlayerSectionContent(
                         } else null,
                         modifier = Modifier.fillMaxSize()
                     )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(Color.Black)
-                    )
                 }
 
-                if (entryPresentationSpec.showManualStartPlayButton) {
+                if (entryPresentationSpec.showManualStartPlayButton && manualStartAvailable) {
                     if (manualStartPlayButtonLayoutSpec.showCoverScrim) {
                         Box(
                             modifier = Modifier
@@ -5330,18 +5290,19 @@ private fun VideoPlayerSectionContent(
             }
         }
 
+        val waitingForStartup = manualStartPending || (!keepCoverForManualStart &&
+            (uiState is VideoPlaybackUiState.Loading || (isBuffering && observedPlayWhenReady)))
         val showStartupLoadingIndicator = playerVisualWorkActive && !isInPipMode &&
             !hasPlayedCurrentMedia && !observedIsPlaying &&
             !(playerState.player.isPlaying && isFirstFrameRendered) &&
             !state.forceCoverOnly && !state.liveBackPreview &&
-            !suppressTransientOverlaysForTransition && !keepCoverForManualStart &&
-            (uiState is VideoPlaybackUiState.Loading ||
-                (isBuffering && playerState.player.playWhenReady))
+            !suppressTransientOverlaysForTransition && waitingForStartup
         if (showStartupLoadingIndicator) {
             com.android.purebilibili.feature.video.ui.overlay.PlayerLoadingIndicator(
                 label = if (isBuffering) "正在缓冲" else "正在加载",
                 tint = Color.White,
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier.align(Alignment.Center)
+                    .zIndex(if (manualStartPending) coverLayerZIndex + 1f else 0f),
             )
         }
 

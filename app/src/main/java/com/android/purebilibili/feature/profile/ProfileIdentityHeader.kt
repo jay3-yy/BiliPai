@@ -42,6 +42,7 @@ internal fun ProfileIdentityHeader(
     flingBehavior: FlingBehavior,
     onAvatarClick: () -> Unit,
     avatarSourceRect: androidx.compose.runtime.MutableState<androidx.compose.ui.geometry.Rect?>,
+    avatarEntranceScale: () -> Float,
     modifier: Modifier = Modifier,
     photoState: ProfileAvatarExpansionState? = null,
     photoFractionProvider: () -> Float = { 0f },
@@ -62,6 +63,7 @@ internal fun ProfileIdentityHeader(
             flingBehavior = flingBehavior,
             onAvatarClick = onAvatarClick,
             avatarSourceRect = avatarSourceRect,
+            avatarEntranceScale = avatarEntranceScale,
             photoScrollConnection = photoScrollConnection,
             modifier = Modifier
                 .matchParentSize()

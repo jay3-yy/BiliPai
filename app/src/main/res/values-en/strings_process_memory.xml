@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="process_memory_title">Live memory usage</string>
+    <string name="process_memory_summary">View PSS, RSS, swap, and the memory breakdown for the main process</string>
+    <string name="process_memory_scope">Main process · Updates every 2 seconds</string>
+    <string name="process_memory_scope_description">The metrics cover the main process. Background audio and WebView renderers can run in separate processes.</string>
+    <string name="process_memory_category_column">Category</string>
+    <string name="process_memory_amount_column">Memory</string>
+    <string name="process_memory_percent_column">Share</string>
+    <string name="process_memory_sampling">Reading memory usage…</string>
+    <string name="process_memory_pss">Total PSS</string>
+    <string name="process_memory_rss">Total RSS</string>
+    <string name="process_memory_swap">Swap</string>
+    <string name="process_memory_breakdown">PSS breakdown</string>
+    <string name="process_memory_java_heap">Java heap</string>
+    <string name="process_memory_native_heap">Native heap</string>
+    <string name="process_memory_code">Code</string>
+    <string name="process_memory_stack">Stack</string>
+    <string name="process_memory_graphics">Graphics</string>
+    <string name="process_memory_private_other">Other private</string>
+    <string name="process_memory_system">System and shared</string>
+    <string name="process_memory_unavailable">Unavailable</string>
+    <string name="process_memory_whole">%1$d</string>
+    <string name="process_memory_decimal">%1$.2f</string>
+    <string name="process_memory_value_with_unit">%1$s %2$s</string>
+    <string name="process_memory_glossary">Memory metrics explained</string>
+    <string name="process_memory_pss_description">Proportional Set Size, the memory attributed proportionally to this process. Private pages count in full, and shared pages are split among the processes using them. For example, two processes sharing 20 MiB each count 10 MiB. Android can also include a proportional share of swapped pages in total PSS.</string>
+    <string name="process_memory_rss_description">Resident Set Size, the size of pages currently resident in physical memory. Every process using a shared page counts it in full.</string>
+    <string name="process_memory_swap_description">The total size of pages from this process that have been moved to swap. Devices using zRAM store these pages in compressed form.</string>
+    <string name="process_memory_java_heap_description">The heap managed by the Android runtime, mainly for Kotlin and Java objects.</string>
+    <string name="process_memory_native_heap_description">Heap memory allocated through the native allocator, such as allocations made by C/C++ libraries.</string>
+    <string name="process_memory_code_description">Program code and static resources mapped into the process, such as APKs, DEX files, shared libraries, and fonts.</string>
+    <string name="process_memory_stack_description">Memory threads use for function calls and local variables.</string>
+    <string name="process_memory_graphics_description">Graphics buffers and rendering memory attributed to the process by Android.</string>
+    <string name="process_memory_private_other_description">Private memory outside the preceding categories, such as some runtime overhead.</string>
+    <string name="process_memory_system_description">Memory Android attributes to the system and shared mappings, such as shared pages from runtime libraries and framework code.</string>
+    <string name="process_memory_units_description">One KiB equals 1,024 bytes. One MiB equals 1,024 KiB.</string>
+    <string name="process_memory_overlay_title">In-app memory overlay</string>
+    <string name="process_memory_overlay_summary">Show memory usage on other pages. Tap to expand.</string>
+    <string name="process_memory_overlay_pss">PSS %1$s</string>
+    <string name="process_memory_overlay_details">View memory details</string>
+    <string name="process_memory_overlay_close">Turn off overlay</string>
+</resources>

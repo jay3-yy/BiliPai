@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_view_account_space_header">View space banners</string>
+    <string name="profile_use_skin_background">Use skin background</string>
+    <string name="profile_disable_skin_background">Disable skin background</string>
+</resources>

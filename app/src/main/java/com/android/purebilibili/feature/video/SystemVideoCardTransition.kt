@@ -13,11 +13,13 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.window.layout.WindowMetricsCalculator
+import com.android.purebilibili.core.store.CardTransitionMethod
 import com.android.purebilibili.core.ui.transition.VideoCardSourceAnchor
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSourceClipRadiusPx
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.navigation3.VideoCardTransitionSession
+import com.android.purebilibili.feature.profile.ProfileAvatarEntrance
 import com.itgsa.animation.sharedview.ViewAnimationConfig
 import com.itgsa.animation.sharedview.ViewAnimationExtras
 import com.itgsa.animation.sharedview.ViewAnimationListener
@@ -26,6 +28,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.lang.ref.WeakReference
@@ -33,19 +37,18 @@ import java.util.UUID
 import kotlin.coroutines.resume
 
 internal data class SystemVideoCardCapability(
-    val available: Boolean,
-    val configurableBlur: Boolean,
+    val method: CardTransitionMethod = CardTransitionMethod.STANDARD,
+    val configurableBlur: Boolean = false,
     /** EXTRA_BACK_ANIM_TYPE 原始声明；null = 设备未声明，按协议不假定类型可写。 */
-    val backAnimMetadata: String?,
-    val roundedWindow: Boolean = false,
-    val oplusWindow: Boolean = false,
-    val vivoWindow: Boolean = false,
+    val backAnimMetadata: String? = null,
     /** 标准 SDK 与原生无缝门面并存，使用该门面的返回更新契约。 */
     val oplusSdkWindow: Boolean = false,
     val systemConditionSummary: String? = null,
-)
+) {
+    val available: Boolean get() = method != CardTransitionMethod.STANDARD
+}
 
-/** 系统窗口转场调度：标准协议优先，再尝试旧无缝、OneShot 与圆角窗口协议；不可用时回退普通页面转场。
+/** 系统窗口转场调度：标准协议优先，再尝试旧无缝和 OneShot；不可用时回退普通页面转场。
  * 启动时校验来源卡片，返回沿用本次窗口已提交的卡片像素与落点。主线程访问。
  */
 internal object SystemVideoCardTransition {
@@ -79,14 +82,16 @@ internal object SystemVideoCardTransition {
         val canConfigureBlur: Boolean,
         val canConfigureBackgroundScale: Boolean,
         val initialRealtimeBlurEnabled: Boolean,
-        val roundedSource: WeakReference<ComponentActivity>?,
-        val oplusWindow: Boolean,
-        val vivoWindow: Boolean,
+        val method: CardTransitionMethod,
         val oplusSdkWindow: Boolean,
         val backAnimMetadata: String?,
         val openingBounds: Rect,
+        val openingAnchorRadius: Float,
+        val windowCoordinates: Boolean,
+        val allowPartialSource: Boolean,
         val openingRadius: Float,
         val openingSeed: VideoDetailOpeningSeed?,
+        val profileAvatarEntrance: ProfileAvatarEntrance?,
         val sourceAnchor: VideoCardSourceAnchor,
         val onReturn: ((SystemWindowMotionPhase) -> Unit)?,
         val neighborMotion: ((SystemWindowMotionPhase) -> Unit)?,
@@ -120,53 +125,73 @@ internal object SystemVideoCardTransition {
     private val sessions = mutableMapOf<String, Session>()
     private var latestWindowRequestToken: String? = null
 
+    // 只记录播放入口，查看设置的过程不会覆盖上一次测试结果。
+    private val lastOpenedMethodState = MutableStateFlow<CardTransitionMethod?>(null)
+    val lastOpenedMethod = lastOpenedMethodState.asStateFlow()
+
+    fun recordStandardOpen() {
+        lastOpenedMethodState.value = CardTransitionMethod.STANDARD
+    }
+
+    fun profileAvatarEntrance(token: String?): ProfileAvatarEntrance? = sessions[token]?.profileAvatarEntrance
+
     fun hasSession(token: String?): Boolean = token != null && token in sessions
 
-    fun canAttempt(enabled: Boolean, source: VideoCardTransitionSession, activity: Activity? = null): Boolean {
+    fun canAttempt(
+        enabled: Boolean,
+        source: VideoCardTransitionSession,
+        activity: Activity,
+        method: CardTransitionMethod,
+    ): Boolean {
         val sourceReady = enabled && source.hasUsableSourceGeometry && source.sourceAnchor != null &&
             source.sourcePixelOwner != null
-        val capability = if (sourceReady) deviceCapability(activity) else null
+        val capability = if (sourceReady) deviceCapability(activity, method) else null
         val supported = capability?.available
         val allowed = sourceReady && supported == true
         Logger.i("SystemVideoCardTransition", "入口判定: route=${source.sourceRoute} enabled=$enabled geometry=${source.hasUsableSourceGeometry} " +
-            "anchor=${source.sourceAnchor != null} supported=$supported allowed=$allowed " +
+            "anchor=${source.sourceAnchor != null} requested=$method resolved=${capability?.method} allowed=$allowed " +
             "conditions=${capability?.systemConditionSummary}")
         return allowed
     }
 
-    fun deviceCapability(activity: Activity? = null): SystemVideoCardCapability {
-        // 标准 SDK 的能力探测只检查静态开关；原生无缝实现还会按当前窗口拒绝请求。
-        val oplusSystemManager = OplusVideoCardTransition.hasSystemManager
+    fun deviceCapability(activity: Activity?, method: CardTransitionMethod): SystemVideoCardCapability {
+        if (method == CardTransitionMethod.STANDARD) return SystemVideoCardCapability()
+        val automatic = method == CardTransitionMethod.AUTO
+        val checksOfficial = automatic || method == CardTransitionMethod.OFFICIAL
+        val checksOplus = automatic || method == CardTransitionMethod.OPLUS_LEGACY
+        val oplusSystemManager = (checksOfficial || checksOplus) && OplusVideoCardTransition.hasSystemManager
         val conditions = if (oplusSystemManager) OplusVideoCardTransition.conditions(activity) else null
+        val summary = conditions?.toString()
         if (conditions?.blocked == true) {
-            return SystemVideoCardCapability(false, false, null, systemConditionSummary = conditions.toString())
+            return SystemVideoCardCapability(systemConditionSummary = summary)
         }
-        if (ViewAnimationManager.isViewAnimationSupported() > 0) {
+        if (checksOfficial && ViewAnimationManager.isViewAnimationSupported() > 0) {
             val extras = ViewAnimationManager.getViewAnimationExtras()
             return SystemVideoCardCapability(
-                available = true,
+                method = CardTransitionMethod.OFFICIAL,
                 configurableBlur = extras?.containsKey(ViewAnimationExtras.EXTRA_BLUR) == true,
                 backAnimMetadata = extras?.get(ViewAnimationExtras.EXTRA_BACK_ANIM_TYPE),
                 oplusSdkWindow = oplusSystemManager,
-                systemConditionSummary = conditions?.toString(),
+                systemConditionSummary = summary,
             )
         }
-        if (OplusVideoCardTransition.available) {
+        if (checksOplus && OplusVideoCardTransition.available) {
             return SystemVideoCardCapability(
-                available = true, configurableBlur = false,
-                backAnimMetadata = null, oplusWindow = true, systemConditionSummary = conditions.toString(),
+                method = CardTransitionMethod.OPLUS_LEGACY,
+                systemConditionSummary = summary,
             )
         }
-        if (VivoVideoCardTransition.available) {
+        if ((automatic || method == CardTransitionMethod.VIVO_ONESHOT) && VivoVideoCardTransition.available) {
             return SystemVideoCardCapability(
-                available = true, configurableBlur = VivoVideoCardTransition.configurableBlur,
-                backAnimMetadata = null, vivoWindow = true,
+                method = CardTransitionMethod.VIVO_ONESHOT,
+                configurableBlur = VivoVideoCardTransition.configurableBlur,
             )
         }
-        return SystemVideoCardCapability(
-            RoundedVideoCardTransition.available, configurableBlur = false,
-            backAnimMetadata = null, roundedWindow = RoundedVideoCardTransition.available,
-        )
+        // 保留可用的系统卡片展开。旧圆角协议的背景效果由系统控制。
+        if ((automatic || method == CardTransitionMethod.XIAOMI_ROUNDED) && RoundedVideoCardTransition.available) {
+            return SystemVideoCardCapability(method = CardTransitionMethod.XIAOMI_ROUNDED)
+        }
+        return SystemVideoCardCapability(systemConditionSummary = summary)
     }
 
     /** false 表示未启动窗口，调用方继续原有应用内导航；失效请求不得继续导航。 */
@@ -176,8 +201,11 @@ internal object SystemVideoCardTransition {
         source: VideoCardTransitionSession,
         realtimeBlurEnabled: Boolean,
         sourceBackgroundColor: Int,
+        method: CardTransitionMethod,
         isCurrent: () -> Boolean,
+        reportMethod: Boolean = true,
         onReturn: ((SystemWindowMotionPhase) -> Unit)? = null,
+        profileAvatarEntrance: ProfileAvatarEntrance? = null,
     ): Boolean {
         fun rejected(reason: String): Boolean {
             Logger.i("SystemVideoCardTransition", "未请求系统展开: route=${source.sourceRoute} reason=$reason")
@@ -188,7 +216,7 @@ internal object SystemVideoCardTransition {
         val sourceWindow = windowGeometry(activity)
         val owner = source.sourcePixelOwner ?: return rejected("pixel_owner_missing")
         if (!CardPositionManager.isActiveVideoCardPixelOwner(owner)) return rejected("pixel_owner_expired")
-        val capability = deviceCapability(activity)
+        val capability = deviceCapability(activity, method)
         Logger.i("SystemVideoCardTransition", "系统条件: ${capability.systemConditionSummary ?: "由标准接口判定"}")
         if (!capability.available) return rejected("system_protocol_unavailable ${capability.systemConditionSummary.orEmpty()}")
         val layer = CardPositionManager.nativeCardLayerForOwner(owner)
@@ -197,9 +225,10 @@ internal object SystemVideoCardTransition {
         if (!isCurrent() || !CardPositionManager.isActiveVideoCardPixelOwner(owner)) return rejected("request_expired_after_capture")
         if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) ||
             !activity.window.decorView.hasWindowFocus()) return rejected("source_window_inactive")
-        val extras = if (capability.roundedWindow || capability.oplusWindow || capability.vivoWindow) null
-            else ViewAnimationManager.getViewAnimationExtras()
-        val windowCoordinates = capability.vivoWindow ||
+        val extras = if (capability.method == CardTransitionMethod.OFFICIAL) {
+            ViewAnimationManager.getViewAnimationExtras()
+        } else null
+        val windowCoordinates = capability.method == CardTransitionMethod.VIVO_ONESHOT ||
             officialBoundsUseWindowCoordinates(extras?.get(ViewAnimationExtras.EXTRA_BOUNDS))
         val capturedBounds = anchor.bounds(windowCoordinates, allowPartial = layer != null)
             ?: return rejected("source_bounds_unavailable")
@@ -256,13 +285,13 @@ internal object SystemVideoCardTransition {
                 putInt(ViewAnimationExtras.EXTRA_COLOR, sourceBackgroundColor)
             }
         }
-        val prefix = when {
-            capability.oplusWindow -> "oplus:"
-            capability.vivoWindow -> "vivo:"
-            capability.roundedWindow -> "rounded:"
-            else -> "sdk:"
+        val prefix = when (capability.method) {
+            CardTransitionMethod.VIVO_ONESHOT -> "vivo"
+            CardTransitionMethod.OPLUS_LEGACY -> "oplus"
+            CardTransitionMethod.XIAOMI_ROUNDED -> "rounded"
+            else -> "sdk"
         }
-        val token = prefix + UUID.randomUUID()
+        val token = "$prefix:${UUID.randomUUID()}"
         val session = Session(
             sourceRoute = source.sourceRoute,
             sourceActivity = WeakReference(activity),
@@ -272,14 +301,16 @@ internal object SystemVideoCardTransition {
             canConfigureBlur = canConfigureBlur,
             canConfigureBackgroundScale = canConfigureBackgroundScale,
             initialRealtimeBlurEnabled = realtimeBlurEnabled,
-            roundedSource = if (capability.roundedWindow) WeakReference(activity) else null,
-            oplusWindow = capability.oplusWindow,
-            vivoWindow = capability.vivoWindow,
+            method = capability.method,
             oplusSdkWindow = capability.oplusSdkWindow,
             backAnimMetadata = capability.backAnimMetadata,
             openingBounds = Rect(bounds),
+            openingAnchorRadius = anchorRadius,
+            windowCoordinates = windowCoordinates,
+            allowPartialSource = layer != null,
             openingRadius = radius,
             openingSeed = videoDetailOpeningSeed(thumbnail, source),
+            profileAvatarEntrance = profileAvatarEntrance,
             sourceAnchor = anchor,
             onReturn = onReturn,
             neighborMotion = com.android.purebilibili.navigation3.SystemWindowControlNeighbors.capture(anchor),
@@ -315,32 +346,31 @@ internal object SystemVideoCardTransition {
             "blurRequested=$realtimeBlurEnabled blurSupported=$canConfigureBlur " +
             "backgroundScaleSupported=$canConfigureBackgroundScale extras=$extras")
         latestWindowRequestToken = token
-        val optionsBundle = when {
-            capability.vivoWindow -> {
+        val optionsBundle = when (capability.method) {
+            CardTransitionMethod.VIVO_ONESHOT -> {
                 VivoVideoCardTransition.open(activity, thumbnail, bounds, radius, realtimeBlurEnabled, listener)
                     ?.also { session.vivoOpening = it }?.options
             }
-            capability.oplusWindow -> OplusVideoCardTransition.open(
+            CardTransitionMethod.OPLUS_LEGACY -> OplusVideoCardTransition.open(
                 activity, thumbnail, bounds, radius, sourceBackgroundColor, listener,
             )?.also { opening ->
                 session.oplusOpening = opening
             }?.options
-            capability.roundedWindow -> RoundedVideoCardTransition.options(
+            CardTransitionMethod.XIAOMI_ROUNDED -> RoundedVideoCardTransition.options(
                 activity, thumbnail, bounds, radius, sourceBackgroundColor,
             ) { event ->
-                if (event.startsWith("open_")) session.openingEvent = event
                 when (event) {
-                    "open_start" -> session.dispatchMotion(SystemWindowMotionPhase.OPENING)
-                    "open_end" -> session.dispatchMotion(SystemWindowMotionPhase.OPENED)
-                    "return_start" -> session.dispatchMotion(SystemWindowMotionPhase.RETURNING)
-                    "return_end" -> session.dispatchMotion(SystemWindowMotionPhase.RETURNED)
+                    "open_start" -> listener.onAnimationStart(ViewAnimationManager.ANIM_MODE_OPEN)
+                    "open_end" -> listener.onAnimationEnd(ViewAnimationManager.ANIM_MODE_OPEN)
+                    "return_start" -> listener.onAnimationStart(ViewAnimationManager.ANIM_MODE_BACK)
+                    "return_end" -> listener.onAnimationEnd(ViewAnimationManager.ANIM_MODE_BACK)
                 }
-                Logger.i("SystemVideoCardTransition", "session=$token protocol=rounded event=$event")
             }?.toBundle()
-            else -> ViewAnimationManager.makeViewAnimationOptions(
+            CardTransitionMethod.OFFICIAL -> ViewAnimationManager.makeViewAnimationOptions(
                 thumbnail, bounds, radius, configuration, listener,
             )?.toBundle()
-        } ?: return rejected("system_options_null protocol=$prefix")
+            CardTransitionMethod.AUTO, CardTransitionMethod.STANDARD -> error("Expected a system card transition")
+        } ?: return rejected("system_options_null protocol=${capability.method}")
         sessions[token] = session
         var launched = false
         try {
@@ -348,12 +378,14 @@ internal object SystemVideoCardTransition {
                 activity, windowRequest, optionsBundle, token,
             ) {
                 // 等待窗口恢复后再次核对请求和几何，不用旧截图打开已切换的卡片。
-                    isCurrent() && activity.window.decorView.hasWindowFocus() &&
-                        windowGeometry(activity) == sourceWindow && anchor.belongsToWindow(activity.window.decorView) &&
-                        CardPositionManager.isActiveVideoCardPixelOwner(owner) &&
-                        anchor.bounds(windowCoordinates, allowPartial = layer != null) == bounds && anchor.radiusPx() == anchorRadius
+                isCurrent() && activity.window.decorView.hasWindowFocus() &&
+                    windowGeometry(activity) == sourceWindow && CardPositionManager.isActiveVideoCardPixelOwner(owner) &&
+                    anchor.matchesWindowGeometry(
+                        activity.window.decorView, bounds, anchorRadius, windowCoordinates, allowPartial = layer != null,
+                    )
             }
             if (!launched) return rejected("request_expired_before_launch")
+            if (reportMethod) lastOpenedMethodState.value = session.method
             Logger.i("SystemVideoCardTransition", "session=$token 系统卡片转场已请求: ${request.bvid}")
             return true
         } catch (error: SecurityException) {
@@ -367,8 +399,11 @@ internal object SystemVideoCardTransition {
                 session.vivoOpening?.abandon()
                 // 旧请求可能在新窗口请求提交后才响应协程取消，不能用全局接口结束新转场。
                 if (latestWindowRequestToken == token) {
-                    if (session.oplusWindow) OplusVideoCardTransition.cancel()
-                    else if (!session.vivoWindow && !capability.roundedWindow) ViewAnimationManager.cancelCurrentViewAnimation()
+                    when (session.method) {
+                        CardTransitionMethod.OPLUS_LEGACY -> OplusVideoCardTransition.cancel()
+                        CardTransitionMethod.OFFICIAL -> ViewAnimationManager.cancelCurrentViewAnimation()
+                        else -> Unit
+                    }
                     latestWindowRequestToken = null
                 }
             }
@@ -388,20 +423,25 @@ internal object SystemVideoCardTransition {
         if (!preparingToFinish) return
         val session = sessions[token]
         val source = session?.sourceActivity?.get()
-        // 回卡属于本次窗口会话，不属于详情当前标签、滚动位置或正在播放的视频。
-        // 系统已持有打开时的落点；后台来源卡片是否仍参与 Compose 测量不影响往返。
-        // 来源窗口必须仍与打开时一致。详情窗口可以改变大小，落点仍使用来源窗口的坐标。
+        // 回卡只允许落到本次打开的原窗口和原控件；仍在同一窗口的列表也可能已经重排。
         val childWindow = windowGeometry(activity)
         val sameWindow = session != null && source != null && !source.isFinishing && !source.isDestroyed &&
             windowGeometry(source) == session.sourceWindow &&
             childWindow.displayId == session.sourceWindow.displayId &&
             childWindow.rotation == session.sourceWindow.rotation
-        val sourceAvailable = returnToSource && sameWindow
+        val bounds = if (returnToSource && sameWindow && session != null && source != null) {
+            session.openingBounds.takeIf {
+                session.sourceAnchor.matchesWindowGeometry(
+                    source.window.decorView, it, session.openingAnchorRadius,
+                    session.windowCoordinates, session.allowPartialSource,
+                )
+            }
+        } else null
+        val sourceAvailable = bounds != null
         // 准备参数不等于系统已经开始返回，联动等待协议的真实回调。
         session?.returnMotionEnabled = sourceAvailable && motionEnabled
-        val bounds = session?.openingBounds?.takeIf { sourceAvailable }
         if (!sourceAvailable) {
-            Logger.w("SystemVideoCardTransition", "返回窗口来源不可用: reason=$reason returnToSource=$returnToSource sameWindow=$sameWindow")
+            Logger.w("SystemVideoCardTransition", "返回落点失效: reason=$reason returnToSource=$returnToSource sameWindow=$sameWindow")
         }
         if (token.startsWith("vivo:")) {
             session?.vivoOpening?.prepareReturn(
@@ -416,8 +456,9 @@ internal object SystemVideoCardTransition {
             return
         }
         if (token.startsWith("rounded:")) {
-            session?.roundedSource?.get()?.let { source ->
-                RoundedVideoCardTransition.refreshReturn(source, bounds, motionEnabled && sourceAvailable)
+            source?.let {
+                // 局部回弹由系统返回结束回调触发，保留返回到来源控件的圆角动画。
+                RoundedVideoCardTransition.refreshReturn(it, bounds, motionEnabled && sourceAvailable)
             }
             return
         }

@@ -1061,6 +1061,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun refresh(
         category: HomeCategory = _uiState.value.currentCategory,
         popularSubCategory: PopularSubCategory = _uiState.value.popularSubCategory,
+        onNewCards: ((Set<String>) -> Unit)? = null,
     ) {
         if (shouldEmbedLivePageInHomeTopTab(category)) return
         if (_isRefreshing.value) return
@@ -1074,6 +1075,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _isRefreshing.value = true
             try {
                 val refreshingCategory = category
+                val previousVideos = onNewCards?.let {
+                    _uiState.value.homeCategoryContent(category, popularSubCategory).videos
+                }
                 _undoSnapshot = buildHomeRefreshUndoSnapshot(
                     refreshingCategory = refreshingCategory,
                     recommendCategoryState = _uiState.value.categoryStates[HomeCategory.RECOMMEND],
@@ -1147,6 +1151,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     //  刷新成功且是推荐分类时标记可撤销
                     undoAvailable = undoAvailable
                 )
+                if (onNewCards != null && previousVideos != null && refreshedState != null) {
+                    val previousKeys = previousVideos.mapTo(HashSet(), HomeFeedMergePolicy::keyOf)
+                    val newKeys = refreshedState.videos.asSequence()
+                        .map(HomeFeedMergePolicy::keyOf)
+                        .filterNot(previousKeys::contains)
+                        .toSet()
+                    if (newKeys.isNotEmpty()) onNewCards(newKeys)
+                }
                 if (undoAvailable) {
                     scheduleUndoDismiss()
                 } else {

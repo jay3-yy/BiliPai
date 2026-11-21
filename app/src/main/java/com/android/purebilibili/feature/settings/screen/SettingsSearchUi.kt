@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.settings
 
+import android.os.Build
+
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.components.appElasticPress
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
@@ -41,8 +44,7 @@ import com.android.purebilibili.core.ui.adaptiveSquircleBackground
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppPreference
 import com.android.purebilibili.core.ui.components.AppPreferenceGroup
-import com.android.purebilibili.core.ui.components.AppLiquidAwareSearchField
-import com.android.purebilibili.core.ui.components.AppSearchFieldPresentation
+import com.android.purebilibili.core.ui.components.AppLiquidAwareSearchTopBarField
 import com.android.purebilibili.core.ui.components.AppSearchEntry
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.rememberAdaptivePreferenceIconContainerColor
@@ -50,36 +52,41 @@ import com.android.purebilibili.core.ui.components.rememberAdaptivePreferenceIco
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
 import com.android.purebilibili.core.ui.rememberAppSettingsIcon
+import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
 import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
 import com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock
+import com.android.purebilibili.feature.home.components.liquid.rememberCombinedBackdrop
 import top.yukonga.miuix.kmp.blur.Backdrop
 
 @Composable
-private fun settingsSearchWallpaperBackdrop(): Backdrop? {
-    // Search lives inside the page recording. Only the independent wallpaper source is
-    // safe here; passing the scroll/header source back into its child would sample itself.
-    val source = LocalGlobalWallpaperBackdropSource.current
-    return if (LocalAppThemeConfig.current.liquidGlassEnabled &&
-        LocalGlobalWallpaperBackdropVisible.current
-    ) source?.takeIf { it.isReady }?.backdrop else null
+internal fun useSettingsSearchContentBackdrop(): Boolean =
+    LocalAppThemeConfig.current.liquidGlassEnabled &&
+        shouldAllowHomeChromeLiquidGlass(Build.VERSION.SDK_INT)
+
+@Composable
+private fun settingsSearchBackdrop(contentBackdrop: Backdrop?): Backdrop? {
+    if (!LocalAppThemeConfig.current.liquidGlassEnabled) return null
+    val wallpaper = if (LocalGlobalWallpaperBackdropVisible.current) {
+        LocalGlobalWallpaperBackdropSource.current?.takeIf { it.isReady }?.backdrop
+    } else null
+    return if (wallpaper != null && contentBackdrop != null) {
+        rememberCombinedBackdrop(wallpaper, contentBackdrop)
+    } else contentBackdrop ?: wallpaper
 }
 
 @Composable
 internal fun SettingsSearchBarSection(
-    query: String,
-    onQueryChange: (String) -> Unit,
+    state: TextFieldState,
     onSearch: () -> Unit = {},
     autoFocusEnabled: Boolean = true,
+    contentBackdrop: Backdrop? = null,
 ) {
     val placeholder = stringResource(R.string.settings_search_placeholder)
-    AppLiquidAwareSearchField(
-        query = query,
-        onQueryChange = onQueryChange,
+    AppLiquidAwareSearchTopBarField(
+        state = state,
         onSearch = onSearch,
         placeholder = placeholder,
-        presentation = AppSearchFieldPresentation.TOP_BAR,
-        backdrop = settingsSearchWallpaperBackdrop(),
-        captureShellForContent = false,
+        backdrop = settingsSearchBackdrop(contentBackdrop),
         autoFocusEnabled = autoFocusEnabled,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
     )
@@ -89,6 +96,7 @@ internal fun SettingsSearchBarSection(
 internal fun SettingsHomeSearchEntry(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    contentBackdrop: Backdrop? = null,
 ) {
     val visualSpec = resolveSettingsVisualSpec()
     val placeholder = stringResource(R.string.settings_search_placeholder)
@@ -104,7 +112,7 @@ internal fun SettingsHomeSearchEntry(
         }
         BottomBarMatchedReusableLiquidDock(
             shape = CircleShape,
-            backdrop = settingsSearchWallpaperBackdrop(),
+            backdrop = settingsSearchBackdrop(contentBackdrop),
             reuseEnabled = true,
             elasticFeedbackEnabled = true,
             elasticFeedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,

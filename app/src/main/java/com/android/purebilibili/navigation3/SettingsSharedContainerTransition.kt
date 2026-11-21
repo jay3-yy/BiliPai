@@ -150,6 +150,7 @@ internal fun settingsSharedContainerDestination(
     navScope: NavTransitionScope,
     color: Color,
     destinationZIndex: Float = 0f,
+    wallpaperBacking: Modifier = Modifier,
 ): Modifier {
     val state = remember(origin) { SeekableTransitionState(navScope.relativeDepth >= 0f) }
     val transition = rememberTransition(state, label = "Settings container")
@@ -211,7 +212,7 @@ internal fun settingsSharedContainerDestination(
                 isInMultiWindow = activity?.isInMultiWindowMode == true,
             )
         }
-        .then(settingsSharedContainerBounds(bounds, pageColor = color))
+        .then(settingsSharedContainerBounds(bounds, pageColor = color, wallpaperBacking = wallpaperBacking))
 }
 
 @Composable
@@ -233,6 +234,7 @@ private fun Transition<Boolean>.settingsVisibilityScope(
 internal fun settingsSharedContainerBounds(
     bounds: SettingsSharedContainerBounds?,
     pageColor: Color? = null,
+    wallpaperBacking: Modifier = Modifier,
 ): Modifier {
     val sharedScope = LocalSettingsContainerSharedScope.current ?: return Modifier
     if (bounds == null) return Modifier
@@ -319,6 +321,8 @@ internal fun settingsSharedContainerBounds(
                 .skipToLookaheadSize { sharedContent.isMatchFound }
         } else Modifier
         beforeShared.then(sharedModifier)
+            // 壁纸和渐变底色一同裁在共享容器圆角内，文字淡入时底图仍遮住后方页面。
+            .then(wallpaperBacking)
             .then(if (pageColor == null) Modifier else Modifier.drawBehind {
                 val open = bounds.open.value
                 // 静止在起点时由父页绘制条目底色，避免在原位置再叠一层底色。

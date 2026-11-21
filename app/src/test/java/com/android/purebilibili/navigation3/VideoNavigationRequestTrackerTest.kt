@@ -40,6 +40,19 @@ class VideoNavigationRequestTrackerTest {
     }
 
     @Test
+    fun leavingAndReturningToTheSameTabDoesNotReviveThePendingRequest() {
+        val tracker = VideoNavigationRequestTracker()
+        val stack = listOf(BiliPaiNavKey.MainHost)
+        val request = tracker.begin(stack, sourceGeneration = 1L)
+
+        tracker.invalidate()
+
+        assertFalse(tracker.isCurrent(request, stack, sourceGeneration = 1L))
+        val next = tracker.begin(stack, sourceGeneration = 1L)
+        assertTrue(tracker.isCurrent(next, stack, sourceGeneration = 1L))
+    }
+
+    @Test
     fun returningToAnEqualStackDoesNotReviveTheOldDirectionLookup() {
         val tracker = VideoNavigationRequestTracker()
         val stack = listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.VideoDetail("BVparent", openId = 1L))

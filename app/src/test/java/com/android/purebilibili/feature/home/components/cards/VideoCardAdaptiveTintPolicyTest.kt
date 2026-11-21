@@ -9,6 +9,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import com.android.purebilibili.core.theme.ACCESSIBLE_TEXT_MIN_CONTRAST
+import com.android.purebilibili.core.theme.calculateContrastRatio
 import com.materialkolor.hct.Hct
 import kotlin.math.abs
 import kotlin.test.Test
@@ -341,7 +343,7 @@ class VideoCardAdaptiveTintPolicyTest {
     }
 
     @Test
-    fun cardTintAndFrostedGlassCanBeUsedSeparately() {
+    fun eitherCardSettingCanUseReadyStaticWallpaperBlur() {
         val tintOnly = resolveHomeCardWallpaperSurfaceMode(
             dynamicTintEnabled = true,
             frostedGlassEnabled = false,
@@ -364,7 +366,7 @@ class VideoCardAdaptiveTintPolicyTest {
             lowBlurBudgetForced = false,
             sdkInt = 34,
         )
-        assertEquals(HomeCardWallpaperSurfaceMode.LIGHTWEIGHT_TINT, tintOnly)
+        assertEquals(HomeCardWallpaperSurfaceMode.REALTIME_FROSTED, tintOnly)
         assertEquals(HomeCardWallpaperSurfaceMode.REALTIME_FROSTED, glassOnly)
 
         val tintedSurface = resolveVideoCardAmbientDrawSpec(
@@ -615,6 +617,35 @@ class VideoCardAdaptiveTintPolicyTest {
                     assertTrue(contrast >= 4.5f)
                 }
             }
+        }
+    }
+
+    @Test
+    fun cachedWallpaperNeedsLessTintWhileBothTextRolesStayReadable() {
+        val sky = Color(0xFF78A0BF)
+        val container = Color(0xFFF7F2FA)
+        val title = Color(0xFF151820)
+        val subtitle = Color(0xFF272C32)
+        val bounds = WallpaperBackdropColorBounds(
+            lower = Color(0xFF517C97),
+            upper = Color(0xFFC5D6D7),
+        )
+
+        val fullRangePlate = resolveWallpaperCardTint(
+            sky, container, frostedGlassEnabled = true,
+            titleColor = title, subtitleColor = subtitle,
+        )
+        val cachedPlate = resolveWallpaperCardTint(
+            sky, container, frostedGlassEnabled = true,
+            titleColor = title, subtitleColor = subtitle,
+            backdropColorBounds = bounds,
+        )
+
+        assertTrue(cachedPlate.alpha < fullRangePlate.alpha)
+        for (backdrop in listOf(bounds.lower, bounds.upper)) {
+            val surface = cachedPlate.compositeOver(backdrop)
+            assertTrue(calculateContrastRatio(title, surface) >= ACCESSIBLE_TEXT_MIN_CONTRAST)
+            assertTrue(calculateContrastRatio(subtitle, surface) >= ACCESSIBLE_TEXT_MIN_CONTRAST)
         }
     }
 

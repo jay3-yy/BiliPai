@@ -19,18 +19,20 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.Player
 import com.android.purebilibili.core.util.resolveSafeAndroidPipRational
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.buildPipPlaybackRemoteActions
 import com.android.purebilibili.feature.video.ui.section.shouldKeepVideoPlaybackAwake
+import kotlinx.coroutines.flow.collect
 
 @Composable
 internal fun VideoDetailPipParamsEffect(
     context: Context,
     activity: Activity?,
-    playerBounds: Rect?,
+    playerBoundsProvider: () -> Rect?,
     pipModeEnabled: Boolean,
     player: Player?,
 ) {
@@ -38,6 +40,7 @@ internal fun VideoDetailPipParamsEffect(
     var lastPipModeEnabled by remember(player) { mutableStateOf<Boolean?>(null) }
     var lastPipUpdateElapsedMs by remember(player) { mutableLongStateOf(0L) }
     val latestPlayer by rememberUpdatedState(player)
+    val latestPlayerBoundsProvider by rememberUpdatedState(playerBoundsProvider)
     val supportsPip = remember(activity) {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             activity?.packageManager?.hasSystemFeature(
@@ -80,39 +83,42 @@ internal fun VideoDetailPipParamsEffect(
         }
     }
 
-    LaunchedEffect(activity, player, playerBounds, pipModeEnabled) {
-        if (!supportsPip || activity == null) return@LaunchedEffect
-        val modeChanged = lastPipModeEnabled == null || lastPipModeEnabled != pipModeEnabled
-        val boundsChanged = hasMeaningfulVideoPlayerBoundsChange(lastPipBounds, playerBounds)
-        val now = android.os.SystemClock.elapsedRealtime()
-        if (!shouldApplyPipParamsUpdate(
-                pipModeEnabled = pipModeEnabled,
-                modeChanged = modeChanged,
-                boundsChanged = boundsChanged,
-                elapsedSinceLastUpdateMs = now - lastPipUpdateElapsedMs,
-            )
-        ) return@LaunchedEffect
+    LaunchedEffect(activity, player, pipModeEnabled) {
+        if (!pipModeEnabled || !supportsPip || activity == null) return@LaunchedEffect
+        // 布局回调只更新画中画来源区域，详情根组件无需订阅几何变化。
+        snapshotFlow { latestPlayerBoundsProvider() }.collect { bounds ->
+            val modeChanged = lastPipModeEnabled == null || lastPipModeEnabled != pipModeEnabled
+            val boundsChanged = hasMeaningfulVideoPlayerBoundsChange(lastPipBounds, bounds)
+            val now = android.os.SystemClock.elapsedRealtime()
+            if (!shouldApplyPipParamsUpdate(
+                    pipModeEnabled = pipModeEnabled,
+                    modeChanged = modeChanged,
+                    boundsChanged = boundsChanged,
+                    elapsedSinceLastUpdateMs = now - lastPipUpdateElapsedMs,
+                )
+            ) return@collect
 
-        lastPipBounds = playerBounds?.let(::Rect)
-        lastPipModeEnabled = pipModeEnabled
-        lastPipUpdateElapsedMs = now
-        val videoWidth = latestPlayer?.videoSize?.width ?: 0
-        val videoHeight = latestPlayer?.videoSize?.height ?: 0
-        val params = android.app.PictureInPictureParams.Builder()
-            .setAspectRatio(resolveSafeAndroidPipRational(videoWidth, videoHeight))
-            .setActions(buildPipPlaybackRemoteActions(context, latestPlayer))
-            .apply {
-                playerBounds?.let(::setSourceRectHint)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    setAutoEnterEnabled(
-                        pipModeEnabled && latestPlayer?.isPlaying == true &&
-                            MiniPlayerManager.getInstance(context).shouldEnterPip()
-                    )
-                    setSeamlessResizeEnabled(pipModeEnabled)
+            lastPipBounds = bounds?.let(::Rect)
+            lastPipModeEnabled = pipModeEnabled
+            lastPipUpdateElapsedMs = now
+            val videoWidth = latestPlayer?.videoSize?.width ?: 0
+            val videoHeight = latestPlayer?.videoSize?.height ?: 0
+            val params = android.app.PictureInPictureParams.Builder()
+                .setAspectRatio(resolveSafeAndroidPipRational(videoWidth, videoHeight))
+                .setActions(buildPipPlaybackRemoteActions(context, latestPlayer))
+                .apply {
+                    bounds?.let(::setSourceRectHint)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        setAutoEnterEnabled(
+                            pipModeEnabled && latestPlayer?.isPlaying == true &&
+                                MiniPlayerManager.getInstance(context).shouldEnterPip()
+                        )
+                        setSeamlessResizeEnabled(pipModeEnabled)
+                    }
                 }
-            }
-            .build()
-        activity.setPictureInPictureParams(params)
+                .build()
+            activity.setPictureInPictureParams(params)
+        }
     }
 }
 

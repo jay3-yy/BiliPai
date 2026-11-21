@@ -44,6 +44,10 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppTypographyTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.resolveGlobalWallpaperProtectiveColor
+import com.android.purebilibili.feature.home.components.cards.LocalWallpaperPalette
+import com.android.purebilibili.feature.home.components.cards.wallpaperCardBlurSample
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
@@ -77,12 +81,20 @@ internal fun LiveRoomCard(
     val metrics = visualSpec.homeMetrics
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    val palette = rememberLiveChromePalette()
+    val cardColor = AppSurfaceTokens.cardContainer()
+    val wallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
+    val wallpaperSample = LocalWallpaperPalette.current?.blurredViewport.takeIf { wallpaperVisible }
+    val infoBackground = if (wallpaperVisible) {
+        val plate = resolveGlobalWallpaperProtectiveColor(cardColor, lightAlpha = 0.68f, darkAlpha = 0.75f)
+        if (wallpaperSample != null) {
+            Modifier.wallpaperCardBlurSample(wallpaperSample, wallpaperCoordinates = null).background(plate)
+        } else Modifier.background(plate)
+    } else Modifier
     val containerTransition = rememberLiveCardContainerTransition(
         roomId = model.roomId,
         title = model.title,
         hostName = model.hostName,
-        color = AppSurfaceTokens.cardContainer(),
+        color = cardColor,
         cornerRadius = metrics.cardRadiusDp.dp,
         onClick = onClick,
         enabled = enableSharedCoverTransition,
@@ -101,7 +113,7 @@ internal fun LiveRoomCard(
     ) {
     AppSurface(
         shape = RoundedCornerShape(metrics.cardRadiusDp.dp),
-        color = AppSurfaceTokens.cardContainer(),
+        color = if (wallpaperVisible) Color.Transparent else cardColor,
         border = null,
         tonalElevation = AppSpacingTokens.None,
         shadowElevation = AppSpacingTokens.None,
@@ -182,6 +194,7 @@ internal fun LiveRoomCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = ((if (searchResult) 60 else visualSpec.roomCardDetailsMinHeightDp) * LocalDensity.current.fontScale).dp)
+                    .then(infoBackground)
                     .padding(start = 5.dp, top = 8.dp, end = 5.dp, bottom = 4.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
