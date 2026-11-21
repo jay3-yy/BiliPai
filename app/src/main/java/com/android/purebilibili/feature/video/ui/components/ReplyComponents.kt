@@ -2633,29 +2633,37 @@ internal fun ReplyVideoReferenceText(
             COMMENT_INLINE_VERIFY_ORGANIZATION_BADGE_ID to organizationVerifyInlineContent
         ) + suffixInlineContent
     }
+    val renderAnnotatedString = remember(annotatedString) { annotatedString.stripLinkAnnotations() }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var showTextSelectionSheet by remember(copyText) { mutableStateOf(false) }
-    val modifier = if (onUrlClick != null) {
-        Modifier.pointerInput(annotatedString) {
-            detectReplyLinkGestures(
-                linkAt = { position -> textLayoutResult?.replyLinkAt(position) },
-                onLinkClick = { link -> link.linkInteractionListener?.onClick(link) },
-                onLongPress = {
-                    val action = latestOnLongPress
-                    if (action != null) action()
-                    else if (copyText.isNotEmpty()) {
-                        selectionHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        showTextSelectionSheet = true
-                    }
-                },
-            )
-        }
-    } else {
-        Modifier
-    }
+    val modifier = Modifier
+        .replyRichTextSemantics(
+            source = annotatedString,
+            layoutResultProvider = { textLayoutResult?.withSourceText(annotatedString) },
+        )
+        .then(
+            if (onUrlClick != null || suffix != null) {
+                Modifier.pointerInput(annotatedString) {
+                    detectReplyLinkGestures(
+                        linkAt = { position -> textLayoutResult?.replyLinkAt(position, annotatedString) },
+                        onLinkClick = { link -> link.linkInteractionListener?.onClick(link) },
+                        onLongPress = {
+                            val action = latestOnLongPress
+                            if (action != null) action()
+                            else if (copyText.isNotEmpty()) {
+                                selectionHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                showTextSelectionSheet = true
+                            }
+                        },
+                    )
+                }
+            } else {
+                Modifier
+            }
+        )
 
     AppText(
-        text = annotatedString,
+        text = renderAnnotatedString,
         inlineContent = inlineContent,
         fontSize = fontSize,
         color = primaryColor,
@@ -2859,6 +2867,7 @@ fun RichCommentText(
         )
     }
     val copyText = remember(text) { text.trim() }
+    val renderAnnotatedString = remember(annotatedString) { annotatedString.stripLinkAnnotations() }
     var showTextSelectionSheet by remember(copyText) { mutableStateOf(false) }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
@@ -2866,9 +2875,13 @@ fun RichCommentText(
         // 以实际字符位置命中链接，跨行标题与内联图标共用同一跳转；
         // 只接管链接手势，普通文字仍交给条目点击、长按或原生划选。
         val textModifier = Modifier
+            .replyRichTextSemantics(
+                source = annotatedString,
+                layoutResultProvider = { textLayoutResult?.withSourceText(annotatedString) },
+            )
             .pointerInput(annotatedString) {
                 detectReplyLinkGestures(
-                    linkAt = { position -> textLayoutResult?.replyLinkAt(position) },
+                    linkAt = { position -> textLayoutResult?.replyLinkAt(position, annotatedString) },
                     onLinkClick = { link -> link.linkInteractionListener?.onClick(link) },
                     onLongPress = {
                         val action = latestOnLongPress
@@ -2894,7 +2907,7 @@ fun RichCommentText(
             resolveUrl = { (resolveRichCommentLinkAction(it.tag) as? RichCommentLinkAction.Url)?.url },
         ) { previewModifier, onPreviewTextLayout ->
             AppText(
-                text = annotatedString,
+                text = renderAnnotatedString,
                 inlineContent = inlineContent,
                 fontSize = fontSize,
                 color = color,
@@ -2903,7 +2916,7 @@ fun RichCommentText(
                 maxLines = maxLines,
                 onTextLayout = {
                     textLayoutResult = it
-                    onPreviewTextLayout(it)
+                    onPreviewTextLayout(it.withSourceText(annotatedString))
                 },
                 modifier = textModifier.then(previewModifier)
             )
