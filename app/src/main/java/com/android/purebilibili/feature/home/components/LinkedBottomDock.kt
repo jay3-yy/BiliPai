@@ -411,9 +411,6 @@ internal fun LinkedBottomDock(
                 gap = gap,
                 searchEnabled = searchEnabled,
             )
-            // 小横条展开态与底栏整簇（导航胶囊 + 搜索圆钮）同宽同起点：
-            // 两行胶囊长度一致、左右边缘对齐。
-            val bottomBarClusterWidth = (navWidth + reservedSearchWidth).coerceAtMost(maximumWidth)
 
             // Glass keeps the navigation/backdrop mounted across both endpoints. At the compact
             // endpoint skip placement so the hidden row neither draws nor intercepts touches.
@@ -623,8 +620,6 @@ internal fun LinkedBottomDock(
                                     searchProgress = search.value,
                                     verticalGap = verticalGap,
                                     presenceProgress = slotGeometryPresenceProvider(),
-                                    expandedAudioWidth = bottomBarClusterWidth,
-                                    expandedAudioX = navigationX,
                                 )
                                 // 高度跟随封面与内容留白，合体时继续收紧，不拉伸到导航行高。
                                 val audioHeight = with(density) {
@@ -653,8 +648,6 @@ internal fun LinkedBottomDock(
                                     searchProgress = search.value,
                                     verticalGap = verticalGap,
                                     presenceProgress = slotGeometryPresenceProvider(),
-                                    expandedAudioWidth = bottomBarClusterWidth,
-                                    expandedAudioX = navigationX,
                                 )
                                 // 外层槽位保留导航行高，紧凑横条在槽内贴底，展开时底边贴导航行上方。
                                 // verticalGap 处；收合时槽与导航行完全重合（圆心同中心）。

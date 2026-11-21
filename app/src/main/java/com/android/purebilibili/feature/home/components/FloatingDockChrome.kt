@@ -42,11 +42,8 @@ import com.android.purebilibili.feature.home.components.liquid.innerShadow
 import com.android.purebilibili.feature.home.components.liquid.lens
 import com.android.purebilibili.feature.home.components.liquid.vibrancy
 import kotlin.math.PI
-import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.roundToInt
 import kotlin.math.sin
-import kotlin.math.sqrt
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BackdropEffectScope
 import top.yukonga.miuix.kmp.blur.blur
@@ -71,25 +68,6 @@ private val iosIndicatorSpecular = EdgeStroke(
 
 private const val LIGHT_REF_X = 0.5f
 private const val LIGHT_REF_Y = 0.7f
-private const val GRAVITY_DIR_THRESHOLD_SQ = 0.01f
-internal const val GRAVITY_HIGHLIGHT_QUANTIZE_DEGREES = 3f
-
-internal fun quantizeGravityHighlightDirection(
-    gravityX: Float,
-    gravityY: Float,
-    stepDegrees: Float = GRAVITY_HIGHLIGHT_QUANTIZE_DEGREES,
-): Pair<Float, Float> {
-    val gMagSq = gravityX * gravityX + gravityY * gravityY
-    if (gMagSq <= GRAVITY_DIR_THRESHOLD_SQ) return 0f to -1f
-    val invMag = 1f / sqrt(gMagSq)
-    val nx = gravityX * invMag
-    val ny = gravityY * invMag
-    val stepRad = (stepDegrees * PI / 180.0).toFloat()
-    if (stepRad <= 0f) return nx to ny
-    val angle = atan2(ny, nx)
-    val quantized = (angle / stepRad).roundToInt() * stepRad
-    return cos(quantized) to sin(quantized)
-}
 
 @Composable
 internal fun rememberBiliPaiGravityHighlight(
@@ -98,26 +76,17 @@ internal fun rememberBiliPaiGravityHighlight(
     width: Dp = base.width,
     active: Boolean,
 ): State<EdgeStroke> {
-    val tiltState = rememberSharedGlassGravity(active)
-    val quantizedDirection = remember(tiltState) {
+    val highlightSector = rememberSharedGlassHighlightSector(active)
+    return remember(base, extraDegrees, highlightSector, width) {
         derivedStateOf {
-            quantizeGravityHighlightDirection(
-                gravityX = tiltState.value.gravityX,
-                gravityY = tiltState.value.gravityY,
-            )
-        }
-    }
-    return remember(base, extraDegrees, quantizedDirection, width) {
-        derivedStateOf {
-            val (lx0, ly0) = quantizedDirection.value
-            val rad = extraDegrees * PI / 180.0
-            val c = cos(rad).toFloat()
-            val s = sin(rad).toFloat()
-            val lx = c * lx0 - s * ly0
-            val ly = s * lx0 + c * ly0
+            val angleRadians = (highlightSector.value * GRAVITY_HIGHLIGHT_QUANTIZE_DEGREES + extraDegrees) *
+                PI / 180.0
             base.copy(
                 width = width,
-                primary = base.primary.copy(x = LIGHT_REF_X + lx, y = LIGHT_REF_Y + ly),
+                primary = base.primary.copy(
+                    x = LIGHT_REF_X + cos(angleRadians).toFloat(),
+                    y = LIGHT_REF_Y + sin(angleRadians).toFloat(),
+                ),
             )
         }
     }

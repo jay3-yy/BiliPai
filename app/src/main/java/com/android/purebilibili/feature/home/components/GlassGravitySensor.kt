@@ -8,12 +8,27 @@ import android.hardware.SensorManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.platform.LocalContext
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.roundToInt
 
-internal data class GlassGravity(val gravityX: Float = 0f, val gravityY: Float = 0f)
+internal const val GRAVITY_HIGHLIGHT_QUANTIZE_DEGREES = 3
+private const val HighlightSectorCount = 360 / GRAVITY_HIGHLIGHT_QUANTIZE_DEGREES
+private const val UpwardHighlightSector = 270 / GRAVITY_HIGHLIGHT_QUANTIZE_DEGREES
+private const val MinimumProjectedGravitySquared = 0.01f
+private val HighlightSectorRadians = (2 * PI / HighlightSectorCount).toFloat()
+
+internal fun quantizeGravityHighlightSector(gravityX: Float, gravityY: Float): Int {
+    if (gravityX * gravityX + gravityY * gravityY <= MinimumProjectedGravitySquared) {
+        return UpwardHighlightSector
+    }
+    val sector = (atan2(gravityY, gravityX) / HighlightSectorRadians).roundToInt()
+    return Math.floorMod(sector, HighlightSectorCount)
+}
 
 internal interface GlassGravitySensorBackend {
     fun start(onSample: (Float, Float) -> Unit): Boolean
@@ -23,8 +38,10 @@ internal interface GlassGravitySensorBackend {
 /** 活跃高光共享一个订阅；最后一个使用者退出后停止接收，并丢弃已排队的回调。 */
 internal class SharedGlassGravitySensor(private val backend: GlassGravitySensorBackend) {
     private val consumers = mutableSetOf<Any>()
-    private val gravity = mutableStateOf(GlassGravity())
-    val state: State<GlassGravity> get() = gravity
+    private val highlightSector = mutableIntStateOf(UpwardHighlightSector)
+    val state: State<Int> get() = highlightSector
+    private var smoothedX = 0f
+    private var smoothedY = 0f
     private var listening = false
     private var initialized = false
     private var generation = 0L
@@ -36,15 +53,18 @@ internal class SharedGlassGravitySensor(private val backend: GlassGravitySensorB
         listening = true
         listening = backend.start { x, y ->
             if (session == generation && listening && consumers.isNotEmpty()) {
-                val previous = gravity.value
-                gravity.value = if (!initialized) {
+                if (!initialized) {
                     initialized = true
-                    GlassGravity(x, y)
+                    smoothedX = x
+                    smoothedY = y
                 } else {
-                    GlassGravity(
-                        previous.gravityX + (x - previous.gravityX) * 0.15f,
-                        previous.gravityY + (y - previous.gravityY) * 0.15f,
-                    )
+                    smoothedX += (x - smoothedX) * 0.15f
+                    smoothedY += (y - smoothedY) * 0.15f
+                }
+                // 保留原始采样和平滑，只在可见的高光方向变化时通知绘制层。
+                val nextSector = quantizeGravityHighlightSector(smoothedX, smoothedY)
+                if (nextSector != highlightSector.intValue) {
+                    highlightSector.intValue = nextSector
                 }
             }
         }
@@ -96,7 +116,7 @@ private class AndroidGlassGravitySensorBackend(context: Context) : GlassGravityS
 private val glassGravitySensors = mutableMapOf<Context, SharedGlassGravitySensor>()
 
 @Composable
-internal fun rememberSharedGlassGravity(active: Boolean): State<GlassGravity> {
+internal fun rememberSharedGlassHighlightSector(active: Boolean): State<Int> {
     val context = LocalContext.current.applicationContext
     val sensor = remember(context) {
         glassGravitySensors.getOrPut(context) {
@@ -112,6 +132,6 @@ internal fun rememberSharedGlassGravity(active: Boolean): State<GlassGravity> {
     }
     // 隐藏高光保持最后方向，且不再观察其他可见组件推动的传感器状态。
     return remember(sensor, active) {
-        if (active) sensor.state else mutableStateOf(Snapshot.withoutReadObservation { sensor.state.value })
+        if (active) sensor.state else mutableIntStateOf(Snapshot.withoutReadObservation { sensor.state.value })
     }
 }
