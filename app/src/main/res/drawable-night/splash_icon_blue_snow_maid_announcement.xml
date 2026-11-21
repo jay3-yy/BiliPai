@@ -3,7 +3,7 @@
     <item>
         <shape android:shape="rectangle">
             <corners android:radius="26dp" />
-            <solid android:color="#FF090A0C" />
+            <solid android:color="#FF121212" />
         </shape>
     </item>
     <item android:drawable="@mipmap/ic_launcher_blue_snow_maid_announcement_foreground" />

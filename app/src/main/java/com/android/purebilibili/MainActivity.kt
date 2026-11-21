@@ -751,15 +751,16 @@ internal fun shouldApplySplashRealtimeBlur(
 
 internal fun shouldRunColdStartSplash(savedInstanceStatePresent: Boolean): Boolean = !savedInstanceStatePresent
 
-internal fun splashExitDurationMs(): Long = 920L
+internal fun splashExitDurationMs(): Long = 600L
 internal fun splashExitTranslateYDp(): Float = 220f
 internal fun splashExitScaleEnd(): Float = 1.12f
 internal fun splashExitBlurRadiusEnd(): Float = 24f
 internal fun splashMaxKeepOnScreenMs(): Long = 1000L
 internal fun splashExitWaitTimeoutMs(): Long =
     splashMaxKeepOnScreenMs() + splashExitDurationMs() + 500L
-internal fun customSplashHoldDurationMs(): Long = 1900L
-internal fun customSplashFadeDurationMs(): Int = 1450
+// 短暂停留用于遮盖首页首帧组装，随后快速淡出，避免装饰性壁纸拖慢冷启动观感。
+internal fun customSplashHoldDurationMs(): Long = 600L
+internal fun customSplashFadeDurationMs(): Int = 700
 
 internal fun customSplashShouldRender(
     showSplash: Boolean,
