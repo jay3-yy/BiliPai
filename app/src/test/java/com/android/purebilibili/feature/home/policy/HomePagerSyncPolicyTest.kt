@@ -387,4 +387,143 @@ class HomePagerSyncPolicyTest {
             )
         )
     }
+
+    @Test
+    fun customTabOrder_restoresEveryCategoryStablyWithoutCyclingOnReturn() {
+        val customEntries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+            HomeTopTabEntry.Category(HomeCategory.LIVE),
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+            HomeTopTabEntry.Category(HomeCategory.POPULAR)
+        )
+
+        customEntries.forEachIndexed { expectedIndex, entry ->
+            val category = (entry as HomeTopTabEntry.Category).category
+            assertEquals(
+                expectedIndex,
+                resolveHomeInitialTopTabPage(
+                    topTabEntries = customEntries,
+                    currentCategory = category,
+                    displayedTabIndex = expectedIndex,
+                    displayedTabEntry = entry
+                )
+            )
+            assertTrue(
+                shouldTreatInitialHomePagerPageAsSyncedWithState(
+                    initialEntry = entry,
+                    currentCategory = category,
+                    displayedTabEntry = entry
+                )
+            )
+        }
+    }
+
+    @Test
+    fun initialTopTabPage_doesNotJumpToPartitionWhenPartitionMovesIntoOldCategorySlot() {
+        val reorderedEntries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+            HomeTopTabEntry.Category(HomeCategory.LIVE),
+            HomeTopTabEntry.Partition,
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND)
+        )
+
+        assertEquals(
+            3,
+            resolveHomeInitialTopTabPage(
+                topTabEntries = reorderedEntries,
+                currentCategory = HomeCategory.RECOMMEND,
+                displayedTabIndex = 2,
+                displayedTabEntry = HomeTopTabEntry.Category(HomeCategory.RECOMMEND)
+            )
+        )
+        assertFalse(
+            shouldTreatInitialHomePagerPageAsSyncedWithState(
+                initialEntry = HomeTopTabEntry.Partition,
+                currentCategory = HomeCategory.RECOMMEND,
+                displayedTabEntry = HomeTopTabEntry.Category(HomeCategory.RECOMMEND)
+            )
+        )
+    }
+
+    @Test
+    fun initialTopTabPage_tracksPartitionIdentityWhenPartitionReorders() {
+        val reorderedEntries = listOf(
+            HomeTopTabEntry.Partition,
+            HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+            HomeTopTabEntry.Category(HomeCategory.LIVE),
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND)
+        )
+
+        assertEquals(
+            0,
+            resolveHomeInitialTopTabPage(
+                topTabEntries = reorderedEntries,
+                currentCategory = HomeCategory.RECOMMEND,
+                displayedTabIndex = 2,
+                displayedTabEntry = HomeTopTabEntry.Partition
+            )
+        )
+        assertFalse(
+            shouldTreatInitialHomePagerPageAsSyncedWithState(
+                initialEntry = HomeTopTabEntry.Category(HomeCategory.LIVE),
+                currentCategory = HomeCategory.RECOMMEND,
+                displayedTabEntry = HomeTopTabEntry.Partition
+            )
+        )
+    }
+
+    @Test
+    fun hiddenCategoryFallback_targetsFirstVisibleCategoryInsteadOfPartitionAtZero() {
+        val entries = listOf(
+            HomeTopTabEntry.Partition,
+            HomeTopTabEntry.Category(HomeCategory.FOLLOW),
+            HomeTopTabEntry.Category(HomeCategory.LIVE)
+        )
+
+        assertEquals(
+            1 to HomeCategory.FOLLOW,
+            resolveHomeFallbackVisibleCategoryTab(
+                topTabEntries = entries,
+                currentCategory = HomeCategory.RECOMMEND
+            )
+        )
+        assertEquals(
+            1,
+            resolveHomeInitialTopTabPage(
+                topTabEntries = entries,
+                currentCategory = HomeCategory.RECOMMEND,
+                displayedTabIndex = 0,
+                displayedTabEntry = HomeTopTabEntry.Category(HomeCategory.RECOMMEND)
+            )
+        )
+    }
+
+    @Test
+    fun externalCategorySwitch_overridesPartitionRetainedEntryAndDrivesPager() {
+        val entries = listOf(
+            HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
+            HomeTopTabEntry.Partition,
+            HomeTopTabEntry.Category(HomeCategory.POPULAR)
+        )
+
+        assertEquals(
+            2,
+            resolveHomePagerTargetPage(
+                topTabEntries = entries,
+                retainedEntry = HomeTopTabEntry.Partition,
+                currentCategory = HomeCategory.POPULAR,
+                hasSyncedPagerWithState = true,
+                displayedTabEntry = HomeTopTabEntry.Category(HomeCategory.POPULAR)
+            )
+        )
+        assertFalse(
+            shouldSkipHomePagerStateDrive(
+                hasSyncedPagerWithState = true,
+                lastDrivenCategory = HomeCategory.POPULAR,
+                currentCategory = HomeCategory.POPULAR,
+                lastDrivenEntry = HomeTopTabEntry.Partition,
+                targetEntry = HomeTopTabEntry.Category(HomeCategory.POPULAR)
+            )
+        )
+    }
 }

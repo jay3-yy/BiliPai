@@ -116,6 +116,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     internal val pendingMemoryRecovery = _pendingMemoryRecovery.asStateFlow()
     val currentCategory = homeStateFlow { it.currentCategory }
     val displayedTabIndex = homeStateFlow { it.displayedTabIndex }
+    val displayedTabEntry = homeStateFlow { it.displayedTabEntry }
     val popularSubCategory = homeStateFlow { it.popularSubCategory }
     val user = homeStateFlow { it.user }
     val messageUnreadCount = homeStateFlow { it.messageUnreadCount }
@@ -221,6 +222,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             isLoading = true,
             currentCategory = previous.currentCategory,
             displayedTabIndex = previous.displayedTabIndex,
+            displayedTabEntry = previous.displayedTabEntry,
             popularSubCategory = previous.popularSubCategory,
             liveSubCategory = if (TokenManager.sessDataCache.isNullOrEmpty()) {
                 LiveSubCategory.POPULAR
@@ -660,7 +662,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // 分类选择同步发布，加载任务只消费入口捕获的分类身份。
     fun switchCategory(category: HomeCategory) {
         val current = _uiState.value
-        if (current.currentCategory == category) return
+        val targetEntry = HomeTopTabEntry.Category(category)
+        if (current.currentCategory == category) {
+            if (current.displayedTabEntry != targetEntry) {
+                _uiState.value = current.copy(displayedTabEntry = targetEntry)
+            }
+            return
+        }
         com.android.purebilibili.core.util.CardPositionManager.isSwitchingCategory = true
         val liveSubCategory = if (category == HomeCategory.LIVE && TokenManager.sessDataCache.isNullOrEmpty()) {
             LiveSubCategory.POPULAR
@@ -757,6 +765,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun updateDisplayedTabIndex(index: Int) {
         val normalized = index.coerceAtLeast(0)
         _uiState.value = _uiState.value.copy(displayedTabIndex = normalized)
+    }
+
+    fun updateDisplayedTab(index: Int, entry: HomeTopTabEntry) {
+        val normalized = index.coerceAtLeast(0)
+        _uiState.value = _uiState.value.copy(
+            displayedTabIndex = normalized,
+            displayedTabEntry = entry,
+        )
     }
     
     //  [新增] 开始消散动画（触发 UI 播放粒子动画）

@@ -14,15 +14,17 @@ internal fun HomePagerSyncEffects(
     coordinator: HomePagerCoordinator,
     currentCategory: HomeCategory,
     displayedTabIndex: Int,
+    displayedTabEntry: HomeTopTabEntry,
     isTopLevelActive: Boolean,
     animationSpec: FiniteAnimationSpec<Float>?,
-    onDisplayedTabIndexChange: (Int) -> Unit,
+    onDisplayedTabChange: (Int, HomeTopTabEntry) -> Unit,
     onCategoryChange: (HomeCategory) -> Unit,
 ) {
     val pagerState = coordinator.pagerState
     val topTabEntries = coordinator.entries
     val currentDisplayedTabIndex by rememberUpdatedState(displayedTabIndex)
-    val updateDisplayedIndex by rememberUpdatedState(onDisplayedTabIndexChange)
+    val currentDisplayedTabEntry by rememberUpdatedState(displayedTabEntry)
+    val updateDisplayedTab by rememberUpdatedState(onDisplayedTabChange)
     val switchCategory by rememberUpdatedState(onCategoryChange)
     // 分类切换标记属于本次分类会话，不等待下一次详情返回才清除。
     LaunchedEffect(currentCategory) {
@@ -41,9 +43,9 @@ internal fun HomePagerSyncEffects(
     ) {
         if (!isTopLevelActive) return@LaunchedEffect
         if (!coordinator.hasSynced) return@LaunchedEffect
-        snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
+        snapshotFlow { Triple(pagerState.currentPage, pagerState.isScrollInProgress, coordinator.isSwitching) }
             .distinctUntilChanged()
-            .collect { (page, scrolling) ->
+            .collect { (page, scrolling, switching) ->
                 val currentCategoryIndex = topTabEntries
                     .indexOf(HomeTopTabEntry.Category(currentCategory))
                     .takeIf { it >= 0 } ?: 0
@@ -56,12 +58,12 @@ internal fun HomePagerSyncEffects(
                     pagerScrolling = scrolling,
                     currentCategoryIndex = currentCategoryIndex,
                     settledCategory = settledCategory,
-                    programmaticPageSwitchInProgress = coordinator.isSwitching
+                    programmaticPageSwitchInProgress = switching
                 )
-                if (!scrolling && currentDisplayedTabIndex != page) {
-                    updateDisplayedIndex(page)
-                }
-                if (!scrolling && settledEntry != null) {
+                if (!scrolling && !switching && settledEntry != null) {
+                    if (currentDisplayedTabIndex != page || currentDisplayedTabEntry != settledEntry) {
+                        updateDisplayedTab(page, settledEntry)
+                    }
                     coordinator.retainedEntry = settledEntry
                 }
                 when (settledAction) {
@@ -75,13 +77,15 @@ internal fun HomePagerSyncEffects(
     }
 
     // [P2] 当前分类被隐藏时，自动落到首个可见分类
-    LaunchedEffect(topTabEntries) {
-        val visibleCategories = topTabEntries.mapNotNull { (it as? HomeTopTabEntry.Category)?.category }
-        val firstVisible = visibleCategories.firstOrNull() ?: return@LaunchedEffect
-        if (currentCategory !in visibleCategories) {
-            updateDisplayedIndex(0)
-            switchCategory(firstVisible)
-        }
+    LaunchedEffect(topTabEntries, currentCategory) {
+        val (fallbackIndex, firstVisible) = resolveHomeFallbackVisibleCategoryTab(
+            topTabEntries = topTabEntries,
+            currentCategory = currentCategory,
+        ) ?: return@LaunchedEffect
+        val fallbackEntry = HomeTopTabEntry.Category(firstVisible)
+        updateDisplayedTab(fallbackIndex, fallbackEntry)
+        coordinator.retainedEntry = fallbackEntry
+        switchCategory(firstVisible)
     }
 
     // [CrashFix] 顶栏配置变化导致页数收缩时，先钳制 pager 当前页，避免越界
@@ -94,15 +98,17 @@ internal fun HomePagerSyncEffects(
     }
 
     // [修复] 状态变化时驱动 Pager：首次使用无动画对齐，后续用动画跟随
-    LaunchedEffect(currentCategory, topTabEntries, isTopLevelActive, animationSpec) {
+    LaunchedEffect(currentCategory, displayedTabEntry, topTabEntries, isTopLevelActive, animationSpec) {
         if (!isTopLevelActive) return@LaunchedEffect
         val targetPage = resolveHomePagerTargetPage(
             topTabEntries = topTabEntries,
             retainedEntry = coordinator.retainedEntry,
             currentCategory = currentCategory,
-            hasSyncedPagerWithState = coordinator.hasSynced
+            hasSyncedPagerWithState = coordinator.hasSynced,
+            displayedTabEntry = displayedTabEntry
         )
         if (targetPage < 0) return@LaunchedEffect
+        val targetEntry = resolveHomeTopTabEntryOrNull(topTabEntries, targetPage)
         if (shouldUseInitialHomePagerSnap(
                 hasSyncedPagerWithState = coordinator.hasSynced,
                 targetPage = targetPage
@@ -110,20 +116,25 @@ internal fun HomePagerSyncEffects(
         ) {
             coordinator.snapToPage(targetPage)
             coordinator.hasSynced = true
-            coordinator.retainedEntry = resolveHomeTopTabEntryOrNull(topTabEntries, targetPage)
+            coordinator.retainedEntry = targetEntry
             coordinator.lastDrivenCategory = currentCategory
+            coordinator.lastDrivenEntry = targetEntry
             return@LaunchedEffect
         }
         if (shouldSkipHomePagerStateDrive(
                 hasSyncedPagerWithState = coordinator.hasSynced,
                 lastDrivenCategory = coordinator.lastDrivenCategory,
-                currentCategory = currentCategory
+                currentCategory = currentCategory,
+                lastDrivenEntry = coordinator.lastDrivenEntry,
+                targetEntry = targetEntry
             )
         ) {
             return@LaunchedEffect
         }
         if (targetPage == pagerState.currentPage && !pagerState.isScrollInProgress) {
+            coordinator.retainedEntry = targetEntry
             coordinator.lastDrivenCategory = currentCategory
+            coordinator.lastDrivenEntry = targetEntry
             return@LaunchedEffect
         }
         if (shouldAnimateHomePagerToCategory(
@@ -135,7 +146,9 @@ internal fun HomePagerSyncEffects(
             )
         ) {
             coordinator.animateToPage(targetPage, animationSpec)
+            coordinator.retainedEntry = targetEntry
             coordinator.lastDrivenCategory = currentCategory
+            coordinator.lastDrivenEntry = targetEntry
         }
     }
 }
