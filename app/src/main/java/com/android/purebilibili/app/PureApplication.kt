@@ -415,6 +415,12 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         AppScope.ioScope.launch {
             CacheUtils.clearCacheAutomaticallyIfDue(this@PureApplication)
         }
+        AppScope.ioScope.launch {
+            com.android.purebilibili.core.store.GithubMirrorStore.save(
+                this@PureApplication,
+                SettingsManager.getAppUpdateMirrorPreference(this@PureApplication).first(),
+            )
+        }
 
         // 启动即确保首页视觉默认值生效：底栏悬浮 + 液态玻璃 + 顶部模糊
         // 冷启动路径不阻塞主线程，迁移改为后台执行。

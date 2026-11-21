@@ -61,6 +61,7 @@ internal enum class SettingsIconRole(
     OPEN_SOURCE_HOME(R.drawable.ms_open_in_new_24, R.drawable.ph_arrow_square_out_24),
     CHECK_UPDATE(R.drawable.ms_system_update_24, R.drawable.ph_download_24),
     UPDATE_CHANNEL(R.drawable.ic_settings_update_channel_24),
+    UPDATE_MIRROR_ENABLED(R.drawable.ms_cloud_done_24, R.drawable.ph_cloud_check_24),
     UPDATE_MIRROR(R.drawable.ms_cloud_download_24, R.drawable.ph_cloud_arrow_down_24),
     UPDATE_MIRROR_ADDRESS(R.drawable.ms_link_24, R.drawable.ph_link_24),
     VIEW_RELEASE_NOTES(R.drawable.ms_newspaper_24, R.drawable.ph_newspaper_24),

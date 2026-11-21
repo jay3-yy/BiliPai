@@ -3283,6 +3283,7 @@ object NetworkModule {
         CoreNetworkRuntime.config = config
         appContext = context.applicationContext
         com.android.purebilibili.core.store.NetworkProxyStore.init(context.applicationContext)
+        com.android.purebilibili.core.store.GithubMirrorStore.init(context.applicationContext)
     }
 
     fun clearRuntimeCookies() {
@@ -3697,6 +3698,7 @@ object NetworkModule {
                 }
             }
             // 最终网络请求与响应固定使用同一账号的完整 Cookie 集合。
+            .addInterceptor(GithubMirrorInterceptor())
             .addNetworkInterceptor(AccountCookieInterceptor())
             .build()
     }
