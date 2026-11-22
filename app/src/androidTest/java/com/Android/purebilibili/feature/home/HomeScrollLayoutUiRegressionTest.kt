@@ -33,6 +33,7 @@ import com.android.purebilibili.core.store.HomeBarHideType
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.feature.home.components.HomeHeader
+import com.android.purebilibili.navigation3.BiliPaiNavKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -57,9 +58,12 @@ class HomeScrollLayoutUiRegressionTest {
                         headerOffsetProvider = { 0f },
                         isHeaderCollapseEnabled = false,
                         user = UserState(),
-                        onAvatarClick = {},
-                        onSettingsClick = {},
-                        onSearchClick = {},
+                        avatarTarget = null,
+                        searchTarget = BiliPaiNavKey.Search(),
+                        onOpenDrawer = {},
+                        onNavigate = { _, _, _ -> },
+                        headerReturn = null,
+                        headerActive = true,
                         topCategories = listOf("推荐频道", "生活频道"),
                         topCategoryKeys = listOf("recommend", "life"),
                         categoryIndex = selected.intValue,

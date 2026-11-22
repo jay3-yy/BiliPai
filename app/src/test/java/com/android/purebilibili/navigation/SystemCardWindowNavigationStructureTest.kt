@@ -28,12 +28,56 @@ class SystemCardWindowNavigationStructureTest {
         assertTrue(source.contains("windowInitialRoute = windowInitialKey?.toLegacyRoute(),"))
     }
 
-    private fun appNavigationSource(): File {
+    @Test
+    fun homeTopActionPrefersInAppBottomPagerOverSystemCardWindowWhenTabIsHosted() {
+        val body = appNavigationSource()
+            .substringAfter("fun openHomeTopActionImpl(")
+            .substringBefore("val latestOpenHomeTopAction")
+
+        val gateToLaunch = body.substringBefore("navigateToSystemCardWindowOrPushImpl(")
+        assertTrue(gateToLaunch.contains("shouldPreferInAppBottomPagerOverSystemCardWindow("))
+        assertTrue(gateToLaunch.contains("openInApp()"))
+    }
+
+    @Test
+    fun pushNavigation3TargetPrefersInAppBottomPagerOverSystemCardWindowWhenTabIsHosted() {
+        val body = appNavigationSource()
+            .substringAfter("fun pushNavigation3TargetImpl(")
+            .substringBefore("val latestPushNavigation3Target")
+
+        val gateToCardSource = body.substringBefore("latestNavigateWithRecordedCardSource")
+        assertTrue(gateToCardSource.contains("shouldPreferInAppBottomPagerOverSystemCardWindow("))
+    }
+
+    @Test
+    fun childWindowDisablesBottomPagerSwitchingAndHidesBottomBar() {
+        val source = appNavigationSource()
+        val requestPagerBody = source
+            .substringAfter("fun requestBottomPagerPageForRoute(")
+            .substringBefore("fun pushNavigation3TargetImpl(")
+        assertTrue(requestPagerBody.contains("if (isChildWindow) return false"))
+
+        val bottomBarMountGateBlock = source
+            .substringAfter("val bottomBarMountGate = shouldShowBottomBarForNavigation(")
+            .substringBefore("val sideBarRouteGate")
+        val sideBarRouteGateBlock = source
+            .substringAfter("val sideBarRouteGate = shouldShowBottomBarForNavigation(")
+            .substringBefore("val sideBarMountGate")
+        val showBottomBarBlock = source
+            .substringAfter("val showBottomBar = shouldShowBottomBarForNavigation(")
+            .substringBefore("val finalBottomBarVisible")
+
+        assertTrue(bottomBarMountGateBlock.contains("isChildWindow = isChildWindow"))
+        assertTrue(sideBarRouteGateBlock.contains("isChildWindow = isChildWindow"))
+        assertTrue(showBottomBarBlock.contains("isChildWindow = isChildWindow"))
+    }
+
+    private fun appNavigationSource(): String {
         val roots = listOf(
             File("src/main/java/com/android/purebilibili"),
             File("app/src/main/java/com/android/purebilibili"),
         )
-        return roots.map { File(it, "navigation/AppNavigation.kt") }.firstOrNull { it.exists() }
+        return roots.map { File(it, "navigation/AppNavigation.kt") }.firstOrNull { it.exists() }?.readText()
             ?: error("找不到 navigation/AppNavigation.kt")
     }
 }

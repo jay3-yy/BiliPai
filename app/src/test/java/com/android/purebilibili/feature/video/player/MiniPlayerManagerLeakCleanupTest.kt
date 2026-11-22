@@ -16,8 +16,6 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import com.android.purebilibili.feature.widget.PlaybackWidgetProvider
-import io.mockk.anyConstructed
-import io.mockk.capture
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkConstructor
@@ -26,6 +24,7 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkAll
 import io.mockk.verify
 import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
@@ -33,6 +32,12 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class MiniPlayerManagerLeakCleanupTest {
+
+    @BeforeTest
+    fun setUp() {
+        mockkObject(PlaybackWidgetProvider.Companion)
+        every { PlaybackWidgetProvider.requestUpdate(any()) } returns Unit
+    }
 
     @AfterTest
     fun tearDown() {
@@ -87,8 +92,6 @@ class MiniPlayerManagerLeakCleanupTest {
         mockkObject(SettingsManager)
         every { SettingsManager.getMiniPlayerModeSync(any()) } returns SettingsManager.MiniPlayerMode.OFF
         every { SettingsManager.getStopPlaybackOnExitSync(any()) } returns true
-        mockkObject(PlaybackWidgetProvider.Companion)
-        every { PlaybackWidgetProvider.requestUpdate(any()) } returns Unit
         mockkStatic(Looper::class)
         every { Looper.getMainLooper() } returns mockk(relaxed = true)
         mockkConstructor(Handler::class)
@@ -117,9 +120,8 @@ class MiniPlayerManagerLeakCleanupTest {
     fun pausedListeningBarDropsBuffersAfterTheLastDetailPageAndCanResume() {
         mockkStatic(ContextCompat::class)
         every { ContextCompat.registerReceiver(any(), any(), any(), any()) } returns null
-        mockkObject(BackgroundManager, PlaybackWidgetProvider.Companion)
+        mockkObject(BackgroundManager)
         every { BackgroundManager.isInBackground } returns false
-        every { PlaybackWidgetProvider.requestUpdate(any()) } returns Unit
         val manager = newMiniPlayerManager(mockContext())
         val player = mockk<ExoPlayer>(relaxed = true)
         var playbackState = Player.STATE_READY

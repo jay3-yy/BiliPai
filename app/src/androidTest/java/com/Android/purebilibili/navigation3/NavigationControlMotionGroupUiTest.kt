@@ -12,7 +12,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.LocalVideoDetailNavigationTransitionScope
@@ -21,7 +20,6 @@ import com.android.purebilibili.core.ui.transition.LocalVideoCardSourceTrackingE
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
 import com.android.purebilibili.core.ui.transition.VideoCardSourceInstances
 import com.android.purebilibili.core.util.CardPositionManager
-import com.android.purebilibili.feature.settings.SettingsSharedContainerOrigin
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -110,9 +108,7 @@ class NavigationControlMotionGroupUiTest {
             }
         }
         rule.runOnIdle {
-            group.sharedReturn = NavigationControlMotionGroupState.SharedReturn(
-                SettingsSharedContainerOrigin(BiliPaiNavKey.MainHost, Color.White),
-            ) { delivered++ }
+            group.systemReturn = ControlGroupLandingDelivery { delivered++ }
         }
         rule.waitForIdle()
         rule.runOnIdle {
@@ -121,9 +117,7 @@ class NavigationControlMotionGroupUiTest {
         }
         rule.waitUntil { delivered == 1 }
         rule.runOnIdle {
-            group.sharedReturn = NavigationControlMotionGroupState.SharedReturn(
-                SettingsSharedContainerOrigin(BiliPaiNavKey.MainHost, Color.White),
-            ) { delivered++ }
+            group.systemReturn = ControlGroupLandingDelivery { delivered++ }
             top.value = false
             top.value = true
         }
