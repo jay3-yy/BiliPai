@@ -1,5 +1,13 @@
 package com.android.purebilibili.feature.onboarding
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -17,23 +25,27 @@ import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.core.ui.components.AppPreference
 import com.android.purebilibili.core.ui.components.AppPreferenceDivider
 import com.android.purebilibili.core.ui.components.AppPreferenceGroup
 import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.feature.agreement.UserAgreementReviewDialog
 import com.android.purebilibili.feature.settings.OFFICIAL_GITHUB_URL
@@ -59,6 +71,7 @@ fun OnboardingScreen(
         )
     }
     var showUserAgreementDialog by remember { mutableStateOf(false) }
+    var showFirstLaunchSetupReplay by remember { mutableStateOf(false) }
     val contentBottomPadding = resolveBottomSafeAreaPadding(
         navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
         extraBottomPadding = 32.dp,
@@ -144,6 +157,14 @@ fun OnboardingScreen(
             item(key = "agreement_group") {
                 AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
                     AppPreference(
+                        icon = ImageVector.vectorResource(R.drawable.ms_palette_24),
+                        title = "重新体验新手引导",
+                        subtitle = "直观体验外观风格、深浅配色、液态玻璃与首页布局",
+                        onClick = { showFirstLaunchSetupReplay = true },
+                        showChevron = true,
+                    )
+                    AppPreferenceDivider()
+                    AppPreference(
                         icon = Icons.Outlined.Policy,
                         title = stringResource(R.string.onboarding_view_user_agreement),
                         subtitle = stringResource(R.string.onboarding_view_user_agreement_summary),
@@ -154,6 +175,53 @@ fun OnboardingScreen(
             }
         },
     )
+
+    if (showFirstLaunchSetupReplay) {
+        val replayReduceMotion = LocalSystemReduceMotion.current
+        val replayVisibleState = remember {
+            MutableTransitionState(replayReduceMotion).apply { targetState = true }
+        }
+        LaunchedEffect(replayVisibleState.isIdle, replayVisibleState.currentState) {
+            if (replayVisibleState.isIdle && !replayVisibleState.currentState) {
+                showFirstLaunchSetupReplay = false
+            }
+        }
+        val dismissReplay = {
+            if (replayReduceMotion) {
+                showFirstLaunchSetupReplay = false
+            } else {
+                replayVisibleState.targetState = false
+            }
+        }
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = dismissReplay,
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+        ) {
+            val enterSpec = AppMotionTokens.emphasizedSpec<Float>()
+            val exitSpec = AppMotionTokens.expressiveSpec<Float>()
+            AnimatedVisibility(
+                visibleState = replayVisibleState,
+                enter = if (replayReduceMotion) {
+                    EnterTransition.None
+                } else {
+                    fadeIn(enterSpec) + scaleIn(enterSpec, initialScale = 0.96f)
+                },
+                exit = if (replayReduceMotion) {
+                    ExitTransition.None
+                } else {
+                    fadeOut(exitSpec) + scaleOut(exitSpec, targetScale = 0.96f)
+                },
+            ) {
+                FirstLaunchSetupScreen(
+                    onFinished = dismissReplay,
+                    isReplay = true,
+                )
+            }
+        }
+    }
 
     if (showUserAgreementDialog) {
         UserAgreementReviewDialog(

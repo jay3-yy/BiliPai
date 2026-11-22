@@ -6,6 +6,7 @@ import com.android.purebilibili.feature.privacy.authenticatePrivacyAccess
 import com.android.purebilibili.core.ui.components.AppSnackbarHost
 import com.android.purebilibili.core.ui.components.AppText
 
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.collectAsState
 
 import android.animation.ValueAnimator
@@ -1440,107 +1441,22 @@ class MainActivity : AppCompatActivity() {
             val appGestureScreenshotEnabled = appThemeSettings.appGestureScreenshotEnabled
             val appScreenshotGestureMode = appThemeSettings.appScreenshotGestureMode
             val appScreenshotCaptureMode = appThemeSettings.appScreenshotCaptureMode
-            val blurIntensity by remember(context) { SettingsManager.getBlurIntensity(context) }
-                .collectAsStateWithLifecycle(initialValue = BlurIntensity.THIN)
-            val headerBlurEnabled by remember(context) { SettingsManager.getHeaderBlurEnabled(context) }
-                .collectAsStateWithLifecycle(initialValue = true)
-            val bottomBarBlurEnabled by remember(context) { SettingsManager.getBottomBarBlurEnabled(context) }
-                .collectAsStateWithLifecycle(initialValue = false)
-            val progressiveTopBlurEnabled by remember(context) { SettingsManager.getProgressiveTopBlurEnabled(context) }
-                .collectAsStateWithLifecycle(initialValue = true)
-            val progressiveTopFadeEnabled by remember(context) { SettingsManager.getProgressiveTopFadeEnabled(context) }
-                .collectAsStateWithLifecycle(initialValue = true)
-            val hapticSettings by remember(context) { SettingsManager.getHapticSettings(context) }
-                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppHapticSettings())
-            val hapticFeedbackEnabled by remember(context) { SettingsManager.getHapticFeedbackEnabled(context) }
-                .collectAsStateWithLifecycle(initialValue = true)
-            val globalTextTapCopyEnabled by remember(context) {
-                SettingsManager.getGlobalTextTapCopyEnabled(context)
-            }.collectAsStateWithLifecycle(initialValue = false)
+            val appThemeConfig by remember(context) {
+                SettingsManager.getAppThemeConfig(context)
+            }.collectAsStateWithLifecycle(initialValue = SettingsManager.DEFAULT_INITIAL_APP_THEME_CONFIG)
+            val commentDisplaySettings by remember(context) {
+                SettingsManager.getCommentDisplaySettings(context)
+            }.collectAsStateWithLifecycle(initialValue = SettingsManager.CommentDisplaySettings())
             val replyPreviewReactions: com.android.purebilibili.feature.video.viewmodel.ReplyPreviewReactionViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel()
             val replyTranslations: com.android.purebilibili.feature.video.viewmodel.ReplyTranslationViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel()
-            val subReplyPreviewLikesEnabled by remember(context) {
-                SettingsManager.getSubReplyPreviewLikesEnabled(context)
-            }.collectAsStateWithLifecycle(initialValue = true)
-            val commentIpLocationEnabled by remember(context) {
-                SettingsManager.getCommentIpLocationEnabled(context)
-            }.collectAsStateWithLifecycle(initialValue = true)
-            val detailedCommentTimeEnabled by remember(context) {
-                SettingsManager.getDetailedCommentTimeEnabled(context)
-            }.collectAsStateWithLifecycle(initialValue = false)
-            val commentReplyPreviewVisible by remember(context) {
-                SettingsManager.getCommentReplyPreviewVisible(context)
-            }.collectAsStateWithLifecycle(initialValue = true)
-            val globalDragFeedbackEnabled by remember(context) {
-                SettingsManager.getGlobalDragFeedbackEnabled(context)
-            }.collectAsStateWithLifecycle(initialValue = true)
-            val uiEntranceAnimationEnabled by remember(context) {
-                SettingsManager.getUiEntranceAnimationEnabled(context)
-            }.collectAsStateWithLifecycle(initialValue = true)
-            val runtimeVisualGuardEnabled by remember(context) {
-                SettingsManager.getRuntimeVisualGuardEnabled(context)
-            }.collectAsStateWithLifecycle(initialValue = true)
-            val nativeMiuixPopupsEnabled by remember(context) {
-                com.android.purebilibili.core.store.player.PlayerSettingsStore
-                    .getNativeMiuixPlayerPopups(context)
-            }.collectAsStateWithLifecycle(initialValue = true)
-            val liquidGlassMasterEnabled by remember(context) {
-                SettingsManager.getAndroidNativeLiquidGlassEnabled(context)
-            }.collectAsStateWithLifecycle(initialValue = true)
-            val liquidControlsUseThemeColor by remember(context) {
-                SettingsManager.getLiquidControlsUseThemeColor(context)
-            }.collectAsStateWithLifecycle(initialValue = false)
-            val liquidGlassScenes by remember(context) {
-                SettingsManager.getLiquidGlassScenes(context)
-            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppLiquidGlassSettings())
-            val liquidGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
-                com.android.purebilibili.core.ui.AppLiquidGlassScene.OTHER_COMPONENTS,
-            )
-            val liquidSwitchThumbMode by remember(context) {
-                SettingsManager.getLiquidSwitchThumbMode(context)
-            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
-            val appThemeConfig = remember(
-                liquidGlassEnabled,
-                liquidGlassMasterEnabled,
-                liquidGlassScenes,
-                liquidControlsUseThemeColor,
-                liquidSwitchThumbMode,
-                blurIntensity,
-                headerBlurEnabled,
-                bottomBarBlurEnabled,
-                progressiveTopBlurEnabled,
-                progressiveTopFadeEnabled,
-                hapticFeedbackEnabled,
-                hapticSettings,
-                globalTextTapCopyEnabled,
-                uiEntranceAnimationEnabled,
-                globalDragFeedbackEnabled,
-                runtimeVisualGuardEnabled,
-                nativeMiuixPopupsEnabled,
-            ) {
-                AppThemeConfig(
-                    liquidGlassEnabled = liquidGlassEnabled,
-                    playerGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.PLAYER_CONTROLS),
-                    popupGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.MENUS_DIALOGS),
-                    nowPlayingGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.NOW_PLAYING),
-                    liquidControlsUseThemeColor = liquidControlsUseThemeColor,
-                    liquidSwitchThumbMode = liquidSwitchThumbMode,
-                    blurIntensity = blurIntensity,
-                    headerBlurEnabled = headerBlurEnabled,
-                    bottomBarBlurEnabled = bottomBarBlurEnabled,
-                    progressiveTopBlurEnabled = progressiveTopBlurEnabled,
-                    progressiveTopFadeEnabled = progressiveTopFadeEnabled,
-                    hapticFeedbackEnabled = hapticFeedbackEnabled,
-                    hapticSettings = hapticSettings,
-                    globalTextTapCopyEnabled = globalTextTapCopyEnabled,
-                    uiEntranceAnimationEnabled = uiEntranceAnimationEnabled,
-                    globalDragFeedbackEnabled = globalDragFeedbackEnabled,
-                    runtimeVisualGuardEnabled = runtimeVisualGuardEnabled,
-                    nativeMiuixPopupsEnabled = nativeMiuixPopupsEnabled,
-                )
-            }
+            val subReplyPreviewLikesEnabled = commentDisplaySettings.subReplyPreviewLikesEnabled
+            val commentIpLocationEnabled = commentDisplaySettings.commentIpLocationEnabled
+            val detailedCommentTimeEnabled = commentDisplaySettings.detailedCommentTimeEnabled
+            val commentReplyPreviewVisible = commentDisplaySettings.commentReplyPreviewVisible
+            val liquidGlassEnabled = appThemeConfig.liquidGlassEnabled
+            val uiEntranceAnimationEnabled = appThemeConfig.uiEntranceAnimationEnabled
             
             // 4. 获取系统当前的深色状态
             val systemInDark = systemInDarkThemeSnapshot
@@ -1819,8 +1735,37 @@ class MainActivity : AppCompatActivity() {
                             ) {
                                 refreshAndroid17HandoffAvailability()
                             }
-                            //  首次启动必须同意用户协议与隐私政策后才能使用应用
-                            com.android.purebilibili.feature.agreement.UserAgreementGate {
+                            //  首次启动必须同意用户协议与隐私政策后才能使用应用；
+                            //  新同意协议后衔接主题与液态玻璃新手引导，完成后平滑进入首页。
+                            var showFirstLaunchSetup by remember { mutableStateOf(false) }
+                            com.android.purebilibili.feature.agreement.UserAgreementGate(
+                                onNewlyAgreed = {
+                                    if (!com.android.purebilibili.feature.onboarding.FirstLaunchSetupStore.isCompleted(context)) {
+                                        showFirstLaunchSetup = true
+                                    }
+                                },
+                            ) {
+                                val setupReduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
+                                val setupEnterSpec = com.android.purebilibili.core.ui.motion.AppMotionTokens.standardSpec<Float>()
+                                val setupExitSpec = com.android.purebilibili.core.ui.motion.AppMotionTokens.expressiveSpec<Float>()
+                                androidx.compose.animation.AnimatedContent(
+                                    targetState = showFirstLaunchSetup,
+                                    transitionSpec = {
+                                        if (setupReduceMotion) {
+                                            androidx.compose.animation.EnterTransition.None togetherWith
+                                                androidx.compose.animation.ExitTransition.None
+                                        } else {
+                                            androidx.compose.animation.fadeIn(setupEnterSpec) togetherWith
+                                                androidx.compose.animation.fadeOut(setupExitSpec)
+                                        }
+                                    },
+                                    label = "firstLaunchSetupTransition",
+                                ) { showingSetup ->
+                                    if (showingSetup) {
+                                        com.android.purebilibili.feature.onboarding.FirstLaunchSetupScreen(
+                                            onFinished = { showFirstLaunchSetup = false },
+                                        )
+                                    } else {
                                 com.android.purebilibili.feature.nearby.NearbyHandoffHost(
                                     miniPlayer = miniPlayerManager,
                                     onOpenVideo = { video ->
@@ -1890,6 +1835,8 @@ class MainActivity : AppCompatActivity() {
                                 mainHazeState = mainHazeState, //  传递全局 Haze 状态
                                 onBrandFeedbackBottomInsetChanged = { brandFeedbackBottomInset = it }
                                 )
+                                }
+                                    }
                                 }
                             }
                             

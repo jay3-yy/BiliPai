@@ -3,6 +3,12 @@ package com.android.purebilibili.feature.agreement
 import com.android.purebilibili.core.ui.AppContentColors
 
 import androidx.activity.compose.LocalActivity
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -43,6 +49,8 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AppDialogAction
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppCard
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
@@ -59,7 +67,10 @@ import kotlinx.coroutines.launch
  * The screen follows the active app theme and branches on dark/light.
  */
 @Composable
-fun UserAgreementGate(content: @Composable () -> Unit) {
+fun UserAgreementGate(
+    onNewlyAgreed: () -> Unit = {},
+    content: @Composable () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var accepted by remember { mutableStateOf(UserAgreementStore.isAccepted(context)) }
@@ -68,41 +79,58 @@ fun UserAgreementGate(content: @Composable () -> Unit) {
     var analyticsEnabled by remember { mutableStateOf(initialChoice.analyticsEnabled) }
     var isSaving by remember { mutableStateOf(false) }
 
-    if (accepted) {
-        content()
-    } else {
-        UserAgreementGateScreen(
-            crashTrackingEnabled = crashTrackingEnabled,
-            onCrashTrackingChange = { crashTrackingEnabled = it },
-            analyticsEnabled = analyticsEnabled,
-            onAnalyticsChange = { analyticsEnabled = it },
-            isSaving = isSaving,
-            onAgree = {
-                if (isSaving) return@UserAgreementGateScreen
-                isSaving = true
-                scope.launch {
-                    try {
-                        UserAgreementStore.accept(context)
-                        SettingsManager.setCrashTrackingEnabled(context, crashTrackingEnabled)
-                        SettingsManager.setAnalyticsEnabled(context, analyticsEnabled)
-                        SettingsManager.setCrashTrackingConsentShown(context, true)
-                        val app = context.applicationContext as? PureApplication
-                        if (app != null) {
-                            app.onUserAgreementAccepted(
-                                crashTrackingEnabled = crashTrackingEnabled,
-                                analyticsEnabled = analyticsEnabled,
-                            )
-                        } else {
-                            CrashReporter.setEnabled(crashTrackingEnabled)
-                            AnalyticsHelper.setEnabled(analyticsEnabled)
+    val reduceMotion = LocalSystemReduceMotion.current
+    val enterSpec = AppMotionTokens.emphasizedSpec<Float>()
+    val exitSpec = AppMotionTokens.expressiveSpec<Float>()
+
+    AnimatedContent(
+        targetState = accepted,
+        transitionSpec = {
+            if (reduceMotion) {
+                EnterTransition.None togetherWith ExitTransition.None
+            } else {
+                fadeIn(enterSpec) togetherWith fadeOut(exitSpec)
+            }
+        },
+        label = "userAgreementGateTransition",
+    ) { isAccepted ->
+        if (isAccepted) {
+            content()
+        } else {
+            UserAgreementGateScreen(
+                crashTrackingEnabled = crashTrackingEnabled,
+                onCrashTrackingChange = { crashTrackingEnabled = it },
+                analyticsEnabled = analyticsEnabled,
+                onAnalyticsChange = { analyticsEnabled = it },
+                isSaving = isSaving,
+                onAgree = {
+                    if (isSaving) return@UserAgreementGateScreen
+                    isSaving = true
+                    scope.launch {
+                        try {
+                            UserAgreementStore.accept(context)
+                            SettingsManager.setCrashTrackingEnabled(context, crashTrackingEnabled)
+                            SettingsManager.setAnalyticsEnabled(context, analyticsEnabled)
+                            SettingsManager.setCrashTrackingConsentShown(context, true)
+                            val app = context.applicationContext as? PureApplication
+                            if (app != null) {
+                                app.onUserAgreementAccepted(
+                                    crashTrackingEnabled = crashTrackingEnabled,
+                                    analyticsEnabled = analyticsEnabled,
+                                )
+                            } else {
+                                CrashReporter.setEnabled(crashTrackingEnabled)
+                                AnalyticsHelper.setEnabled(analyticsEnabled)
+                            }
+                            onNewlyAgreed()
+                            accepted = true
+                        } finally {
+                            isSaving = false
                         }
-                        accepted = true
-                    } finally {
-                        isSaving = false
                     }
-                }
-            },
-        )
+                },
+            )
+        }
     }
 }
 

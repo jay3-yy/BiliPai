@@ -31,9 +31,11 @@ internal class AppStartupOrchestrator(
 
         val idleTasks = deferredTasks.filter { it.thread == StartupThread.MAIN_IDLE }
         if (idleTasks.isNotEmpty()) {
+            val pendingIdleTasks = ArrayDeque(idleTasks)
             Looper.myQueue().addIdleHandler {
-                idleTasks.forEach(taskRunner)
-                false
+                val nextTask = pendingIdleTasks.removeFirstOrNull() ?: return@addIdleHandler false
+                taskRunner(nextTask)
+                pendingIdleTasks.isNotEmpty()
             }
         }
 

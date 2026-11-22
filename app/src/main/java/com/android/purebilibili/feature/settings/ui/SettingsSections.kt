@@ -1525,7 +1525,7 @@ fun DataStorageSection(
             icon = settingsShareVisual.icon,
             iconPainter = settingsShareVisual.iconResId?.let { painterResource(id = it) },
             title = settingsDestinationCopy(SettingsSearchTarget.SETTINGS_SHARE).title,
-            value = settingsDestinationCopy(SettingsSearchTarget.SETTINGS_SHARE).summary,
+            subtitle = settingsDestinationCopy(SettingsSearchTarget.SETTINGS_SHARE).summary,
             onClick = onSettingsShareClick,
             iconTint = siblingTints[0]
         )
@@ -1535,7 +1535,7 @@ fun DataStorageSection(
             icon = webDavVisual.icon,
             iconPainter = webDavVisual.iconResId?.let { painterResource(id = it) },
             title = settingsDestinationCopy(SettingsSearchTarget.WEBDAV_BACKUP).title,
-            value = settingsDestinationCopy(SettingsSearchTarget.WEBDAV_BACKUP).summary,
+            subtitle = settingsDestinationCopy(SettingsSearchTarget.WEBDAV_BACKUP).summary,
             onClick = onWebDavBackupClick,
             iconTint = siblingTints[1]
         )

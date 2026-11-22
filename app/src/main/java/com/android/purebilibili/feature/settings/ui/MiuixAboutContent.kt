@@ -94,7 +94,7 @@ internal fun miuixAboutBackground(
     val background = MiuixTheme.colorScheme.background
     val dark = background.luminance() < 0.5f
     val palette = when (settings.mode) {
-        AboutBackgroundMode.DEFAULT -> return animatedMiuixAboutGradient(
+        AboutBackgroundMode.DEFAULT -> return miuixAmbientGradientBackground(
             background = background,
             dark = dark,
             scrollProgress = scrollProgress,
@@ -142,11 +142,11 @@ internal fun miuixAboutBackground(
 private const val ABOUT_GRADIENT_CYCLE_NANOS = 7_000_000_000L
 
 @Composable
-private fun animatedMiuixAboutGradient(
+internal fun miuixAmbientGradientBackground(
     background: Color,
     dark: Boolean,
-    scrollProgress: () -> Float,
-    motionAllowed: Boolean,
+    scrollProgress: () -> Float = { 0f },
+    motionAllowed: Boolean = true,
 ): Modifier {
     var inViewport by remember { mutableStateOf(false) }
     val phase = remember { mutableFloatStateOf(0f) }
