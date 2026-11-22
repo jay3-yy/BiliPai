@@ -544,12 +544,15 @@ internal data class SearchHighlightedTextSegment(
     val highlighted: Boolean
 )
 
+private val SEARCH_HIGHLIGHT_EM_REGEX =
+    Regex("<em[^>]*>(.*?)</em>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+private val SEARCH_HTML_TAG_REGEX = Regex("<.*?>")
+
 internal fun resolveSearchHighlightedTextSegments(rawTitle: String): List<SearchHighlightedTextSegment> {
     if (rawTitle.isBlank()) return emptyList()
     val segments = mutableListOf<SearchHighlightedTextSegment>()
-    val regex = Regex("<em[^>]*>(.*?)</em>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
     var cursor = 0
-    regex.findAll(rawTitle).forEach { match ->
+    SEARCH_HIGHLIGHT_EM_REGEX.findAll(rawTitle).forEach { match ->
         if (match.range.first > cursor) {
             val plain = decodeSearchHighlightedText(rawTitle.substring(cursor, match.range.first))
             if (plain.isNotEmpty()) {
@@ -572,7 +575,7 @@ internal fun resolveSearchHighlightedTextSegments(rawTitle: String): List<Search
 }
 
 private fun decodeSearchHighlightedText(raw: String): String {
-    return HtmlEntityUtils.unescape(raw.replace(Regex("<.*?>"), ""))
+    return HtmlEntityUtils.unescape(raw.replace(SEARCH_HTML_TAG_REGEX, ""))
 }
 
 internal data class SearchTypeTabLayoutSpec(
@@ -1641,7 +1644,7 @@ fun SearchScreen(
                                 .then(searchChromeSource?.modifier ?: Modifier)
                                 .globalWallpaperAwareBackground()
                                 .verticalPriorityHorizontalPagerSwipe(searchPagerState),
-                            beyondViewportPageCount = 1,
+                            beyondViewportPageCount = 0,
                             key = { page -> resolveSearchTypeForPagerPage(page, searchTabs) },
                         ) { page ->
                             val targetSearchType = resolveSearchTypeForPagerPage(page, searchTabs)

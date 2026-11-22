@@ -1681,7 +1681,7 @@ internal fun DynamicList(
             items(
                 count = com.android.purebilibili.feature.dynamic.components.DYNAMIC_FEED_SKELETON_ITEM_COUNT,
                 key = { index -> "dynamic_skeleton_$index" },
-                contentType = { "dynamic_card" }
+                contentType = { "dynamic_skeleton" }
             ) { index ->
                 com.android.purebilibili.feature.dynamic.components.DynamicFeedSkeletonCard(
                     modifier = when {
@@ -1719,7 +1719,7 @@ internal fun DynamicList(
             items(
                 count = oldContentDividerIndex,
                 key = { index -> dynamicGridKeys[index] },
-                contentType = { "dynamic_card" }
+                contentType = { index -> "dynamic_card_${filteredItems[index].type}" }
             ) { index ->
                 Box(modifier = Modifier.animateItem()) {
                     dynamicCard(filteredItems[index])
@@ -1738,7 +1738,9 @@ internal fun DynamicList(
                     val index = oldContentDividerIndex + offset
                     dynamicGridKeys[index]
                 },
-                contentType = { "dynamic_card" }
+                contentType = { offset ->
+                    "dynamic_card_${filteredItems[oldContentDividerIndex + offset].type}"
+                }
             ) { offset ->
                 Box(modifier = Modifier.animateItem()) {
                     dynamicCard(filteredItems[oldContentDividerIndex + offset])
@@ -1748,7 +1750,7 @@ internal fun DynamicList(
             items(
                 count = filteredItems.size,
                 key = { index -> dynamicGridKeys[index] },
-                contentType = { "dynamic_card" }
+                contentType = { index -> "dynamic_card_${filteredItems[index].type}" }
             ) { index ->
                 Box(modifier = Modifier.animateItem()) {
                     dynamicCard(filteredItems[index])

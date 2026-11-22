@@ -88,17 +88,25 @@ class BiliPaiForegroundReturnPagerFrameTimingBenchmark {
     }
 
     private fun MacrobenchmarkScope.clickBottomTab(label: String) {
-        val byDesc = device.wait(Until.findObject(By.desc(label)), 2_000)
-        if (byDesc != null) {
-            byDesc.click()
-            device.waitForIdle()
-            return
+        val candidates = if (label == "首页" || label == "推荐") {
+            listOf("推荐", "首页")
+        } else {
+            listOf(label)
         }
-
-        val byText = device.wait(Until.findObject(By.text(label)), 2_000)
-        if (byText != null) {
-            byText.click()
-            device.waitForIdle()
+        for (candidate in candidates) {
+            val byDesc = device.wait(Until.findObject(By.desc(candidate)), 1_500)
+            if (byDesc != null) {
+                byDesc.click()
+                device.waitForIdle()
+                return
+            }
+            val byText = device.findObjects(By.text(candidate)).lastOrNull()
+                ?: device.wait(Until.findObject(By.text(candidate)), 1_500)
+            if (byText != null) {
+                byText.click()
+                device.waitForIdle()
+                return
+            }
         }
     }
 

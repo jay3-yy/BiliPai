@@ -935,13 +935,13 @@ fun DynamicCardV2(
         }
 
         //  风险提示条（module_dispute：如“视频内含有危险行为，请勿模仿”，点击打开 jump_url）
-        val showDispute by androidx.compose.runtime.remember(context) {
-            com.android.purebilibili.core.store.ContentDisplaySettings.observe(
-                context, com.android.purebilibili.core.store.ContentDisplaySettings.DYNAMIC_WARNING
-            )
-        }.collectAsStateWithLifecycle(initialValue = false)
-        item.modules.module_dispute?.takeIf { showDispute }?.let { dispute ->
-            if (shouldShowDynamicDispute(dispute)) {
+        item.modules.module_dispute?.takeIf(::shouldShowDynamicDispute)?.let { dispute ->
+            val showDispute by androidx.compose.runtime.remember(context) {
+                com.android.purebilibili.core.store.ContentDisplaySettings.observe(
+                    context, com.android.purebilibili.core.store.ContentDisplaySettings.DYNAMIC_WARNING
+                )
+            }.collectAsStateWithLifecycle(initialValue = false)
+            if (showDispute) {
                 val disputeColors = resolveAccessibleContainerColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
                     contentColor = AppContentColors.secondaryText(),

@@ -129,7 +129,7 @@ fun ZoomableImage(
                 targetValue = 1f,
                 animationSpec = tween(
                     durationMillis = if (reduceMotion) 0 else durationMillis,
-                    easing = CubicBezierEasing(0f, 0f, 0.58f, 1f),
+                    easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.StandardEaseOut,
                 ),
             ) {
                 scale = startScale + (targetScale - startScale) * value

@@ -930,13 +930,10 @@ fun CommonListScreen(
             historyViewModel.searchHistory(searchQuery)
         }
     }
-    // [New] 动态顶栏高度测量 (最准确的方式)
+    // [New] 动态顶栏高度测量：始终使用展开态高度作为列表顶部留白，避免折叠滚动每帧布局回写组合。
     var headerHeightPx by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    var visibleHeaderHeightPx by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var fixedTopBarHeightPx by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    val headerHeightDp = with(LocalDensity.current) {
-        (if (supportsCollapsibleCommonListHeader) visibleHeaderHeightPx else headerHeightPx).toDp()
-    }
+    val headerHeightDp = with(LocalDensity.current) { headerHeightPx.toDp() }
     var commonListHeaderOffsetPx by remember { mutableFloatStateOf(0f) }
     var commonListHeaderSettleJob by remember { androidx.compose.runtime.mutableStateOf<Job?>(null) }
     var commonListHeaderSettleTargetPx by remember { mutableFloatStateOf(0f) }
@@ -1911,9 +1908,11 @@ fun CommonListScreen(
                     }
                     .then(topBarBackgroundModifier)
                     .onGloballyPositioned { coordinates ->
-                        visibleHeaderHeightPx = coordinates.size.height
-                        if (!supportsCollapsibleCommonListHeader || commonListHeaderOffsetPx >= -0.5f) {
-                            headerHeightPx = coordinates.size.height
+                        val measuredHeight = coordinates.size.height
+                        if ((!supportsCollapsibleCommonListHeader || commonListHeaderOffsetPx >= -0.5f) &&
+                            headerHeightPx != measuredHeight
+                        ) {
+                            headerHeightPx = measuredHeight
                         }
                     }
             ) {
@@ -1951,7 +1950,9 @@ fun CommonListScreen(
                             transitionEnabled = favoriteCollectionSharedTransitionEnabled
                         )
                             .onGloballyPositioned { coordinates ->
-                                fixedTopBarHeightPx = coordinates.size.height
+                                if (fixedTopBarHeightPx != coordinates.size.height) {
+                                    fixedTopBarHeightPx = coordinates.size.height
+                                }
                             }
                             // 仅历史入口接管顶部 inset，并由 padding 消费，避免原生顶栏重复留白。
                             .then(if (historyViewModel != null) {

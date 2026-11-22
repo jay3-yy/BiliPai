@@ -48,8 +48,10 @@ internal fun SearchSuggestTag.toSearchSuggestionUiModel(): SearchSuggestionUiMod
     )
 }
 
+private val SEARCH_UI_HTML_TAG_REGEX = Regex("<.*?>")
+
 internal fun String.stripSearchMarkup(): String {
-    return replace(Regex("<.*?>"), "")
+    return replace(SEARCH_UI_HTML_TAG_REGEX, "")
         .replace("&quot;", "\"")
         .replace("&amp;", "&")
         .replace("&lt;", "<")

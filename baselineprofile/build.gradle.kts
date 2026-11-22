@@ -55,6 +55,15 @@ kotlin {
     }
 }
 
+// AGP 9 testedApks configurations omit TargetJvmEnvironment, causing KMP miuix transitive
+// modules (miuix-core / miuix-material) to fall back to desktop variants.
+configurations.matching { it.name.endsWith("TestedApks") }.configureEach {
+    attributes.attribute(
+        org.gradle.api.attributes.java.TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE,
+        objects.named(org.gradle.api.attributes.java.TargetJvmEnvironment.ANDROID),
+    )
+}
+
 dependencies {
     // 与 androidx.baselineprofile 插件 1.5.0 对齐（1.4.1 与 AGP 9 不兼容线配套）
     implementation("androidx.benchmark:benchmark-macro-junit4:1.5.0")

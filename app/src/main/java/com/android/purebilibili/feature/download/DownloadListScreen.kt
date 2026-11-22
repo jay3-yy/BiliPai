@@ -102,8 +102,12 @@ fun DownloadListScreen(
     val tasks by DownloadManager.tasks.collectAsStateWithLifecycle()
     val downloadsInitialized by DownloadManager.isInitialized.collectAsStateWithLifecycle()
     var isNetworkAvailable by remember(context) { mutableStateOf(NetworkUtils.isNetworkAvailable(context)) }
-    val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsStateWithLifecycle(initialValue = null)
-    val downloadExportTreeUri by SettingsManager.getDownloadExportTreeUri(context).collectAsStateWithLifecycle(initialValue = null)
+    val customDownloadPath by remember(context) {
+        SettingsManager.getDownloadPath(context)
+    }.collectAsStateWithLifecycle(initialValue = null)
+    val downloadExportTreeUri by remember(context) {
+        SettingsManager.getDownloadExportTreeUri(context)
+    }.collectAsStateWithLifecycle(initialValue = null)
     val taskList = remember(tasks) { tasks.values.toList().sortedByDescending { it.createdAt } }
     var pendingDeleteTask by remember { mutableStateOf<com.android.purebilibili.feature.download.DownloadTask?>(null) }
     var dissolvingTaskIds by remember { mutableStateOf(setOf<String>()) }

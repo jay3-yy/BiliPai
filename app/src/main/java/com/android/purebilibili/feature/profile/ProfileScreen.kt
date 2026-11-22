@@ -1194,7 +1194,10 @@ private fun ProfileSkinVideoBackground(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val activePlayback = playbackEnabled && animationGate.active
     val repeatMode = remember(playMode) { resolveProfileSkinVideoRepeatMode(playMode) }
     val player = remember(videoPath) {
         com.android.purebilibili.core.lifecycle.AbandonableResource(
@@ -1212,36 +1215,29 @@ private fun ProfileSkinVideoBackground(
         }
     }
 
-    DisposableEffect(lifecycleOwner, player, playbackEnabled) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> if (playbackEnabled) player.play()
-                Lifecycle.Event.ON_STOP -> player.pause()
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        if (playbackEnabled && lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+    DisposableEffect(player, activePlayback) {
+        if (activePlayback) {
             player.play()
         } else {
             player.pause()
         }
         onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
             player.pause()
         }
     }
 
     SideEffect {
         player.repeatMode = repeatMode
-        if (!playbackEnabled) player.pause()
+        if (!activePlayback) player.pause()
     }
 
     AndroidView(
         factory = { viewContext -> ProfileSkinVideoView(viewContext).apply { this.player = player } },
         update = { it.player = player },
         onRelease = { it.player = null },
-        modifier = modifier.clipToBounds(),
+        modifier = modifier
+            .then(animationGate.modifier)
+            .clipToBounds(),
     )
 }
 

@@ -601,10 +601,7 @@ fun PartitionContent(
     var sideRailVideoPushTargetPx by remember { mutableFloatStateOf(0f) }
     val sideRailVideoPushPx = animateFloatAsState(
         targetValue = sideRailVideoPushTargetPx,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
+        animationSpec = com.android.purebilibili.core.ui.motion.softLandingSpring(),
         label = "partitionVideoListPush"
     )
 

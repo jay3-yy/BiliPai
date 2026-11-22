@@ -171,14 +171,22 @@ fun OnboardingBottomSheet(
                             .fillMaxWidth()
                             .verticalPriorityHorizontalPagerSwipe(pagerState),
                     ) { page ->
-                        when (page) {
-                            // 传入局部 Haze 状态给内部组件使用 (如果需要)
-                            // 或者在这个场景下，内部列表项的模糊可能不需要了，或者可以改为普通的半透明
-                            // 这里我们暂时保留 localHazeState 传递，虽然它现在没有连接到 Haze 源
-                            // TODO: 如果需要内部元素再模糊背景，需要再套一层 Haze
-                            0 -> WelcomePage(hazeState = localHazeState)
-                            1 -> AppearanceSettingsPage(hazeState = localHazeState)
-                            2 -> PlaybackSettingsPage(hazeState = localHazeState)
+                        val pageVisualWorkActive = remember(pagerState, page) {
+                            derivedStateOf {
+                                pagerState.settledPage == page && !pagerState.isScrollInProgress
+                            }
+                        }
+                        CompositionLocalProvider(
+                            com.android.purebilibili.core.ui.LocalVisualWorkAllowed provides (
+                                com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current &&
+                                    pageVisualWorkActive.value
+                            ),
+                        ) {
+                            when (page) {
+                                0 -> WelcomePage(hazeState = localHazeState)
+                                1 -> AppearanceSettingsPage(hazeState = localHazeState)
+                                2 -> PlaybackSettingsPage(hazeState = localHazeState)
+                            }
                         }
                     }
 
@@ -320,17 +328,21 @@ private fun WelcomePage(hazeState: HazeState) {
         verticalArrangement = Arrangement.Center
     ) {
         //  Lottie 欢迎动画 - 动画项 0
+        val welcomeGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
         val welcomeComposition by rememberLottieComposition(
             LottieCompositionSpec.Url("https://assets9.lottiefiles.com/packages/lf20_touohxv0.json") // 欢迎/庆祝动画
         )
-        val welcomeProgress by animateLottieCompositionAsState(
+        val welcomeProgress = animateLottieCompositionAsState(
             composition = welcomeComposition,
-            iterations = LottieConstants.IterateForever
+            iterations = LottieConstants.IterateForever,
+            isPlaying = welcomeGate.active,
+            restartOnPlay = false,
         )
 
         Box(
             modifier = Modifier
                 .size(120.dp)
+                .then(welcomeGate.modifier)
                 .graphicsLayer {
                     alpha = animatedItems[0].value
                     scaleX = 0.5f + animatedItems[0].value * 0.5f
@@ -349,7 +361,7 @@ private fun WelcomePage(hazeState: HazeState) {
             //  Lottie 装饰动画 (环绕效果)
             LottieAnimation(
                 composition = welcomeComposition,
-                progress = { welcomeProgress },
+                progress = { welcomeProgress.value },
                 modifier = Modifier.size(120.dp)
             )
         }
@@ -461,24 +473,31 @@ private fun AppearanceSettingsPage(hazeState: HazeState) {
     }
 
     //  图标呼吸动画
-    val infiniteTransition = rememberInfiniteTransition(label = "iconPulse")
-    val iconScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "iconScale"
-    )
+    val appearanceGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val iconScale = if (appearanceGate.active) {
+        val infiniteTransition = rememberInfiniteTransition(label = "iconPulse")
+        infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.05f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1500),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "iconScale"
+        )
+    } else {
+        remember { mutableFloatStateOf(1f) }
+    }
 
     //  Lottie 外观主题动画 - 彩虹渐变
     val themeComposition by rememberLottieComposition(
         LottieCompositionSpec.Url(LottieUrls.THEME_COLORS)
     )
-    val themeProgress by animateLottieCompositionAsState(
+    val themeProgress = animateLottieCompositionAsState(
         composition = themeComposition,
-        iterations = LottieConstants.IterateForever
+        iterations = LottieConstants.IterateForever,
+        isPlaying = appearanceGate.active,
+        restartOnPlay = false,
     )
 
     Column(
@@ -494,16 +513,18 @@ private fun AppearanceSettingsPage(hazeState: HazeState) {
         Box(
             modifier = Modifier
                 .size(100.dp)
+                .then(appearanceGate.modifier)
                 .graphicsLayer {
+                    val pulse = iconScale.value
                     alpha = animatedItems[0].value
-                    scaleX = iconScale * (0.5f + animatedItems[0].value * 0.5f)
-                    scaleY = iconScale * (0.5f + animatedItems[0].value * 0.5f)
+                    scaleX = pulse * (0.5f + animatedItems[0].value * 0.5f)
+                    scaleY = pulse * (0.5f + animatedItems[0].value * 0.5f)
                 },
             contentAlignment = Alignment.Center
         ) {
             LottieAnimation(
                 composition = themeComposition,
-                progress = { themeProgress },
+                progress = { themeProgress.value },
                 modifier = Modifier.size(100.dp)
             )
         }
@@ -599,24 +620,31 @@ private fun PlaybackSettingsPage(hazeState: HazeState) {
     }
 
     //  图标呼吸动画
-    val infiniteTransition = rememberInfiniteTransition(label = "iconPulse")
-    val iconScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "iconScale"
-    )
+    val playbackGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val iconScale = if (playbackGate.active) {
+        val infiniteTransition = rememberInfiniteTransition(label = "iconPulse")
+        infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.05f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1500),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "iconScale"
+        )
+    } else {
+        remember { mutableFloatStateOf(1f) }
+    }
 
     //  Lottie 播放动画 - 视频播放按钮
     val playComposition by rememberLottieComposition(
         LottieCompositionSpec.Url(LottieUrls.VIDEO_PLAY)
     )
-    val playProgress by animateLottieCompositionAsState(
+    val playProgress = animateLottieCompositionAsState(
         composition = playComposition,
-        iterations = LottieConstants.IterateForever
+        iterations = LottieConstants.IterateForever,
+        isPlaying = playbackGate.active,
+        restartOnPlay = false,
     )
 
     Column(
@@ -632,16 +660,18 @@ private fun PlaybackSettingsPage(hazeState: HazeState) {
         Box(
             modifier = Modifier
                 .size(100.dp)
+                .then(playbackGate.modifier)
                 .graphicsLayer {
+                    val pulse = iconScale.value
                     alpha = animatedItems[0].value
-                    scaleX = iconScale * (0.5f + animatedItems[0].value * 0.5f)
-                    scaleY = iconScale * (0.5f + animatedItems[0].value * 0.5f)
+                    scaleX = pulse * (0.5f + animatedItems[0].value * 0.5f)
+                    scaleY = pulse * (0.5f + animatedItems[0].value * 0.5f)
                 },
             contentAlignment = Alignment.Center
         ) {
             LottieAnimation(
                 composition = playComposition,
-                progress = { playProgress },
+                progress = { playProgress.value },
                 modifier = Modifier.size(100.dp)
             )
         }
@@ -726,24 +756,31 @@ private fun FeatureBadge(
     animationProgress: Float = 1f
 ) {
     //  徽章呼吸动画
-    val infiniteTransition = rememberInfiniteTransition(label = "badgePulse")
-    val badgeScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "badgeScale"
-    )
+    val badgeGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val badgeScale = if (badgeGate.active) {
+        val infiniteTransition = rememberInfiniteTransition(label = "badgePulse")
+        infiniteTransition.animateFloat(
+            initialValue = 1f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2000),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "badgeScale"
+        )
+    } else {
+        remember { mutableFloatStateOf(1f) }
+    }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.graphicsLayer {
-            alpha = animationProgress
-            scaleX = 0.5f + animationProgress * 0.5f
-            scaleY = 0.5f + animationProgress * 0.5f
-        }
+        modifier = Modifier
+            .then(badgeGate.modifier)
+            .graphicsLayer {
+                alpha = animationProgress
+                scaleX = 0.5f + animationProgress * 0.5f
+                scaleY = 0.5f + animationProgress * 0.5f
+            }
     ) {
         Box(
             modifier = Modifier.size(56.dp),
@@ -754,8 +791,9 @@ private fun FeatureBadge(
                 modifier = Modifier
                     .size(64.dp)
                     .graphicsLayer {
-                        scaleX = badgeScale
-                        scaleY = badgeScale
+                        val scale = badgeScale.value
+                        scaleX = scale
+                        scaleY = scale
                     }
                     .blur(12.dp)
                     .background(
@@ -773,8 +811,9 @@ private fun FeatureBadge(
                 modifier = Modifier
                     .size(56.dp)
                     .graphicsLayer {
-                        scaleX = badgeScale
-                        scaleY = badgeScale
+                        val scale = badgeScale.value
+                        scaleX = scale
+                        scaleY = scale
                     }
                     .background(
                         color = opaqueCompositeOver(

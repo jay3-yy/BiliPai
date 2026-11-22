@@ -543,13 +543,13 @@ private fun CascadeSidebarItem(
         visible = true
     }
 
-    val offsetY by animateFloatAsState(
+    val offsetYState = animateFloatAsState(
         targetValue = if (visible) 0f else 20f,
         animationSpec = AppMotionTokens.emphasizedSpec(),
         label = "cascadeOffsetY"
     )
 
-    val alpha by animateFloatAsState(
+    val alphaState = animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = AppMotionTokens.standardSpec(),
         label = "cascadeAlpha"
@@ -558,8 +558,8 @@ private fun CascadeSidebarItem(
     Box(
         modifier = itemModifier
             .graphicsLayer {
-                translationY = offsetY
-                this.alpha = alpha
+                translationY = offsetYState.value
+                this.alpha = alphaState.value
             }
     ) {
         content()

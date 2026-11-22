@@ -205,16 +205,19 @@ private fun DrawGridImage(
         contentAlignment = Alignment.Center
     ) {
         if (imageUrl.isNotEmpty()) {
-            PageAwareAsyncImage(
-                model = coil3.request.ImageRequest.Builder(context)
+            val imageRequest = remember(context, imageUrl) {
+                coil3.request.ImageRequest.Builder(context)
                     .data(imageUrl)
                     // Reuse this exact source identity as the preview's placeholder key.
                     .memoryCacheKey(imageUrl)
-                    .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
+                    .httpHeaders(DRAW_GRID_BILIBILI_REFERER_HEADERS)
                     // The Hero flight is the only transition; don't fade the source
                     // again if its list item is recreated while the preview is open.
                     .crossfade(false)
-                    .build(),
+                    .build()
+            }
+            PageAwareAsyncImage(
+                model = imageRequest,
                 imageLoader = if (isGif) gifImageLoader else defaultImageLoader,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
@@ -299,3 +302,6 @@ private fun DrawGridImage(
         }
     }
 }
+
+private val DRAW_GRID_BILIBILI_REFERER_HEADERS: NetworkHeaders =
+    NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build()

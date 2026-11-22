@@ -13,7 +13,7 @@ import androidx.compose.runtime.remember
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 
-internal val ProfileHeaderEaseOutQuint = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
+internal val ProfileHeaderEaseOutQuint = com.android.purebilibili.core.ui.motion.AppMotionEasing.EaseOutQuint
 
 internal fun resolveProfileHeaderExpandedFraction(offsetPx: Float, collapseRangePx: Float): Float =
     if (collapseRangePx <= 0f) 1f else (1f - offsetPx / collapseRangePx).coerceIn(0f, 1f)
