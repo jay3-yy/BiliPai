@@ -486,7 +486,7 @@ class SettingsSearchPolicyTest {
     @Test
     fun allRestoredCommentSettingsHaveConcreteSearchDestinations() {
         val restored = settingsItemDirectory.filter { it.page == SettingsRootCategory.COMMENTS_CONTENT }
-        assertEquals(18, restored.size)
+        assertEquals(17, restored.size)
         restored.forEach { item ->
             val result = resolveSettingsSearchResults(item.title)
                 .first { it.settingId == item.settingId }
@@ -498,6 +498,20 @@ class SettingsSearchPolicyTest {
         assertTrue(resolveSettingsSearchResults("隐藏三连").any {
             it.settingId == "playback.hide_interactive_command_danmaku"
         })
+    }
+
+    @Test
+    fun queryByRemovedDanmakuCloudSync_returnsNoSettingResult() {
+        listOf("同步弹幕设置到账号", "弹幕云同步", "弹幕设置同步").forEach { query ->
+            val results = resolveSettingsSearchResults(query, Int.MAX_VALUE)
+            assertTrue(
+                results.none {
+                    it.settingId == "playback.danmaku_cloud_sync_enabled" ||
+                        it.focusId == SettingsSearchFocusIds.PLAYBACK_INTERACTION
+                },
+                "Unexpected result for removed setting query: $query -> $results"
+            )
+        }
     }
 
 }

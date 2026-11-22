@@ -14,11 +14,8 @@ import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.PortraitDanmakuDisplayAreaMode
 import com.android.purebilibili.feature.video.danmaku.DanmakuBlockRuleSections
-import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncStatus
-import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 import com.android.purebilibili.feature.video.danmaku.DanmakuBlockRuleImportResult
 import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRuleImport
-import com.android.purebilibili.feature.video.danmaku.resolveDanmakuCloudSyncToggleSubtitle
 import com.android.purebilibili.feature.video.danmaku.mergeDanmakuBlockRuleSections
 import com.android.purebilibili.feature.video.danmaku.normalizeDanmakuRegexManagerInput
 import com.android.purebilibili.feature.video.danmaku.normalizeDanmakuUserHashManagerInput
@@ -155,20 +152,6 @@ internal fun resolveDanmakuSettingsPanelSurfaceColors(
     )
 }
 
-internal fun resolveDanmakuSyncStatusBadgeText(syncUiState: DanmakuCloudSyncUiState): String {
-    return when (syncUiState.status) {
-        DanmakuCloudSyncStatus.IDLE -> "未同步"
-        DanmakuCloudSyncStatus.PENDING -> "待同步"
-        DanmakuCloudSyncStatus.SYNCING -> "同步中"
-        DanmakuCloudSyncStatus.SUCCESS -> "已同步"
-        DanmakuCloudSyncStatus.FAILURE -> "同步失败"
-    }
-}
-
-internal fun shouldShowDanmakuSyncRetry(status: DanmakuCloudSyncStatus): Boolean {
-    return status == DanmakuCloudSyncStatus.FAILURE
-}
-
 internal fun resolveDanmakuBlockManagerSections(blockRulesRaw: String): DanmakuBlockRuleSections {
     return partitionDanmakuBlockRules(parseDanmakuBlockRules(blockRulesRaw))
 }
@@ -299,14 +282,11 @@ fun DanmakuSettingsPanel(
     hideInteractiveCommands: Boolean = false,
     showBlockRuleEditor: Boolean = false,
     showSmartOcclusionSection: Boolean = false,
-    showSyncSection: Boolean = false,
-    cloudSyncEnabled: Boolean = true,
     blockRulesRaw: String = "",
     smartOcclusion: Boolean = true,
     fullscreenWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
     portraitDisplayAreaMode: PortraitDanmakuDisplayAreaMode =
         PortraitDanmakuDisplayAreaMode.SCREEN_TOP,
-    syncUiState: DanmakuCloudSyncUiState = DanmakuCloudSyncUiState(),
     onSliderPreview: ((DanmakuSliderParameter, Float) -> Unit)? = null,
     onOpacityChange: (Float) -> Unit,
     onFontScaleChange: (Float) -> Unit,
@@ -334,8 +314,6 @@ fun DanmakuSettingsPanel(
     onSmartOcclusionChange: (Boolean) -> Unit = {},
     onFullscreenWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
     onPortraitDisplayAreaModeChange: (PortraitDanmakuDisplayAreaMode) -> Unit = {},
-    onCloudSyncEnabledChange: (Boolean) -> Unit = {},
-    onSyncNowClick: () -> Unit = {},
     onShowDanmakuPool: (() -> Unit)? = null,
     inlineFontScale: Float = fontScale,
     fullscreenFontScale: Float = fontScale,
@@ -361,7 +339,6 @@ fun DanmakuSettingsPanel(
     val colorScheme = MaterialTheme.colorScheme
     val panelColors = rememberDanmakuPanelColors(colorScheme)
     val isFullscreenStyle = false
-    val syncShape = AppShapes.container(ContainerLevel.Field)
     val showSectionBasic = true
     val showSectionAdvanced = true
     val showSectionBlocking = true
@@ -448,37 +425,13 @@ fun DanmakuSettingsPanel(
                         DanmakuSliderItem("滚动弹幕时长", scrollDurationSeconds, 1f..50f, displayValue = { "$it 秒" }, onValueChange = onScrollDurationSecondsChange, colors = panelColors, resetValue = 7f, steps = 48, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.SCROLL_DURATION, next) } })
                         DanmakuSliderItem("静态弹幕时长", staticDurationSeconds, 1f..50f, displayValue = { "$it 秒" }, onValueChange = onStaticDurationSecondsChange, colors = panelColors, resetValue = 4f, steps = 48, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.STATIC_DURATION, next) } })
                         DanmakuSliderItem("弹幕行高", lineHeight, 1f..3f, displayValue = { "$it" }, onValueChange = onLineHeightChange, colors = panelColors, resetValue = 1.6f, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.LINE_HEIGHT, next) } })
-                        DanmakuSettingsAction("高级设置与账号同步", onClick = { showExtraSettings = true })
+                        DanmakuSettingsAction("高级设置", onClick = { showExtraSettings = true })
                     } else if (glass) {
                         if (onShowDanmakuPool != null) {
                             DanmakuSettingsAction("查看弹幕列表", onClick = {
                                 onDismiss()
                                 onShowDanmakuPool()
                             })
-                        }
-                        if (showSyncSection) {
-                            DanmakuSettingsSectionTitle("账号同步")
-                            DanmakuSettingsToggle("同步弹幕设置到账号", cloudSyncEnabled, onCloudSyncEnabledChange)
-                            AppText(
-                                resolveDanmakuCloudSyncToggleSubtitle(cloudSyncEnabled),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = panelColors.supportingColor,
-                            )
-                            if (cloudSyncEnabled) {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(top = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    AppText("账号同步状态", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                                    AppText(resolveDanmakuSyncStatusBadgeText(syncUiState), style = MaterialTheme.typography.labelMedium)
-                                }
-                                syncUiState.message?.let { message ->
-                                    AppText(message, style = MaterialTheme.typography.bodySmall, color = panelColors.supportingColor)
-                                }
-                                AppTextButton(onClick = onSyncNowClick, enabled = syncUiState.status != DanmakuCloudSyncStatus.SYNCING) {
-                                    AppText(if (shouldShowDanmakuSyncRetry(syncUiState.status)) "重试同步" else "立即同步")
-                                }
-                            }
                         }
                         DanmakuSettingsSectionTitle("合并重复弹幕")
                         DanmakuSettingsToggle("合并重复弹幕", mergeDuplicates, onMergeDuplicatesChange)
@@ -563,112 +516,6 @@ fun DanmakuSettingsPanel(
                             }
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                    }
-
-                    if (showSectionBasic && showSyncSection) {
-                        AppSurface(
-                            modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 3),
-                            color = panelColors.itemColor,
-                            shape = AppShapes.container(ContainerLevel.Card)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        AppText(
-                                            text = "同步弹幕设置到账号",
-                                            color = panelColors.titleColor,
-                                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        AppText(
-                                            text = resolveDanmakuCloudSyncToggleSubtitle(cloudSyncEnabled),
-                                            color = panelColors.supportingColor,
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    AppSwitch(
-                                        checked = cloudSyncEnabled,
-                                        onCheckedChange = onCloudSyncEnabledChange
-                                    )
-                                }
-
-                                if (cloudSyncEnabled) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            AppText(
-                                                text = "账号同步状态",
-                                                color = panelColors.titleColor,
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            AppText(
-                                                text = syncUiState.message
-                                                    ?: when (syncUiState.status) {
-                                                        DanmakuCloudSyncStatus.SUCCESS -> "当前基础弹幕设置已同步到账号"
-                                                        DanmakuCloudSyncStatus.SYNCING -> "正在同步当前弹幕设置"
-                                                        DanmakuCloudSyncStatus.PENDING -> "检测到设置变更，等待同步"
-                                                        DanmakuCloudSyncStatus.FAILURE -> "最近一次同步失败，可立即重试"
-                                                        DanmakuCloudSyncStatus.IDLE -> "当前设备本地设置尚未触发同步"
-                                                    },
-                                                color = panelColors.supportingColor,
-                                                style = MaterialTheme.typography.bodySmall
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Column(
-                                            horizontalAlignment = Alignment.End,
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .then(if (glass) Modifier.size(width = 100.dp, height = 36.dp) else Modifier)
-                                                    .clip(if (glass) syncShape else AppShapes.container(ContainerLevel.Pill))
-                                                    .background(panelColors.badgeBackgroundColor)
-                                                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                                                contentAlignment = Alignment.Center,
-                                            ) {
-                                                AppText(
-                                                    text = resolveDanmakuSyncStatusBadgeText(syncUiState),
-                                                    color = panelColors.badgeContentColor,
-                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
-                                                )
-                                            }
-                                            DanmakuSyncButton(
-                                                onClick = onSyncNowClick,
-                                                enabled = syncUiState.status != DanmakuCloudSyncStatus.SYNCING,
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                                accent = panelColors.sliderActiveTrackColor
-                                            ) {
-                                                AppText(
-                                                    text = if (shouldShowDanmakuSyncRetry(syncUiState.status)) {
-                                                        "重试同步"
-                                                    } else {
-                                                        "立即同步"
-                                                    },
-                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
                     }
 
                     // Settings Card（基础分区：字体/透明度/速度）

@@ -182,7 +182,6 @@ internal enum class SettingsIconRole(
     AUDIO_FOCUS(R.drawable.ms_headphones_24, R.drawable.ph_headphones_24),
     SLIDE_VOLUME_BRIGHTNESS(R.drawable.ms_swap_vert_24, R.drawable.ph_arrows_down_up_24),
     PIP_DANMAKU(R.drawable.ms_textsms_24, R.drawable.ph_chat_centered_text_24),
-    DANMAKU_CLOUD_SYNC(R.drawable.ms_cloud_sync_24, R.drawable.ph_cloud_24),
     AUDIO_MODE_PIP(R.drawable.ms_picture_in_picture_24, R.drawable.ph_picture_in_picture_24),
     PLAYER_DIAGNOSTICS(R.drawable.ms_query_stats_24, R.drawable.ph_chart_line_up_24),
     QUALITY_WARNING(R.drawable.ms_report_problem_24, R.drawable.ph_warning_circle_24),

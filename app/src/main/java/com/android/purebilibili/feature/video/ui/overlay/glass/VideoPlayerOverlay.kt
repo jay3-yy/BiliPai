@@ -64,7 +64,6 @@ import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.blur.shouldAllowRuntimeShaderBackedHazeEffect
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 // Import reusable components from standalone files
 import com.android.purebilibili.feature.video.ui.components.glass.QualitySelectionMenu
 import com.android.purebilibili.feature.video.ui.components.glass.AudioQualitySelectionMenuDialog
@@ -577,9 +576,6 @@ private fun VideoPlayerOverlayContent(
     val danmakuFullscreenPanelWidthMode = state.danmakuFullscreenPanelWidthMode
     val portraitDanmakuDisplayAreaMode = state.portraitDanmakuDisplayAreaMode
     val danmakuSettingsScope = state.danmakuSettingsScope
-    val showDanmakuSyncSection = state.showDanmakuSyncSection
-    val danmakuCloudSyncEnabled = state.danmakuCloudSyncEnabled
-    val danmakuSyncUiState = state.danmakuSyncUiState
     val onDanmakuOpacityChange = actions.onDanmakuOpacityChange
     val onDanmakuFontScaleChange = actions.onDanmakuFontScaleChange
     val onDanmakuFontWeightChange = actions.onDanmakuFontWeightChange
@@ -606,8 +602,6 @@ private fun VideoPlayerOverlayContent(
     val onDanmakuSmartOcclusionChange = actions.onDanmakuSmartOcclusionChange
     val onDanmakuFullscreenPanelWidthModeChange = actions.onDanmakuFullscreenPanelWidthModeChange
     val onPortraitDanmakuDisplayAreaModeChange = actions.onPortraitDanmakuDisplayAreaModeChange
-    val onDanmakuCloudSyncEnabledChange = actions.onDanmakuCloudSyncEnabledChange
-    val onDanmakuSyncNowClick = actions.onDanmakuSyncNowClick
     val subtitleControlState = state.subtitleControlState
     val subtitleControlCallbacks = actions.subtitleControlCallbacks
     val doubleTapLikeEnabled = state.doubleTapLikeEnabled
@@ -2248,9 +2242,6 @@ private fun VideoPlayerOverlayContent(
                 smartOcclusion = danmakuSmartOcclusion,
                 fullscreenWidthMode = danmakuFullscreenPanelWidthMode,
                 portraitDisplayAreaMode = portraitDanmakuDisplayAreaMode,
-                showSyncSection = showDanmakuSyncSection,
-                cloudSyncEnabled = danmakuCloudSyncEnabled,
-                syncUiState = danmakuSyncUiState,
                 onSliderPreview = actions.onDanmakuSliderPreview,
                 onOpacityChange = onDanmakuOpacityChange,
                 onFontScaleChange = onDanmakuFontScaleChange,
@@ -2278,8 +2269,6 @@ private fun VideoPlayerOverlayContent(
                 onSmartOcclusionChange = onDanmakuSmartOcclusionChange,
                 onFullscreenWidthModeChange = onDanmakuFullscreenPanelWidthModeChange,
                 onPortraitDisplayAreaModeChange = onPortraitDanmakuDisplayAreaModeChange,
-                onCloudSyncEnabledChange = onDanmakuCloudSyncEnabledChange,
-                onSyncNowClick = onDanmakuSyncNowClick,
                 onShowDanmakuPool = onShowDanmakuPool?.let { action ->
                     {
                         showDanmakuSettings = false

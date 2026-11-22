@@ -1524,7 +1524,8 @@ object SettingsManager {
     private val KEY_SLIDE_VOLUME_BRIGHTNESS_ENABLED = booleanPreferencesKey("slide_volume_brightness_enabled")
     private val KEY_SET_SYSTEM_BRIGHTNESS = booleanPreferencesKey("set_system_brightness")
     private val KEY_PIP_NO_DANMAKU = booleanPreferencesKey("pip_no_danmaku")
-    private val KEY_DANMAKU_CLOUD_SYNC_ENABLED = booleanPreferencesKey("danmaku_cloud_sync_enabled")
+    // 已下线的「同步弹幕设置到账号」历史键，仅用于启动时清理旧持久化数据
+    private val KEY_LEGACY_DANMAKU_CLOUD_SYNC_ENABLED = booleanPreferencesKey("danmaku_cloud_sync_enabled")
     private val KEY_SHOW_PLAYER_CAST_BUTTON = booleanPreferencesKey("show_player_cast_button")
     private val KEY_SHOW_VIDEO_FOLLOW_BUTTON = booleanPreferencesKey("show_video_follow_button")
     private val KEY_PLAYER_PROGRESS_PLACEMENT = intPreferencesKey("player_progress_placement")
@@ -3131,15 +3132,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setPipNoDanmakuEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_PIP_NO_DANMAKU] = value
-        }
-    }
-
-    fun getDanmakuCloudSyncEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_DANMAKU_CLOUD_SYNC_ENABLED] ?: true }
-
-    suspend fun setDanmakuCloudSyncEnabled(context: Context, value: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[KEY_DANMAKU_CLOUD_SYNC_ENABLED] = value
         }
     }
 
@@ -6356,9 +6348,23 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
     
-    // 强制更新弹幕默认值（覆盖已有设置，版本升级时触发一次）
+    internal fun removeLegacyDanmakuCloudSyncPreference(
+        preferences: MutablePreferences
+    ): Boolean {
+        if (!preferences.contains(KEY_LEGACY_DANMAKU_CLOUD_SYNC_ENABLED)) return false
+        preferences.remove(KEY_LEGACY_DANMAKU_CLOUD_SYNC_ENABLED)
+        return true
+    }
+
+    // 强制更新弹幕默认值（覆盖已有设置，版本升级时触发一次），并清理已下线的历史弹幕云同步键
     suspend fun forceDanmakuDefaults(context: Context) {
+        val snapshot = context.settingsDataStore.data.first()
+        val needsDefaultsMigration =
+            (snapshot[KEY_DANMAKU_DEFAULTS_VERSION] ?: 0) < DANMAKU_DEFAULTS_VERSION
+        val hasLegacyCloudSyncKey = snapshot.contains(KEY_LEGACY_DANMAKU_CLOUD_SYNC_ENABLED)
+        if (!needsDefaultsMigration && !hasLegacyCloudSyncKey) return
         context.settingsDataStore.edit { preferences ->
+            removeLegacyDanmakuCloudSyncPreference(preferences)
             val currentVersion = preferences[KEY_DANMAKU_DEFAULTS_VERSION] ?: 0
             if (currentVersion < DANMAKU_DEFAULTS_VERSION) {
                 preferences[KEY_DANMAKU_OPACITY] = DEFAULT_DANMAKU_OPACITY
