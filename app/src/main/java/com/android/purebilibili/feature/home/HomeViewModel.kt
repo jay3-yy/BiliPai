@@ -255,7 +255,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 blockedMids = list.map { it.mid }.toSet()
             }
         }
-        syncTodayWatchFeedbackFromStore()
+        viewModelScope.launch {
+            syncTodayWatchFeedbackFromStore()
+        }
         viewModelScope.launch {
             PluginManager.awaitPluginReady(BuiltinPluginIds.AD_FILTER)
             //  推荐流过滤插件的「启用态 + 配置」是在注册协程里异步回填的(DataStore)。
@@ -960,28 +962,41 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         video: VideoItem,
         action: HomeNotInterestedAction
     ) {
-        val snapshot = TodayWatchFeedbackStore.getSnapshot(getApplication()).withDislikedVideoFeedback(
-            video = TodayWatchDislikedVideoSnapshot(
-                bvid = video.bvid,
-                title = video.title,
-                creatorName = video.owner.name,
-                creatorMid = video.owner.mid,
-                dislikedAtMillis = System.currentTimeMillis()
-            ),
-            keywords = action.keywords,
-            includeCreatorSignal = action.shouldBlockCreator
-        )
-        todayDislikedBvids.clear()
-        todayDislikedBvids.addAll(snapshot.dislikedBvids)
-        todayDislikedCreatorMids.clear()
-        todayDislikedCreatorMids.addAll(snapshot.dislikedCreatorMids)
-        todayDislikedKeywords.clear()
-        todayDislikedKeywords.addAll(snapshot.dislikedKeywords)
-        TodayWatchFeedbackStore.saveSnapshot(getApplication(), snapshot)
+        if (video.bvid.isNotBlank()) todayDislikedBvids.add(video.bvid)
+        if (action.shouldBlockCreator && video.owner.mid > 0L) todayDislikedCreatorMids.add(video.owner.mid)
+        todayDislikedKeywords.addAll(action.keywords.map { it.trim() }.filter { it.isNotEmpty() })
+        val dislikedAtMillis = System.currentTimeMillis()
+        val appContext = getApplication<Application>()
+        viewModelScope.launch {
+            val snapshot = withContext(Dispatchers.IO) {
+                val updated = TodayWatchFeedbackStore.getSnapshot(appContext).withDislikedVideoFeedback(
+                    video = TodayWatchDislikedVideoSnapshot(
+                        bvid = video.bvid,
+                        title = video.title,
+                        creatorName = video.owner.name,
+                        creatorMid = video.owner.mid,
+                        dislikedAtMillis = dislikedAtMillis
+                    ),
+                    keywords = action.keywords,
+                    includeCreatorSignal = action.shouldBlockCreator
+                )
+                TodayWatchFeedbackStore.saveSnapshot(appContext, updated)
+                updated
+            }
+            todayDislikedBvids.clear()
+            todayDislikedBvids.addAll(snapshot.dislikedBvids)
+            todayDislikedCreatorMids.clear()
+            todayDislikedCreatorMids.addAll(snapshot.dislikedCreatorMids)
+            todayDislikedKeywords.clear()
+            todayDislikedKeywords.addAll(snapshot.dislikedKeywords)
+        }
     }
 
-    private fun syncTodayWatchFeedbackFromStore() {
-        val snapshot = TodayWatchFeedbackStore.getSnapshot(getApplication())
+    private suspend fun syncTodayWatchFeedbackFromStore() {
+        val appContext = getApplication<Application>()
+        val snapshot = withContext(Dispatchers.IO) {
+            TodayWatchFeedbackStore.getSnapshot(appContext)
+        }
         todayDislikedBvids.clear()
         todayDislikedBvids.addAll(snapshot.dislikedBvids)
         todayDislikedCreatorMids.clear()
@@ -1000,16 +1015,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun persistTodayWatchFeedback() {
-        val currentSnapshot = TodayWatchFeedbackStore.getSnapshot(getApplication())
-        TodayWatchFeedbackStore.saveSnapshot(
-            context = getApplication(),
-            snapshot = com.android.purebilibili.core.store.TodayWatchFeedbackSnapshot(
-                dislikedBvids = todayDislikedBvids.toSet(),
-                dislikedCreatorMids = todayDislikedCreatorMids.toSet(),
-                dislikedKeywords = todayDislikedKeywords.toSet(),
-                recentDislikedVideos = currentSnapshot.recentDislikedVideos
+        val bvids = todayDislikedBvids.toSet()
+        val creatorMids = todayDislikedCreatorMids.toSet()
+        val keywords = todayDislikedKeywords.toSet()
+        val appContext = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentSnapshot = TodayWatchFeedbackStore.getSnapshot(appContext)
+            TodayWatchFeedbackStore.saveSnapshot(
+                context = appContext,
+                snapshot = com.android.purebilibili.core.store.TodayWatchFeedbackSnapshot(
+                    dislikedBvids = bvids,
+                    dislikedCreatorMids = creatorMids,
+                    dislikedKeywords = keywords,
+                    recentDislikedVideos = currentSnapshot.recentDislikedVideos
+                )
             )
-        )
+        }
     }
 
     private fun loadData() {

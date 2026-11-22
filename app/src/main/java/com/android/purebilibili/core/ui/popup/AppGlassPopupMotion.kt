@@ -52,9 +52,9 @@ internal object AppGlassPopupMotion {
     const val OpenSeconds = 0.45f
     const val ReturnSeconds = com.android.purebilibili.core.ui.AppGlassPopupMotionSpec.AnchoredReturnMillis / 1000f
     const val ShrinkSeconds = com.android.purebilibili.core.ui.AppGlassPopupMotionSpec.UnanchoredExitMillis / 1000f
-    private val easeOut = CubicBezierEasing(0f, 0f, 0.58f, 1f)
-    private val easeIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
-    private val glyphIn = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
+    private val easeOut = com.android.purebilibili.core.ui.motion.AppMotionEasing.StandardEaseOut
+    private val easeIn = com.android.purebilibili.core.ui.motion.AppMotionEasing.StandardEaseIn
+    private val glyphIn = com.android.purebilibili.core.ui.motion.AppMotionEasing.StandardEase
     private val easeInOut = AppMotionEasing.IosEaseInOut
 
     private val openingSpring = FloatSpringSpec(dampingRatio = 0.754f, stiffness = 400f)

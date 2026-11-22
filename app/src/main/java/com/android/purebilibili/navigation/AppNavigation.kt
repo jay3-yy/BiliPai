@@ -4286,7 +4286,7 @@ fun AppNavigation(
 
                 @Composable
                 fun RenderSearchEntryContent(key: BiliPaiNavKey) {
-                    val homeState by homeViewModel.uiState.collectAsStateWithLifecycle(
+                    val homeUser by homeViewModel.user.collectAsStateWithLifecycle(
                         context = kotlin.coroutines.EmptyCoroutineContext
                     )
                     val searchKey = key as? BiliPaiNavKey.Search
@@ -4295,7 +4295,7 @@ fun AppNavigation(
                     com.android.purebilibili.feature.search.SearchResultContainerHost(
                         content = { openUpResult, openBangumiResult, _, sourceVisible ->
                             SearchScreen(
-                                userFace = homeState.user.face,
+                                userFace = homeUser.face,
                                 initialKeyword = initialSearchKeyword,
                                 onInitialKeywordConsumed = consumeInitialSearchKeyword,
                                 entryMotionSource = searchEntryMotionSource,
@@ -4359,7 +4359,7 @@ fun AppNavigation(
                                     openArticleInNavigation3(articleId, title)
                                 },
                                 onAvatarClick = {
-                                    if (homeState.user.isLogin) {
+                                    if (homeUser.isLogin) {
                                         pushNavigation3Target(BiliPaiNavKey.Profile)
                                     } else {
                                         pushNavigation3Key(BiliPaiNavKey.Login)

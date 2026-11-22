@@ -106,8 +106,14 @@ internal class SettingsSharedContainerTransition(
 
 @Composable
 internal fun SettingsSharedTransitionLayout(enabled: Boolean, content: @Composable () -> Unit) {
+    if (!enabled) {
+        CompositionLocalProvider(LocalSettingsContainerSharedScope provides null) {
+            content()
+        }
+        return
+    }
     SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalSettingsContainerSharedScope provides if (enabled) this else null) {
+        CompositionLocalProvider(LocalSettingsContainerSharedScope provides this) {
             content()
         }
     }

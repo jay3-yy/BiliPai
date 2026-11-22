@@ -82,7 +82,7 @@ class GoogleCastPlugin : BuiltinPlugin, CastPluginApi {
             autoplay = media.autoplay
         )
         if (result.isSuccess) {
-            val session = CastContext.getSharedInstance(context).sessionManager.currentCastSession
+            val session = GoogleCastRouteManager.awaitCastContext(context).sessionManager.currentCastSession
             if (session != null) {
                 GoogleCastPlaybackController.attach(
                     session = session,

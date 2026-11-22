@@ -50,7 +50,7 @@ fun LottieAnimation(
     val composition by rememberLottieComposition(
         spec = LottieCompositionSpec.Url(url)
     )
-    val progress by animateLottieCompositionAsState(
+    val progressState = animateLottieCompositionAsState(
         composition = composition,
         iterations = iterations,
         isPlaying = autoPlay && animationGate.active,
@@ -59,7 +59,7 @@ fun LottieAnimation(
     
     com.airbnb.lottie.compose.LottieAnimation(
         composition = composition,
-        progress = { progress },
+        progress = { progressState.value },
         modifier = modifier.size(size).then(animationGate.modifier)
     )
 }
@@ -273,27 +273,34 @@ fun SuccessAnimation(
     size: Dp = 80.dp,
     onFinished: () -> Unit = {}
 ) {
+    val animationGate = rememberDecorativeAnimationGate()
     var finished by remember { mutableStateOf(false) }
+    val latestOnFinished by androidx.compose.runtime.rememberUpdatedState(onFinished)
     
     val composition by rememberLottieComposition(
         spec = LottieCompositionSpec.Url(LottieUrls.SUCCESS)
     )
-    val progress by animateLottieCompositionAsState(
+    val progressState = animateLottieCompositionAsState(
         composition = composition,
-        iterations = 1
+        iterations = 1,
+        isPlaying = animationGate.active,
+        restartOnPlay = false,
     )
     
-    LaunchedEffect(progress) {
-        if (progress == 1f && !finished) {
-            finished = true
-            onFinished()
+    LaunchedEffect(progressState, animationGate.active) {
+        if (!animationGate.active) return@LaunchedEffect
+        androidx.compose.runtime.snapshotFlow { progressState.value }.collect { value ->
+            if (value == 1f && !finished) {
+                finished = true
+                latestOnFinished()
+            }
         }
     }
     
     com.airbnb.lottie.compose.LottieAnimation(
         composition = composition,
-        progress = { progress },
-        modifier = modifier.size(size)
+        progress = { progressState.value },
+        modifier = modifier.size(size).then(animationGate.modifier)
     )
 }
 

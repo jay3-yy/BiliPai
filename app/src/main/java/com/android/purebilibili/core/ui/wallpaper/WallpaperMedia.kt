@@ -55,20 +55,12 @@ internal fun WallpaperMedia(
     onSourceSize: (IntSize) -> Unit = {},
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val coordinator = LocalWallpaperPlaybackCoordinator.current
     val lease = remember(uri) { Any() }
-    var foreground by remember(lifecycleOwner) {
-        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
-    }
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, _ ->
-            foreground = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-    val eligible = foreground && playbackEnabled && LocalWindowInfo.current.isWindowFocused
+    val playbackGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val eligible = playbackEnabled && playbackGate.active
     val sourceSize = remember(uri) { mutableStateOf(IntSize.Zero) }
     var loadState by remember(uri) { mutableStateOf(WallpaperMediaLoadState.LOADING) }
     val latestLoadCallback by rememberUpdatedState(onLoadState)
@@ -171,13 +163,14 @@ internal fun WallpaperMedia(
             )
         }
     }
+    val gatedModifier = modifier.then(playbackGate.modifier)
     if (transformProvider == null) {
-        media(modifier)
+        media(gatedModifier)
     } else {
         // Fit the full source inside a viewport-sized child, then transform its layer to
         // the shared crop rect. Never resize a TextureView to a giant zoomed bitmap size.
         // All gesture/state reads stay in the layer phase, outside composition and layout.
-        Box(modifier = modifier.clipToBounds()) {
+        Box(modifier = gatedModifier.clipToBounds()) {
             media(Modifier.fillMaxSize().graphicsLayer {
                 val source = sourceSize.value
                 val width = size.width.coerceAtLeast(1f)

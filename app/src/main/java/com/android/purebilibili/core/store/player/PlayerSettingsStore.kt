@@ -15,6 +15,7 @@ import com.android.purebilibili.core.store.normalizeLongPressSpeed
 import com.android.purebilibili.core.store.normalizePlaybackSpeedOptions
 import com.android.purebilibili.core.store.resolvePlaybackSpeedOptions
 import com.android.purebilibili.core.store.normalizePlaybackSpeed as normalizePlaybackSpeedPolicy
+import com.android.purebilibili.core.store.editSettingsAndCommitPrefs
 import com.android.purebilibili.core.store.settingsDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -259,13 +260,12 @@ object PlayerSettingsStore {
         }
 
     suspend fun setDefaultAudioQuality(context: Context, value: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[defaultAudioQualityPreferenceKey] = value
-        }
-        context.getSharedPreferences(audioQualityCachePrefs, Context.MODE_PRIVATE)
-            .edit()
-            .putInt(cacheKeyDefaultAudioQuality, value)
-            .commit()
+        editSettingsAndCommitPrefs(
+            context = context,
+            name = audioQualityCachePrefs,
+            editSettings = { this[defaultAudioQualityPreferenceKey] = value },
+            editPrefs = { putInt(cacheKeyDefaultAudioQuality, value) },
+        )
     }
 
     fun getCachedDefaultAudioQuality(context: Context): Int {

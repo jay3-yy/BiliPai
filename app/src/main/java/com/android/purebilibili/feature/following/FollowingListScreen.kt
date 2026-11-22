@@ -281,9 +281,9 @@ class FollowingListViewModel : ViewModel() {
         _userFollowGroupIds.value = emptyMap()
         _isFollowGroupMetaLoading.value = false
 
-        val restoredFromCache = restoreFollowingListFromPersistentCache(mid, forceRefresh)
-
         viewModelScope.launch {
+            val restoredFromCache = restoreFollowingListFromPersistentCache(mid, forceRefresh)
+            if (generation != followingGeneration) return@launch
             if (!restoredFromCache) {
                 _uiState.value = FollowingListUiState.Loading
             }
@@ -330,9 +330,11 @@ class FollowingListViewModel : ViewModel() {
         }
     }
 
-    private fun restoreFollowingListFromPersistentCache(mid: Long, forceRefresh: Boolean): Boolean {
+    private suspend fun restoreFollowingListFromPersistentCache(mid: Long, forceRefresh: Boolean): Boolean {
         val context = NetworkModule.appContext ?: return false
-        val snapshot = FollowingCacheStore.getSnapshot(context, mid) ?: return false
+        val snapshot = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            FollowingCacheStore.getSnapshot(context, mid)
+        } ?: return false
         if (!shouldUseFollowingPersistentCache(
                 forceRefresh = forceRefresh,
                 requestMid = mid,

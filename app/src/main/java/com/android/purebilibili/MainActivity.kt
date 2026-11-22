@@ -1440,23 +1440,23 @@ class MainActivity : AppCompatActivity() {
             val appGestureScreenshotEnabled = appThemeSettings.appGestureScreenshotEnabled
             val appScreenshotGestureMode = appThemeSettings.appScreenshotGestureMode
             val appScreenshotCaptureMode = appThemeSettings.appScreenshotCaptureMode
-            val blurIntensity by SettingsManager.getBlurIntensity(context)
+            val blurIntensity by remember(context) { SettingsManager.getBlurIntensity(context) }
                 .collectAsStateWithLifecycle(initialValue = BlurIntensity.THIN)
-            val headerBlurEnabled by SettingsManager.getHeaderBlurEnabled(context)
+            val headerBlurEnabled by remember(context) { SettingsManager.getHeaderBlurEnabled(context) }
                 .collectAsStateWithLifecycle(initialValue = true)
-            val bottomBarBlurEnabled by SettingsManager.getBottomBarBlurEnabled(context)
+            val bottomBarBlurEnabled by remember(context) { SettingsManager.getBottomBarBlurEnabled(context) }
                 .collectAsStateWithLifecycle(initialValue = false)
-            val progressiveTopBlurEnabled by SettingsManager.getProgressiveTopBlurEnabled(context)
+            val progressiveTopBlurEnabled by remember(context) { SettingsManager.getProgressiveTopBlurEnabled(context) }
                 .collectAsStateWithLifecycle(initialValue = true)
-            val progressiveTopFadeEnabled by SettingsManager.getProgressiveTopFadeEnabled(context)
+            val progressiveTopFadeEnabled by remember(context) { SettingsManager.getProgressiveTopFadeEnabled(context) }
                 .collectAsStateWithLifecycle(initialValue = true)
             val hapticSettings by remember(context) { SettingsManager.getHapticSettings(context) }
                 .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppHapticSettings())
-            val hapticFeedbackEnabled by SettingsManager.getHapticFeedbackEnabled(context)
+            val hapticFeedbackEnabled by remember(context) { SettingsManager.getHapticFeedbackEnabled(context) }
                 .collectAsStateWithLifecycle(initialValue = true)
-            val globalTextTapCopyEnabled by SettingsManager
-                .getGlobalTextTapCopyEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = false)
+            val globalTextTapCopyEnabled by remember(context) {
+                SettingsManager.getGlobalTextTapCopyEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = false)
             val replyPreviewReactions: com.android.purebilibili.feature.video.viewmodel.ReplyPreviewReactionViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel()
             val replyTranslations: com.android.purebilibili.feature.video.viewmodel.ReplyTranslationViewModel =
@@ -1473,29 +1473,34 @@ class MainActivity : AppCompatActivity() {
             val commentReplyPreviewVisible by remember(context) {
                 SettingsManager.getCommentReplyPreviewVisible(context)
             }.collectAsStateWithLifecycle(initialValue = true)
-            val globalDragFeedbackEnabled by SettingsManager
-                .getGlobalDragFeedbackEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val uiEntranceAnimationEnabled by SettingsManager
-                .getUiEntranceAnimationEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val runtimeVisualGuardEnabled by SettingsManager
-                .getRuntimeVisualGuardEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val nativeMiuixPopupsEnabled by com.android.purebilibili.core.store.player.PlayerSettingsStore
-                .getNativeMiuixPlayerPopups(context)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val liquidGlassMasterEnabled by SettingsManager.getAndroidNativeLiquidGlassEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val liquidControlsUseThemeColor by SettingsManager.getLiquidControlsUseThemeColor(context)
-                .collectAsStateWithLifecycle(initialValue = false)
-            val liquidGlassScenes by SettingsManager.getLiquidGlassScenes(context)
-                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppLiquidGlassSettings())
+            val globalDragFeedbackEnabled by remember(context) {
+                SettingsManager.getGlobalDragFeedbackEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val uiEntranceAnimationEnabled by remember(context) {
+                SettingsManager.getUiEntranceAnimationEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val runtimeVisualGuardEnabled by remember(context) {
+                SettingsManager.getRuntimeVisualGuardEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val nativeMiuixPopupsEnabled by remember(context) {
+                com.android.purebilibili.core.store.player.PlayerSettingsStore
+                    .getNativeMiuixPlayerPopups(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val liquidGlassMasterEnabled by remember(context) {
+                SettingsManager.getAndroidNativeLiquidGlassEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val liquidControlsUseThemeColor by remember(context) {
+                SettingsManager.getLiquidControlsUseThemeColor(context)
+            }.collectAsStateWithLifecycle(initialValue = false)
+            val liquidGlassScenes by remember(context) {
+                SettingsManager.getLiquidGlassScenes(context)
+            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppLiquidGlassSettings())
             val liquidGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
                 com.android.purebilibili.core.ui.AppLiquidGlassScene.OTHER_COMPONENTS,
             )
-            val liquidSwitchThumbMode by SettingsManager.getLiquidSwitchThumbMode(context)
-                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
+            val liquidSwitchThumbMode by remember(context) {
+                SettingsManager.getLiquidSwitchThumbMode(context)
+            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
             val appThemeConfig = remember(
                 liquidGlassEnabled,
                 liquidGlassMasterEnabled,

@@ -3047,11 +3047,12 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     //  [新增] --- 触感反馈 ---
     fun getHapticFeedbackEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_HAPTIC_FEEDBACK_ENABLED] ?: true } // 默认开启
+        .distinctUntilChanged()
 
     fun getHapticSettings(context: Context): Flow<com.android.purebilibili.core.ui.AppHapticSettings> =
         context.settingsDataStore.data.map {
             com.android.purebilibili.core.ui.AppHapticSettings(it[KEY_HAPTIC_SCENES_DISABLED] ?: 0)
-        }
+        }.distinctUntilChanged()
 
     suspend fun setHapticSceneEnabled(context: Context, scene: com.android.purebilibili.core.ui.AppHapticScene, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -3075,6 +3076,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     fun getGlobalTextTapCopyEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_GLOBAL_TEXT_TAP_COPY_ENABLED] ?: false }
+        .distinctUntilChanged()
 
     suspend fun setGlobalTextTapCopyEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -3836,6 +3838,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     //  [新增] --- 界面入场动画 master 开关(全 App 统一入场动效) ---
     fun getGlobalDragFeedbackEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_GLOBAL_DRAG_FEEDBACK_ENABLED] ?: true }
+        .distinctUntilChanged()
 
     suspend fun setGlobalDragFeedbackEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_GLOBAL_DRAG_FEEDBACK_ENABLED] = value }
@@ -3843,6 +3846,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     fun getUiEntranceAnimationEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_UI_ENTRANCE_ANIMATION_ENABLED] ?: true }  // 默认开启
+        .distinctUntilChanged()
 
     suspend fun setUiEntranceAnimationEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_UI_ENTRANCE_ANIMATION_ENABLED] = value }
@@ -3850,6 +3854,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     fun getSmartVisualGuardEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { false }
+        .distinctUntilChanged()
 
     suspend fun setSmartVisualGuardEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -3861,6 +3866,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getRuntimeVisualGuardEnabled(context: Context): Flow<Boolean> =
         context.settingsDataStore.data
             .map { preferences -> preferences[KEY_RUNTIME_VISUAL_GUARD_ENABLED] ?: true }
+            .distinctUntilChanged()
 
     suspend fun setRuntimeVisualGuardEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -4729,6 +4735,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             )
             mode != HomeHeaderBlurMode.ALWAYS_OFF
         }
+        .distinctUntilChanged()
 
     suspend fun setHeaderBlurEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -4748,6 +4755,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         .map { preferences ->
             preferences[KEY_PROGRESSIVE_TOP_BLUR_ENABLED] ?: false
         }
+        .distinctUntilChanged()
 
     suspend fun setProgressiveTopBlurEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -4763,6 +4771,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         .map { preferences ->
             preferences[KEY_PROGRESSIVE_TOP_FADE_ENABLED] ?: true
         }
+        .distinctUntilChanged()
 
     suspend fun setProgressiveTopFadeEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -4860,6 +4869,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     //  [新增] --- 底栏模糊效果 ---
     fun getBottomBarBlurEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] ?: false }
+        .distinctUntilChanged()
 
     suspend fun setBottomBarBlurEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] = value }
@@ -5011,7 +5021,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getLiquidGlassScenes(context: Context): Flow<com.android.purebilibili.core.ui.AppLiquidGlassSettings> =
         context.settingsDataStore.data.map {
             com.android.purebilibili.core.ui.AppLiquidGlassSettings(it[KEY_LIQUID_GLASS_SCENES_DISABLED] ?: 0)
-        }
+        }.distinctUntilChanged()
 
     suspend fun setLiquidGlassSceneEnabled(context: Context, scene: com.android.purebilibili.core.ui.AppLiquidGlassScene, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -5026,16 +5036,19 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 preferences[KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED]
                     ?: true
             }
+            .distinctUntilChanged()
 
     fun getLiquidControlsUseThemeColor(context: Context): Flow<Boolean> =
-        context.settingsDataStore.data.map { it[KEY_LIQUID_CONTROLS_USE_THEME_COLOR] ?: false }
+        context.settingsDataStore.data
+            .map { it[KEY_LIQUID_CONTROLS_USE_THEME_COLOR] ?: false }
+            .distinctUntilChanged()
 
     fun getLiquidSwitchThumbMode(context: Context): Flow<com.android.purebilibili.core.ui.LiquidSwitchThumbMode> =
         context.settingsDataStore.data.map { preferences ->
             com.android.purebilibili.core.ui.LiquidSwitchThumbMode.entries.firstOrNull {
                 it.name == preferences[KEY_LIQUID_SWITCH_THUMB_MODE]
             } ?: com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME
-        }
+        }.distinctUntilChanged()
 
     suspend fun setLiquidSwitchThumbMode(context: Context, value: com.android.purebilibili.core.ui.LiquidSwitchThumbMode) {
         context.settingsDataStore.edit { it[KEY_LIQUID_SWITCH_THUMB_MODE] = value.name }
@@ -5218,6 +5231,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 else -> BlurIntensity.THIN  // 默认标准
             }
         }
+        .distinctUntilChanged()
 
     //  [新增] 获取底栏可见项目
     fun getVisibleBottomBarItems(context: Context): Flow<Set<String>> = context.settingsDataStore.data
@@ -8439,6 +8453,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                     ?: DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT
             )
         }
+        .distinctUntilChanged()
 
     suspend fun setCommentCollapsedReplyPreviewLimit(context: Context, value: Int) {
         val normalized = normalizeCommentCollapsedReplyPreviewLimit(value)

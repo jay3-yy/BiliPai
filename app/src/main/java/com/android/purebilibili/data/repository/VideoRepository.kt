@@ -269,7 +269,7 @@ object VideoRepository {
             (it.bvid == bvid || it.bvid == canonicalBvid) && (cid <= 0L || it.cid == cid)
         }
     }
-    private val api = NetworkModule.api
+    private val api by lazy { NetworkModule.api }
 
     private const val VERTICAL_VIDEO_CACHE_MAX_ENTRIES = 1_024
     private val verticalVideoCache = LruCache<String, Boolean>(VERTICAL_VIDEO_CACHE_MAX_ENTRIES)

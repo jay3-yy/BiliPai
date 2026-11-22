@@ -87,7 +87,7 @@ internal object GoogleCastMediaLoader {
 
             mediaRoute.select()
 
-            val castContext = CastContext.getSharedInstance(context)
+            val castContext = GoogleCastRouteManager.awaitCastContext(context)
             val startMs = System.currentTimeMillis()
             val session = withTimeout(SESSION_TIMEOUT_MS) {
                 var session = castContext.sessionManager.currentCastSession
