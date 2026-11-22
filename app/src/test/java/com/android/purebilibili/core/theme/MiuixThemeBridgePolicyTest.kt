@@ -280,5 +280,10 @@ class MiuixThemeBridgePolicyTest {
         assertEquals(1f, colors.sliderBackground.alpha)
         assertEquals(1f, colors.disabledPrimary.alpha)
         assertEquals(1f, colors.disabledSecondary.alpha)
+        assertEquals(
+            opaqueCompositeOver(scheme.onSurface.copy(alpha = 0.38f), scheme.surface),
+            colors.disabledOnSurface,
+        )
+        assertNotEquals(colors.onSurface, colors.disabledOnSurface)
     }
 }

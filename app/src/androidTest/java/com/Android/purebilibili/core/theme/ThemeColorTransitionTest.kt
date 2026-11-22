@@ -180,7 +180,15 @@ class ThemeColorTransitionTest {
                 if (nextSource == com.android.purebilibili.feature.settings.Md3ColorSource.WALLPAPER_RETONED) {
                     assertEquals(Color(0xFF007AFF), visibleAccent)
                 } else if (nextSource == com.android.purebilibili.feature.settings.Md3ColorSource.CUSTOM) {
-                    assertEquals(Color(0xFFFF5722), visibleAccent)
+                    val expectedPrimary = createBiliPaiStyleColorScheme(
+                        seedColor = Color(0xFFFF5722),
+                        darkTheme = false,
+                        amoledDarkTheme = false,
+                        paletteStyle = com.materialkolor.PaletteStyle.TonalSpot,
+                        colorSpec = com.materialkolor.dynamiccolor.ColorSpec.SpecVersion.SPEC_2025,
+                        uiStyle = nextStyle,
+                    ).primary
+                    assertEquals(expectedPrimary, visibleAccent)
                 }
             }
             rule.mainClock.advanceTimeBy(1_000)

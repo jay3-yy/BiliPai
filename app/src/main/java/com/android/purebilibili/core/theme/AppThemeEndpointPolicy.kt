@@ -47,59 +47,18 @@ internal fun resolveAppThemeEndpointPalette(
         )
         return AppThemePalette(material, miuix, material.primary)
     }
-    val pickedAccent = resolveLiquidControlAccentColor(
-        source = source,
-        customSeed = customSeed,
-        generatedAccent = configured.primary,
-        roleOverridesEnabled = roleOverrides.enabled,
-        roleControlHex = if (darkTheme) roleOverrides.dark.controlAccentHex else roleOverrides.light.controlAccentHex,
+    // 非玻璃 MD3 保留 MaterialKolor / 系统动态取色生成的完整 HCT 角色（primary /
+    // primaryContainer / secondaryContainer / tertiary 分离）；液态玻璃开启时的
+    // 精准主色同步已在 resolveConfiguredMaterialScheme 的 alignLiquidAccentColorScheme 完成。
+    val bridgedMiuix = resolveMiuixColorsFromMaterialBridge(
+        createMiuixMaterialBridge(configured),
+        darkTheme,
     )
-    val selectedAccent = pickedAccent
-    val exactPrimary = if (!preserveGeneratedPalette && source == Md3ColorSource.CUSTOM) configured.copy(
-        primary = selectedAccent,
-        onPrimary = resolveReadableForeground(selectedAccent),
-    ) else configured
-    val nativeMiuix = shouldUseNativeMiuixPalette(uiStyle)
-    val nativeMiuixColors = if (nativeMiuix) {
-        resolveNativeMiuixColors(
-            exactPrimary, darkTheme, amoledDarkTheme,
-            customRolesEnabled = source == Md3ColorSource.CUSTOM && roleOverrides.enabled && !preserveGeneratedPalette,
-        )
-    } else null
-    // 原生导航指示器、tonal 按钮及筛选胶囊消费 secondaryContainer，而非 primary。
-    // 自定义色在关闭玻璃后也必须覆盖这个选中角色；只桥接颜色，不改原生布局和动效。
-    // 玻璃分支沿用 alignLiquidAccentColorScheme，壁纸配色保留其独立角色。
-    val useNativeCustomSelection = !preserveGeneratedPalette && !liquidGlassEnabled && source == Md3ColorSource.CUSTOM
-    val material = if (useNativeCustomSelection) {
-        val selectionSurface = nativeMiuixColors?.surface ?: exactPrimary.surface
-        val selection = resolveTintedSelectionAccentColors(selectedAccent, selectionSurface)
-        // Standard custom colors share one accent family across tonal actions and tabs.
-        // Glass and generated/wallpaper palettes retain their independent role contracts.
-        exactPrimary.copy(
-            primaryContainer = selection.backgroundColor,
-            onPrimaryContainer = selection.contentColor,
-            secondaryContainer = selection.backgroundColor,
-            onSecondaryContainer = selection.contentColor,
-        )
-    } else exactPrimary
-    val bridgedMiuix = nativeMiuixColors
-        ?: resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(material), darkTheme)
     // Both hosts can contain Miuix components. Apply explicit secondary edits after
-    // either bridge, while unedited secondary controls retain their native neutral role.
-    val selectionMiuix = if (useNativeCustomSelection) bridgedMiuix.copy(
-        primaryContainer = material.primaryContainer,
-        onPrimaryContainer = material.onPrimaryContainer,
-        secondaryContainer = material.secondaryContainer,
-        onSecondaryContainer = material.onSecondaryContainer,
-    ) else bridgedMiuix
+    // the bridge, while unedited secondary controls retain their neutral role.
     val miuix = if (source == Md3ColorSource.WALLPAPER_RETONED &&
         WallpaperPaletteRole.SECONDARY in wallpaperOverrides.forMode(darkTheme)
-    ) selectionMiuix.copy(secondary = material.secondary, onSecondary = material.onSecondary)
-        else selectionMiuix
-    val aligned = if (nativeMiuix) {
-        alignMaterialSurfacesWithMiuix(
-            material, miuix, preserveMaterialAccentRoles = preserveGeneratedPalette || source == Md3ColorSource.WALLPAPER_RETONED,
-        )
-    } else material
-    return AppThemePalette(aligned, miuix, aligned.primary)
+    ) bridgedMiuix.copy(secondary = configured.secondary, onSecondary = configured.onSecondary)
+        else bridgedMiuix
+    return AppThemePalette(configured, miuix, configured.primary)
 }

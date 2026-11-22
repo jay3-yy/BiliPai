@@ -14,11 +14,8 @@ import com.android.purebilibili.core.ui.AppShapeTokens
 val LocalCornerRadiusScale = staticCompositionLocalOf { 1f }
 
 /**
- * Material 3 形状槽位,与 [resolveAndroidNativeChromeTokens] 的容器 24dp / 胶囊 28dp 对齐:
- * - large 16→24:内容卡与 chrome 容器共用同一套圆角语言;
- * - medium 12→16:中层容器(视频详情语义形状、代码块等)跟随 expressive 尺度;
- * - small/extraSmall 保持官方默认,避免输入框、芯片等紧凑控件观感回退;
- * - extraLarge 28 与胶囊 token 一致。
+ * Material 3 官方默认形状槽位（extraSmall=4dp, small=8dp, medium=12dp, large=16dp, extraLarge=28dp）。
+ * 浮层/胶囊等大容器圆角继续由 [resolveAndroidNativeChromeTokens] 独立提供。
  */
 val Md3Shapes = Shapes(
     extraSmall = RoundedCornerShape(AppShapeTokens.MaterialExtraSmall),

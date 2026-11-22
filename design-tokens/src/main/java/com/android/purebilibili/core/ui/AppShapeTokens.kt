@@ -35,8 +35,8 @@ object AppShapeTokens {
 
     val MaterialExtraSmall = 4.dp
     val MaterialSmall = 8.dp
-    val MaterialMedium = 16.dp
-    val MaterialLarge = 24.dp
+    val MaterialMedium = 12.dp
+    val MaterialLarge = 16.dp
     val MaterialExtraLarge = 28.dp
 
     fun baseCornerDp(level: ContainerLevel): Float = when (level) {

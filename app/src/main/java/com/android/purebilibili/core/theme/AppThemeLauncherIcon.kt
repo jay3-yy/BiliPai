@@ -27,7 +27,7 @@ internal fun rememberAppThemeIconPaletteIndex(primary: Color): Int {
         com.android.purebilibili.core.store.getBiliPaiIconColorSettings(context)
     }
     val colors by customFlow.collectAsStateWithLifecycle(
-        initialValue = com.android.purebilibili.core.store.getBiliPaiIconColorSettingsSync(context),
+        initialValue = remember(context) { com.android.purebilibili.core.store.getBiliPaiIconColorSettingsSync(context) },
     )
     return resolveBiliPaiThemeIconIndex(colors.foreground ?: primary.toArgb(), colors.background)
 }
@@ -37,10 +37,12 @@ internal fun rememberAppThemeIconPaletteIndex(primary: Color): Int {
 internal fun SyncAppThemeLauncherIcon(paletteIndex: Int) {
     val context = LocalContext.current.applicationContext
     val iconFlow = remember(context) { SettingsManager.getAppIcon(context) }
-    val icon by iconFlow.collectAsStateWithLifecycle(initialValue = SettingsManager.getAppIconSync(context))
+    val icon by iconFlow.collectAsStateWithLifecycle(
+        initialValue = remember(context) { SettingsManager.getAppIconSync(context) },
+    )
     val splashFlow = remember(context) { SettingsManager.getSplashIconAnimationEnabled(context) }
     val splashVisible by splashFlow.collectAsStateWithLifecycle(
-        initialValue = SettingsManager.isSplashIconAnimationEnabledSync(context),
+        initialValue = remember(context) { SettingsManager.isSplashIconAnimationEnabledSync(context) },
     )
     LaunchedEffect(context, paletteIndex, icon, splashVisible) {
         syncAppThemeLauncherIcon(context, paletteIndex)

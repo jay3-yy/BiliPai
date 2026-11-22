@@ -107,17 +107,16 @@ class AndroidNativeVariantThemePolicyTest {
     }
 
     @Test
-    fun md3Shapes_alignWithChromeCornerTokens() {
-        // MD3 路径的 MaterialTheme.shapes 必须与 chrome token(容器 24dp / 胶囊 28dp)同一套圆角语言,
-        // small/extraSmall 保持官方默认以保护输入框与芯片观感。
+    fun md3Shapes_matchOfficialMaterial3Defaults() {
         val expected = Shapes(
             extraSmall = RoundedCornerShape(4.dp),
             small = RoundedCornerShape(8.dp),
-            medium = RoundedCornerShape(16.dp),
-            large = RoundedCornerShape(24.dp),
+            medium = RoundedCornerShape(12.dp),
+            large = RoundedCornerShape(16.dp),
             extraLarge = RoundedCornerShape(28.dp)
         )
 
         assertEquals(expected, Md3Shapes)
+        assertEquals(Shapes(), Md3Shapes)
     }
 }

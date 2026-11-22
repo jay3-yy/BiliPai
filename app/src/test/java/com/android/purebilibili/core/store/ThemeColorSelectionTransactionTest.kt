@@ -36,8 +36,8 @@ class ThemeColorSelectionTransactionTest {
             base, selected.uiStyle, selected.md3ColorSource, false,
             wallpaperOverrides = selected.wallpaperPaletteOverrides, customSeed = seed,
         )
-        assertEquals(seed, endpoint.material.primary)
-        assertEquals(seed, endpoint.liquidAccent)
+        assertEquals(base.primary, endpoint.material.primary)
+        assertEquals(base.primary, endpoint.liquidAccent)
         // Returning to re-toning restores that mode's edits without overwriting manual colors.
         SettingsManager.updateMd3ColorSelection(preferences, Md3ColorSource.WALLPAPER_RETONED)
         val restored = mapAppThemeSettingsFromPreferences(preferences)

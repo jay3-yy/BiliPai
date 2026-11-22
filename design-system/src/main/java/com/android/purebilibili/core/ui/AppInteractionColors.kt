@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.core.theme.AdaptiveAccentColors
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
-import com.android.purebilibili.core.theme.resolveTintedSelectionAccentColors
+import com.android.purebilibili.core.theme.resolveFilledSelectionAccentColors
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -38,12 +38,11 @@ data class AppActionStateColors(val container: Color, val content: Color)
 
 /** 主题组件共享的交互色。 */
 object AppInteractionColors {
-    /** 原生 MD3 的胶囊标签和底栏共用基于页面底色的主色选中态。 */
+    /** 原生 MD3 的胶囊标签、筛选芯片和底栏选中态遵循官方 secondaryContainer / onSecondaryContainer 角色。 */
     @Composable
     fun rememberMaterialNavigationSelection(): AdaptiveAccentColors {
-        val accent = AppContentColors.accent()
-        val surface = AppSurfaceTokens.chromeBackground()
-        return remember(accent, surface) { resolveTintedSelectionAccentColors(accent, surface) }
+        val scheme = MaterialTheme.colorScheme
+        return remember(scheme) { resolveFilledSelectionAccentColors(scheme) }
     }
 
     /** 内容选中态在两种材质下使用相同的容器及前景。 */

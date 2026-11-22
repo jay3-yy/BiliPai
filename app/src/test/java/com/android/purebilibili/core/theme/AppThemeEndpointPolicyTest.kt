@@ -62,7 +62,7 @@ class AppThemeEndpointPolicyTest {
     }
 
     @Test
-    fun materialCustomSelectionRetainsItsExistingColorContract() {
+    fun materialCustomSelectionPreservesOfficialMd3HctRolesWhenGlassIsOff() {
         for (dark in listOf(false, true)) {
             val seed = Color(0xFF007AFF)
             val base = createBiliPaiStyleColorScheme(
@@ -72,16 +72,31 @@ class AppThemeEndpointPolicyTest {
                 base, AppUiStyle.MATERIAL3, Md3ColorSource.CUSTOM, dark,
                 customSeed = seed, liquidGlassEnabled = false,
             )
-            assertEquals(seed, endpoint.material.primary)
-            assertEquals(resolveReadableForeground(seed), endpoint.material.onPrimary)
-            val container = opaqueCompositeOver(seed.copy(alpha = 0.14f), base.surface)
-            assertEquals(container, endpoint.material.secondaryContainer)
-            assertTrue(calculateContrastRatio(endpoint.material.onSecondaryContainer, container) >= ACCESSIBLE_TEXT_MIN_CONTRAST)
+            assertEquals(base.primary, endpoint.material.primary)
+            assertEquals(base.onPrimary, endpoint.material.onPrimary)
+            assertEquals(base.primaryContainer, endpoint.material.primaryContainer)
+            assertEquals(base.onPrimaryContainer, endpoint.material.onPrimaryContainer)
+            assertEquals(base.secondaryContainer, endpoint.material.secondaryContainer)
+            assertEquals(base.onSecondaryContainer, endpoint.material.onSecondaryContainer)
+            assertEquals(base.tertiary, endpoint.material.tertiary)
+            assertTrue(
+                calculateContrastRatio(
+                    endpoint.material.onSecondaryContainer,
+                    endpoint.material.secondaryContainer,
+                ) >= ACCESSIBLE_TEXT_MIN_CONTRAST
+            )
+            val glassConfigured = alignLiquidAccentColorScheme(
+                scheme = base,
+                accent = seed,
+                liquidGlassEnabled = true,
+                source = Md3ColorSource.CUSTOM,
+            )
             val glass = resolveAppThemeEndpointPalette(
-                base, AppUiStyle.MATERIAL3, Md3ColorSource.CUSTOM, dark,
+                glassConfigured, AppUiStyle.MATERIAL3, Md3ColorSource.CUSTOM, dark,
                 customSeed = seed, liquidGlassEnabled = true,
             )
-            assertEquals(base.secondaryContainer, glass.material.secondaryContainer)
+            assertEquals(seed, glass.material.primary)
+            assertEquals(glassConfigured.secondaryContainer, glass.material.secondaryContainer)
             assertEquals(base.surface, glass.material.surface)
         }
     }

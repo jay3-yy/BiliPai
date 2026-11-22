@@ -537,7 +537,7 @@ internal fun resolveMiuixColorsFromMaterialBridge(
         onSurfaceSecondary = opaqueCompositeOver(bridge.onSurface.copy(alpha = 0.8f), bridge.surface),
         onSurfaceVariantSummary = bridge.onSurfaceVariant,
         onSurfaceVariantActions = bridge.onSurfaceVariant,
-        disabledOnSurface = bridge.onSurface,
+        disabledOnSurface = opaqueCompositeOver(bridge.onSurface.copy(alpha = 0.38f), bridge.surface),
         surfaceContainer = bridge.surfaceContainer,
         onSurfaceContainer = bridge.onSurface,
         onSurfaceContainerVariant = bridge.onSurfaceVariant,
@@ -1119,6 +1119,9 @@ fun PureBiliBiliTheme(
             if (controller.isAppearanceLightStatusBars != themeDefaultLightBars) {
                 controller.isAppearanceLightStatusBars = themeDefaultLightBars
             }
+            if (controller.isAppearanceLightNavigationBars != themeDefaultLightBars) {
+                controller.isAppearanceLightNavigationBars = themeDefaultLightBars
+            }
         }
     }
 
@@ -1151,20 +1154,25 @@ fun PureBiliBiliTheme(
             controller = controller,
             textStyles = miuixTextStyles
         ) {
+            val miuixIndication = androidx.compose.foundation.LocalIndication.current
             MaterialTheme(
                 colorScheme = materialColorScheme,
                 typography = materialTypography,
                 shapes = shapes,
                 motionScheme = materialMotionScheme,
                 content = {
+                    val materialIndication = androidx.compose.foundation.LocalIndication.current
                     // Both themes are mounted for shared color tokens. Explicitly select
-                    // scrolling physics so MD3 does not inherit the enclosing Miuix factory.
-                    // Glass changes surfaces only; it retains the selected native scroll style.
+                    // scrolling physics and click indication so MD3 keeps ripple/platform
+                    // overscroll while Miuix retains MiuixIndication/MiuixOverscrollFactory.
+                    // Glass changes surfaces only; it retains the selected native feedback style.
                     CompositionLocalProvider(
                         androidx.compose.foundation.LocalOverscrollFactory provides
                             if (uiStyle == AppUiStyle.MIUIX) {
                                 top.yukonga.miuix.kmp.utils.MiuixOverscrollFactory
                             } else platformOverscrollFactory,
+                        androidx.compose.foundation.LocalIndication provides
+                            if (uiStyle == AppUiStyle.MIUIX) miuixIndication else materialIndication,
                     ) {
                         com.android.purebilibili.core.ui.ProvideAppContentColors(
                             nativeInteractionColors = com.android.purebilibili.core.ui.isMiuixNonGlassEnabled(uiStyle, liquidGlassEnabled),

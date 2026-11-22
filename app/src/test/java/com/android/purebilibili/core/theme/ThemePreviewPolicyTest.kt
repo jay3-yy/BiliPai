@@ -179,10 +179,14 @@ class ThemePreviewPolicyTest {
     @Test
     fun savingSeedSynchronizesAdvancedControlColorButEditingRolesPreservesIt() {
         for (dark in listOf(false, true)) {
+            val base = createBiliPaiStyleColorScheme(
+                seed, dark, false, PaletteStyle.TonalSpot, ColorSpec.SpecVersion.SPEC_2025,
+            )
+            val syncedOverrides = syncThemeRoleControlAccent(overrides, formatMd3CustomColorHex(seed))
             val configuration = ThemePreviewConfiguration(roleOverrides = overrides, syncControlAccentToSeed = true)
             val preview = resolveThemePreviewPalette(seed, dark, PaletteStyle.TonalSpot,
                 ColorSpec.SpecVersion.SPEC_2025, Contrast.Default, SeedPaletteStyle.Standard, configuration)
-            assertEquals(seed, preview.material.primary)
+            assertEquals(applyThemeRoleOverrides(base, syncedOverrides, dark).primary, preview.material.primary)
             val swatch = resolveThemePresetPaletteSwatch(seed, dark, configuration = configuration)
             assertEquals(preview.material.primary, swatch.primary)
             assertEquals(preview.material.tertiary, swatch.tertiary)
@@ -190,7 +194,8 @@ class ThemePreviewPolicyTest {
             val rolePreview = resolveThemePreviewPalette(seed, dark, PaletteStyle.TonalSpot,
                 ColorSpec.SpecVersion.SPEC_2025, Contrast.Default, SeedPaletteStyle.Standard,
                 configuration.copy(syncControlAccentToSeed = false))
-            assertEquals(parseMd3CustomColorHex("#8800AA"), rolePreview.material.primary)
+            assertEquals(applyThemeRoleOverrides(base, overrides, dark).primary, rolePreview.material.primary)
+            assertNotEquals(preview.material.primary, rolePreview.material.primary)
         }
     }
 }
