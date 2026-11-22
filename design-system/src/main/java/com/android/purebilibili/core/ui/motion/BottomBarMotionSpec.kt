@@ -84,7 +84,7 @@ fun resolveBottomBarMotionSpec(
         BottomBarMotionProfile.DEFAULT -> base
         BottomBarMotionProfile.IOS_FLOATING -> base.copy(
             drag = base.drag.copy(
-                baseResistance = 1.04f,
+                baseResistance = 1f,
                 overscrollResistance = 0.34f,
                 flingProjectionTimeSeconds = 0.24f,
                 selectionSpring = MotionSpringConfig(
@@ -108,7 +108,7 @@ fun resolveBottomBarMotionSpec(
         )
         BottomBarMotionProfile.ANDROID_NATIVE_FLOATING -> base.copy(
             drag = base.drag.copy(
-                baseResistance = 1.02f,
+                baseResistance = 1f,
                 overscrollResistance = 0.34f,
                 flingProjectionTimeSeconds = 0.14f,
                 selectionSpring = MotionSpringConfig(
@@ -141,7 +141,7 @@ fun resolveBottomBarMotionSpec(
         )
         BottomBarMotionProfile.MIUI_FLOATING -> base.copy(
             drag = base.drag.copy(
-                baseResistance = 1.01f,
+                baseResistance = 1f,
                 overscrollResistance = 0.30f,
                 flingProjectionTimeSeconds = 0.18f,
                 selectionSpring = MotionSpringConfig(

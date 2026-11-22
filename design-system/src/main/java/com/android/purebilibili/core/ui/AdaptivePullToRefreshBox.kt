@@ -12,15 +12,22 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.collect
 import top.yukonga.miuix.kmp.basic.PullToRefresh as MiuixPullToRefresh
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState as rememberMiuixPullToRefreshState
 
@@ -103,11 +110,56 @@ fun AdaptivePullToRefreshBox(
                     // otherwise a cancelled Pulling/RefreshComplete session can consume later
                     // comment drags. movableContent below still preserves the list and its offset.
                     val miuixState = rememberMiuixPullToRefreshState()
+                    val reboundGuard = remember(miuixState) {
+                        MiuixPullReboundGuard(
+                            currentRefreshState = { miuixState.refreshState },
+                            currentDragOffset = { miuixState.dragOffset },
+                        )
+                    }
+                    val reboundGuardConnection = remember(reboundGuard) {
+                        miuixReboundGuardConnection(reboundGuard)
+                    }
+                    val reboundPointerTracker = remember(reboundGuard) {
+                        Modifier.pointerInput(reboundGuard) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    reboundGuard.onPointerEvent(
+                                        event.changes.any { it.pressed },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    // 松手回弹被再次上滑取消时，原生松手锁可能让指示器停在拉长位置。
+                    // 只在确认回弹弹簧已启动的短窗口内消费上滑，让卡片随弹簧一起回位。
+                    LaunchedEffect(reboundGuard.armed, miuixState, isRefreshing) {
+                        if (!reboundGuard.armed) return@LaunchedEffect
+                        snapshotFlow {
+                            miuixState.dragOffset to miuixState.refreshState
+                        }.collect { (offset, refreshState) ->
+                            reboundGuard.onOffsetChanged(
+                                offset = offset,
+                                refreshState = refreshState,
+                                isRefreshing = isRefreshing,
+                            )
+                        }
+                    }
+                    LaunchedEffect(reboundGuard.armGeneration) {
+                        if (reboundGuard.armGeneration == 0) return@LaunchedEffect
+                        repeat(MiuixPullReboundGuard.SPRING_START_CONFIRM_FRAMES) {
+                            withFrameNanos { }
+                        }
+                        reboundGuard.confirmSpringStarted()
+                    }
                     CompositionLocalProvider(LocalHapticFeedback provides refreshHaptic) {
                         MiuixPullToRefresh(
                             isRefreshing = isRefreshing,
                             onRefresh = onRefresh,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .nestedScroll(reboundGuardConnection)
+                                .then(reboundPointerTracker),
                             pullToRefreshState = miuixState,
                             contentPadding = mergedContentPadding,
                             color = AppSurfaceTokens.primary(),

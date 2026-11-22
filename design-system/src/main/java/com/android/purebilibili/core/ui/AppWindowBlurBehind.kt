@@ -131,7 +131,9 @@ private object ModalContentBlur {
 
     private fun update(view: View) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        val radius = owners[view]?.values?.maxOrNull() ?: 0f
+        val rawRadius = owners[view]?.values?.maxOrNull() ?: 0f
+        // 按整像素量化半径，避免弹窗拖动/弹簧尾段因亚像素浮点变化每帧重建 RenderEffect。
+        val radius = if (rawRadius <= 0.5f) 0f else kotlin.math.round(rawRadius)
         if (appliedRadii[view] == radius) return
         appliedRadii[view] = radius
         view.setRenderEffect(

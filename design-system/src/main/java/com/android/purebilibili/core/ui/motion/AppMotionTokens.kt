@@ -112,15 +112,18 @@ object AppMotionTokens {
 
     fun <T> resolveExpressiveSpec(
         uiStyle: AppUiStyle
-    ): FiniteAnimationSpec<T> = when (uiStyle) {
-        AppUiStyle.MIUIX -> tween(
-            durationMillis = 150,
-            easing = AppMotionEasing.EmphasizedExit
-        )
-        AppUiStyle.MATERIAL3 -> tween(
-            durationMillis = 180,
-            easing = AppMotionEasing.Md3EmphasizedAccelerate
-        )
+    ): FiniteAnimationSpec<T> {
+        val tokens = resolveAndroidNativeChromeTokens(uiStyle)
+        return when (uiStyle) {
+            AppUiStyle.MIUIX -> tween(
+                durationMillis = tokens.expressiveMotionDurationMillis,
+                easing = AppMotionEasing.EmphasizedExit
+            )
+            AppUiStyle.MATERIAL3 -> tween(
+                durationMillis = tokens.expressiveMotionDurationMillis,
+                easing = AppMotionEasing.Md3EmphasizedAccelerate
+            )
+        }
     }
 
     fun <T> resolveSpatialSpec(): FiniteAnimationSpec<T> = spring(

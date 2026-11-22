@@ -357,8 +357,11 @@ private fun LiquidValueThumb(
             shape = { CircleShape },
             effects = {
                 val progress = motion.press.value
-                blur(8.dp.toPx() * (1f - progress))
-                lens(5.dp.toPx() * lensScale * progress, 10.dp.toPx() * lensScale * progress, chromaticAberration = 1f)
+                // 静止态（progress == 0f）滑块表面为 100% 不透明，跳过被完全遮挡的 8dp 实时模糊与透镜。
+                if (progress > 0.001f) {
+                    blur(8.dp.toPx() * (1f - progress))
+                    lens(5.dp.toPx() * lensScale * progress, 10.dp.toPx() * lensScale * progress, chromaticAberration = 1f)
+                }
             },
             onDrawFront = { drawEdgeStroke(CircleShape, liquidValueThumbRim, motion.press.value.coerceIn(0f, 1f)) },
             layerBlock = {

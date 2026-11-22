@@ -48,16 +48,29 @@ fun AppCircularProgressIndicator(
     trackColor: Color = Color.Unspecified,
     strokeCap: StrokeCap? = null,
 ) {
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val gatedModifier = modifier.then(animationGate.modifier)
+    if (!animationGate.active) {
+        AppCircularProgressIndicator(
+            progress = { 0.72f },
+            modifier = gatedModifier,
+            color = color,
+            strokeWidth = strokeWidth,
+            trackColor = trackColor,
+            strokeCap = strokeCap,
+        )
+        return
+    }
     when (LocalAppUiStyle.current) {
         AppUiStyle.MATERIAL3 -> AppMaterial3CircularProgressIndicator(
-            modifier = modifier,
+            modifier = gatedModifier,
             color = color,
             strokeWidth = strokeWidth,
             trackColor = trackColor,
             strokeCap = strokeCap,
         )
         AppUiStyle.MIUIX -> AppMiuixCircularProgressIndicator(
-            modifier = modifier,
+            modifier = gatedModifier,
             color = color,
             strokeWidth = strokeWidth,
             trackColor = trackColor,
@@ -72,15 +85,27 @@ fun AppLinearProgressIndicator(
     trackColor: Color = Color.Unspecified,
     strokeCap: StrokeCap? = null,
 ) {
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val gatedModifier = modifier.then(animationGate.modifier)
+    if (!animationGate.active) {
+        AppLinearProgressIndicator(
+            progress = { 0.38f },
+            modifier = gatedModifier,
+            color = color,
+            trackColor = trackColor,
+            strokeCap = strokeCap,
+        )
+        return
+    }
     when (LocalAppUiStyle.current) {
         AppUiStyle.MATERIAL3 -> AppMaterial3LinearProgressIndicator(
-            modifier = modifier,
+            modifier = gatedModifier,
             color = color,
             trackColor = trackColor,
             strokeCap = strokeCap,
         )
         AppUiStyle.MIUIX -> AppMiuixLinearProgressIndicator(
-            modifier = modifier,
+            modifier = gatedModifier,
             color = color,
             trackColor = trackColor,
         )

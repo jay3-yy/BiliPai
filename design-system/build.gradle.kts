@@ -43,6 +43,12 @@ kotlin {
     }
 }
 
+composeCompiler {
+    stabilityConfigurationFiles.add(
+        rootProject.layout.projectDirectory.file("compose_stability.conf")
+    )
+}
+
 dependencies {
     api(project(":design-tokens"))
     api(platform(libs.androidx.compose.bom))

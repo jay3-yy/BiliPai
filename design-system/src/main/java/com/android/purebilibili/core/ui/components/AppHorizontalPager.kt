@@ -81,8 +81,21 @@ fun AppHorizontalPager(
         verticalAlignment = verticalAlignment, flingBehavior = resolvedFling,
         userScrollEnabled = !useMiuixGestures && enabled, reverseLayout = reverseLayout, key = key,
         pageNestedScrollConnection = resolvedNestedScroll, snapPosition = snapPosition,
-        overscrollEffect = overscrollEffect, pageContent = pageContent,
-    )
+        overscrollEffect = overscrollEffect,
+    ) { page ->
+        val pageVisualWorkActive = remember(state, page) {
+            androidx.compose.runtime.derivedStateOf {
+                state.settledPage == page && !state.isScrollInProgress
+            }
+        }
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.android.purebilibili.core.ui.LocalVisualWorkAllowed provides (
+                com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current && pageVisualWorkActive.value
+            ),
+        ) {
+            pageContent(page)
+        }
+    }
 }
 
 /** Miuix 的触摸换页直接驱动 PagerState，需要在手势已由分页接管后观察位移。 */

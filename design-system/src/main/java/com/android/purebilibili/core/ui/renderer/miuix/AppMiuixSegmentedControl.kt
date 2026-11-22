@@ -408,6 +408,7 @@ private fun <T> AppMiuixNonGlassTabs(
     } else {
         Dp.Infinity
     }
+    val itemSquirclePath = remember { Path() }
     TabRow(
         tabs = labels,
         selectedTabIndex = selectedIndex,
@@ -418,14 +419,14 @@ private fun <T> AppMiuixNonGlassTabs(
             .squircleClip(geometry.cornerRadius)
             .drawBehind {
                 if (opaqueItems) clipRect {
+                    val cornerPx = geometry.cornerRadius.toPx()
                     listState.layoutInfo.visibleItemsInfo.forEach { item ->
                         val left = if (layoutDirection == LayoutDirection.Rtl) {
                             size.width - item.offset - item.size
                         } else item.offset.toFloat()
-                        val path = Path().apply {
-                            addSquircleRect(item.size.toFloat(), size.height, geometry.cornerRadius.toPx())
-                        }
-                        translate(left = left) { drawPath(path, itemBackground) }
+                        itemSquirclePath.rewind()
+                        itemSquirclePath.addSquircleRect(item.size.toFloat(), size.height, cornerPx)
+                        translate(left = left) { drawPath(itemSquirclePath, itemBackground) }
                     }
                 }
             }

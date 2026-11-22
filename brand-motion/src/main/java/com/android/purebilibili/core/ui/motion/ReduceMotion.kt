@@ -7,11 +7,11 @@ import android.os.Looper
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import java.util.WeakHashMap
 
 /**
  * 系统是否处于「减弱动效」状态。
@@ -28,24 +28,54 @@ internal fun readSystemReduceMotion(resolver: ContentResolver): Boolean {
     return scale == 0f
 }
 
+private class SharedReduceMotionEntry(
+    private val resolver: ContentResolver,
+) {
+    val state: MutableState<Boolean> = mutableStateOf(readSystemReduceMotion(resolver))
+    private var activeListeners = 0
+    private var observer: ContentObserver? = null
+
+    fun acquire() {
+        if (activeListeners++ == 0) {
+            val contentObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    state.value = readSystemReduceMotion(resolver)
+                }
+            }
+            observer = contentObserver
+            resolver.registerContentObserver(
+                Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
+                false,
+                contentObserver,
+            )
+            state.value = readSystemReduceMotion(resolver)
+        }
+    }
+
+    fun release() {
+        if (--activeListeners <= 0) {
+            activeListeners = 0
+            observer?.let { resolver.unregisterContentObserver(it) }
+            observer = null
+        }
+    }
+}
+
+private val sharedReduceMotionLock = Any()
+private val sharedReduceMotionEntries = WeakHashMap<ContentResolver, SharedReduceMotionEntry>()
+
+private fun getOrCreateSharedReduceMotionEntry(resolver: ContentResolver): SharedReduceMotionEntry =
+    synchronized(sharedReduceMotionLock) {
+        sharedReduceMotionEntries.getOrPut(resolver) { SharedReduceMotionEntry(resolver) }
+    }
+
 @Composable
 fun rememberSystemReduceMotion(): Boolean {
     val resolver = LocalContext.current.applicationContext.contentResolver
-    var reduceMotion by remember(resolver) { mutableStateOf(readSystemReduceMotion(resolver)) }
-    DisposableEffect(resolver) {
-        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
-            override fun onChange(selfChange: Boolean) {
-                reduceMotion = readSystemReduceMotion(resolver)
-            }
-        }
-        resolver.registerContentObserver(
-            Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
-            false,
-            observer
-        )
-        // 注册后再同步一次,避免注册窗口内的变更被漏掉。
-        reduceMotion = readSystemReduceMotion(resolver)
-        onDispose { resolver.unregisterContentObserver(observer) }
+    val entry = remember(resolver) { getOrCreateSharedReduceMotionEntry(resolver) }
+    DisposableEffect(entry) {
+        synchronized(sharedReduceMotionLock) { entry.acquire() }
+        onDispose { synchronized(sharedReduceMotionLock) { entry.release() } }
     }
-    return reduceMotion
+    return entry.state.value
 }

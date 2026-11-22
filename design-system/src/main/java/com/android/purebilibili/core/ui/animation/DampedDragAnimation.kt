@@ -240,6 +240,7 @@ class DampedDragAnimationState internal constructor(
         value: Float,
         onSettled: (() -> Unit)? = null,
         animatePress: Boolean = true,
+        initialVelocity: Float = valueAnimation.velocity,
     ) {
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             mutatorMutex.mutate {
@@ -248,7 +249,11 @@ class DampedDragAnimationState internal constructor(
                 targetIndex = nextTarget.roundToInt().coerceIn(0, itemCount - 1)
                 valueJob?.cancel()
                 valueJob = launch {
-                    valueAnimation.animateTo(nextTarget, valueAnimationSpec) {
+                    valueAnimation.animateTo(
+                        targetValue = nextTarget,
+                        animationSpec = valueAnimationSpec,
+                        initialVelocity = initialVelocity,
+                    ) {
                         updateDeformationVelocity(this.value)
                     }
                 }
@@ -368,6 +373,10 @@ class DampedDragAnimationState internal constructor(
         if (notifyIndexChanged && notifyIndexChangedOnReleaseStart) {
             onIndexChanged(releaseTargetIndex)
         }
+        val releaseVelocityItemsPerSecond = resolveDampedDragVelocityItemsPerSecond(
+            velocityPxPerSecond = velocityX,
+            itemWidthPx = itemWidthPx,
+        )
         animateToValue(
             value = releaseTargetIndex.toFloat(),
             onSettled = {
@@ -380,6 +389,7 @@ class DampedDragAnimationState internal constructor(
                 }
             },
             animatePress = false,
+            initialVelocity = releaseVelocityItemsPerSecond,
         )
         offsetJob?.cancel()
         offsetJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {

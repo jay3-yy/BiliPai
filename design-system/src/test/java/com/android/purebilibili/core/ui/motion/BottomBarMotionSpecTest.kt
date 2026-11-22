@@ -28,4 +28,12 @@ class BottomBarMotionSpecTest {
         assertEquals(250f, spec.indicator.scaleYSpring.stiffness, 0.001f)
         assertTrue(spec.indicator.railFractionStretchMultiplier >= 0.08f)
     }
+
+    @Test
+    fun `all bottom bar profiles keep non-amplifying base drag resistance`() {
+        for (profile in BottomBarMotionProfile.entries) {
+            val spec = resolveBottomBarMotionSpec(profile)
+            assertTrue(spec.drag.baseResistance in 0.9f..1.0f)
+        }
+    }
 }
