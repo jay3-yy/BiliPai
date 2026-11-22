@@ -328,7 +328,7 @@ private tailrec fun Context.findHostActivity(): Activity? = when (this) {
 
 @OptIn(ExperimentalMediaQueryApi::class)
 private fun androidx.compose.material3.adaptive.Posture.toAppFoldingFeatureInfo(
-    mediaPosture: UiMediaScope.Posture,
+    mediaPosture: UiMediaScope.WindowPosture,
 ): AppFoldingFeatureInfo {
     val hinges = hingeList.map { hinge ->
         AppHingeFeature(
@@ -349,9 +349,12 @@ private fun androidx.compose.material3.adaptive.Posture.toAppFoldingFeatureInfo(
         )
     }
     val halfOpenedHinges = hinges.filterNot { hinge -> hinge.isFlat }
-    val queriedOrientation = when (mediaPosture) {
-        UiMediaScope.Posture.Tabletop -> AppHingeOrientation.Horizontal
-        UiMediaScope.Posture.Book -> AppHingeOrientation.Vertical
+    val queriedOrientation = when {
+        mediaPosture.isTabletop -> AppHingeOrientation.Horizontal
+        mediaPosture.folds.any { fold ->
+            fold.state == UiMediaScope.FoldState.HalfOpened &&
+                fold.orientation == UiMediaScope.FoldOrientation.Vertical
+        } -> AppHingeOrientation.Vertical
         else -> AppHingeOrientation.None
     }
     // The two APIs collect window layout independently. Use the reported geometry while the

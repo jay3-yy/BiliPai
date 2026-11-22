@@ -240,7 +240,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         // calling LazyGridSpanLayoutProvider.getLineConfiguration with an invalid cache line.
         // Regular grids need their own fallback: the staggered-grid flag above does not apply.
         // Retain normal line prefetching while bypassing the default cache-window keepAround path.
-        ComposeFoundationFlags.isPreferDefaultCacheWindowOverPrefetchStrategy = false
+        ComposeFoundationFlags.isPreferDefaultCacheWindowOverPrefetchStrategyLazyGrid = false
 
         // Install the local crash path before theme, StrictMode, or any other startup work. This
         // ensures even an early initialization exception has a private snapshot for feedback.
