@@ -106,14 +106,11 @@ internal class SettingsSharedContainerTransition(
 
 @Composable
 internal fun SettingsSharedTransitionLayout(enabled: Boolean, content: @Composable () -> Unit) {
-    if (!enabled) {
-        CompositionLocalProvider(LocalSettingsContainerSharedScope provides null) {
-            content()
-        }
-        return
-    }
+    // 保持固定槽位结构：横竖屏切换（如视频上滑全屏导致 settingsPersistentPanes 变化）或
+    // 动效开关变化时会动态翻转 enabled，若拆成不同分支会销毁并重建包裹 NavDisplay 的子树，
+    // 在交接帧触发 SaveableStateHolder 重复 key 崩溃（Key ... was used multiple times）。
     SharedTransitionLayout(modifier = Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalSettingsContainerSharedScope provides this) {
+        CompositionLocalProvider(LocalSettingsContainerSharedScope provides if (enabled) this else null) {
             content()
         }
     }
