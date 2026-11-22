@@ -1,7 +1,6 @@
 // 文件路径: data/repository/DanmakuRepository.kt
 package com.android.purebilibili.data.repository
 
-import com.android.purebilibili.core.store.normalizeDanmakuDisplayArea
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.DanmakuThumbupStatsItem
 import com.android.purebilibili.data.model.response.GradeDanmakuSummary
@@ -42,74 +41,6 @@ internal fun resolveDanmakuLikeResult(code: Int, requestedLike: Boolean): Boolea
     65004 -> false
     else -> null
 }
-
-internal data class DanmakuCloudSyncSettings(
-    val enabled: Boolean,
-    val allowScroll: Boolean,
-    val allowTop: Boolean,
-    val allowBottom: Boolean,
-    val allowColorful: Boolean,
-    val allowSpecial: Boolean,
-    val opacity: Float,
-    val displayAreaRatio: Float,
-    val speed: Float,
-    val fontScale: Float
-)
-
-internal data class DanmakuCloudConfigPayload(
-    val dmSwitch: String,
-    val blockScroll: String,
-    val blockTop: String,
-    val blockBottom: String,
-    val blockColor: String,
-    val blockSpecial: String,
-    val opacity: Float,
-    val dmArea: Int,
-    val speedPlus: Float,
-    val fontSize: Float
-)
-
-private fun Boolean.toCloudFlag(): String = if (this) "true" else "false"
-
-internal fun mapDanmakuDisplayAreaRatioToCloudValue(displayAreaRatio: Float): Int {
-    if (displayAreaRatio <= 0f) return 0
-    return (normalizeDanmakuDisplayArea(displayAreaRatio) * 100f).toInt()
-}
-
-/**
- * B 站 `x/v2/dm/web/config` 的 fontsize 实测拒绝 ≤0.5（≤50% 同步失败）。
- * 本地仍可调到更小；上云时抬到 API 可接受下限，避免「无法同步设置」。
- */
-internal const val DANMAKU_CLOUD_FONT_SIZE_MIN_EXCLUSIVE = 0.5f
-internal const val DANMAKU_CLOUD_FONT_SIZE_MIN = 0.51f
-internal const val DANMAKU_CLOUD_FONT_SIZE_MAX = 1.6f
-
-internal fun mapDanmakuFontScaleToCloudFontSize(fontScale: Float): Float {
-    val clamped = fontScale.coerceIn(0.3f, DANMAKU_CLOUD_FONT_SIZE_MAX)
-    return if (clamped <= DANMAKU_CLOUD_FONT_SIZE_MIN_EXCLUSIVE) {
-        DANMAKU_CLOUD_FONT_SIZE_MIN
-    } else {
-        clamped
-    }
-}
-
-internal fun buildDanmakuCloudConfigPayload(settings: DanmakuCloudSyncSettings): DanmakuCloudConfigPayload {
-    return DanmakuCloudConfigPayload(
-        dmSwitch = settings.enabled.toCloudFlag(),
-        // B站 blockxxx 字段语义：true=不屏蔽，false=屏蔽；与本地 allow 语义一致
-        blockScroll = settings.allowScroll.toCloudFlag(),
-        blockTop = settings.allowTop.toCloudFlag(),
-        blockBottom = settings.allowBottom.toCloudFlag(),
-        blockColor = settings.allowColorful.toCloudFlag(),
-        blockSpecial = settings.allowSpecial.toCloudFlag(),
-        opacity = settings.opacity.coerceIn(0f, 1f),
-        dmArea = mapDanmakuDisplayAreaRatioToCloudValue(settings.displayAreaRatio),
-        speedPlus = settings.speed.coerceIn(0.4f, 1.6f),
-        fontSize = mapDanmakuFontScaleToCloudFontSize(settings.fontScale)
-    )
-}
-
-internal fun isDanmakuCloudSyncSuccessful(code: Int): Boolean = code == 0 || code == 23004
 
 internal fun resolveDanmakuThumbupState(
     dmid: Long,
@@ -784,49 +715,6 @@ object DanmakuRepository {
             }
         } catch (e: Exception) {
             android.util.Log.e("DanmakuRepo", "❌ reportDanmaku exception: ${e.message}", e)
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * 同步弹幕配置到账号云端（对齐 Web 原版行为）
-     */
-    internal suspend fun syncDanmakuCloudConfig(
-        settings: DanmakuCloudSyncSettings
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache
-            if (csrf.isNullOrEmpty()) {
-                return@withContext Result.failure(Exception("请先登录"))
-            }
-
-            val payload = buildDanmakuCloudConfigPayload(settings)
-            val response = api.updateDanmakuWebConfig(
-                dmSwitch = payload.dmSwitch,
-                blockScroll = payload.blockScroll,
-                blockTop = payload.blockTop,
-                blockBottom = payload.blockBottom,
-                blockColor = payload.blockColor,
-                blockSpecial = payload.blockSpecial,
-                opacity = payload.opacity,
-                dmArea = payload.dmArea,
-                speedPlus = payload.speedPlus,
-                fontSize = payload.fontSize,
-                csrf = csrf
-            )
-
-            if (isDanmakuCloudSyncSuccessful(response.code)) {
-                Result.success(Unit)
-            } else {
-                val errorMsg = when (response.code) {
-                    -101 -> "请先登录"
-                    -111 -> "鉴权失败，请重新登录"
-                    -400 -> "弹幕云同步参数错误"
-                    else -> response.message.ifEmpty { "弹幕云同步失败 (${response.code})" }
-                }
-                Result.failure(Exception(errorMsg))
-            }
-        } catch (e: Exception) {
             Result.failure(e)
         }
     }

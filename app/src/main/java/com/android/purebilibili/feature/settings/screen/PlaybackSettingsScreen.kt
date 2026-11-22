@@ -1335,8 +1335,6 @@ private fun PlaybackInteractionSettingsSection(
         .collectAsStateWithLifecycle(initialValue = true)
     val hideInteractiveCommandDanmaku by remember(context) { com.android.purebilibili.core.store.SettingsManager.getDanmakuHideInteractiveCommands(context) }
         .collectAsStateWithLifecycle(initialValue = false)
-    val danmakuCloudSyncEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getDanmakuCloudSyncEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = true)
     //  [新增] 自动播放下一个
     val autoPlayEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getAutoPlay(context) }.collectAsStateWithLifecycle(initialValue = true)
     val nextWatchHintEnabled by remember(context) { SettingsManager.getNextWatchHintEnabled(context) }
@@ -1654,23 +1652,6 @@ SettingsItemAnchor("playback.subtitle_auto_preference") {
                 iconTint = AppContentColors.secondaryText()
             )
 }
-        AppPreferenceDivider()
-        SettingsItemAnchor("playback.danmaku_cloud_sync_enabled") {
-            AppSwitchPreference(
-                icon = rememberSettingsSemanticIcon(SettingsIconRole.DANMAKU_CLOUD_SYNC),
-                title = playbackSettingTitle("playback.danmaku_cloud_sync_enabled"),
-                subtitle = com.android.purebilibili.feature.video.danmaku
-                    .resolveDanmakuCloudSyncToggleSubtitle(danmakuCloudSyncEnabled),
-                checked = danmakuCloudSyncEnabled,
-                onCheckedChange = {
-                    scope.launch {
-                        com.android.purebilibili.core.store.SettingsManager
-                            .setDanmakuCloudSyncEnabled(context, it)
-                    }
-                },
-                iconTint = AppContentColors.secondaryText()
-            )
-        }
         AppPreferenceDivider()
         SettingsItemAnchor("playback.video_info_default_expanded") {
             AppSwitchPreference(

@@ -335,6 +335,19 @@ class DanmakuSettingsMappingPolicyTest {
         assertEquals(0.75f, landscape.displayArea)
     }
 
+    @Test
+    fun removeLegacyDanmakuCloudSyncPreference_deletesOnlyRetiredKey() {
+        val prefs = mutablePreferencesOf(
+            booleanPreferencesKey("danmaku_cloud_sync_enabled") to true,
+            floatPreferencesKey("danmaku_opacity") to 0.7f
+        )
+
+        assertTrue(SettingsManager.removeLegacyDanmakuCloudSyncPreference(prefs))
+        assertFalse(prefs.contains(booleanPreferencesKey("danmaku_cloud_sync_enabled")))
+        assertEquals(0.7f, prefs[floatPreferencesKey("danmaku_opacity")])
+        assertFalse(SettingsManager.removeLegacyDanmakuCloudSyncPreference(prefs))
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun <T> propertyValue(instance: Any, name: String): T {
         val upperName = name.replaceFirstChar { it.uppercase() }

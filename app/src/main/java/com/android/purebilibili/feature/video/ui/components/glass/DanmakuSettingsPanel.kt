@@ -16,11 +16,8 @@ import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.PortraitDanmakuDisplayAreaMode
 import com.android.purebilibili.feature.video.danmaku.DanmakuBlockRuleSections
-import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncStatus
-import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 import com.android.purebilibili.feature.video.danmaku.DanmakuBlockRuleImportResult
 import com.android.purebilibili.feature.video.danmaku.parseDanmakuBlockRuleImport
-import com.android.purebilibili.feature.video.danmaku.resolveDanmakuCloudSyncToggleSubtitle
 import com.android.purebilibili.feature.video.danmaku.mergeDanmakuBlockRuleSections
 import com.android.purebilibili.feature.video.danmaku.normalizeDanmakuRegexManagerInput
 import com.android.purebilibili.feature.video.danmaku.normalizeDanmakuUserHashManagerInput
@@ -167,20 +164,6 @@ internal fun resolveDanmakuSettingsPanelSurfaceColors(
             colorScheme.surfaceContainerLow
         }
     )
-}
-
-internal fun resolveDanmakuSyncStatusBadgeText(syncUiState: DanmakuCloudSyncUiState): String {
-    return when (syncUiState.status) {
-        DanmakuCloudSyncStatus.IDLE -> "未同步"
-        DanmakuCloudSyncStatus.PENDING -> "待同步"
-        DanmakuCloudSyncStatus.SYNCING -> "同步中"
-        DanmakuCloudSyncStatus.SUCCESS -> "已同步"
-        DanmakuCloudSyncStatus.FAILURE -> "同步失败"
-    }
-}
-
-internal fun shouldShowDanmakuSyncRetry(status: DanmakuCloudSyncStatus): Boolean {
-    return status == DanmakuCloudSyncStatus.FAILURE
 }
 
 internal fun resolveDanmakuBlockManagerSections(blockRulesRaw: String): DanmakuBlockRuleSections {
@@ -351,14 +334,11 @@ fun DanmakuSettingsPanel(
     hideInteractiveCommands: Boolean = false,
     showBlockRuleEditor: Boolean = false,
     showSmartOcclusionSection: Boolean = false,
-    showSyncSection: Boolean = false,
-    cloudSyncEnabled: Boolean = true,
     blockRulesRaw: String = "",
     smartOcclusion: Boolean = true,
     fullscreenWidthMode: DanmakuPanelWidthMode = DanmakuPanelWidthMode.THIRD,
     portraitDisplayAreaMode: PortraitDanmakuDisplayAreaMode =
         PortraitDanmakuDisplayAreaMode.SCREEN_TOP,
-    syncUiState: DanmakuCloudSyncUiState = DanmakuCloudSyncUiState(),
     onSliderPreview: ((DanmakuSliderParameter, Float) -> Unit)? = null,
     onOpacityChange: (Float) -> Unit,
     onFontScaleChange: (Float) -> Unit,
@@ -386,8 +366,6 @@ fun DanmakuSettingsPanel(
     onSmartOcclusionChange: (Boolean) -> Unit = {},
     onFullscreenWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
     onPortraitDisplayAreaModeChange: (PortraitDanmakuDisplayAreaMode) -> Unit = {},
-    onCloudSyncEnabledChange: (Boolean) -> Unit = {},
-    onSyncNowClick: () -> Unit = {},
     onShowDanmakuPool: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
@@ -419,13 +397,10 @@ fun DanmakuSettingsPanel(
         hideInteractiveCommands = hideInteractiveCommands,
         showBlockRuleEditor = showBlockRuleEditor,
         showSmartOcclusionSection = showSmartOcclusionSection,
-        showSyncSection = showSyncSection,
-        cloudSyncEnabled = cloudSyncEnabled,
         blockRulesRaw = blockRulesRaw,
         smartOcclusion = smartOcclusion,
         fullscreenWidthMode = fullscreenWidthMode,
         portraitDisplayAreaMode = portraitDisplayAreaMode,
-        syncUiState = syncUiState,
         onSliderPreview = onSliderPreview,
         onOpacityChange = onOpacityChange,
         onFontScaleChange = onFontScaleChange,
@@ -453,8 +428,6 @@ fun DanmakuSettingsPanel(
         onSmartOcclusionChange = onSmartOcclusionChange,
         onFullscreenWidthModeChange = onFullscreenWidthModeChange,
         onPortraitDisplayAreaModeChange = onPortraitDisplayAreaModeChange,
-        onCloudSyncEnabledChange = onCloudSyncEnabledChange,
-        onSyncNowClick = onSyncNowClick,
         onShowDanmakuPool = onShowDanmakuPool,
         onDismiss = onDismiss,
     )
