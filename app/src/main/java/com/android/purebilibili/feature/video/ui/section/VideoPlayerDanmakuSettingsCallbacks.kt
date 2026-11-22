@@ -3,22 +3,17 @@ package com.android.purebilibili.feature.video.ui.section
 import android.content.Context
 import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.data.repository.DanmakuCloudSyncSettings
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.ui.overlay.VideoPlayerOverlayActions
 
 // 只组装弹幕设置事件，保留其他控制回调。保存工作由播放器宿主的 UI 作用域启动，
-// 即时渲染更新、持久化请求与云同步排队沿用原有顺序；当前显示范围由宿主传入。
+// 即时渲染更新与持久化请求沿用原有顺序；当前显示范围由宿主传入。
 internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
     context: Context,
     danmakuManager: DanmakuManager,
     danmakuEnabled: Boolean,
     activeDanmakuScope: DanmakuSettingsScope,
-    cloudSyncSettings: DanmakuCloudSyncSettings,
     launchSettingsWrite: (suspend () -> Unit) -> Unit,
-    onQueueCloudSync: (DanmakuCloudSyncSettings) -> Unit,
-    onCloudSyncDisabled: () -> Unit,
-    onSyncNow: () -> Unit,
 ): VideoPlayerOverlayActions = copy(
     onDanmakuToggle = {
         val newState = !danmakuEnabled
@@ -33,7 +28,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
                 activeDanmakuScope
             )
         }
-        onQueueCloudSync(cloudSyncSettings.copy(enabled = newState))
         //  记录弹幕开关事件
         com.android.purebilibili.core.util.AnalyticsHelper.logDanmakuToggle(newState)
     },
@@ -49,7 +43,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
                 activeDanmakuScope
             )
         }
-        onQueueCloudSync(cloudSyncSettings.copy(opacity = value))
     },
     onDanmakuFontScaleChange = { value ->
         danmakuManager.fontScale = value
@@ -60,7 +53,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
                 activeDanmakuScope
             )
         }
-        onQueueCloudSync(cloudSyncSettings.copy(fontScale = value))
     },
     onDanmakuFontWeightChange = { value ->
         danmakuManager.fontWeight = value
@@ -81,7 +73,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
                 activeDanmakuScope
             )
         }
-        onQueueCloudSync(cloudSyncSettings.copy(speed = value))
     },
     onDanmakuDisplayAreaChange = { value ->
         danmakuManager.displayArea = value
@@ -92,7 +83,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
                 activeDanmakuScope
             )
         }
-        onQueueCloudSync(cloudSyncSettings.copy(displayAreaRatio = value))
     },
     onDanmakuStrokeWidthChange = { value ->
         danmakuManager.strokeWidth = value
@@ -205,7 +195,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
                 activeDanmakuScope
             )
         }
-        onQueueCloudSync(cloudSyncSettings.copy(allowScroll = value))
     },
     onDanmakuAllowTopChange = { value ->
         launchSettingsWrite {
@@ -215,7 +204,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
                 activeDanmakuScope
             )
         }
-        onQueueCloudSync(cloudSyncSettings.copy(allowTop = value))
     },
     onDanmakuAllowBottomChange = { value ->
         launchSettingsWrite {
@@ -225,7 +213,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
                 activeDanmakuScope
             )
         }
-        onQueueCloudSync(cloudSyncSettings.copy(allowBottom = value))
     },
     onDanmakuAllowColorfulChange = { value ->
         launchSettingsWrite {
@@ -235,7 +222,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
                 activeDanmakuScope
             )
         }
-        onQueueCloudSync(cloudSyncSettings.copy(allowColorful = value))
     },
     onDanmakuAllowSpecialChange = { value ->
         launchSettingsWrite {
@@ -245,7 +231,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
                 activeDanmakuScope
             )
         }
-        onQueueCloudSync(cloudSyncSettings.copy(allowSpecial = value))
     },
     onDanmakuHideInteractiveCommandsChange = { value ->
         launchSettingsWrite {
@@ -272,18 +257,6 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
             SettingsManager
                 .setPortraitDanmakuDisplayAreaMode(context, value)
         }
-    },
-    onDanmakuCloudSyncEnabledChange = { enabled ->
-        launchSettingsWrite {
-            SettingsManager
-                .setDanmakuCloudSyncEnabled(context, enabled)
-        }
-        if (!enabled) {
-            onCloudSyncDisabled()
-        }
-    },
-    onDanmakuSyncNowClick = {
-        onSyncNow()
     },
     onDanmakuBlockRulesRawChange = { value ->
         launchSettingsWrite {

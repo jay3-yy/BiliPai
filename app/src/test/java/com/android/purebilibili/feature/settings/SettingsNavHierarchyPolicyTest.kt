@@ -34,7 +34,7 @@ class SettingsNavHierarchyPolicyTest {
 
     @Test
     fun resolveSettingsNavParentRoute_keepsIndependentCategoriesAtRootDetailDepth() {
-        assertEquals("appearance_settings", resolveSettingsNavParentRoute("animation_settings"))
+        assertEquals("settings", resolveSettingsNavParentRoute("animation_settings"))
         assertEquals("settings_category", resolveSettingsNavParentRoute("home_settings"))
         assertEquals("appearance_settings", resolveSettingsNavParentRoute("icon_settings"))
         assertEquals("settings_category", resolveSettingsNavParentRoute("message_notification_settings"))
@@ -79,12 +79,7 @@ class SettingsNavHierarchyPolicyTest {
                 childRoute = "message_notification_settings",
             )
         )
-        assertTrue(
-            isSettingsNavHierarchyTransition(
-                parentRoute = "appearance_settings",
-                childRoute = "animation_settings",
-            )
-        )
+        assertFalse(isSettingsNavHierarchyTransition("appearance_settings", "animation_settings"))
         assertTrue(
             isSettingsNavHierarchyTransition(
                 parentRoute = "settings",
@@ -190,7 +185,6 @@ class SettingsNavHierarchyPolicyTest {
 
     @Test
     fun singleEntryCategory_directlyTargetsNextLevel() {
-        // 「外观与主题」分类页只有一个「外观设置」入口 → 点击分类直接进外观设置页
         assertEquals(
             BiliPaiNavKey.AppearanceSettings,
             resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.APPEARANCE_THEME),
@@ -198,6 +192,10 @@ class SettingsNavHierarchyPolicyTest {
         assertEquals(
             BiliPaiNavKey.AppearanceSettings,
             resolveSettingsCategoryNavKey(SettingsRootCategory.APPEARANCE_THEME),
+        )
+        assertEquals(
+            BiliPaiNavKey.AnimationSettings,
+            resolveSettingsCategoryNavKey(SettingsRootCategory.ANIMATION_HAPTICS),
         )
         // 「插件与扩展」分类页只有一个「插件中心」入口 → 点击分类直接进插件中心
         assertEquals(

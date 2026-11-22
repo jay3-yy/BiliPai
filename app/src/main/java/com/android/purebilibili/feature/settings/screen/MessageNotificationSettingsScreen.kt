@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -222,10 +222,11 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
         scrollHost = SettingsPageScrollHost.External,
         externalContentHandlesTopPadding = true,
     ) {
+        val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(bottom = 24.dp),
         ) {
             Spacer(modifier = Modifier.height(LocalSettingsTopContentPadding.current))

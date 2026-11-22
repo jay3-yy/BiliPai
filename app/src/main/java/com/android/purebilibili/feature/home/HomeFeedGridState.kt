@@ -113,6 +113,11 @@ internal class HomeFeedGridState(
         if (regularLayout) regular.scrollToItem(index, scrollOffset) else waterfall.scrollToItem(index, scrollOffset)
     }
 
+    /** 保持刷新前的顶部位置，避免增量插入后继续锚定原首项。 */
+    fun keepTopOnNextLayout() {
+        if (regularLayout) regular.requestScrollToItem(0) else waterfall.requestScrollToItem(0)
+    }
+
     suspend fun animateScrollToItem(index: Int, scrollOffset: Int = 0) {
         if (regularLayout) regular.animateScrollToItem(index, scrollOffset)
         else waterfall.animateScrollToItem(index, scrollOffset)

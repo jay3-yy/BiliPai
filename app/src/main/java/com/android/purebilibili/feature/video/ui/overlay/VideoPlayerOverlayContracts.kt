@@ -7,7 +7,6 @@ import androidx.media3.common.Player
 import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.DanmakuPanelWidthMode
 import com.android.purebilibili.core.store.PortraitDanmakuDisplayAreaMode
-import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import com.android.purebilibili.data.model.response.ViewPoint
@@ -108,9 +107,6 @@ data class VideoPlayerOverlayState(
     val portraitDanmakuDisplayAreaMode: PortraitDanmakuDisplayAreaMode =
         PortraitDanmakuDisplayAreaMode.SCREEN_TOP,
     val danmakuSettingsScope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT,
-    val showDanmakuSyncSection: Boolean = false,
-    val danmakuCloudSyncEnabled: Boolean = true,
-    val danmakuSyncUiState: DanmakuCloudSyncUiState = DanmakuCloudSyncUiState(),
     val subtitleControlState: SubtitleControlUiState = SubtitleControlUiState(),
     val subtitleTracks: List<com.android.purebilibili.feature.video.subtitle.SubtitleTrackMeta> = emptyList(),
     val acquireNativeSubtitles: Boolean = false,
@@ -239,8 +235,6 @@ data class VideoPlayerOverlayActions(
     val onDanmakuSmartOcclusionChange: (Boolean) -> Unit = {},
     val onDanmakuFullscreenPanelWidthModeChange: (DanmakuPanelWidthMode) -> Unit = {},
     val onPortraitDanmakuDisplayAreaModeChange: (PortraitDanmakuDisplayAreaMode) -> Unit = {},
-    val onDanmakuCloudSyncEnabledChange: (Boolean) -> Unit = {},
-    val onDanmakuSyncNowClick: () -> Unit = {},
     val subtitleControlCallbacks: SubtitleControlCallbacks = SubtitleControlCallbacks(),
     val onDoubleTapLike: () -> Unit = {},
     val onAspectRatioChange: (VideoAspectRatio) -> Unit = {},

@@ -121,7 +121,6 @@ fun CollectionRow(
                 collectionId = collectionSubscriptionId,
                 currentBvid = currentBvid,
                 currentAid = currentAid,
-                fontSize = MaterialTheme.typography.labelMedium.fontSize,
                 immersive = immersive,
             )
 

@@ -4,6 +4,7 @@ import com.android.purebilibili.core.util.animateScrollToTop
 
 import com.android.purebilibili.core.ui.AppContentColors
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.MutableTransitionState
@@ -29,7 +30,7 @@ import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
+import com.android.purebilibili.feature.video.screen.VideoCommentRefreshContainer
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.android.purebilibili.core.ui.components.AppIcon
@@ -44,6 +45,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.data.model.response.EmotePackage
+import com.android.purebilibili.data.repository.CommentRepository
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import androidx.compose.runtime.getValue
@@ -53,6 +57,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -93,7 +98,9 @@ import com.android.purebilibili.feature.video.ui.pager.shouldOpenPortraitComment
 import com.android.purebilibili.feature.video.ui.pager.shouldOpenPortraitCommentThreadDetail
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.video.viewmodel.FullCommentSearchUiState
+import com.android.purebilibili.feature.video.viewmodel.VIDEO_COMMENT_TYPE
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
+import com.android.purebilibili.feature.video.viewmodel.commentComposerDraftKey
 import com.android.purebilibili.feature.video.viewmodel.resolveVideoCommentSkeletonSlotCount
 import kotlinx.coroutines.launch
 import kotlin.math.max
@@ -342,11 +349,12 @@ fun VideoCommentSheetHost(
     onMainSheetVisibilityProgressChange: (Float) -> Unit = {},
     commentViewModel: VideoCommentViewModel,
     aid: Long,
+    commentType: Int = VIDEO_COMMENT_TYPE,
     upMid: Long = 0,
     expectedReplyCount: Int = 0,
     emoteMap: Map<String, String> = emptyMap(),
-    onRootCommentClick: () -> Unit = {},
-    onReplyClick: (ReplyItem) -> Unit = {},
+    onRootCommentClick: (() -> Unit)? = null,
+    onReplyClick: ((ReplyItem) -> Unit)? = null,
     onUserClick: (Long) -> Unit,
     onVideoClick: ((String) -> Unit)? = null,
     onSearchKeywordClick: ((String) -> Unit)? = null,
@@ -361,6 +369,7 @@ fun VideoCommentSheetHost(
     handleFraudEvents: Boolean = true,
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
     threadListModifier: Modifier = Modifier,
+    pullToRefreshFromTopOnly: Boolean = false,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -622,18 +631,60 @@ fun VideoCommentSheetHost(
         }
     }
 
-    LaunchedEffect(aid, mainSheetVisible, forceInitialize, preferredSortMode, upMid, expectedReplyCount) {
+    LaunchedEffect(aid, commentType, mainSheetVisible, forceInitialize, preferredSortMode, upMid, expectedReplyCount) {
         if (shouldInitializeVideoCommentSheetHost(mainSheetVisible, forceInitialize)) {
             commentViewModel.init(
                 aid = aid,
                 upMid = upMid,
                 preferredSortMode = preferredSortMode,
-                expectedReplyCount = expectedReplyCount
+                expectedReplyCount = expectedReplyCount,
+                commentType = commentType,
             )
         }
     }
 
-    CommentFraudFeedbackHost(commentViewModel = commentViewModel, enabled = handleFraudEvents)
+    CommentFraudFeedbackHost(
+        commentViewModel = commentViewModel,
+        enabled = handleFraudEvents,
+        onDeleteShadowBanned = commentViewModel::deleteCommentForFraudResult,
+    )
+    val menuCallbacks = remember(commentViewModel) { commentViewModel.replyMenuCallbacks() }
+    val useBuiltInComposer = onRootCommentClick == null || onReplyClick == null
+    var showBuiltInComposer by rememberSaveable(aid, commentType) { mutableStateOf(false) }
+    var submittedSessionId by remember(aid, commentType) { mutableStateOf<Long?>(null) }
+    var builtInEmotePackages by remember { mutableStateOf<List<EmotePackage>>(emptyList()) }
+    LaunchedEffect(useBuiltInComposer, showBuiltInComposer) {
+        if (useBuiltInComposer && showBuiltInComposer && builtInEmotePackages.isEmpty()) {
+            builtInEmotePackages = CommentRepository.getEmotePackages().getOrDefault(emptyList())
+        }
+    }
+    LaunchedEffect(useBuiltInComposer, commentState.isSending, commentState.sendError, commentState.composerDrafts.completedSessionId) {
+        if (!useBuiltInComposer) return@LaunchedEffect
+        if (submittedSessionId != null && !commentState.isSending) {
+            submittedSessionId = null
+            commentState.sendError?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+        }
+    }
+    LaunchedEffect(useBuiltInComposer, commentState.composerDrafts.sessionId, commentState.composerDrafts.completedSessionId) {
+        if (useBuiltInComposer && commentState.composerDrafts.completedSessionId == commentState.composerDrafts.sessionId) {
+            showBuiltInComposer = false
+        }
+    }
+    fun openBuiltInComposer(reply: ReplyItem? = null) {
+        if (TokenManager.sessDataCache.isNullOrBlank()) {
+            Toast.makeText(context, "请先登录", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!commentState.canInputComment) {
+            Toast.makeText(context, commentState.rootInputHint.ifBlank { "当前评论区暂不可发言" }, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (reply == null) commentViewModel.cancelReply() else commentViewModel.replyTo(reply)
+        commentViewModel.beginCommentDraft()
+        showBuiltInComposer = true
+    }
+    val effectiveOnRootCommentClick = onRootCommentClick ?: { openBuiltInComposer(null) }
+    val effectiveOnReplyClick = onReplyClick ?: { reply -> openBuiltInComposer(reply) }
 
     val openCommentUrl: (String) -> Unit = openCommentUrl@{ rawUrl ->
         val url = rawUrl.trim()
@@ -746,15 +797,17 @@ fun VideoCommentSheetHost(
                             ) {
                                 VideoCommentMainList(
                                     viewModel = commentViewModel,
+                                    menuCallbacks = menuCallbacks,
                                     showIdentityDecorations = commentMemberDecorationsEnabled,
-                                    onRootCommentClick = onRootCommentClick,
-                                    onReplyClick = onReplyClick,
+                                    onRootCommentClick = effectiveOnRootCommentClick,
+                                    onReplyClick = effectiveOnReplyClick,
                                     onUserClick = onUserClick,
                                     onCommentUrlClick = openCommentUrl,
                                     onTimestampClick = onTimestampClick,
                                     maxTimestampMs = maxTimestampMs,
                                     onImagePreview = previewCallback,
                                     onRefresh = commentViewModel::refreshComments,
+                                    pullToRefreshFromTopOnly = pullToRefreshFromTopOnly,
                                     headerDragModifier = Modifier.pointerInput(
                                         mainSheetVisible,
                                         hostContent,
@@ -853,13 +906,13 @@ fun VideoCommentSheetHost(
                                         isRefreshing = subReplyState.isRefreshing,
                                         onDismiss = { commentViewModel.closeSubReply() },
                                         applyStatusBarPadding = applyThreadStatusBarPadding,
-                                        onRootCommentClick = onRootCommentClick,
+                                        onRootCommentClick = effectiveOnRootCommentClick,
                                         onTimestampClick = onTimestampClick,
                                         upMid = subReplyState.upMid,
                                         showUpFlag = commentState.showUpFlag,
                                         showIdentityDecorations = commentMemberDecorationsEnabled,
                                         onImagePreview = previewCallback,
-                                        onReplyClick = onReplyClick,
+                                        onReplyClick = effectiveOnReplyClick,
                                         onConversationClick = commentViewModel::openSubReplyConversation,
                                         onConversationBack = commentViewModel::closeSubReplyConversation,
                                         isConversationMode = subReplyState.conversationAnchor != null,
@@ -872,6 +925,9 @@ fun VideoCommentSheetHost(
                                         onCommentLike = commentViewModel::likeComment,
                                         onCommentHate = commentViewModel::hateComment,
                                         onReportComment = commentViewModel::reportComment,
+                                        onToggleTopComment = commentViewModel::toggleTopComment,
+                                        pinnedReplyIds = commentState.pinnedReplyIds,
+                                        menuCallbacks = menuCallbacks,
                                         likedComments = commentState.likedComments,
                                         hatedComments = commentState.hatedComments,
                                         onUrlClick = openCommentUrl,
@@ -896,11 +952,55 @@ fun VideoCommentSheetHost(
             }
         }
     }
+
+    if (useBuiltInComposer) {
+        val composerSessionId = commentState.composerDrafts.sessionId
+        val composerReplyRpid = commentState.replyTarget?.rpid
+        val composerDraft = commentState.composerDrafts.drafts[commentComposerDraftKey(composerReplyRpid)]
+        val composerKey = remember(aid, commentType, composerReplyRpid, composerSessionId) {
+            "sheet:$aid:$commentType:$composerReplyRpid:$composerSessionId"
+        }
+        CommentInputDialog(
+            visible = showBuiltInComposer,
+            draftKey = composerKey,
+            onDismiss = {
+                if (commentViewModel.commentState.value.composerDrafts.sessionId == composerSessionId) {
+                    showBuiltInComposer = false
+                    commentViewModel.cancelReply()
+                }
+            },
+            onSend = { text, images, sync ->
+                val latest = commentViewModel.commentState.value
+                if (showBuiltInComposer &&
+                    latest.composerDrafts.sessionId == composerSessionId &&
+                    latest.composerDrafts.completedSessionId != composerSessionId &&
+                    latest.replyTarget?.rpid == composerReplyRpid &&
+                    !latest.isSending
+                ) {
+                    submittedSessionId = composerSessionId
+                    commentViewModel.updateCommentDraft(composerSessionId, composerReplyRpid, text, images, sync)
+                    commentViewModel.sendComment(text, images, sync)
+                }
+            },
+            isSending = commentState.isSending,
+            replyToName = commentState.replyTarget?.member?.uname,
+            inputHint = if (commentState.replyTarget == null) commentState.rootInputHint else commentState.childInputHint,
+            canInputComment = commentState.canInputComment,
+            emotePackages = builtInEmotePackages,
+            initialText = composerDraft?.text.orEmpty(),
+            initialImageUris = composerDraft?.imageUris.orEmpty(),
+            initialSyncToDynamic = composerDraft?.syncToDynamic ?: false,
+            onDraftChange = { text, images, sync ->
+                commentViewModel.updateCommentDraft(composerSessionId, composerReplyRpid, text, images, sync)
+            },
+        )
+    }
 }
 
 @Composable
 internal fun VideoCommentMainList(
     viewModel: VideoCommentViewModel,
+    menuCallbacks: ReplyMenuCallbacks = remember(viewModel) { viewModel.replyMenuCallbacks() },
     showIdentityDecorations: Boolean,
     onRootCommentClick: () -> Unit,
     onReplyClick: (ReplyItem) -> Unit,
@@ -910,6 +1010,7 @@ internal fun VideoCommentMainList(
     maxTimestampMs: Long?,
     onImagePreview: (List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit,
     onRefresh: () -> Unit,
+    pullToRefreshFromTopOnly: Boolean = false,
     headerDragModifier: Modifier = Modifier,
     onBackToTop: () -> Unit = {},
     scrollToTopRequest: Int = 0,
@@ -923,7 +1024,8 @@ internal fun VideoCommentMainList(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val appearance = rememberVideoCommentAppearance()
-    val commentChromeBackdrop = rememberLayerBackdrop()
+    val commentGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+    val commentChromeBackdrop = if (commentGlassEnabled) rememberLayerBackdrop() else null
     // 首屏骨架按视口高度铺够槽位：少铺会让列表在数据到达时被撑长、整体跳一下。
     val commentSkeletonSlotCount = resolveVideoCommentSkeletonSlotCount(
         LocalConfiguration.current.screenHeightDp
@@ -970,16 +1072,22 @@ internal fun VideoCommentMainList(
                     .fillMaxWidth()
                     .weight(1f),
             ) {
-                AdaptivePullToRefreshBox(
+                VideoCommentRefreshContainer(
                     isRefreshing = state.isRepliesRefreshing,
                     onRefresh = onRefresh,
+                    enabled = true,
+                    refreshGestureListState = listState.takeIf { pullToRefreshFromTopOnly },
+                    allowContentScrollWhileRefreshing = false,
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .layerBackdrop(commentChromeBackdrop),
+                            .then(
+                                if (commentChromeBackdrop != null) Modifier.layerBackdrop(commentChromeBackdrop)
+                                else Modifier
+                            ),
                         contentPadding = WindowInsets.navigationBars.asPaddingValues()
                     ) {
                     commentSectionNotice(state.pageControl)
@@ -1051,6 +1159,13 @@ internal fun VideoCommentMainList(
                         key = { it.rpid },
                         contentType = { resolveReplyItemContentType(it) }
                     ) { reply ->
+                        val menuBindings = resolveReplyMenuBindings(
+                            item = reply,
+                            currentMid = state.currentMid,
+                            upMid = state.upMid,
+                            pinnedReplyIds = state.pinnedReplyIds,
+                            callbacks = menuCallbacks,
+                        )
                         ReplyItemView(
                             modifier = videoCommentItemModifier(),
                             avatarListState = listState.takeIf { avatarPushEnabled },
@@ -1058,7 +1173,7 @@ internal fun VideoCommentMainList(
                             upMid = state.upMid,
                             showUpFlag = state.showUpFlag,
                             showIdentityDecorations = showIdentityDecorations,
-                            isPinned = reply.rpid in state.pinnedReplyIds,
+                            isPinned = menuBindings.isPinned,
                             onClick = {},
                             onSubClick = { parentReply, targetReplyId ->
                                 if (shouldOpenPortraitCommentThreadDetail(useEmbeddedPresentation = true)) {
@@ -1077,13 +1192,10 @@ internal fun VideoCommentMainList(
                                     onReplyClick(reply)
                                 }
                             },
-                            onReportClick = { reason -> viewModel.reportComment(reply.rpid, reason) },
-                            canToggleTop = shouldShowReplyTopAction(
-                                currentMid = state.currentMid,
-                                upMid = state.upMid,
-                                item = reply
-                            ),
-                            onToggleTopClick = { viewModel.toggleTopComment(reply) },
+                            onCheckFraudClick = menuBindings.onCheckFraudClick,
+                            onReportClick = menuBindings.onReportClick,
+                            canToggleTop = menuBindings.canToggleTop,
+                            onToggleTopClick = menuBindings.onToggleTopClick,
                             onUrlClick = onCommentUrlClick,
                             onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) ?: Unit }
                         )

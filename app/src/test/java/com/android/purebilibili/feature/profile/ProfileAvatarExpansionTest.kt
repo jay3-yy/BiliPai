@@ -42,6 +42,20 @@ class ProfileAvatarExpansionTest {
     }
 
     @Test
+    fun `remeasuring the header preserves its expanded state`() = runTest {
+        val state = ProfileAvatarExpansionState()
+        state.settle(true, 200f, 0f, 1f, motion = false)
+        state.updateExpandedRange(0f)
+        assertEquals(0f, state.visualOffsetPx)
+        state.updateExpandedRange(240f)
+        assertEquals(1f, state.fraction(240f))
+        assertEquals(240f, state.visualOffsetPx)
+        state.reset()
+        state.updateExpandedRange(200f)
+        assertEquals(0f, state.visualOffsetPx)
+    }
+
+    @Test
     fun `extra pull stretches a fully expanded photo before upward motion closes it`() = runTest {
         val state = ProfileAvatarExpansionState()
         state.settle(true, 200f, 0f, 1f, motion = false)

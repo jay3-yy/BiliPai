@@ -119,6 +119,35 @@ class ReplyRichTextInteractionTest(private val style: AppUiStyle, private val gl
     }
 
     @Test
+    fun plainTextOnSameLinesAsWrappedLinkStillBelongsToCommentRow() {
+        showComment(pinned = true)
+        val textLayout = layout()
+        val start = displayedText.indexOf(TITLE, displayedText.indexOf(PREFIX) + PREFIX.length)
+        val last = start + TITLE.length - 1
+        val startLine = textLayout.getLineForOffset(start)
+        val endLine = textLayout.getLineForOffset(last)
+        assertTrue(startLine < endLine)
+
+        val leadingPlainOffset = textLayout.getLineStart(startLine)
+        assertTrue(leadingPlainOffset < start)
+        assertTrue(textLayout.layoutInput.text.getLinkAnnotations(leadingPlainOffset, leadingPlainOffset + 1).isEmpty())
+        tapAt(textLayout.getBoundingBox(leadingPlainOffset).center)
+        var expectedRowClicks = 1
+
+        val endLineRight = textLayout.getLineRight(endLine)
+        val containerWidth = textLayout.size.width.toFloat()
+        assertTrue(endLineRight + 16f < containerWidth)
+        val midY = (textLayout.getLineTop(endLine) + textLayout.getLineBottom(endLine)) / 2f
+        tapAt(Offset((endLineRight + containerWidth) / 2f, midY))
+        expectedRowClicks++
+
+        rule.runOnIdle {
+            assertEquals(expectedRowClicks, rowClicks)
+            assertTrue(clicks.isEmpty())
+        }
+    }
+
+    @Test
     fun pinnedStandaloneVideoTitleUsesLinkGestureAndLatestCallback() {
         val title = "飞宇的酒"
         displayedText = "TOP $title"

@@ -11,9 +11,7 @@ import com.android.purebilibili.core.ui.transition.VideoCardTransitionBackground
 import kotlin.math.max
 import kotlin.math.min
 
-private const val HOME_WALLPAPER_HOME_ROUTE_BASE = "home"
 private const val HOME_WALLPAPER_MAIN_HOST_ROUTE = "main_host"
-private const val HOME_WALLPAPER_CHAT_ROUTE_BASE = "chat"
 
 /**
  * 底栏宿主的当前路由是 `main_host`，真正的首页/动态等 tab 在 [mainHostTabRoute]。
@@ -31,16 +29,18 @@ internal fun resolveGlobalHomeWallpaperRoute(
     return normalized
 }
 
-// Explicit opt-in keeps players, web content and destinations with their own artwork opaque.
+// 浏览与设置页面复用根层壁纸；播放器和独立网页保留自己的底图。
 private val GLOBAL_WALLPAPER_PAGE_ROUTES = setOf(
-    "home", "dynamic", "profile", "settings", "settings_category", "settings_search",
+    "home", "dynamic", "dynamic_detail", "article", "article_collection", "comment_detail",
+    "profile", "space", "account_ledger", "settings", "settings_category", "settings_search",
     "appearance_settings", "home_settings", "icon_settings", "animation_settings",
     "playback_settings", "permission_settings", "space_privacy_settings", "login_activity_settings", "message_notification_settings",
-    "plugins_settings", "content_filter_history", "bottom_bar_settings", "settings_share", "webdav_backup", "tips_settings",
+    "plugins_settings", "content_filter_history", "bottom_bar_settings", "settings_share", "webdav_backup",
+    "tips_settings", "keyboard_shortcuts_settings", "open_source_licenses", "performance_history", "process_memory",
     "history", "history_search", "favorite", "favorite_subscribed", "favorite_search",
-    "liked_videos", "watch_later", "watch_later_search", "following", "download_list",
-    "live_list", "live_search", "live_area", "live_area_detail", "live_following",
-    "inbox", "message", "chat", "partition", "search", "search_trending", "topic",
+    "liked_videos", "watch_later", "watch_later_search", "following", "fans", "download_list",
+    "live_list", "live_search", "live_area", "live_area_detail", "live_following", "live_match", "match_info",
+    "inbox", "message", "chat", "partition", "category", "search", "search_trending", "topic",
     "bangumi", "weekly_series", "season_series_detail",
 )
 
@@ -96,18 +96,12 @@ private fun normalizeHomeWallpaperRoute(route: String?): String? {
     return route?.trim()?.takeIf { it.isNotBlank() }?.substringBefore("?")
 }
 
-/** Dynamic home/chat already own a media renderer; the root must not start another player. */
+/** 静态底图可继续供退出页回放；动态素材只在使用壁纸的路由之间保留同一实例。 */
 internal fun shouldRenderRootHomeWallpaperMedia(
-    wallpaperVisible: Boolean,
+    globalWallpaperEnabled: Boolean,
     isStaticWallpaper: Boolean,
-    currentRoute: String?,
-    mainHostTabRoute: String? = null,
-): Boolean {
-    if (!wallpaperVisible) return false
-    if (isStaticWallpaper) return true
-    val route = resolveGlobalHomeWallpaperRoute(currentRoute, mainHostTabRoute)?.substringBefore('/')
-    return route != HOME_WALLPAPER_HOME_ROUTE_BASE && route != HOME_WALLPAPER_CHAT_ROUTE_BASE
-}
+    activeRouteUsesWallpaper: Boolean,
+): Boolean = globalWallpaperEnabled && (isStaticWallpaper || activeRouteUsesWallpaper)
 
 data class HomeGlassChromeStyle(
     val containerAlpha: Float,
@@ -190,7 +184,7 @@ internal fun resolveHomeCardWallpaperSurfaceMode(
         return HomeCardWallpaperSurfaceMode.STANDARD
     }
     if (
-        frostedGlassEnabled &&
+        (frostedGlassEnabled || dynamicTintEnabled) &&
             wallpaperIsStatic &&
             backdropReady &&
             blurEnabled &&

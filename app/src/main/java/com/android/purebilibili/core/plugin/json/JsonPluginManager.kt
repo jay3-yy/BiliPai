@@ -48,6 +48,7 @@ object JsonPluginManager {
     private val httpClient by lazy {
         OkHttpClient.Builder()
             .dns(buildAppDns())
+            .addInterceptor(com.android.purebilibili.core.network.GithubMirrorInterceptor())
             .protocols(NetworkModule.resolveSharedNetworkProtocols())
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)

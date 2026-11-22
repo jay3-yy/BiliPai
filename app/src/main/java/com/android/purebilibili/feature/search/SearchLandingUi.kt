@@ -24,6 +24,7 @@ import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.ClearAll
@@ -70,6 +71,10 @@ import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 
 private const val SEARCH_HIGHLIGHT_START_TOKEN = "§hl§"
 private const val SEARCH_HIGHLIGHT_END_TOKEN = "§/hl§"
@@ -580,7 +585,7 @@ private fun SearchKeywordSectionHeader(
     onToggleEnabled: (() -> Unit)?,
     onOpenTrending: (() -> Unit)?,
     modifier: Modifier = Modifier,
-) {
+) = NavigationControlMotionGroup {
     val actionColor = AppContentColors.secondaryText()
     val refreshLabel = stringResource(R.string.common_refresh)
     val iconActionSize = if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
@@ -593,6 +598,10 @@ private fun SearchKeywordSectionHeader(
             widthDp = maxWidth.value.toInt(),
             fontScale = LocalDensity.current.fontScale,
         )
+        val trending = openTrending?.let { open ->
+            val shape = if (useCompactActions) CircleShape else ButtonDefaults.textShape
+            rememberSystemWindowNavigationControl(BiliPaiNavKey.SearchTrending, shape, open)
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
@@ -610,11 +619,12 @@ private fun SearchKeywordSectionHeader(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (!useCompactActions && openTrending != null) {
+                if (!useCompactActions && trending != null) {
                     SearchKeywordHeaderTextAction(
                         text = "完整榜单",
                         icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                        onClick = openTrending,
+                        onClick = trending.onClick,
+                        modifier = trending.modifier,
                     )
                 }
             }
@@ -623,8 +633,8 @@ private fun SearchKeywordSectionHeader(
                 horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (useCompactActions && openTrending != null) {
-                    AppIconButton(onClick = openTrending, modifier = Modifier.size(iconActionSize)) {
+                if (useCompactActions && trending != null) {
+                    AppIconButton(onClick = trending.onClick, modifier = Modifier.size(iconActionSize).then(trending.modifier)) {
                         AppIcon(
                             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                             contentDescription = "完整榜单",
@@ -634,8 +644,9 @@ private fun SearchKeywordSectionHeader(
                     }
                 }
                 if (enabled) {
+                    val refreshMotion = if (trending != null) rememberSystemWindowControlNeighborModifier() else Modifier
                     if (useCompactActions) {
-                        AppIconButton(onClick = onRefresh, modifier = Modifier.size(iconActionSize)) {
+                        AppIconButton(onClick = onRefresh, modifier = Modifier.size(iconActionSize).then(refreshMotion)) {
                             AppIcon(
                                 imageVector = Icons.Rounded.Refresh,
                                 contentDescription = refreshLabel,
@@ -649,6 +660,7 @@ private fun SearchKeywordSectionHeader(
                             icon = Icons.Rounded.Refresh,
                             iconAtStart = true,
                             onClick = onRefresh,
+                            modifier = refreshMotion,
                         )
                     }
                 }
@@ -656,7 +668,8 @@ private fun SearchKeywordSectionHeader(
                     hasToggleHandler = onToggleEnabled != null,
                 )
                 if (showVisibilityToggle && onToggleEnabled != null) {
-                    AppIconButton(onClick = onToggleEnabled, modifier = Modifier.size(iconActionSize)) {
+                    val toggleMotion = if (trending != null) rememberSystemWindowControlNeighborModifier() else Modifier
+                    AppIconButton(onClick = onToggleEnabled, modifier = Modifier.size(iconActionSize).then(toggleMotion)) {
                         AppIcon(
                             imageVector = if (enabled) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                             contentDescription = resolveSearchKeywordSectionToggleContentDescription(enabled, title),

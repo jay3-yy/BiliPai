@@ -40,10 +40,10 @@ class StartupSplashPolicyTest {
     }
 
     @Test
-    fun customSplashFade_usesSlowIosLikeDurationWindow() {
-        assertEquals(1900L, customSplashHoldDurationMs())
-        assertEquals(1450, customSplashFadeDurationMs())
-        assertTrue(customSplashFadeDurationMs() > 1000)
+    fun customSplashExit_exitsQuicklyAfterNativeSplash() {
+        assertEquals(600L, customSplashHoldDurationMs())
+        assertEquals(700, customSplashFadeDurationMs())
+        assertTrue(customSplashFadeDurationMs() < 1000)
     }
 
     @Test

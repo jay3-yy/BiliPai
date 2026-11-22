@@ -445,19 +445,12 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             _uiState.value = BangumiPlayerState.Loading
             
             // 1. 获取番剧/课程详情（包含剧集列表）
-            val detailRequest = resolveBangumiDetailRequest(seasonId, epId)
             val detailResult = if (mediaId > 0L && seasonId <= 0L && epId <= 0L) {
                 BangumiRepository.getSeasonDetailByMediaId(mediaId)
             } else if (isCourse) {
-                BangumiRepository.getPugvSeasonDetail(
-                    seasonId = detailRequest.seasonId,
-                    epId = detailRequest.epId
-                )
+                BangumiRepository.getPugvSeasonDetail(seasonId = seasonId, epId = epId)
             } else {
-                BangumiRepository.getSeasonDetail(
-                    seasonId = detailRequest.seasonId,
-                    epId = detailRequest.epId
-                )
+                BangumiRepository.getSeasonDetail(seasonId = seasonId, epId = epId)
             }
             
             detailResult.exceptionOrNull()?.let { if (it is CancellationException) throw it }
@@ -466,7 +459,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             detailResult.onSuccess { detail ->
                 val resumeTarget = resolveBangumiInitialEpisode(
                     detail = detail,
-                    preferredAid = preferredAid,
+                    preferredAid = preferredAid.takeIf { isCourse || detail.seasonType == 10 } ?: 0L,
                     routeEpId = epId,
                     autoResumeEnabled = true
                 )

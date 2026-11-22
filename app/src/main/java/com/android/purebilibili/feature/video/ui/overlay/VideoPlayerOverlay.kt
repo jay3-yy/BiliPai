@@ -68,7 +68,6 @@ import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.blur.shouldAllowRuntimeShaderBackedHazeEffect
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 // Import reusable components from standalone files
 import com.android.purebilibili.feature.video.ui.components.QualitySelectionMenu
 import com.android.purebilibili.feature.video.ui.components.AudioQualitySelectionMenuDialog
@@ -119,7 +118,7 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import com.android.purebilibili.core.ui.components.AppTextButton
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.AppModalPresentation
 import com.android.purebilibili.feature.video.ui.components.PlaybackCdnDiagnostics
@@ -569,9 +568,6 @@ private fun VideoPlayerOverlayContent(
     val danmakuFullscreenPanelWidthMode = state.danmakuFullscreenPanelWidthMode
     val portraitDanmakuDisplayAreaMode = state.portraitDanmakuDisplayAreaMode
     val danmakuSettingsScope = state.danmakuSettingsScope
-    val showDanmakuSyncSection = state.showDanmakuSyncSection
-    val danmakuCloudSyncEnabled = state.danmakuCloudSyncEnabled
-    val danmakuSyncUiState = state.danmakuSyncUiState
     val onDanmakuOpacityChange = actions.onDanmakuOpacityChange
     val onDanmakuFontScaleChange = actions.onDanmakuFontScaleChange
     val onDanmakuFontWeightChange = actions.onDanmakuFontWeightChange
@@ -598,8 +594,6 @@ private fun VideoPlayerOverlayContent(
     val onDanmakuSmartOcclusionChange = actions.onDanmakuSmartOcclusionChange
     val onDanmakuFullscreenPanelWidthModeChange = actions.onDanmakuFullscreenPanelWidthModeChange
     val onPortraitDanmakuDisplayAreaModeChange = actions.onPortraitDanmakuDisplayAreaModeChange
-    val onDanmakuCloudSyncEnabledChange = actions.onDanmakuCloudSyncEnabledChange
-    val onDanmakuSyncNowClick = actions.onDanmakuSyncNowClick
     val subtitleTools = rememberPiliSubtitleTools(
         bvid, cid, player, state.subtitleControlState, actions.subtitleControlCallbacks,
         nativeTracks = state.subtitleTracks, isFullscreen = isFullscreen,
@@ -2169,6 +2163,19 @@ private fun VideoPlayerOverlayContent(
             }
         }
 
+        val loadingIndicatorsActive = visualWorkActive && progressInViewport
+        val showRebufferingIndicator = loadingIndicatorsActive && shouldShowBufferingIndicator(
+            isBuffering = isBuffering,
+            isQualitySwitching = isQualitySwitching,
+            playWhenReady = player.playWhenReady,
+            hasRenderedFirstFrame = hasRenderedFirstFrame,
+            suppressTransientOverlays = suppressTransientOverlaysForTransition,
+        ) && centerLoadingUiState == null && !state.startupLoadingActive && !player.isPlaying
+        val showCenterLoadingBadge = loadingIndicatorsActive && !pluginPlaybackStatus.first &&
+            !suppressTransientOverlaysForTransition &&
+            !state.startupLoadingActive && !player.isPlaying && hasRenderedFirstFrame &&
+            (showRebufferingIndicator || centerLoadingUiState != null)
+
         val showCenterPlaybackControl = !hideCenterPlayback && !portraitFullscreenChrome && showPlayerChrome &&
             (pluginPlaybackStatus.first || player.playbackState == Player.STATE_READY ||
                 player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_ENDED) &&
@@ -2176,34 +2183,28 @@ private fun VideoPlayerOverlayContent(
 
         CenterPlaybackControl(
             visible = showCenterPlaybackControl,
+            loading = showCenterLoadingBadge,
             isPlaying = effectiveIsPlaying,
             onPlayPause = { togglePlayPause() },
             diameter = if (isFullscreen) 72.dp else 56.dp,
             viewportTopInset = if (isFullscreen) 0.dp else statusBarBackdropHeight,
-            isBuffering = hasRenderedFirstFrame && !pluginPlaybackStatus.first && player.playWhenReady &&
-                (player.playbackState == Player.STATE_BUFFERING || centerLoadingUiState != null),
         )
 
         // --- 5.4  缓冲加载指示器 ---
         AnimatedVisibility(
-            visible = shouldShowBufferingIndicator(
-                isBuffering = isBuffering,
-                isQualitySwitching = isQualitySwitching,
-                playWhenReady = player.playWhenReady,
-                hasRenderedFirstFrame = hasRenderedFirstFrame,
-                suppressTransientOverlays = suppressTransientOverlaysForTransition,
-            ) && centerLoadingUiState == null && !showCenterPlaybackControl &&
-                !state.startupLoadingActive,
+            visible = showRebufferingIndicator && !showCenterPlaybackControl,
             modifier = Modifier.align(Alignment.Center),
             // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
             // 看起来像又一次进场闪烁。
             enter = EnterTransition.None,
             exit = fadeOut(OverlayControlFadeSpec)
         ) {
-            BiliTvBufferingIndicator(
-                tint = centerLoadingVisualState.indicatorColor,
-                bufferedProvider = { progressProvider().buffered },
-            )
+            if (loadingIndicatorsActive && !showCenterPlaybackControl) {
+                BiliTvBufferingIndicator(
+                    tint = centerLoadingVisualState.indicatorColor,
+                    bufferedProvider = { progressProvider().buffered },
+                )
+            }
         }
 
         AnimatedVisibility(
@@ -2212,6 +2213,7 @@ private fun VideoPlayerOverlayContent(
             enter = fadeIn(OverlayControlFadeSpec),
             exit = fadeOut(OverlayControlFadeSpec)
         ) {
+            if (!loadingIndicatorsActive || showCenterPlaybackControl) return@AnimatedVisibility
             val loadingState = centerLoadingUiState ?: return@AnimatedVisibility
             Box(modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)) {
                 Column(
@@ -2384,9 +2386,6 @@ private fun VideoPlayerOverlayContent(
                     smartOcclusion = danmakuSmartOcclusion,
                     fullscreenWidthMode = danmakuFullscreenPanelWidthMode,
                     portraitDisplayAreaMode = portraitDanmakuDisplayAreaMode,
-                    showSyncSection = showDanmakuSyncSection,
-                    cloudSyncEnabled = danmakuCloudSyncEnabled,
-                    syncUiState = danmakuSyncUiState,
                     onSliderPreview = actions.onDanmakuSliderPreview,
                     onOpacityChange = onDanmakuOpacityChange,
                     onFontScaleChange = onDanmakuFontScaleChange,
@@ -2414,8 +2413,6 @@ private fun VideoPlayerOverlayContent(
                     onSmartOcclusionChange = onDanmakuSmartOcclusionChange,
                     onFullscreenWidthModeChange = onDanmakuFullscreenPanelWidthModeChange,
                     onPortraitDisplayAreaModeChange = onPortraitDanmakuDisplayAreaModeChange,
-                    onCloudSyncEnabledChange = onDanmakuCloudSyncEnabledChange,
-                    onSyncNowClick = onDanmakuSyncNowClick,
                     onShowDanmakuPool = onShowDanmakuPool?.let { action ->
                         {
                             showDanmakuSettings = false
@@ -3508,10 +3505,9 @@ private fun TripleLikeInteractionButton(
     val likeFilledIcon = rememberAppLikeFilledIcon()
 
     var isLongPressing by remember { mutableStateOf(false) }
-    var longPressProgress by remember { mutableFloatStateOf(0f) }
     val progressDuration = 1500
 
-    val animatedProgress by animateFloatAsState(
+    val animatedProgressState = animateFloatAsState(
         targetValue = if (isLongPressing) 1f else 0f,
         animationSpec = if (isLongPressing) {
             androidx.compose.animation.core.tween(durationMillis = progressDuration, easing = LinearEasing)
@@ -3527,10 +3523,7 @@ private fun TripleLikeInteractionButton(
             }
         }
     )
-
-    LaunchedEffect(animatedProgress) {
-        longPressProgress = animatedProgress
-    }
+    val longPressProgress = animatedProgressState.value
 
     LaunchedEffect(isLongPressing) {
         if (isLongPressing) {

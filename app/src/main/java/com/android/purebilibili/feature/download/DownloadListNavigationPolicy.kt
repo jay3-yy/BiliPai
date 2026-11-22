@@ -9,10 +9,11 @@ internal enum class DownloadTaskClickTarget {
 
 internal fun resolveDownloadTaskClickTarget(
     task: DownloadTask,
-    isNetworkAvailable: Boolean
+    isNetworkAvailable: Boolean,
+    playableOffline: Boolean = isDownloadTaskPlayableOffline(task),
 ): DownloadTaskClickTarget? {
     return when {
-        isDownloadTaskPlayableOffline(task) -> DownloadTaskClickTarget.OfflinePlayer
+        playableOffline -> DownloadTaskClickTarget.OfflinePlayer
         // 本地文件不可用（如被系统清理）但有网络：回退到在线播放，而不是点击无响应
         task.isComplete && isNetworkAvailable -> DownloadTaskClickTarget.OnlinePlayer
         else -> null

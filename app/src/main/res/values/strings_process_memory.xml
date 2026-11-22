@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="process_memory_title">实时内存占用</string>
+    <string name="process_memory_summary">查看主进程的 PSS、RSS、交换空间和内存构成</string>
+    <string name="process_memory_scope">主进程 · 每 2 秒刷新</string>
+    <string name="process_memory_scope_description">统计范围为主进程，不含独立的后台音频和 WebView 渲染进程。</string>
+    <string name="process_memory_category_column">分类</string>
+    <string name="process_memory_amount_column">占用量</string>
+    <string name="process_memory_percent_column">占比</string>
+    <string name="process_memory_sampling">正在读取内存占用…</string>
+    <string name="process_memory_pss">总 PSS</string>
+    <string name="process_memory_rss">总 RSS</string>
+    <string name="process_memory_swap">交换内存</string>
+    <string name="process_memory_breakdown">PSS 构成</string>
+    <string name="process_memory_java_heap">Java 堆</string>
+    <string name="process_memory_native_heap">Native 堆</string>
+    <string name="process_memory_code">代码</string>
+    <string name="process_memory_stack">栈</string>
+    <string name="process_memory_graphics">图形</string>
+    <string name="process_memory_private_other">其他私有内存</string>
+    <string name="process_memory_system">系统与共享</string>
+    <string name="process_memory_unavailable">不可用</string>
+    <string name="process_memory_whole">%1$d</string>
+    <string name="process_memory_decimal">%1$.2f</string>
+    <string name="process_memory_value_with_unit">%1$s %2$s</string>
+    <string name="process_memory_glossary">指标说明</string>
+    <string name="process_memory_pss_description">比例集大小（Proportional Set Size），表示按比例归到当前进程的内存。私有页面全额计入，共享页面按进程分摊。例如 20 MiB 由两个进程共享，各计入 10 MiB。Android 的总 PSS 也可能计入按比例分摊的交换页。</string>
+    <string name="process_memory_rss_description">常驻集大小（Resident Set Size），表示当前驻留在物理内存中的页面大小。共享页面会全额计入每个使用它的进程。</string>
+    <string name="process_memory_swap_description">当前进程被换出到交换区的页面总量。设备使用 zRAM 时，这些页面会压缩保存。</string>
+    <string name="process_memory_java_heap_description">Android 运行时管理的堆，主要存放 Kotlin 和 Java 对象。</string>
+    <string name="process_memory_native_heap_description">通过原生分配器申请的堆内存，例如 C/C++ 库分配的内存。</string>
+    <string name="process_memory_code_description">映射到进程的程序代码与静态资源，例如 APK、DEX、共享库和字体。</string>
+    <string name="process_memory_stack_description">线程用于保存函数调用和局部变量的内存。</string>
+    <string name="process_memory_graphics_description">系统归到进程的图形缓冲区及渲染相关内存。</string>
+    <string name="process_memory_private_other_description">进程独占、未归入前述分类的内存，例如部分运行时开销。</string>
+    <string name="process_memory_system_description">Android 归到系统与共享的内存份额，例如运行库和系统框架的共享页面。</string>
+    <string name="process_memory_units_description">1 KiB 等于 1,024 字节，1 MiB 等于 1,024 KiB。</string>
+    <string name="process_memory_overlay_title">应用内内存浮窗</string>
+    <string name="process_memory_overlay_summary">在其他页面显示内存占用，点击可展开</string>
+    <string name="process_memory_overlay_pss">PSS %1$s</string>
+    <string name="process_memory_overlay_details">查看内存详情</string>
+    <string name="process_memory_overlay_close">关闭浮窗</string>
+</resources>

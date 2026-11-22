@@ -49,7 +49,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -139,6 +139,7 @@ import com.android.purebilibili.core.util.BilibiliUrlParser
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 import com.android.purebilibili.core.util.calculateWindowSizeClass
+import com.android.purebilibili.core.util.isBilibiliWebHost
 import com.android.purebilibili.core.util.rememberAppWindowAdaptiveInfo
 import com.android.purebilibili.core.util.resolveSafeAndroidPipRational
 import com.android.purebilibili.data.repository.VideoRepository
@@ -193,7 +194,9 @@ import com.android.purebilibili.navigation.resolveBilibiliLinkNavigationAction
 import com.android.purebilibili.navigation.resolvePageCid
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.toLegacyRoute
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
@@ -372,8 +375,7 @@ private fun normalizeIntentLinkWebCandidate(rawInput: String): String? {
     val uri = runCatching { URI(candidate) }.getOrNull() ?: return null
     val scheme = uri.scheme?.lowercase().orEmpty()
     if (scheme !in setOf("http", "https")) return null
-    val host = uri.host?.lowercase().orEmpty()
-    if (!host.contains("b23.tv") && !host.contains("bilibili.com")) return null
+    if (!isBilibiliWebHost(uri.host)) return null
     return candidate
 }
 
@@ -489,7 +491,7 @@ internal fun resolveMainActivityLinkNavigation(
                 pendingNavigationRoute = ScreenRoutes.WeeklySeries.createRoute(target.weeklyNumber)
             )
         } else {
-            MainActivityLinkNavigation()
+            null
         }
     }
 }
@@ -749,15 +751,16 @@ internal fun shouldApplySplashRealtimeBlur(
 
 internal fun shouldRunColdStartSplash(savedInstanceStatePresent: Boolean): Boolean = !savedInstanceStatePresent
 
-internal fun splashExitDurationMs(): Long = 920L
+internal fun splashExitDurationMs(): Long = 600L
 internal fun splashExitTranslateYDp(): Float = 220f
 internal fun splashExitScaleEnd(): Float = 1.12f
 internal fun splashExitBlurRadiusEnd(): Float = 24f
 internal fun splashMaxKeepOnScreenMs(): Long = 1000L
 internal fun splashExitWaitTimeoutMs(): Long =
     splashMaxKeepOnScreenMs() + splashExitDurationMs() + 500L
-internal fun customSplashHoldDurationMs(): Long = 1900L
-internal fun customSplashFadeDurationMs(): Int = 1450
+// 短暂停留用于遮盖首页首帧组装，随后快速淡出，避免装饰性壁纸拖慢冷启动观感。
+internal fun customSplashHoldDurationMs(): Long = 600L
+internal fun customSplashFadeDurationMs(): Int = 700
 
 internal fun customSplashShouldRender(
     showSplash: Boolean,
@@ -1437,23 +1440,23 @@ class MainActivity : AppCompatActivity() {
             val appGestureScreenshotEnabled = appThemeSettings.appGestureScreenshotEnabled
             val appScreenshotGestureMode = appThemeSettings.appScreenshotGestureMode
             val appScreenshotCaptureMode = appThemeSettings.appScreenshotCaptureMode
-            val blurIntensity by SettingsManager.getBlurIntensity(context)
+            val blurIntensity by remember(context) { SettingsManager.getBlurIntensity(context) }
                 .collectAsStateWithLifecycle(initialValue = BlurIntensity.THIN)
-            val headerBlurEnabled by SettingsManager.getHeaderBlurEnabled(context)
+            val headerBlurEnabled by remember(context) { SettingsManager.getHeaderBlurEnabled(context) }
                 .collectAsStateWithLifecycle(initialValue = true)
-            val bottomBarBlurEnabled by SettingsManager.getBottomBarBlurEnabled(context)
+            val bottomBarBlurEnabled by remember(context) { SettingsManager.getBottomBarBlurEnabled(context) }
                 .collectAsStateWithLifecycle(initialValue = false)
-            val progressiveTopBlurEnabled by SettingsManager.getProgressiveTopBlurEnabled(context)
+            val progressiveTopBlurEnabled by remember(context) { SettingsManager.getProgressiveTopBlurEnabled(context) }
                 .collectAsStateWithLifecycle(initialValue = true)
-            val progressiveTopFadeEnabled by SettingsManager.getProgressiveTopFadeEnabled(context)
+            val progressiveTopFadeEnabled by remember(context) { SettingsManager.getProgressiveTopFadeEnabled(context) }
                 .collectAsStateWithLifecycle(initialValue = true)
             val hapticSettings by remember(context) { SettingsManager.getHapticSettings(context) }
                 .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppHapticSettings())
-            val hapticFeedbackEnabled by SettingsManager.getHapticFeedbackEnabled(context)
+            val hapticFeedbackEnabled by remember(context) { SettingsManager.getHapticFeedbackEnabled(context) }
                 .collectAsStateWithLifecycle(initialValue = true)
-            val globalTextTapCopyEnabled by SettingsManager
-                .getGlobalTextTapCopyEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = false)
+            val globalTextTapCopyEnabled by remember(context) {
+                SettingsManager.getGlobalTextTapCopyEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = false)
             val replyPreviewReactions: com.android.purebilibili.feature.video.viewmodel.ReplyPreviewReactionViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel()
             val replyTranslations: com.android.purebilibili.feature.video.viewmodel.ReplyTranslationViewModel =
@@ -1470,29 +1473,34 @@ class MainActivity : AppCompatActivity() {
             val commentReplyPreviewVisible by remember(context) {
                 SettingsManager.getCommentReplyPreviewVisible(context)
             }.collectAsStateWithLifecycle(initialValue = true)
-            val globalDragFeedbackEnabled by SettingsManager
-                .getGlobalDragFeedbackEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val uiEntranceAnimationEnabled by SettingsManager
-                .getUiEntranceAnimationEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val runtimeVisualGuardEnabled by SettingsManager
-                .getRuntimeVisualGuardEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val nativeMiuixPopupsEnabled by com.android.purebilibili.core.store.player.PlayerSettingsStore
-                .getNativeMiuixPlayerPopups(context)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val liquidGlassMasterEnabled by SettingsManager.getAndroidNativeLiquidGlassEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val liquidControlsUseThemeColor by SettingsManager.getLiquidControlsUseThemeColor(context)
-                .collectAsStateWithLifecycle(initialValue = false)
-            val liquidGlassScenes by SettingsManager.getLiquidGlassScenes(context)
-                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppLiquidGlassSettings())
+            val globalDragFeedbackEnabled by remember(context) {
+                SettingsManager.getGlobalDragFeedbackEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val uiEntranceAnimationEnabled by remember(context) {
+                SettingsManager.getUiEntranceAnimationEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val runtimeVisualGuardEnabled by remember(context) {
+                SettingsManager.getRuntimeVisualGuardEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val nativeMiuixPopupsEnabled by remember(context) {
+                com.android.purebilibili.core.store.player.PlayerSettingsStore
+                    .getNativeMiuixPlayerPopups(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val liquidGlassMasterEnabled by remember(context) {
+                SettingsManager.getAndroidNativeLiquidGlassEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val liquidControlsUseThemeColor by remember(context) {
+                SettingsManager.getLiquidControlsUseThemeColor(context)
+            }.collectAsStateWithLifecycle(initialValue = false)
+            val liquidGlassScenes by remember(context) {
+                SettingsManager.getLiquidGlassScenes(context)
+            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppLiquidGlassSettings())
             val liquidGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
                 com.android.purebilibili.core.ui.AppLiquidGlassScene.OTHER_COMPONENTS,
             )
-            val liquidSwitchThumbMode by SettingsManager.getLiquidSwitchThumbMode(context)
-                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
+            val liquidSwitchThumbMode by remember(context) {
+                SettingsManager.getLiquidSwitchThumbMode(context)
+            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
             val appThemeConfig = remember(
                 liquidGlassEnabled,
                 liquidGlassMasterEnabled,
@@ -1911,7 +1919,7 @@ class MainActivity : AppCompatActivity() {
                         com.android.purebilibili.feature.video.screen.VideoDetailPipParamsEffect(
                             context = this@MainActivity,
                             activity = this@MainActivity,
-                            playerBounds = miniPlayerManager.miniPlayerSourceBoundsPx,
+                            playerBoundsProvider = { miniPlayerManager.miniPlayerSourceBoundsPx },
                             pipModeEnabled = miniPlayerManager.shouldEnterPip(),
                             player = miniPlayerManager.player
                         )
@@ -2844,12 +2852,16 @@ class MainActivity : AppCompatActivity() {
     var pendingSearchKeyword by mutableStateOf<String?>(null)
     var pendingNavigationRoute by mutableStateOf<String?>(null)
         private set
+    private var intentLinkJob: Job? = null
     
     /**
      *  [新增] 处理 Deep Link 和分享意图
      */
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
+        if (intent.action == Intent.ACTION_VIEW || intent.action == Intent.ACTION_SEND) {
+            intentLinkJob?.cancel()
+        }
 
         PlaybackHandoffCodec.fromIntent(intent)?.let { payload ->
             pendingNavigationRoute = PlaybackHandoffCodec.toRoute(payload)
@@ -2957,59 +2969,45 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     *  统一解析入口链接，必要时异步展开 b23.tv
-     */
     private fun resolveIntentLinkAndNavigate(rawInput: String) {
-        BilibiliNavigationTargetParser.parse(rawInput)?.let { target ->
-            applyIntentNavigationTarget(target)
-            return
-        }
-
-        // b23.tv 短链必须等异步展开出原生目标，不能先落 Web 兜底——
-        // 否则 Web 路由被组合层抢先消费，原生视频页永远进不来。
-        val linkToResolve = BilibiliNavigationTargetParser.unwrapBrowserUrl(rawInput) ?: rawInput
-        val containsShortLink = BilibiliUrlParser.extractUrls(linkToResolve)
-            .any { it.contains("b23.tv", ignoreCase = true) } ||
-            linkToResolve.trim().startsWith("b23.tv/", ignoreCase = true)
-        if (!containsShortLink) {
-            resolveIntentLinkFallbackRoute(rawInput)?.let { route ->
-                Logger.d(TAG, "🌐 入口链接先回退到 WebView: $route")
-                pendingNavigationRoute = route
-            }
-        }
-
-        lifecycleScope.launch {
-            val target = BilibiliNavigationTargetParser.resolve(linkToResolve)
-            if (target != null) {
-                applyIntentNavigationTarget(target)
+        intentLinkJob = lifecycleScope.launch {
+            val wrappedUrl = BilibiliNavigationTargetParser.unwrapBrowserUrl(rawInput)
+            val target = if (wrappedUrl == null) {
+                BilibiliNavigationTargetParser.resolve(rawInput)
             } else {
-                resolveIntentLinkFallbackRoute(rawInput)?.let { route ->
-                    Logger.d(TAG, "🌐 入口链接回退到 WebView: $route")
-                    pendingNavigationRoute = route
-                    return@launch
-                }
-                Logger.w(TAG, "⚠️ 无法解析入口链接: $rawInput")
+                BilibiliNavigationTargetParser.parse(rawInput)
+                    ?: BilibiliNavigationTargetParser.resolve(wrappedUrl)
+            }
+            val resolvedTarget = if (target is BilibiliNavigationTarget.Video && target.needsPageCid) {
+                target.resolvePageCid()
+            } else {
+                target
+            }
+            ensureActive()
+            if (target != null && resolvedTarget == null) {
+                android.widget.Toast.makeText(
+                    this@MainActivity, R.string.video_link_part_unavailable, android.widget.Toast.LENGTH_SHORT
+                ).show()
+                return@launch
+            }
+            val navigation = resolvedTarget?.let(::resolveMainActivityLinkNavigation)
+            if (navigation != null) {
+                applyIntentLinkNavigation(navigation)
+                return@launch
+            }
+            val fallbackRoute = resolveIntentLinkFallbackRoute(rawInput)
+            if (fallbackRoute != null) {
+                pendingNavigationRoute = fallbackRoute
+            } else {
+                Logger.w(TAG, "无法解析入口链接: $rawInput")
+                android.widget.Toast.makeText(
+                    this@MainActivity, R.string.external_link_unavailable, android.widget.Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }
 
-    private fun applyIntentNavigationTarget(target: BilibiliNavigationTarget) {
-        if (target is BilibiliNavigationTarget.Video && target.needsPageCid) {
-            lifecycleScope.launch {
-                val resolved = target.resolvePageCid()
-                if (resolved != null) applyIntentNavigationTarget(resolved)
-                else android.widget.Toast.makeText(
-                    this@MainActivity, R.string.video_link_part_unavailable, android.widget.Toast.LENGTH_SHORT
-                ).show()
-            }
-            return
-        }
-        val navigation = resolveMainActivityLinkNavigation(target)
-        if (navigation == null) {
-            Logger.w(TAG, "⚠️ 暂不支持入口目标: $target")
-            return
-        }
+    private fun applyIntentLinkNavigation(navigation: MainActivityLinkNavigation) {
         navigation.pendingVideoId?.let { videoId ->
             Logger.d(TAG, "📺 入口链接解析到视频: $videoId")
             pendingVideoId = videoId

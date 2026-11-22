@@ -340,6 +340,7 @@ internal fun VideoInlineSubReplyDetailContent(
     onCommentLike: (Long) -> Unit,
     onCommentHate: (Long) -> Unit,
     onReportComment: (Long, Int) -> Unit,
+    onToggleTopComment: (ReplyItem) -> Unit = {},
     onUrlClick: (String) -> Unit,
     showIdentityDecorations: Boolean,
     onAvatarClick: (String) -> Unit,
@@ -412,6 +413,13 @@ internal fun VideoInlineSubReplyDetailContent(
         onCommentLike = onCommentLike,
         onCommentHate = onCommentHate,
         onReportComment = onReportComment,
+        onToggleTopComment = onToggleTopComment,
+        pinnedReplyIds = commentState.pinnedReplyIds,
+        menuCallbacks = ReplyMenuCallbacks(
+            onReport = { reply, reason -> onReportComment(reply.rpid, reason) },
+            onCheckFraud = onCheckCommentFraud,
+            onToggleTop = onToggleTopComment,
+        ),
         likedComments = commentState.likedComments,
         hatedComments = commentState.hatedComments,
         onUrlClick = onUrlClick,
@@ -475,6 +483,9 @@ internal fun SubReplyDetailContent(
     onCommentLike: ((Long) -> Unit)? = null,
     onCommentHate: ((Long) -> Unit)? = null,
     onReportComment: ((Long, Int) -> Unit)? = null,
+    onToggleTopComment: ((ReplyItem) -> Unit)? = null,
+    pinnedReplyIds: Set<Long> = emptySet(),
+    menuCallbacks: ReplyMenuCallbacks? = null,
     likedComments: Set<Long> = emptySet(),
     hatedComments: Set<Long> = emptySet(),
     onUrlClick: ((String) -> Unit)? = null,
@@ -852,6 +863,16 @@ internal fun SubReplyDetailContent(
                             16.dp
                         }
                         if (rootReply != null) {
+                            val rootMenuBindings = resolveSubReplyDetailRowBindings(
+                                item = rootReply,
+                                currentMid = currentMid,
+                                upMid = upMid,
+                                pinnedReplyIds = pinnedReplyIds,
+                                menuCallbacks = menuCallbacks,
+                                onReportComment = onReportComment,
+                                onCheckCommentFraud = onCheckCommentFraud,
+                                onToggleTopComment = onToggleTopComment,
+                            )
                             // The page transition owns reveal; avoid resizing the lazy-list anchor again.
                             Box(
                                 modifier = Modifier.testTag(SUB_REPLY_DETAIL_ROOT_TAG).then(
@@ -865,6 +886,7 @@ internal fun SubReplyDetailContent(
                                     avatarListState = listState.takeIf { avatarPushEnabled && !connectRoot },
                                     avatarItemKey = "root_reply",
                                     item = rootReply,
+                                    isPinned = rootMenuBindings.isPinned,
                                     hideSubPreview = true,
                                     boundAvatarToItem = true,
                                     showIdentityDecorations = showIdentityDecorations,
@@ -879,16 +901,16 @@ internal fun SubReplyDetailContent(
                                     onDeleteClick = onDeleteComment?.takeIf {
                                         currentMid > 0 && rootReply.mid == currentMid
                                     }?.let { delete -> { delete(rootReply.rpid) } },
-                                    onCheckFraudClick = if (onCheckCommentFraud != null && currentMid > 0 && rootReply.mid == currentMid) {
-                                        { onCheckCommentFraud.invoke(rootReply) }
-                                    } else null,
+                                    onCheckFraudClick = rootMenuBindings.onCheckFraudClick,
                                     onLikeClick = { onCommentLike?.invoke(rootReply.rpid) },
                                     onHateClick = { onCommentHate?.invoke(rootReply.rpid) },
                                     isLiked = rootReply.rpid in likedComments,
                                     isHated = rootReply.rpid in hatedComments,
                                     onUrlClick = onUrlClick,
                                     maxTimestampMs = maxTimestampMs,
-                                    onReportClick = onReportComment?.let { report -> { reason -> report(rootReply.rpid, reason) } },
+                                    onReportClick = rootMenuBindings.onReportClick,
+                                    canToggleTop = rootMenuBindings.canToggleTop,
+                                    onToggleTopClick = rootMenuBindings.onToggleTopClick,
                                     onAvatarClick = { onAvatarClick?.invoke(it) ?: Unit },
                                 )
                             }
@@ -1018,6 +1040,16 @@ internal fun SubReplyDetailContent(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                             ) { indent ->
+                                val itemMenuBindings = resolveSubReplyDetailRowBindings(
+                                    item = item,
+                                    currentMid = currentMid,
+                                    upMid = upMid,
+                                    pinnedReplyIds = pinnedReplyIds,
+                                    menuCallbacks = menuCallbacks,
+                                    onReportComment = onReportComment,
+                                    onCheckCommentFraud = onCheckCommentFraud,
+                                    onToggleTopComment = onToggleTopComment,
+                                )
                                 ReplyItemView(
                                     modifier = Modifier
                                         .padding(start = indent)
@@ -1025,6 +1057,7 @@ internal fun SubReplyDetailContent(
                                     // 树状连线以头像为锚，子回复头像固定在行内。
                                     avatarListState = listState.takeIf { avatarPushEnabled && threadRow == null },
                                     item = item,
+                                    isPinned = itemMenuBindings.isPinned,
                                     containerColor = backgroundColor,
                                     hideSubPreview = true,
                                     showIdentityDecorations = showIdentityDecorations,
@@ -1039,16 +1072,16 @@ internal fun SubReplyDetailContent(
                                     onDeleteClick = (onDissolveStart ?: onDeleteComment)?.takeIf {
                                         currentMid > 0 && item.mid == currentMid
                                     }?.let { delete -> { delete(item.rpid) } },
-                                    onCheckFraudClick = if (onCheckCommentFraud != null && currentMid > 0 && item.mid == currentMid) {
-                                        { onCheckCommentFraud.invoke(item) }
-                                    } else null,
+                                    onCheckFraudClick = itemMenuBindings.onCheckFraudClick,
                                     onLikeClick = { onCommentLike?.invoke(item.rpid) },
                                     onHateClick = { onCommentHate?.invoke(item.rpid) },
                                     isLiked = item.rpid in likedComments,
                                     isHated = item.rpid in hatedComments,
                                     onUrlClick = onUrlClick,
                                     maxTimestampMs = maxTimestampMs,
-                                    onReportClick = onReportComment?.let { report -> { reason -> report(item.rpid, reason) } },
+                                    onReportClick = itemMenuBindings.onReportClick,
+                                    canToggleTop = itemMenuBindings.canToggleTop,
+                                    onToggleTopClick = itemMenuBindings.onToggleTopClick,
                                     onAvatarClick = { onAvatarClick?.invoke(it) ?: Unit },
                                     onConversationClick = if (shouldRenderSubReplyConversationAction(item, true)) {
                                         {
@@ -1130,5 +1163,39 @@ internal fun SubReplyDetailContent(
             }
         }
     }
+}
+
+private fun resolveSubReplyDetailRowBindings(
+    item: ReplyItem,
+    currentMid: Long,
+    upMid: Long,
+    pinnedReplyIds: Set<Long>,
+    menuCallbacks: ReplyMenuCallbacks?,
+    onReportComment: ((Long, Int) -> Unit)?,
+    onCheckCommentFraud: ((ReplyItem) -> Unit)?,
+    onToggleTopComment: ((ReplyItem) -> Unit)?,
+): ResolvedReplyMenuBindings {
+    if (menuCallbacks != null) {
+        return resolveReplyMenuBindings(
+            item = item,
+            currentMid = currentMid,
+            upMid = upMid,
+            pinnedReplyIds = pinnedReplyIds,
+            callbacks = menuCallbacks,
+        )
+    }
+    return ResolvedReplyMenuBindings(
+        isPinned = item.rpid in pinnedReplyIds,
+        onReportClick = onReportComment?.let { report -> { reason -> report(item.rpid, reason) } },
+        onCheckFraudClick = if (onCheckCommentFraud != null && currentMid > 0L && resolveReplyMemberMid(item) == currentMid) {
+            { onCheckCommentFraud.invoke(item) }
+        } else null,
+        canToggleTop = onToggleTopComment != null && shouldShowReplyTopAction(
+            currentMid = currentMid,
+            upMid = upMid,
+            item = item,
+        ),
+        onToggleTopClick = { onToggleTopComment?.invoke(item) },
+    )
 }
 

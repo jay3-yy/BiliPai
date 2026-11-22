@@ -8,6 +8,8 @@ import com.android.purebilibili.core.ui.AppContentColors
 
 import android.os.Build
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.feature.home.LocalRootOwnsMovingWallpaper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -55,12 +58,14 @@ import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.feature.settings.rememberSettingsVector
 import com.android.purebilibili.feature.home.components.BiliPaiImmersiveTopBar
 import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgressiveTopBlur
+import com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import com.android.purebilibili.core.util.AppFoldPosture
 import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.feature.settings.ui.SettingsPinnedChromeLayout
 import com.android.purebilibili.feature.settings.SettingsHomeSearchEntry
+import com.android.purebilibili.feature.settings.useSettingsSearchContentBackdrop
 import com.android.purebilibili.feature.settings.SettingsRootCategory
 import com.android.purebilibili.feature.settings.canonicalSettingsRootCategory
 import com.android.purebilibili.feature.settings.rememberSettingsEntryVisual
@@ -102,11 +107,15 @@ fun SettingsTabletShell(
     val categoryIconTints = rememberSettingsSiblingIconTints(categories.size)
     val useThreePaneLayout =
         LocalWindowSizeClass.current.shouldUseThreePaneLayout && selectedCategory != null
+    val wallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
+    val movingWallpaper = wallpaperVisible && LocalRootOwnsMovingWallpaper.current
+    val paneBackground = if (movingWallpaper) Modifier
+        else Modifier.globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer())
     val emptyDetailPane: @Composable () -> Unit = {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer())
+                .then(paneBackground)
                 .padding(layoutPolicy.detailPanePaddingDp.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -131,7 +140,7 @@ fun SettingsTabletShell(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer())
+                .then(paneBackground)
                 .padding(horizontal = layoutPolicy.detailPanePaddingDp.dp),
         ) {
             rightPane()
@@ -150,14 +159,21 @@ fun SettingsTabletShell(
                 .fillMaxHeight(),
         ) {
             val config = LocalAppThemeConfig.current
+            val lowBlurBudget = isLowBlurBudgetForced()
             val progressive = shouldUseBiliPaiProgressiveTopBlur(
                 enabled = config.progressiveTopBlurEnabled && !config.headerBlurEnabled,
                 hasBackdrop = true,
-            ) && !isLowBlurBudgetForced()
+            ) && !lowBlurBudget
             val fadeActive = config.progressiveTopFadeEnabled && !config.headerBlurEnabled
-            val tabletChromeSource = if (progressive) rememberChromeBackdropSource(
-                recordingBackground = AppSurfaceTokens.groupedListContainer(),
-            ) else null
+            val searchContentBackdropEnabled = useSettingsSearchContentBackdrop()
+            val tabletChromeSource = if (progressive || searchContentBackdropEnabled) {
+                rememberChromeBackdropSource(
+                    recordingBackground = if (wallpaperVisible && searchContentBackdropEnabled) {
+                        Color.Unspecified
+                    } else AppSurfaceTokens.groupedListContainer(),
+                    recordingEnabled = LocalChromeBackdropRecordingAllowed.current && !lowBlurBudget,
+                )
+            } else null
             val tabletChromeBackdrop = tabletChromeSource?.takeIf { it.isReady }?.backdrop
             val tabletHazeState = if (
                 config.headerBlurEnabled && !progressive &&
@@ -170,11 +186,12 @@ fun SettingsTabletShell(
                 chrome = {
                     BiliPaiImmersiveTopBar(
                         modifier = if (progressive) Modifier.clipToBounds() else Modifier,
-                        backdrop = tabletChromeBackdrop,
+                        backdrop = tabletChromeBackdrop.takeIf { progressive },
                         enabled = progressive,
                         headerBlurActive = tabletHazeReady,
                         surfaceColor = AppSurfaceTokens.groupedListContainer(),
-                        fadeEnabled = fadeActive,
+                        fadeEnabled = fadeActive || wallpaperVisible,
+                        opaqueBackgroundFallback = !wallpaperVisible,
                     ) {
                         Column(
                             modifier = if (tabletHazeReady) {
@@ -187,19 +204,19 @@ fun SettingsTabletShell(
                                         AppSurfaceTokens.groupedListContainer()
                                             .copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
                                     )
-                            } else if (!progressive && !fadeActive) {
-                                Modifier.globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer())
+                            } else if (!progressive && !fadeActive && !wallpaperVisible) {
+                                paneBackground
                             } else Modifier,
                         ) {
                             AppTopBar(
                                 title = stringResource(R.string.settings_title),
                                 colors = TopAppBarDefaults.topAppBarColors(
-                                    containerColor = if (progressive || fadeActive || tabletHazeReady) {
-                                        androidx.compose.ui.graphics.Color.Transparent
+                                    containerColor = if (progressive || fadeActive || tabletHazeReady || wallpaperVisible) {
+                                        Color.Transparent
                                     } else {
                                         AppSurfaceTokens.groupedListContainer()
                                     },
-                                    scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                    scrolledContainerColor = Color.Transparent,
                                 ),
                                 navigationIcon = {
                                     AppIconButton(onClick = onBack) {
@@ -213,6 +230,7 @@ fun SettingsTabletShell(
                             SettingsHomeSearchEntry(
                                 onClick = onSearchOpen,
                                 modifier = Modifier.padding(horizontal = layoutPolicy.masterPanePaddingDp.dp),
+                                contentBackdrop = tabletChromeBackdrop.takeIf { searchContentBackdropEnabled },
                             )
                             Spacer(Modifier.height(8.dp))
                         }
@@ -224,7 +242,7 @@ fun SettingsTabletShell(
                         .fillMaxSize()
                         .then(tabletChromeSource?.modifier ?: Modifier)
                         .then(if (tabletHazeReady) Modifier.hazeSourceCompat(requireNotNull(tabletHazeState)) else Modifier)
-                        .globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer())
+                        .then(paneBackground)
                         .padding(horizontal = layoutPolicy.masterPanePaddingDp.dp),
                 ) {
                     LazyColumn(

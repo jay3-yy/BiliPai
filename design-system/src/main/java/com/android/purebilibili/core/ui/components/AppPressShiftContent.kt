@@ -7,20 +7,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.layout
 import kotlin.math.roundToInt
 
 /**
@@ -39,29 +29,30 @@ fun AppPressShiftContent(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    BoxWithConstraints(modifier = modifier) {
-        val density = LocalDensity.current
-        val contentSize = remember { mutableStateOf(IntSize.Zero) }
-        // Distance from centered position to the leading edge; zero when content fills the width.
-        val maxShiftPx = with(density) {
-            ((maxWidth - contentSize.value.width.toDp()) / 2).coerceAtLeast(0.dp).toPx()
-        }
-        val shiftProgress by animateFloatAsState(
-            targetValue = if (pressed) 1f else 0f,
-            animationSpec = spring(
-                dampingRatio = 0.62f,
-                stiffness = Spring.StiffnessMediumLow,
-            ),
-            label = "pressShiftProgress",
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .offset { IntOffset((-maxShiftPx * shiftProgress).roundToInt(), 0) }
-                .onSizeChanged { contentSize.value = it },
-            content = content,
-        )
-    }
+    val shiftProgress = animateFloatAsState(
+        targetValue = if (pressed) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = 0.62f,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "pressShiftProgress",
+    )
+    Box(
+        modifier = modifier.layout { measurable, constraints ->
+            val placeable = measurable.measure(constraints.copy(minWidth = 0))
+            val width = maxOf(constraints.minWidth, placeable.width)
+            val height = maxOf(constraints.minHeight, placeable.height)
+            val maxShiftPx = ((width - placeable.width) / 2f).coerceAtLeast(0f)
+            layout(width, height) {
+                val centerX = ((width - placeable.width) / 2f).coerceAtLeast(0f)
+                val centerY = ((height - placeable.height) / 2f).coerceAtLeast(0f)
+                val offsetX = (centerX - maxShiftPx * shiftProgress.value).roundToInt()
+                placeable.placeRelative(offsetX, centerY.roundToInt())
+            }
+        },
+        contentAlignment = Alignment.Center,
+        content = content,
+    )
 }
 
 /** Convenience: pressed state derived from the container's interaction source. */

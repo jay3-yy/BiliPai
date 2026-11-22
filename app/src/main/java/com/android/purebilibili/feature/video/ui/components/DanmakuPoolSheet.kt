@@ -10,14 +10,19 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Close
@@ -34,23 +39,33 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.AppHapticScene
 import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.ProvideAppHapticScene
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AnimatedCountText
 import com.android.purebilibili.core.ui.components.AppIconButton
-import com.android.purebilibili.core.ui.components.AppOutlinedTextField
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.danmaku.engine.DanmakuItem
+
+internal val DANMAKU_POOL_ROW_HORIZONTAL_PADDING = 12.dp
+internal val DANMAKU_POOL_ROW_VERTICAL_PADDING = 8.dp
+internal val DANMAKU_POOL_ROW_INNER_HEIGHT = 24.dp
+internal val DANMAKU_POOL_ROW_MIN_HEIGHT =
+    DANMAKU_POOL_ROW_INNER_HEIGHT + DANMAKU_POOL_ROW_VERTICAL_PADDING * 2
+internal val DANMAKU_POOL_SEARCH_BORDER_WIDTH = 0.5.dp
 
 private enum class DanmakuPoolSortMode(val label: String) {
     TIME("时间"),
@@ -186,44 +201,11 @@ fun DanmakuPoolSheet(
                 }
             }
 
-            // 搜索框
-            AppOutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .appSearchElasticPress(),
-                placeholder = {
-                    AppText(
-                        text = "搜索当前已加载的弹幕...",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.secondaryText(),
-                    )
-                },
-                leadingIcon = {
-                    AppIcon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "搜索",
-                        modifier = Modifier.size(18.dp),
-                        tint = AppContentColors.secondaryText(),
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        AppIconButton(
-                            onClick = { searchQuery = "" },
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            AppIcon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "清空",
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                    }
-                },
-                singleLine = true,
+            // 搜索框（紧凑单行，行高与下方弹幕行一致）
+            DanmakuPoolSearchBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -474,6 +456,101 @@ fun DanmakuPoolSheet(
 }
 
 @Composable
+private fun DanmakuPoolSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val borderShape = AppShapes.borderedContainer(ContainerLevel.Card)
+    val borderColor = if (isFocused) {
+        AppContentColors.accent().copy(alpha = 0.65f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+    }
+    val textColor = AppContentColors.primaryText()
+    val secondaryColor = AppContentColors.secondaryText()
+
+    AppSurface(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = DANMAKU_POOL_ROW_MIN_HEIGHT)
+            .appSearchElasticPress(highlightShape = borderShape),
+        color = AppSurfaceTokens.searchContainer(),
+        shape = borderShape,
+        border = BorderStroke(DANMAKU_POOL_SEARCH_BORDER_WIDTH, borderColor),
+    ) {
+        ProvideAppHapticScene(AppHapticScene.TEXT) {
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                interactionSource = interactionSource,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = textColor),
+                cursorBrush = SolidColor(AppContentColors.accent()),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                decorationBox = { innerTextField ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = DANMAKU_POOL_ROW_MIN_HEIGHT)
+                            .padding(
+                                horizontal = DANMAKU_POOL_ROW_HORIZONTAL_PADDING,
+                                vertical = DANMAKU_POOL_ROW_VERTICAL_PADDING,
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "搜索",
+                            modifier = Modifier.size(16.dp),
+                            tint = secondaryColor,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = DANMAKU_POOL_ROW_INNER_HEIGHT),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            if (query.isEmpty()) {
+                                AppText(
+                                    text = "搜索当前已加载的弹幕...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = secondaryColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            innerTextField()
+                        }
+                        if (query.isNotEmpty()) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(DANMAKU_POOL_ROW_INNER_HEIGHT)
+                                    .clip(CircleShape)
+                                    .clickable { onQueryChange("") },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                AppIcon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "清空",
+                                    modifier = Modifier.size(14.dp),
+                                    tint = secondaryColor,
+                                )
+                            }
+                        }
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
 private fun DanmakuPoolItemRow(
     item: DanmakuItem,
     isLiked: Boolean,
@@ -501,7 +578,11 @@ private fun DanmakuPoolItemRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .heightIn(min = DANMAKU_POOL_ROW_MIN_HEIGHT)
+                .padding(
+                    horizontal = DANMAKU_POOL_ROW_HORIZONTAL_PADDING,
+                    vertical = DANMAKU_POOL_ROW_VERTICAL_PADDING,
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // 时间胶囊

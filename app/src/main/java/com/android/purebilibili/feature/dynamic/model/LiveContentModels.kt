@@ -17,7 +17,7 @@ data class LiveContentInfo(
 data class LivePlayInfo(
     val title: String = "",
     val cover: String = "",
-    val online: Int = 0,
+    val online: Int? = null,
     val room_id: Long = 0,
     //  添加更多可选字段提高兼容性
     val area_name: String = "",  // 分区名称

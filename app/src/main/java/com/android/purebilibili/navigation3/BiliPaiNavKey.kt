@@ -69,6 +69,11 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data object ProcessMemory : BiliPaiNavKey {
+        override val routeBase: String = "process_memory"
+    }
+
+    @Serializable
     data object PerformanceHistory : BiliPaiNavKey {
         override val routeBase: String = "performance_history"
     }

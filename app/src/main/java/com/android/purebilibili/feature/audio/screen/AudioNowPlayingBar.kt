@@ -4,6 +4,8 @@ import com.android.purebilibili.core.ui.AppContentColors
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animateTo
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,6 +13,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import com.android.purebilibili.core.ui.components.appElasticPress
+import com.android.purebilibili.core.ui.components.appPressHighlightPressSpec
 import com.android.purebilibili.core.ui.components.rememberAppElasticPressState
 import com.android.purebilibili.core.ui.components.LocalElasticPressEnabled
 import androidx.compose.runtime.CompositionLocalProvider
@@ -37,6 +40,8 @@ import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.theme.LocalSettingsLiquidGlassEnabled
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppText
@@ -53,12 +58,17 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.MutableFloatState
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
@@ -79,6 +89,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import com.android.purebilibili.feature.audio.lyrics.halcyon.darken
@@ -119,6 +130,7 @@ import com.android.purebilibili.feature.home.components.resolveBottomBarDarkThem
 import com.android.purebilibili.feature.home.components.resolveSharedBottomBarCapsuleShape
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.tanh
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 
 private const val NOW_PLAYING_CAPTURE_TIMEOUT_MILLIS = 500L
@@ -229,7 +241,7 @@ internal fun AudioNowPlayingBar(
         val dissolveContext = LocalContext.current
         val artworkGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
         val reduceMotion = LocalSystemReduceMotion.current
-        val cancelCaptureJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+        val cancelCaptureJob = remember { arrayOfNulls<Job>(1) }
 
         // 从窗口已绘制的像素截取横条，避免离屏重绘实时模糊/旋转图层。
         // 点按取消立即暂停；粒子首帧隐藏本体，消散完成后再关闭会话。
@@ -452,6 +464,20 @@ internal fun AudioNowPlayingBar(
             !pauseArtworkRotation && !captureInProgress && !cancelDissolving && !sourceInActiveReturn
         val elasticState = rememberAppElasticPressState()
         val glassMotion = glassActive && miuixBackdrop != null
+        val interactionEnabled = !sourceInActiveReturn && !captureInProgress && !cancelDissolving
+        val swipeFeedbackEnabled = interactionEnabled && !reduceMotion && LocalComponentMotionEnabled.current &&
+            LocalElasticPressEnabled.current && LocalAppThemeConfig.current.globalDragFeedbackEnabled
+        val swipeOffset = remember(sourceRoute, swipeFeedbackEnabled) { mutableFloatStateOf(0f) }
+        val latestSkipNext = rememberUpdatedState(onSkipNext)
+        val latestSkipPrevious = rememberUpdatedState(onSkipPrevious)
+        // 玻璃外壳与正文共用位移，折射采样跟着外壳；原生路径移动整条。
+        val glassLayer: GraphicsLayerScope.() -> Unit = remember(elasticState, swipeOffset) {
+            {
+                translationX = 0f
+                elasticState.layerBlock(this)
+                translationX += swipeOffset.floatValue
+            }
+        }
         Box(
             modifier = modifier
                 .then(artworkGate.modifier)
@@ -474,7 +500,7 @@ internal fun AudioNowPlayingBar(
                 }
                 // 源锚点和录制层使用同一个未缩放的胶囊尺寸，松手回弹不会改变系统落点。
                 .appElasticPress(
-                    enabled = !sourceInActiveReturn && !captureInProgress && !cancelDissolving,
+                    enabled = interactionEnabled,
                     state = elasticState,
                     transformInBackdrop = glassMotion,
                 )
@@ -488,8 +514,11 @@ internal fun AudioNowPlayingBar(
                 }
                 .recordNativeVideoCardLayer(
                     layer = nativeBarLayer,
+                    // 小横条只在点击展开时录制一次来源像素。常驻录制会让每个静止帧
+                    // 重新生成 GraphicsLayer display list，且返回交接期间已有冻结位图。
+                    enabled = captureInProgress,
                     freezeProvider = {
-                        nativeBarLayer != null && (freezeSourceLayer || sourceInActiveReturn) &&
+                        nativeBarLayer != null && freezeSourceLayer &&
                             CardPositionManager.isNativeVideoCardLayerCurrentOwner(nativeBarLayer)
                     },
                     // Visibility is owned by the explicit now-playing handoff above.
@@ -516,19 +545,23 @@ internal fun AudioNowPlayingBar(
                     }
                 }
                 .clickable(
-                    enabled = !sourceInActiveReturn && !captureInProgress && !cancelDissolving,
+                    enabled = interactionEnabled,
                     onClick = handleExpand,
                 )
                 .then(
-                    if (!sourceInActiveReturn && !cancelDissolving) {
+                    if (interactionEnabled) {
                         Modifier.audioNowPlayingSkipGesture(
-                            onSkipNext = onSkipNext,
-                            onSkipPrevious = onSkipPrevious,
+                            swipeOffset = swipeOffset.takeIf { swipeFeedbackEnabled },
+                            onSkipNext = latestSkipNext,
+                            onSkipPrevious = latestSkipPrevious,
                         )
                     } else {
                         Modifier
                     }
                 )
+                .then(if (!glassMotion && swipeFeedbackEnabled) {
+                    Modifier.graphicsLayer { translationX = swipeOffset.floatValue }
+                } else Modifier)
                 .then(if (sourceInActiveReturn) Modifier.clearAndSetSemantics {} else Modifier),
         ) {
             if (!dissolveContentHidden) Box(
@@ -536,7 +569,7 @@ internal fun AudioNowPlayingBar(
                     .graphicsLayer { alpha = 1f - surfaceMergeProgress().coerceIn(0f, 1f) }
                     .biliPaiFloatingDockShell(
                         backdrop = miuixBackdrop,
-                        interactionLayerBlock = elasticState.layerBlock.takeIf { glassMotion },
+                        interactionLayerBlock = glassLayer.takeIf { glassMotion },
                         interactionState = elasticState.takeIf { glassMotion },
                         containerColor = containerColor,
                         pressProgress = 0f,
@@ -550,9 +583,8 @@ internal fun AudioNowPlayingBar(
                         readabilitySurfaceColor = AppSurfaceTokens.background(),
                     )
             )
-            // 玻璃拖拽变形覆盖内容与关闭按钮，二者使用同一尺寸和变换中心；原生路径不施加变形。
             Box(
-                modifier = if (glassMotion) Modifier.graphicsLayer(elasticState.layerBlock) else Modifier,
+                modifier = if (glassMotion) Modifier.graphicsLayer(glassLayer) else Modifier,
             ) {
                 CompositionLocalProvider(LocalElasticPressEnabled provides false) {
                     AudioNowPlayingBarContentRow(
@@ -701,20 +733,49 @@ internal fun AudioNowPlayingBar(
 }
 
 private fun Modifier.audioNowPlayingSkipGesture(
-    onSkipNext: () -> Unit,
-    onSkipPrevious: () -> Unit
-): Modifier = pointerInput(onSkipNext, onSkipPrevious) {
-    var totalDrag = 0f
-    detectHorizontalDragGestures(
-        onDragEnd = {
-            if (abs(totalDrag) > 64f) {
-                if (totalDrag < 0f) onSkipNext() else onSkipPrevious()
+    swipeOffset: MutableFloatState?,
+    onSkipNext: State<() -> Unit>,
+    onSkipPrevious: State<() -> Unit>,
+): Modifier = pointerInput(swipeOffset) {
+    coroutineScope {
+        var totalDrag = 0f
+        var startOffset = 0f
+        var returnJob: Job? = null
+
+        fun releaseOffset() {
+            if (swipeOffset == null || swipeOffset.floatValue == 0f) return
+            returnJob = launch {
+                AnimationState(initialValue = swipeOffset.floatValue)
+                    .animateTo(0f, appPressHighlightPressSpec()) {
+                        swipeOffset.floatValue = value
+                    }
             }
-            totalDrag = 0f
-        },
-        onDragCancel = { totalDrag = 0f }
-    ) { _, dragAmount ->
-        totalDrag += dragAmount
+        }
+
+        detectHorizontalDragGestures(
+            onDragStart = {
+                returnJob?.cancel()
+                totalDrag = 0f
+                startOffset = swipeOffset?.floatValue ?: 0f
+            },
+            onDragEnd = {
+                releaseOffset()
+                if (abs(totalDrag) > 64f) {
+                    if (totalDrag < 0f) onSkipNext.value() else onSkipPrevious.value()
+                }
+            },
+            onDragCancel = { releaseOffset() },
+        ) { _, dragAmount ->
+            totalDrag += dragAmount
+            if (swipeOffset != null) {
+                // 短距离近似直接跟手，长距离逐渐增加阻力，窄槽位的移动范围随宽度收敛。
+                val limit = minOf(24.dp.toPx(), size.width * 0.25f)
+                if (limit > 0f) {
+                    val dragOffset = limit * tanh(totalDrag / limit)
+                    swipeOffset.floatValue = (startOffset + dragOffset).coerceIn(-limit, limit)
+                }
+            }
+        }
     }
 }
 

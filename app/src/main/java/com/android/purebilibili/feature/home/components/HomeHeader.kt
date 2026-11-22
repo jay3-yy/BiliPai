@@ -1683,12 +1683,6 @@ internal fun HomeHeader(
     val avatarAnchor = avatarSource.anchorModifier(edgeButtonShape, animateNeighbors = false, neighborActive = headerActive, returnHandledByOwner = true, motionGroup = headerMotionGroup)
     val searchAnchor = searchSource.anchorModifier(resolveHomeTopSearchContainerShape(topChromePolicy), neighborActive = headerActive, returnHandledByOwner = true, motionGroup = headerMotionGroup)
     val topRightActionSourceModifier = endSource.anchorModifier(edgeButtonShape, animateNeighbors = false, neighborActive = headerActive, returnHandledByOwner = true, motionGroup = headerMotionGroup)
-    val avatarSharedContainer = com.android.purebilibili.navigation3.navigationSharedContainerSourceModifier(
-        avatarSource?.sharedSource, edgeButtonShape,
-    )
-    val endSharedContainer = com.android.purebilibili.navigation3.navigationSharedContainerSourceModifier(
-        endSource?.sharedSource, edgeButtonShape,
-    )
     fun navigate(target: BiliPaiNavKey, control: HomeHeaderControl, source: SystemWindowCardSource?) {
         onNavigate(target, control) { source?.record() == true }
     }
@@ -1714,26 +1708,12 @@ internal fun HomeHeader(
     val systemReturnPhase = headerReturn?.systemPhase
     val entryNavigationRunning =
         com.android.purebilibili.core.ui.LocalVideoDetailNavigationTransitionScope.current?.isRunning == true
-    val landingOrigin = when (headerReturn?.source) {
-        HomeHeaderControl.AVATAR -> avatarSource
-        HomeHeaderControl.SEARCH -> searchSource
-        HomeHeaderControl.END_ACTION -> endSource
-        null -> null
-    }?.sharedSource?.origin
-    val sharedNavigationRunning by remember(landingOrigin) {
-        derivedStateOf {
-            landingOrigin?.sharedBounds?.let {
-                it.navigationScope.value.isRunning || it.transition.currentState != it.transition.targetState
-            } == true
-        }
-    }
-    val headerNavigationRunning = entryNavigationRunning || sharedNavigationRunning
-    LaunchedEffect(headerReturn, systemReturnPhase, headerNavigationRunning, headerActive, windowActive, motionEnabled) {
+    LaunchedEffect(headerReturn, systemReturnPhase, entryNavigationRunning, headerActive, windowActive, motionEnabled) {
         if (!motionEnabled || !headerActive || !windowActive) {
             returnPressure.snapTo(0f)
             return@LaunchedEffect
         }
-        if (headerReturn == null || !headerReturn.canLand(headerNavigationRunning)) {
+        if (headerReturn == null || !headerReturn.canLand(entryNavigationRunning)) {
             // 返回途中只恢复顶栏姿态；取消手势不补发落位冲量。
             returnPressure.animateTo(0f, AppMotionTokens.folmeSpringSpec(damping = 1f, response = 0.25f))
             return@LaunchedEffect
@@ -1745,18 +1725,10 @@ internal fun HomeHeader(
             if (value != 0f) headerReturn.consumeWhenLanded(navigationRunning = false)
         }
     }
-    fun linkedControlMotion(control: HomeHeaderControl, sharedContent: Boolean = true): Modifier {
-        val neighborMotion = when (control) {
-            HomeHeaderControl.AVATAR -> avatarSource.neighborMotionModifier()
-            HomeHeaderControl.END_ACTION -> endSource.neighborMotionModifier()
-            HomeHeaderControl.SEARCH -> Modifier // 搜索框的锚点直接包裹可见内容。
-        }
-        val sharedContainer = when (control) {
-            HomeHeaderControl.AVATAR -> avatarSharedContainer
-            HomeHeaderControl.END_ACTION -> endSharedContainer
-            HomeHeaderControl.SEARCH -> Modifier
-        }
-        return if (sharedContent) neighborMotion.then(sharedContainer) else neighborMotion
+    fun linkedControlMotion(control: HomeHeaderControl): Modifier = when (control) {
+        HomeHeaderControl.AVATAR -> avatarSource.neighborMotionModifier()
+        HomeHeaderControl.END_ACTION -> endSource.neighborMotionModifier()
+        HomeHeaderControl.SEARCH -> Modifier
     }
     fun landingMotion(control: HomeHeaderControl): Modifier {
         val source = headerReturn?.source ?: return Modifier
@@ -2785,7 +2757,7 @@ internal fun HomeHeader(
                                 layout = topRightUnreadBadgeLayout,
                                 borderColor = AppSurfaceTokens.cardContainer(),
                                 modifier = Modifier.align(Alignment.TopEnd)
-                                    .then(linkedControlMotion(HomeHeaderControl.END_ACTION, sharedContent = false)),
+                                    .then(linkedControlMotion(HomeHeaderControl.END_ACTION)),
                             )
                         }
                     },
@@ -3262,7 +3234,7 @@ internal fun HomeHeader(
                                         borderColor = AppSurfaceTokens.cardContainer(),
                                         modifier = Modifier
                                             .align(Alignment.TopEnd)
-                                            .then(linkedControlMotion(HomeHeaderControl.END_ACTION, sharedContent = false))
+                                            .then(linkedControlMotion(HomeHeaderControl.END_ACTION))
                                             .offset(
                                                 x = topRightUnreadBadgeLayout.offsetX,
                                                 y = topRightUnreadBadgeLayout.offsetY

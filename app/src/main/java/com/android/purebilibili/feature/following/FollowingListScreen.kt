@@ -19,12 +19,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
@@ -281,9 +281,9 @@ class FollowingListViewModel : ViewModel() {
         _userFollowGroupIds.value = emptyMap()
         _isFollowGroupMetaLoading.value = false
 
-        val restoredFromCache = restoreFollowingListFromPersistentCache(mid, forceRefresh)
-
         viewModelScope.launch {
+            val restoredFromCache = restoreFollowingListFromPersistentCache(mid, forceRefresh)
+            if (generation != followingGeneration) return@launch
             if (!restoredFromCache) {
                 _uiState.value = FollowingListUiState.Loading
             }
@@ -330,9 +330,11 @@ class FollowingListViewModel : ViewModel() {
         }
     }
 
-    private fun restoreFollowingListFromPersistentCache(mid: Long, forceRefresh: Boolean): Boolean {
+    private suspend fun restoreFollowingListFromPersistentCache(mid: Long, forceRefresh: Boolean): Boolean {
         val context = NetworkModule.appContext ?: return false
-        val snapshot = FollowingCacheStore.getSnapshot(context, mid) ?: return false
+        val snapshot = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            FollowingCacheStore.getSnapshot(context, mid)
+        } ?: return false
         if (!shouldUseFollowingPersistentCache(
                 forceRefresh = forceRefresh,
                 requestMid = mid,

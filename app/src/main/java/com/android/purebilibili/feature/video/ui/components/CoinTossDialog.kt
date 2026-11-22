@@ -12,7 +12,7 @@ import com.android.purebilibili.core.ui.components.AppHorizontalPager as Horizon
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
@@ -168,7 +168,7 @@ internal fun CoinTossDialog(
             if (!paying && !closing && page in 0 until pager.pageCount) {
                 scope.launch {
                     if (latestActive) pager.animateScrollToPage(
-                        page, animationSpec = tween(200, easing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)),
+                        page, animationSpec = tween(200, easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.StandardEase),
                     ) else pager.scrollToPage(page)
                 }
             }

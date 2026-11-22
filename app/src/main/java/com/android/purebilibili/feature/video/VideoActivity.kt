@@ -76,6 +76,14 @@ open class VideoActivity : FragmentActivity() {
     private var officialCardReturnAtRoot = false
     private var officialReturnToSource = true
 
+    internal val hasOfficialCardSession: Boolean
+        get() = SystemVideoCardTransition.hasSession(intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION))
+
+    internal val profileAvatarEntrance: com.android.purebilibili.feature.profile.ProfileAvatarEntrance?
+        get() = SystemVideoCardTransition.profileAvatarEntrance(
+            intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION)
+        )
+
     internal val usesOfficialCardReturnAtRoot: Boolean
         get() = officialCardReturnAtRoot && officialReturnMotionEnabled &&
             intent.hasExtra(SystemVideoCardTransition.EXTRA_SESSION)
@@ -220,24 +228,30 @@ open class VideoActivity : FragmentActivity() {
                     foldPosture = appWindowAdaptiveInfo.posture.toAdaptiveFoldPosture(),
                 )
             }
-            val blurIntensity by SettingsManager.getBlurIntensity(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = BlurIntensity.THIN)
-            val headerBlurEnabled by SettingsManager.getHeaderBlurEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val bottomBarBlurEnabled by SettingsManager.getBottomBarBlurEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = false)
-            val progressiveTopBlurEnabled by SettingsManager
-                .getProgressiveTopBlurEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val progressiveTopFadeEnabled by SettingsManager
-                .getProgressiveTopFadeEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val cardDynamicTintEnabled by SettingsManager
-                .getHomeCardDynamicTintEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = false)
-            val cardFrostedGlassEnabled by SettingsManager
-                .getHomeCardFrostedGlassEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = false)
+            val blurIntensity by remember(this@VideoActivity) {
+                SettingsManager.getBlurIntensity(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = BlurIntensity.THIN)
+            val headerBlurEnabled by remember(this@VideoActivity) {
+                SettingsManager.getHeaderBlurEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val bottomBarBlurEnabled by remember(this@VideoActivity) {
+                SettingsManager.getBottomBarBlurEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = false)
+            val progressiveTopBlurEnabled by remember(this@VideoActivity) {
+                SettingsManager.getProgressiveTopBlurEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val progressiveTopFadeEnabled by remember(this@VideoActivity) {
+                SettingsManager.getProgressiveTopFadeEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val cardDynamicTintEnabled by remember(this@VideoActivity) {
+                SettingsManager.getHomeCardDynamicTintEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = false)
+            val cardBackgroundMode by remember(this@VideoActivity) {
+                SettingsManager.getHomeCardBackgroundMode(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeCardBackgroundMode.OFF)
+            val cardFrostedGlassEnabled by remember(this@VideoActivity) {
+                SettingsManager.getHomeCardFrostedGlassEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = false)
             val replyPreviewReactions: com.android.purebilibili.feature.video.viewmodel.ReplyPreviewReactionViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel()
             val replyTranslations: com.android.purebilibili.feature.video.viewmodel.ReplyTranslationViewModel =
@@ -251,32 +265,38 @@ open class VideoActivity : FragmentActivity() {
             val commentReplyPreviewVisible by remember(this@VideoActivity) {
                 SettingsManager.getCommentReplyPreviewVisible(this@VideoActivity)
             }.collectAsStateWithLifecycle(initialValue = true)
+            val detailedCommentTimeEnabled by remember(this@VideoActivity) {
+                SettingsManager.getDetailedCommentTimeEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = false)
             val hapticSettings by remember(this@VideoActivity) { SettingsManager.getHapticSettings(this@VideoActivity) }
                 .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppHapticSettings())
-            val hapticFeedbackEnabled by SettingsManager
-                .getHapticFeedbackEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val globalTextTapCopyEnabled by SettingsManager
-                .getGlobalTextTapCopyEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = false)
-            val globalDragFeedbackEnabled by SettingsManager
-                .getGlobalDragFeedbackEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val uiEntranceAnimationEnabled by SettingsManager
-                .getUiEntranceAnimationEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val runtimeVisualGuardEnabled by SettingsManager
-                .getRuntimeVisualGuardEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val liquidGlassMasterEnabled by SettingsManager.getAndroidNativeLiquidGlassEnabled(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = true)
-            val liquidGlassScenes by SettingsManager.getLiquidGlassScenes(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppLiquidGlassSettings())
+            val hapticFeedbackEnabled by remember(this@VideoActivity) {
+                SettingsManager.getHapticFeedbackEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val globalTextTapCopyEnabled by remember(this@VideoActivity) {
+                SettingsManager.getGlobalTextTapCopyEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = false)
+            val globalDragFeedbackEnabled by remember(this@VideoActivity) {
+                SettingsManager.getGlobalDragFeedbackEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val uiEntranceAnimationEnabled by remember(this@VideoActivity) {
+                SettingsManager.getUiEntranceAnimationEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val runtimeVisualGuardEnabled by remember(this@VideoActivity) {
+                SettingsManager.getRuntimeVisualGuardEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val liquidGlassMasterEnabled by remember(this@VideoActivity) {
+                SettingsManager.getAndroidNativeLiquidGlassEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            val liquidGlassScenes by remember(this@VideoActivity) {
+                SettingsManager.getLiquidGlassScenes(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppLiquidGlassSettings())
             val liquidGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
                 com.android.purebilibili.core.ui.AppLiquidGlassScene.OTHER_COMPONENTS,
             )
-            val liquidSwitchThumbMode by SettingsManager.getLiquidSwitchThumbMode(this@VideoActivity)
-                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
+            val liquidSwitchThumbMode by remember(this@VideoActivity) {
+                SettingsManager.getLiquidSwitchThumbMode(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
             val appThemeConfig = remember(
                 liquidGlassEnabled,
                 liquidGlassMasterEnabled,
@@ -357,6 +377,7 @@ open class VideoActivity : FragmentActivity() {
                     com.android.purebilibili.core.ui.LocalSubReplyPreviewLikesEnabled provides subReplyPreviewLikesEnabled,
                     com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled provides commentIpLocationEnabled,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
+                    com.android.purebilibili.core.ui.LocalDetailedCommentTimeEnabled provides detailedCommentTimeEnabled,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->
                         startActivity(android.content.Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
                             putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE,
@@ -377,6 +398,8 @@ open class VideoActivity : FragmentActivity() {
                         com.android.purebilibili.core.ui.components.BiliPaiPopupSurfaceRenderer,
                     com.android.purebilibili.feature.home.components.cards.LocalHomeCardDynamicTintEnabled provides
                         cardDynamicTintEnabled,
+                    com.android.purebilibili.feature.home.components.cards.LocalHomeCardFixedBlurEnabled provides
+                        (cardBackgroundMode == com.android.purebilibili.core.store.HomeCardBackgroundMode.FIXED_BLUR),
                     com.android.purebilibili.feature.home.components.cards.LocalHomeCardFrostedGlassEnabled provides
                         cardFrostedGlassEnabled,
                 ) {

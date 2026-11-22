@@ -5,8 +5,11 @@ import com.android.purebilibili.R
 
 @StringRes
 internal fun settingsSearchResultTitleResource(settingId: String): Int? = when (settingId) {
+    PROCESS_MEMORY_SETTING_ID -> R.string.process_memory_title
+    SUB_REPLY_STYLE_SETTING_ID -> R.string.sub_reply_style_title
     "animation.predictive_back_enabled" -> R.string.animation_predictive_back_title
     "animation.card_transition_enabled" -> R.string.animation_title_card_transition
+    CARD_TRANSITION_METHOD_SETTING_ID -> R.string.animation_card_transition_method_title
     CARD_REMOVAL_DISSOLVE_SETTING_ID -> R.string.animation_card_removal_dissolve_title
     "animation.app_navigation_settings.settings_container_morph_enabled" -> R.string.animation_settings_container_title
     "animation.page_transition_style" -> R.string.animation_back_title
@@ -19,7 +22,8 @@ internal fun settingsSearchResultTitleResource(settingId: String): Int? = when (
     "appearance.startup_animation_style" -> R.string.appearance_startup_animation_style_title
     PROGRESSIVE_BLUR_RENDERER_SETTING_ID -> R.string.animation_progressive_renderer_title
     SETTINGS_ICON_GLYPHS_SETTING_ID -> R.string.appearance_settings_icon_glyphs_title
-    "legacy.001" -> R.string.settings_search_legacy_001_title
+    "legacy.001" -> SettingsRootCategory.APPEARANCE_THEME.titleResource()
+    "legacy.045" -> SettingsRootCategory.ANIMATION_HAPTICS.titleResource()
     "legacy.002" -> R.string.settings_search_legacy_002_title
     "legacy.003" -> R.string.settings_search_legacy_003_title
     "legacy.004" -> R.string.settings_search_legacy_004_title
@@ -46,9 +50,12 @@ internal fun settingsSearchResultTitleResource(settingId: String): Int? = when (
 
 @StringRes
 internal fun settingsSearchResultSummaryResource(settingId: String): Int? = when (settingId) {
+    PROCESS_MEMORY_SETTING_ID -> R.string.process_memory_summary
+    SUB_REPLY_STYLE_SETTING_ID -> R.string.sub_reply_style_summary
     CARD_REMOVAL_DISSOLVE_SETTING_ID -> R.string.animation_card_removal_dissolve_summary
     SETTINGS_ICON_GLYPHS_SETTING_ID -> R.string.appearance_settings_icon_glyphs_summary
-    "legacy.001" -> R.string.settings_search_legacy_001_summary
+    "legacy.001" -> SettingsRootCategory.APPEARANCE_THEME.subtitleResource()
+    "legacy.045" -> SettingsRootCategory.ANIMATION_HAPTICS.subtitleResource()
     "legacy.002" -> R.string.settings_search_legacy_002_summary
     "legacy.003" -> R.string.settings_search_legacy_003_summary
     "legacy.004" -> R.string.settings_search_legacy_004_summary

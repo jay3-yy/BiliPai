@@ -196,12 +196,20 @@ class LinkedDockPolicyTest {
 
     @Test
     fun expandedAudioOccupiesItsOwnRow() {
-        val geometry = geometry(merge = 0f, search = 0f)
-        assertEquals(336, geometry.audioWidth)
-        assertEquals(0, geometry.audioX)
-        assertEquals(0, geometry.audioY)
-        assertEquals(72, geometry.top)
-        assertEquals(136, geometry.height)
+        for (width in listOf(240, 336, 600)) {
+            for (searchEnabled in listOf(false, true)) {
+                val geometry = resolveLinkedDockGeometry(
+                    width = width, button = 56, barHeight = 64, gap = 8,
+                    hasAudio = true, searchEnabled = searchEnabled,
+                    mergeProgress = 0f, searchProgress = 0f,
+                )
+                assertEquals(width, geometry.audioWidth)
+                assertEquals(0, geometry.audioX)
+                assertEquals(0, geometry.audioY)
+                assertEquals(72, geometry.top)
+                assertEquals(136, geometry.height)
+            }
+        }
     }
 
     @Test
@@ -346,64 +354,6 @@ class LinkedDockPolicyTest {
         kotlin.test.assertFalse(shouldExpandPlaybackFromSearch(LinkedDockPhase.Search, hasAudio = false))
         kotlin.test.assertFalse(shouldExpandPlaybackFromSearch(LinkedDockPhase.Playback, hasAudio = true))
         kotlin.test.assertFalse(shouldExpandPlaybackFromSearch(LinkedDockPhase.Expanded, hasAudio = true))
-    }
-
-    @Test
-    fun expandedAudioMatchesBottomBarClusterLengthAndOrigin() {
-        // 展开态小横条与底栏整簇（导航胶囊 + 搜索圆钮）同宽同起点，
-        // 两行胶囊左右边缘对齐。
-        val clusterWidth = 352
-        val clusterX = 124
-        val geometry = resolveLinkedDockGeometry(
-            width = 600, button = 56, barHeight = 64, gap = 8,
-            hasAudio = true, searchEnabled = true,
-            mergeProgress = 0f, searchProgress = 0f,
-            presenceProgress = 1f,
-            expandedAudioWidth = clusterWidth,
-            expandedAudioX = clusterX,
-        )
-        assertEquals(clusterWidth, geometry.audioWidth)
-        assertEquals(clusterX, geometry.audioX)
-    }
-
-    @Test
-    fun expandedAudioPresenceKeepsRightEdgeAnchoredAtClusterEdge() {
-        val clusterWidth = 352
-        val clusterX = 124
-        val full = resolveLinkedDockGeometry(
-            width = 600, button = 56, barHeight = 64, gap = 8,
-            hasAudio = true, searchEnabled = true,
-            mergeProgress = 0f, searchProgress = 0f,
-            presenceProgress = 1f,
-            expandedAudioWidth = clusterWidth,
-            expandedAudioX = clusterX,
-        )
-        val half = resolveLinkedDockGeometry(
-            width = 600, button = 56, barHeight = 64, gap = 8,
-            hasAudio = true, searchEnabled = true,
-            mergeProgress = 0f, searchProgress = 0f,
-            presenceProgress = 0.5f,
-            expandedAudioWidth = clusterWidth,
-            expandedAudioX = clusterX,
-        )
-        assertEquals(clusterX + clusterWidth, full.audioX + full.audioWidth)
-        assertEquals(full.audioX + full.audioWidth, half.audioX + half.audioWidth)
-        assertEquals(full.audioWidth / 2, half.audioWidth)
-    }
-
-    @Test
-    fun mergeAnimationStillCollapsesAudioTowardFirstButton() {
-        // 对齐底栏簇只改展开态落点；merge 动画终点（并入首按钮旁的胶囊）不变。
-        val geometry = resolveLinkedDockGeometry(
-            width = 600, button = 56, barHeight = 64, gap = 8,
-            hasAudio = true, searchEnabled = true,
-            mergeProgress = 1f, searchProgress = 0f,
-            presenceProgress = 1f,
-            expandedAudioWidth = 352,
-            expandedAudioX = 124,
-        )
-        assertEquals(64, geometry.audioX)
-        assertEquals(600 - 56 - geometry.searchWidth - 16, geometry.audioWidth)
     }
 
     private fun geometry(merge: Float, search: Float) =

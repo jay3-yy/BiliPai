@@ -74,6 +74,33 @@ internal fun resolveVideoCardLandingImpulseVelocity(
     return edgeCompressionDp.coerceAtMost(motion.maxEdgeCompressionDp) / motion.peakResponseSeconds
 }
 
+/**
+ * 冲量随释放速度缩放：松手越果断，到达卡槽越快，压缩越深。
+ *
+ * [releaseVelocity] 为导航驱动的提交速度（进度/秒）：预测返回甩手约 2–4/s，
+ * 返回键/程序化返回为 0（保持基线 1x 手感）。基准增益 0.1/s，区间 [0.85, 1.4]。
+ */
+internal fun resolveVideoCardLandingImpulseScale(releaseVelocity: Float): Float {
+    if (!releaseVelocity.isFinite()) return 1f
+    return (1f + releaseVelocity * 0.1f).coerceIn(0.85f, 1.4f)
+}
+
+/**
+ * 系统接口落位与引擎落位共用的压缩行程：同一布局在同一卡片宽度下
+ * 必须得到同一边缘行程，切「一镜到底接口」不改变落位手感。
+ */
+internal fun resolveVideoCardLandingEdgeTravelDp(
+    longestEdgeDp: Float,
+    sourceLayout: VideoCardSourceLayout,
+): Float {
+    return resolveVideoCardLandingEdgeCompressionDp(
+        widthPx = longestEdgeDp,
+        heightPx = longestEdgeDp,
+        density = 1f,
+        sourceLayout = sourceLayout,
+    )
+}
+
 /** Outward release is deliberately smaller than compression, with a separate 0.3% scale cap. */
 internal fun resolveVideoCardLandingReleaseDp(
     widthPx: Float,

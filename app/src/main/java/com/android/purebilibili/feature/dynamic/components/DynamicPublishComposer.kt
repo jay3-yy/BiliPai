@@ -42,10 +42,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Edit
@@ -173,6 +173,7 @@ fun DynamicPublishComposer(
         }
     }
     var previewImage by remember { mutableStateOf<String?>(null) }
+    val previewPageMotion = remember { ImagePreviewPageMotion() }
     var cropImage by remember { mutableStateOf<String?>(null) }
     var showReplyMenu by remember { mutableStateOf(false) }
     var showDiscardDialog by remember { mutableStateOf(false) }
@@ -277,6 +278,7 @@ fun DynamicPublishComposer(
     com.android.purebilibili.core.ui.AppModalBottomSheet(
         onDismissRequest = ::requestDismiss,
         sheetState = sheetState,
+        sheetSurfaceModifier = previewPageMotion.backdropModifier,
         containerColor = AppSurfaceTokens.background(),
         dragHandle = null,
         dismissOnBackPress = false,
@@ -672,7 +674,14 @@ fun DynamicPublishComposer(
     }
     previewImage?.let { image ->
         val index = imageUris.indexOf(image)
-        if (index >= 0) ImagePreviewDialog(images = imageUris, initialIndex = index, onDismiss = { previewImage = null })
+        if (index >= 0) {
+            ImagePreviewDialog(
+                images = imageUris,
+                initialIndex = index,
+                sourcePageMotion = previewPageMotion,
+                onDismiss = { previewImage = null },
+            )
+        }
     }
     pendingUnlocatedIndex?.let { index ->
         unlocatedItems.getOrNull(index)?.let { item ->

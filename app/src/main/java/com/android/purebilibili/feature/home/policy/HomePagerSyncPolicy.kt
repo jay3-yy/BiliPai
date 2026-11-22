@@ -79,9 +79,13 @@ internal fun shouldUseInitialHomePagerSnap(
 internal fun shouldSkipHomePagerStateDrive(
     hasSyncedPagerWithState: Boolean,
     lastDrivenCategory: HomeCategory?,
-    currentCategory: HomeCategory
+    currentCategory: HomeCategory,
+    lastDrivenEntry: HomeTopTabEntry? = null,
+    targetEntry: HomeTopTabEntry? = null,
 ): Boolean {
-    return hasSyncedPagerWithState && lastDrivenCategory == currentCategory
+    if (!hasSyncedPagerWithState) return false
+    if (targetEntry != null && lastDrivenEntry != targetEntry) return false
+    return lastDrivenCategory == currentCategory
 }
 
 internal fun shouldAnimateHomePagerToCategory(
@@ -102,9 +106,19 @@ internal fun shouldAnimateHomePagerToCategory(
 internal fun resolveHomeInitialTopTabPage(
     topTabEntries: List<HomeTopTabEntry>,
     currentCategory: HomeCategory,
-    displayedTabIndex: Int
+    displayedTabIndex: Int,
+    displayedTabEntry: HomeTopTabEntry? = null,
 ): Int {
     if (topTabEntries.isEmpty()) return 0
+    if (displayedTabEntry != null) {
+        val explicitIndex = topTabEntries.indexOf(displayedTabEntry)
+        if (explicitIndex >= 0) return explicitIndex
+        return topTabEntries
+            .indexOf(HomeTopTabEntry.Category(currentCategory))
+            .takeIf { it >= 0 }
+            ?: topTabEntries.indexOfFirst { it is HomeTopTabEntry.Category }.takeIf { it >= 0 }
+            ?: 0
+    }
     val safeDisplayedIndex = displayedTabIndex.coerceIn(0, topTabEntries.lastIndex)
     val displayedEntry = topTabEntries[safeDisplayedIndex]
     if (
@@ -117,13 +131,18 @@ internal fun resolveHomeInitialTopTabPage(
     return topTabEntries
         .indexOf(HomeTopTabEntry.Category(currentCategory))
         .takeIf { it >= 0 }
+        ?: topTabEntries.indexOfFirst { it is HomeTopTabEntry.Category }.takeIf { it >= 0 }
         ?: 0
 }
 
 internal fun shouldTreatInitialHomePagerPageAsSyncedWithState(
     initialEntry: HomeTopTabEntry?,
-    currentCategory: HomeCategory
+    currentCategory: HomeCategory,
+    displayedTabEntry: HomeTopTabEntry? = null,
 ): Boolean {
+    if (displayedTabEntry != null) {
+        return initialEntry == displayedTabEntry
+    }
     return initialEntry == HomeTopTabEntry.Partition ||
         initialEntry == HomeTopTabEntry.Subscriptions ||
         initialEntry == HomeTopTabEntry.Category(currentCategory)
@@ -133,10 +152,12 @@ internal fun resolveHomePagerTargetPage(
     topTabEntries: List<HomeTopTabEntry>,
     retainedEntry: HomeTopTabEntry?,
     currentCategory: HomeCategory,
-    hasSyncedPagerWithState: Boolean
+    hasSyncedPagerWithState: Boolean,
+    displayedTabEntry: HomeTopTabEntry? = null,
 ): Int {
     if (topTabEntries.isEmpty()) return -1
     val targetEntry = when {
+        displayedTabEntry != null -> displayedTabEntry
         retainedEntry == HomeTopTabEntry.Partition -> HomeTopTabEntry.Partition
         retainedEntry == HomeTopTabEntry.Subscriptions -> HomeTopTabEntry.Subscriptions
         else -> HomeTopTabEntry.Category(currentCategory)
@@ -144,4 +165,18 @@ internal fun resolveHomePagerTargetPage(
     val targetIndex = topTabEntries.indexOf(targetEntry)
     if (targetIndex >= 0) return targetIndex
     return topTabEntries.indexOf(HomeTopTabEntry.Category(currentCategory))
+        .takeIf { it >= 0 }
+        ?: topTabEntries.indexOfFirst { it is HomeTopTabEntry.Category }
+}
+
+internal fun resolveHomeFallbackVisibleCategoryTab(
+    topTabEntries: List<HomeTopTabEntry>,
+    currentCategory: HomeCategory,
+): Pair<Int, HomeCategory>? {
+    val visibleCategories = topTabEntries.mapNotNull { (it as? HomeTopTabEntry.Category)?.category }
+    val firstVisible = visibleCategories.firstOrNull() ?: return null
+    if (currentCategory in visibleCategories) return null
+    val fallbackIndex = topTabEntries.indexOf(HomeTopTabEntry.Category(firstVisible))
+    if (fallbackIndex < 0) return null
+    return fallbackIndex to firstVisible
 }

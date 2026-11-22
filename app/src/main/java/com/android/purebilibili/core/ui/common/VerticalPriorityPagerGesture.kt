@@ -13,7 +13,9 @@ import androidx.compose.foundation.pager.PagerDefaults
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
-import top.yukonga.miuix.kmp.utils.pagerGestureOverride
+import com.android.purebilibili.core.ui.components.ScrollBoundaryFeedback
+import com.android.purebilibili.core.ui.components.appMiuixPagerGesture
+import com.android.purebilibili.core.ui.components.rememberScrollBoundaryFeedback
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -159,13 +161,15 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
     if (!enabled || state.pageCount < 2) return@composed this
     // Non-list surfaces can retain Miuix's cross-axis takeover behavior.
     if (!forceVerticalPriority && LocalAppUiStyle.current == AppUiStyle.MIUIX) {
-        return@composed pagerGestureOverride(
-            pagerState = state,
+        if (shouldYield()) return@composed this
+        return@composed appMiuixPagerGesture(
+            state = state,
             flingBehavior = PagerDefaults.flingBehavior(state, snapAnimationSpec = PagerNavigationSpringSpec),
-            enabled = !shouldYield(),
+            reverseLayout = reverseLayout,
         )
     }
 
+    val boundaryFeedback = rememberScrollBoundaryFeedback(state)
     val latestShouldYield = rememberUpdatedState(shouldYield)
     val latestDragInteractionSource = rememberUpdatedState(dragInteractionSource)
     val latestSettleAnimationSpec = rememberUpdatedState(settleAnimationSpec)
@@ -213,6 +217,7 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
 
     then(pageActions).pointerInput(
         state,
+        boundaryFeedback,
         reverseDirection,
         minimumFlingVelocityPx,
         maximumPositionThresholdPx,
@@ -272,7 +277,7 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                 touchSlop = viewConfiguration.touchSlop,
             )
             val scrollDirectionMultiplier = if (reverseDirection) -1f else 1f
-            val dragSession = PagerDragScrollSession()
+            val dragSession = PagerDragScrollSession(boundaryFeedback)
             val scrollJob = dragCoroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
                 var release: PagerDragRelease? = null
                 state.scroll(MutatePriority.UserInput) {
@@ -292,9 +297,13 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                         maximumPositionThresholdPx = maximumPositionThresholdPx,
                         minimumFlingVelocityPxPerSecond = minimumFlingVelocityPx,
                     )
+                    val positionBeforeSettle = state.currentPage + state.currentPageOffsetFraction
+                    boundaryFeedback.beforeScroll()
                     val animationSpec = latestSettleAnimationSpec.value
                     if (animationSpec == null) state.animateScrollToPage(targetPage)
                     else state.animateScrollToPage(targetPage, animationSpec = animationSpec)
+                    val positionAfterSettle = state.currentPage + state.currentPageOffsetFraction
+                    boundaryFeedback.afterScroll(positionAfterSettle - positionBeforeSettle, moved = true)
                 }
             }
 
@@ -366,7 +375,7 @@ private data class PagerDragRelease(
     val scrollDeltaPx: Float,
 )
 
-private class PagerDragScrollSession {
+private class PagerDragScrollSession(private val boundaryFeedback: ScrollBoundaryFeedback) {
     private var scrollScope: ScrollScope? = null
     private var releaseContinuation: CancellableContinuation<PagerDragRelease>? = null
 
@@ -374,7 +383,7 @@ private class PagerDragScrollSession {
         suspendCancellableCoroutine { continuation ->
             scrollScope = this
             releaseContinuation = continuation
-            if (initialDelta != 0f) scrollBy(initialDelta)
+            dragBy(initialDelta)
             continuation.invokeOnCancellation {
                 scrollScope = null
                 releaseContinuation = null
@@ -382,7 +391,11 @@ private class PagerDragScrollSession {
         }
 
     fun dragBy(delta: Float) {
-        if (delta != 0f) scrollScope?.scrollBy(delta)
+        val scope = scrollScope ?: return
+        if (delta == 0f) return
+        boundaryFeedback.beforeScroll()
+        val consumed = scope.scrollBy(delta)
+        boundaryFeedback.afterScroll(delta, moved = consumed != 0f)
     }
 
     fun release(release: PagerDragRelease) {

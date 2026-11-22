@@ -1,13 +1,19 @@
 package com.android.purebilibili.feature.video.screen
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
 import kotlin.math.roundToInt
 
@@ -67,4 +73,44 @@ internal fun videoContentAdditionalTopPadding(
     override fun calculateTopPadding(): Dp = contentPadding.calculateTopPadding() +
         with(density) { extraTopPx().coerceAtLeast(0f).toDp() }
     override fun calculateBottomPadding(): Dp = contentPadding.calculateBottomPadding()
+}
+
+internal class VideoContentChromeMeasurements {
+    var tabHeightPx by mutableIntStateOf(0)
+    var commentHeightPx by mutableIntStateOf(0)
+}
+
+internal enum class VideoContentChromeSlot { Tabs, CommentHeader }
+
+/** Measure the overlays before the pager so both pages can reserve their space on the first frame. */
+@Composable
+internal fun VideoContentChromeLayout(
+    measurements: VideoContentChromeMeasurements,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val looseConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+        val tabs = measurables.first { it.layoutId == VideoContentChromeSlot.Tabs }
+        val header = measurables.firstOrNull { it.layoutId == VideoContentChromeSlot.CommentHeader }
+        val tabPlaceable = tabs.measure(looseConstraints)
+        measurements.tabHeightPx = tabPlaceable.height
+        if (header == null) measurements.commentHeightPx = 0
+        val headerPlaceable = header?.measure(looseConstraints.offset(vertical = -tabPlaceable.height))
+        val placeables = measurables.map { measurable ->
+            when (measurable) {
+                tabs -> tabPlaceable
+                header -> requireNotNull(headerPlaceable)
+                else -> measurable.measure(looseConstraints)
+            }
+        }
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            placeables.forEach { placeable ->
+                placeable.placeRelative(
+                    0,
+                    if (placeable === headerPlaceable) tabPlaceable.height else 0,
+                )
+            }
+        }
+    }
 }

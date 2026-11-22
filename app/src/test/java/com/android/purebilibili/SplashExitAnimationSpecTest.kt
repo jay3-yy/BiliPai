@@ -8,7 +8,7 @@ class SplashExitAnimationSpecTest {
 
     @Test
     fun usesExpectedDefaultAnimationSpecValues() {
-        assertEquals(920L, splashExitDurationMs())
+        assertEquals(600L, splashExitDurationMs())
         assertEquals(220f, splashExitTranslateYDp(), 0.001f)
         assertEquals(1.12f, splashExitScaleEnd(), 0.001f)
         assertEquals(24f, splashExitBlurRadiusEnd(), 0.001f)

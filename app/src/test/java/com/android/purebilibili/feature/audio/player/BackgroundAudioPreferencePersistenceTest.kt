@@ -34,6 +34,22 @@ class BackgroundAudioPreferencePersistenceTest {
     }
 
     @Test
+    fun `live handoff transfers the original sleep schedule and disk checkpoints drop it`() {
+        val timers = listOf(
+            PlaybackSleepTimer.Countdown(minutes = 30, deadlineMs = 1_900_000L),
+            PlaybackSleepTimer.AfterCurrent(bvid = "a", cid = 42L),
+        )
+        timers.forEach { timer ->
+            val live = running.copy(sleepTimer = timer)
+            val serialized = backgroundAudioJson.encodeToString(BackgroundAudioSnapshot.serializer(), live)
+            val received = backgroundAudioJson.decodeFromString(BackgroundAudioSnapshot.serializer(), serialized)
+
+            assertEquals(timer, received.sleepTimer)
+            assertNull(received.forPersistence().sleepTimer)
+        }
+    }
+
+    @Test
     fun `legacy checkpoints retain the original order when no saved baseline was supplied`() {
         val legacy = running.copy(savedPlayMode = null, savedShuffle = null, backgroundPlaybackOverride = null, backgroundOverrideBvid = null)
         assertEquals(legacy, legacy.forPersistence())

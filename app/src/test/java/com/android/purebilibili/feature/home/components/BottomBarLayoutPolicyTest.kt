@@ -286,7 +286,7 @@ class BottomBarLayoutPolicyTest {
         // The ordinary dock and adjacent search circle share a compact resting height.
         for (searchExpanded in listOf(false, true)) {
             assertEquals(
-                64.dp,
+                52.dp,
                 resolveBiliPaiBottomBarDockHeight(searchExpanded, nativeMiuixNavigation = true),
             )
         }

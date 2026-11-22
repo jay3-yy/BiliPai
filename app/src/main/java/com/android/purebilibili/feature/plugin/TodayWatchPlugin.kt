@@ -284,12 +284,12 @@ class TodayWatchPlugin : BuiltinPlugin, RecommendationPluginApi<VideoItem>, Toda
         val configSnapshot by configState.collectAsStateWithLifecycle()
         var uiConfig by remember { mutableStateOf(configSnapshot) }
         var feedbackSnapshot by remember {
-            mutableStateOf(TodayWatchFeedbackStore.getSnapshot(context))
+            mutableStateOf(com.android.purebilibili.core.store.TodayWatchFeedbackSnapshot())
         }
         var showResetDialog by remember { mutableStateOf(false) }
         var resetMessage by remember { mutableStateOf<String?>(null) }
         var creatorSignals by remember {
-            mutableStateOf(TodayWatchProfileStore.getCreatorSignals(context, limit = 5))
+            mutableStateOf<List<com.android.purebilibili.core.store.CreatorSignalSnapshot>>(emptyList())
         }
         val insightState = remember(uiConfig.currentMode, feedbackSnapshot, creatorSignals) {
             buildTodayWatchTasteInsightState(
@@ -301,12 +301,18 @@ class TodayWatchPlugin : BuiltinPlugin, RecommendationPluginApi<VideoItem>, Toda
 
         LaunchedEffect(Unit) {
             loadConfigSuspend()
-            feedbackSnapshot = TodayWatchFeedbackStore.getSnapshot(context)
-            creatorSignals = TodayWatchProfileStore.getCreatorSignals(context, limit = 5)
+            val (loadedFeedback, loadedSignals) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                TodayWatchFeedbackStore.getSnapshot(context) to
+                    TodayWatchProfileStore.getCreatorSignals(context, limit = 5)
+            }
+            feedbackSnapshot = loadedFeedback
+            creatorSignals = loadedSignals
         }
         LaunchedEffect(configSnapshot) {
             uiConfig = configSnapshot
-            creatorSignals = TodayWatchProfileStore.getCreatorSignals(context, limit = 5)
+            creatorSignals = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                TodayWatchProfileStore.getCreatorSignals(context, limit = 5)
+            }
         }
 
         fun commit(next: TodayWatchPluginConfig) {

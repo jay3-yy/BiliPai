@@ -123,6 +123,45 @@ internal fun resolveBottomPagerPageForRoute(
         .takeIf { it >= 0 }
 }
 
+/**
+ * 底栏 Pager 初始页：恢复快照的底栏路由优先；系统卡片窗口的初始内容本身是底栏
+ * 目的地时（如头像入口的“我的”），选中项绑定窗口内容身份而非默认首页。
+ */
+internal fun resolveBottomBarInitialPage(
+    recoveredBottomRoute: String?,
+    windowInitialRoute: String?,
+    visibleItems: List<BottomNavItem>
+): Int {
+    recoveredBottomRoute?.let { recovered ->
+        visibleItems.indexOfFirst { item -> item.route == recovered }.takeIf { it >= 0 }
+    }?.let { return it }
+    return resolveBottomPagerPageForRoute(
+        route = windowInitialRoute,
+        visibleItems = visibleItems,
+    ) ?: 0
+}
+
+/**
+ * 主窗口底栏或侧栏已承载目标一级入口时，优先切换应用内 Pager，
+ * 不再通过系统卡片转场（含小米旧版 103）拉起独立 NavigationCardActivity，
+ * 保证与普通转场一致；若目标不在底栏可见项中，或底栏永久隐藏且未启用侧栏，
+ * 仍允许走系统卡片窗口转场。
+ */
+internal fun shouldPreferInAppBottomPagerOverSystemCardWindow(
+    targetRoute: String?,
+    visibleBottomBarItems: List<BottomNavItem>,
+    isChildWindow: Boolean,
+    bottomBarAlwaysHidden: Boolean,
+    useSideNavigation: Boolean,
+): Boolean {
+    if (isChildWindow) return false
+    if (bottomBarAlwaysHidden && !useSideNavigation) return false
+    return resolveBottomPagerPageForRoute(
+        route = targetRoute,
+        visibleItems = visibleBottomBarItems,
+    ) != null
+}
+
 internal fun resolveBottomPagerItemForPage(
     page: Int,
     visibleItems: List<BottomNavItem>
@@ -165,8 +204,10 @@ internal fun shouldShowBottomBarForNavigation(
     visibleBottomBarRoutes: Set<String>,
     useSideNavigation: Boolean,
     shouldHideBottomBarOnTablet: Boolean,
-    shouldDeferReveal: Boolean
+    shouldDeferReveal: Boolean,
+    isChildWindow: Boolean = false,
 ): Boolean {
+    if (isChildWindow) return false
     return !activeRoute.orEmpty().startsWith("story") &&
         activeRoute in visibleBottomBarRoutes &&
         !useSideNavigation &&

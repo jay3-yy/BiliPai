@@ -83,9 +83,8 @@ internal fun rememberInlineVideoStatusBarState(
 }
 
 @Composable
-internal fun rememberVideoDetailOpeningCoverImage(matchesEntry: Boolean): InlineStatusBarImage? {
-    val seed = LocalVideoDetailOpeningSeed.current
-    if (!matchesEntry || seed == null) return null
+internal fun rememberVideoDetailOpeningCoverImage(bvid: String): InlineStatusBarImage? {
+    val seed = LocalVideoDetailOpeningSeed.current?.takeIf { it.bvid == bvid } ?: return null
     return remember(seed) {
         InlineStatusBarImage(
             seed.bitmap.asImageBitmap(),
@@ -116,7 +115,8 @@ internal fun InlineVideoStatusBarBackdrop(
             .background(Color.Black),
     ) {
         val cover = remember(state.coverImage, residentCover, openingCover) {
-            derivedStateOf { state.coverImage.value ?: residentCover.value ?: openingCover }
+            // 同一张常驻封面同时供入场和等待首帧使用，避免挂载播放器时重切模糊来源。
+            derivedStateOf { residentCover.value ?: state.coverImage.value ?: openingCover }
         }
         val showBlur by remember(state, cover) {
             derivedStateOf {

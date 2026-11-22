@@ -54,6 +54,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -164,6 +165,7 @@ private fun MiniPlayerSessionOverlay(
     val playerChromeProfile = rememberAppPlayerChromeProfile()
     val reduceMotion = rememberSystemReduceMotion()
     val visualWorkActive = rememberVisualWorkActive()
+    var miniPlayerInViewport by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveMiniPlayerOverlayLayoutPolicy(
@@ -707,8 +709,7 @@ private fun MiniPlayerSessionOverlay(
             )
         }
     }
-    val animatedOffsetX = offsetXAnimatable.value
-    val animatedOffsetY by animateFloatAsState(
+    val animatedOffsetYState = animateFloatAsState(
         targetValue = targetOffsetY,
         animationSpec = if (isDraggingPosition || isResizing || reduceMotion) {
             snap()
@@ -718,22 +719,26 @@ private fun MiniPlayerSessionOverlay(
         label = "offsetY"
     )
 
-    // 回报小窗屏幕边界，供 PIP sourceRectHint 做无缝过渡。
+    // 回报小窗屏幕边界，供 PIP sourceRectHint 做无缝过渡；使用 snapshotFlow 避免每帧重启协程与重组。
     LaunchedEffect(
-        animatedOffsetX,
-        animatedOffsetY,
+        offsetXAnimatable,
+        animatedOffsetYState,
         miniPlayerWidthPx,
         miniPlayerHeightPx,
         suppressContentForPip
     ) {
-        miniPlayerManager.miniPlayerSourceBoundsPx = if (suppressContentForPip) {
-            null
-        } else {
-            android.graphics.Rect(
-                animatedOffsetX.roundToInt(),
-                animatedOffsetY.roundToInt(),
-                (animatedOffsetX + miniPlayerWidthPx).roundToInt(),
-                (animatedOffsetY + miniPlayerHeightPx).roundToInt(),
+        if (suppressContentForPip) {
+            miniPlayerManager.miniPlayerSourceBoundsPx = null
+            return@LaunchedEffect
+        }
+        snapshotFlow {
+            offsetXAnimatable.value.roundToInt() to animatedOffsetYState.value.roundToInt()
+        }.collect { (x, y) ->
+            miniPlayerManager.miniPlayerSourceBoundsPx = android.graphics.Rect(
+                x,
+                y,
+                (x + miniPlayerWidthPx).roundToInt(),
+                (y + miniPlayerHeightPx).roundToInt(),
             )
         }
     }
@@ -815,7 +820,7 @@ private fun MiniPlayerSessionOverlay(
             // [新增] 贴边隐藏的小胶囊视图
             StashedMiniPlayerView(
                 modifier = Modifier
-                    .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
+                    .offset { IntOffset(offsetXAnimatable.value.roundToInt(), animatedOffsetYState.value.roundToInt()) }
                     .zIndex(101f)
                     .graphicsLayer { alpha = ((stashProgress.value - 0.35f) / 0.65f).coerceIn(0f, 1f) },
                 layoutPolicy = layoutPolicy,
@@ -854,9 +859,10 @@ private fun MiniPlayerSessionOverlay(
             AppCard(
                 modifier = Modifier
                     .then(autoHide.focusModifier)
-                    .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
+                    .offset { IntOffset(offsetXAnimatable.value.roundToInt(), animatedOffsetYState.value.roundToInt()) }
                     .width(miniPlayerWidth)
                     .height(miniPlayerHeight)
+                    .onVisibilityChanged(minFractionVisible = 0f) { miniPlayerInViewport = it }
                     .onGloballyPositioned { coordinates ->
                         cardCoordinates[0] = coordinates
                         if (navigationHandoff != null) {
@@ -991,7 +997,13 @@ private fun MiniPlayerSessionOverlay(
                 }
 
                 player?.let { currentPlayer ->
-                    PlayerBufferingIndicator(player = currentPlayer, modifier = Modifier.align(Alignment.Center))
+                    // 退出小窗/落地过渡期间不再叠一层缓冲动画，避免详情页起播前先闪一个小圈。
+                    if (miniPlayerManager.isMiniMode && miniPlayerManager.isActive &&
+                        visualWorkActive && miniPlayerInViewport && !contentHidden && !awaitingMorphLanding &&
+                        !isStashed && !dismissing && !suppressContentForPip && landingCover == null
+                    ) {
+                        PlayerBufferingIndicator(player = currentPlayer, modifier = Modifier.align(Alignment.Center))
+                    }
                 }
 
                 // 控件直接叠在视频上；玻璃与原生材质共用媒体白色图标，不增加标题栏。

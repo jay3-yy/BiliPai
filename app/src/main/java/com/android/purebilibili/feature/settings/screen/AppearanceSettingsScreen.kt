@@ -31,11 +31,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.*
 import com.android.purebilibili.core.theme.AppUiStyle
@@ -70,6 +70,9 @@ import com.android.purebilibili.core.store.HomeFeedCardStyle
 import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
 import com.android.purebilibili.core.store.HomeWallpaperEffectScope
+import com.android.purebilibili.core.store.HomeCardBackgroundMode
+import com.android.purebilibili.feature.settings.homeCardBackgroundModeLabel
+import com.android.purebilibili.feature.profile.ALPINE_PAGE_WALLPAPER_URI
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.SettingsIconGlyphs
 import com.android.purebilibili.core.store.ThemeModeRoleOverrides
@@ -119,7 +122,6 @@ fun AppearanceSettingsScreen(
     onBack: () -> Unit,
     onNavigateToIconSettings: () -> Unit = {},
     contentMode: AppearanceSettingsContentMode = AppearanceSettingsContentMode.APPEARANCE,
-    onAnimationClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -132,7 +134,7 @@ fun AppearanceSettingsScreen(
     var pendingLanguageRestart by remember { mutableStateOf<AppLanguage?>(null) }
     val backLabel = stringResource(R.string.common_back)
     val screenTitle = when (contentMode) {
-        AppearanceSettingsContentMode.APPEARANCE -> stringResource(R.string.appearance_settings_title)
+        AppearanceSettingsContentMode.APPEARANCE -> stringResource(SettingsRootCategory.APPEARANCE_THEME.titleResource())
         AppearanceSettingsContentMode.HOME -> context.getString(R.string.appearance_home_and_dynamic_title)
     }
     val restartDialogTitle = stringResource(R.string.app_language_restart_dialog_title)
@@ -180,7 +182,6 @@ fun AppearanceSettingsScreen(
     ) {
         CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides effectiveLiquidGlassEnabled) {
             AppearanceSettingsContent(
-                onAnimationClick = onAnimationClick,
                 state = state,
                 onNavigateToIconSettings = onNavigateToIconSettings,
                 contentMode = contentMode,
@@ -246,7 +247,6 @@ fun AppearanceSettingsContent(
     viewModel: SettingsViewModel,
     context: android.content.Context,
     onAppLanguageChange: (AppLanguage) -> Unit,
-    onAnimationClick: () -> Unit = {},
 ) {
     val homeConfiguration = rememberSettingsHomeConfiguration()
     val themeConfiguration = rememberSettingsThemeConfiguration()
@@ -505,7 +505,13 @@ fun AppearanceSettingsContent(
     val homeRefreshUndoVisible = homeConfiguration.homeRefreshUndoVisible
     val fullVideoCardContentVisible = homeConfiguration.showFullVideoCardContent
     val videoCardLongPressActionEnabled = homeConfiguration.videoCardLongPressActionEnabled
-    val homeCardDynamicTintEnabled = homeConfiguration.homeCardDynamicTintEnabled
+    val homeCardBackgroundMode = HomeCardBackgroundMode.fromSettings(
+        dynamicTint = homeConfiguration.homeCardDynamicTintEnabled,
+        fixedBlur = homeConfiguration.homeCardFixedBlurEnabled,
+    )
+    val homeCardBackgroundOptions = HomeCardBackgroundMode.entries.map { mode ->
+        AppSegmentOption(mode, stringResource(homeCardBackgroundModeLabel(mode)))
+    }
     val homeDurationStyle = homeConfiguration.homeDurationStyle
     val homeFeedCardStyle = homeConfiguration.homeFeedCardStyle
     val homeHeroCarouselEnabled = homeConfiguration.homeHeroCarouselEnabled
@@ -662,7 +668,7 @@ fun AppearanceSettingsContent(
                             )
                         }
 
-                        // 液态玻璃总开关与玻璃材质条目已集中在「动画与触感」页的玻璃分组,
+                        // 液态玻璃总开关与玻璃材质条目位于「动效与反馈」页的玻璃分组。
                         // 这里只保留与玻璃无关的显示样式条目。
 
                         SettingsItemAnchor("appearance.app_list_item_style") {
@@ -760,19 +766,6 @@ fun AppearanceSettingsContent(
                                         )
                                     }
                                 },
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsNavigationContainerOrigin(
-                            target = com.android.purebilibili.navigation3.BiliPaiNavKey.AnimationSettings,
-                            onClick = onAnimationClick,
-                            first = false,
-                        ) { contentModifier, open ->
-                            AppPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.ANIMATION),
-                                title = context.getString(R.string.appearance_animation_glass_title),
-                                onClick = open,
-                                contentModifier = contentModifier,
                             )
                         }
                     }
@@ -2193,6 +2186,8 @@ fun AppearanceSettingsContent(
                                 )
                                 AppText(
                                     text = when {
+                                        dedicatedHomeWallpaperUri == ALPINE_PAGE_WALLPAPER_URI ->
+                                            context.getString(R.string.appearance_wallpaper_alpine_daylight)
                                         dedicatedHomeWallpaperUri.isNotBlank() -> context.getString(R.string.appearance_home_wallpaper_dedicated)
                                         homeWallpaperFollowsSplash -> context.getString(R.string.appearance_home_wallpaper_follows_splash)
                                         else -> context.getString(R.string.appearance_home_wallpaper_source)
@@ -2314,24 +2309,22 @@ fun AppearanceSettingsContent(
                             }
                         }
 
-                        // 「卡片背景模糊」已并入「动画与触感」页的液态玻璃与磨砂分组。
+                        // 「卡片背景模糊」位于「动效与反馈」页的液态玻璃与磨砂分组。
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.home_card_dynamic_tint_enabled") {
-                            AppSwitchPreference(
+                            SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_CARD_DYNAMIC_TINT),
                                 title = settingItemTitle("appearance.home_card_dynamic_tint_enabled"),
-                                subtitle = if (homeCardDynamicTintEnabled) {
-                                    context.getString(R.string.appearance_wallpaper_card_tint_on)
-                                } else {
-                                    context.getString(R.string.appearance_wallpaper_card_tint_off)
+                                subtitle = stringResource(when (homeCardBackgroundMode) {
+                                    HomeCardBackgroundMode.OFF -> R.string.appearance_wallpaper_card_tint_off
+                                    HomeCardBackgroundMode.FOLLOW_IMAGE -> R.string.appearance_wallpaper_card_tint_on
+                                    HomeCardBackgroundMode.FIXED_BLUR -> R.string.appearance_card_background_fixed_summary
+                                }),
+                                options = homeCardBackgroundOptions,
+                                selectedValue = homeCardBackgroundMode,
+                                onSelectionChange = { mode ->
+                                    scope.launch { SettingsManager.setHomeCardBackgroundMode(context, mode) }
                                 },
-                                checked = homeCardDynamicTintEnabled,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        SettingsManager.setHomeCardDynamicTintEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
                             )
                         }
                     }

@@ -27,6 +27,7 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.appActionClickable
+import top.yukonga.miuix.kmp.blur.Backdrop
 
 /** 首页仅传递提示状态句柄，显示和消失只更新提示本身。 */
 @Composable
@@ -97,46 +98,49 @@ internal fun HomeRefreshDeltaTip(
     }
 }
 
-/** 撤销可用状态与听视频横条的变化只影响悬浮入口。 */
+/** 听视频横条的变化只更新撤销胶囊的底部避让。 */
 @Composable
 internal fun HomeRefreshUndoHost(
-    viewModel: HomeViewModel,
-    currentCategory: HomeCategory,
+    undoVisible: Boolean,
+    undoDismissed: Boolean,
     refreshNewItemsKey: Long,
     homeListBottomPadding: Dp,
     oldContentLocatorVisible: Boolean,
+    backdrop: Backdrop?,
+    onUndo: () -> Unit,
+    onUndoDismiss: () -> Unit,
 ) {
-    val undoAvailable by viewModel.undoAvailable.collectAsStateWithLifecycle()
     val nowPlayingBarOverlayVisible by com.android.purebilibili.feature.audio.player
         .AudioNowPlayingSession.barOverlayVisible
         .collectAsStateWithLifecycle()
     HomeRefreshUndoOverlay(
-        undoAvailable = undoAvailable,
+        undoVisible = undoVisible,
+        undoDismissed = undoDismissed,
         nowPlayingBarOverlayVisible = nowPlayingBarOverlayVisible,
-        isRecommendation = currentCategory == HomeCategory.RECOMMEND,
         refreshNewItemsKey = refreshNewItemsKey,
         homeListBottomPadding = homeListBottomPadding,
         oldContentLocatorVisible = oldContentLocatorVisible,
-        onUndo = viewModel::undoRefresh,
+        backdrop = backdrop,
+        onUndo = onUndo,
+        onUndoDismiss = onUndoDismiss,
     )
 }
 
 @Composable
 private fun HomeRefreshUndoOverlay(
-    undoAvailable: Boolean,
+    undoVisible: Boolean,
+    undoDismissed: Boolean,
     nowPlayingBarOverlayVisible: Boolean,
-    isRecommendation: Boolean,
     refreshNewItemsKey: Long,
     homeListBottomPadding: Dp,
     oldContentLocatorVisible: Boolean,
+    backdrop: Backdrop?,
     onUndo: () -> Unit,
+    onUndoDismiss: () -> Unit,
 ) {
     val overlayMotionSpec = remember { resolveHomeOverlayMotionSpec() }
     //  与「定位上次刷新」胶囊共用同一底部锚点：跟随听视频横条上浮，且在定位胶囊
     //  可见时再抬一个胶囊位（胶囊高约 36dp + 8dp 间距），避免两者互相遮挡。
-    val undoVisible = undoAvailable && isRecommendation
-    //  手动关闭撤销胶囊；下次撤销可用时自动复位
-    var undoDismissed by remember(refreshNewItemsKey) { mutableStateOf(false) }
     var undoDissolving by remember(refreshNewItemsKey) { mutableStateOf(false) }
     val undoPillBottomPadding = homeListBottomPadding + AppSpacingTokens.Medium +
         120.dp +
@@ -167,8 +171,8 @@ private fun HomeRefreshUndoOverlay(
             DissolvableVideoCard(
                 isDissolving = undoDissolving,
                 onDissolveComplete = {
-                    undoDismissed = true
                     undoDissolving = false
+                    onUndoDismiss()
                 },
                 cardId = "undo-refresh-$refreshNewItemsKey",
                 preset = com.android.purebilibili.core.ui.animation.DissolveAnimationPreset.TELEGRAM_FAST,
@@ -177,6 +181,7 @@ private fun HomeRefreshUndoOverlay(
                 keepInvisibleAfterDissolve = true,
             ) {
                 com.android.purebilibili.feature.home.components.HomeOverlayPillButton(
+                    backdrop = backdrop,
                     onClick = { if (!undoDissolving) onUndo() },
                     modifier = Modifier.pointerInput(Unit) {
                         detectHorizontalDragGestures { change, _ ->

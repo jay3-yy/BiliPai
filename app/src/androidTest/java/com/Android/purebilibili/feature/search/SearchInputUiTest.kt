@@ -12,7 +12,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.assertIsFocused
@@ -72,30 +71,6 @@ class SearchInputUiTest {
     }
 
     @Test
-    fun restoringFocusDoesNotRequestEditNavigationButTouchDoes() {
-        val state = TextFieldState(initialText = "搜索词")
-        val focusRequester = FocusRequester()
-        var editRequests = 0
-        rule.setContent {
-            MaterialTheme {
-                SearchTopBar(
-                    textFieldState = state,
-                    onBack = {},
-                    onSearch = {},
-                    onClearQuery = {},
-                    focusRequester = focusRequester,
-                    autoFocusEnabled = false,
-                    onEditRequested = { editRequests++ },
-                )
-            }
-        }
-        rule.runOnIdle { focusRequester.requestFocus() }
-        rule.runOnIdle { assertEquals(0, editRequests) }
-        rule.onNode(hasSetTextAction()).performTouchInput { click() }
-        rule.runOnIdle { assertEquals(1, editRequests) }
-    }
-
-    @Test
     fun movingSelectionAndUpdatingSuggestionsKeepsTheSameImeSession() {
         val state = TextFieldState(initialText = "abcdef")
         val suggestion = mutableStateOf("推荐词")
@@ -121,7 +96,8 @@ class SearchInputUiTest {
                 }
             }
         }
-        rule.onNode(hasSetTextAction()).performClick()
+        rule.onNode(hasSetTextAction()).performTouchInput { click() }
+        rule.onNode(hasSetTextAction()).assertIsFocused()
         rule.waitUntil { connection != null }
         rule.runOnIdle {
             checkNotNull(connection).setSelection(2, 2)

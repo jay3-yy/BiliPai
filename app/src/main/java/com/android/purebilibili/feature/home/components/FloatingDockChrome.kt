@@ -42,102 +42,50 @@ import com.android.purebilibili.feature.home.components.liquid.innerShadow
 import com.android.purebilibili.feature.home.components.liquid.lens
 import com.android.purebilibili.feature.home.components.liquid.vibrancy
 import kotlin.math.PI
-import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.roundToInt
 import kotlin.math.sin
-import kotlin.math.sqrt
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BackdropEffectScope
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.drawBackdrop
-import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
-import top.yukonga.miuix.kmp.blur.highlight.LightPosition
-import top.yukonga.miuix.kmp.blur.highlight.LightSource
+import top.yukonga.miuix.kmp.material.EdgeLightSource
+import top.yukonga.miuix.kmp.material.EdgePeak
+import top.yukonga.miuix.kmp.material.EdgeStroke
+import top.yukonga.miuix.kmp.material.drawEdgeStroke
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 
-private val iosIndicatorSpecular: Highlight = Highlight(
+private val iosIndicatorSpecular = EdgeStroke(
     width = 1.dp,
-    alpha = 1f,
-    style = BloomStroke(
-        color = Color.White.copy(alpha = 0.12f),
-        innerBlurRadius = 2.0.dp,
-        primaryLight = LightSource(
-            position = LightPosition(0.5f, -0.3f, -0.05f),
-            color = Color.White,
-            intensity = 1f,
-        ),
-        secondaryLight = LightSource(
-            position = LightPosition(0.5f, 0.8f, -0.5f),
-            color = Color.White,
-            intensity = 0.4f,
-        ),
-        dualPeak = true,
-    ),
+    bevel = 2.dp,
+    color = Color.White.copy(alpha = 0.12f),
+    primary = EdgeLightSource(0.5f, -0.3f, -0.05f),
+    secondary = EdgeLightSource(0.5f, 0.8f, -0.5f, intensity = 0.4f),
+    peak = EdgePeak.Dual,
 )
 
 private const val LIGHT_REF_X = 0.5f
 private const val LIGHT_REF_Y = 0.7f
-private const val GRAVITY_DIR_THRESHOLD_SQ = 0.01f
-internal const val GRAVITY_HIGHLIGHT_QUANTIZE_DEGREES = 3f
-
-internal fun quantizeGravityHighlightDirection(
-    gravityX: Float,
-    gravityY: Float,
-    stepDegrees: Float = GRAVITY_HIGHLIGHT_QUANTIZE_DEGREES,
-): Pair<Float, Float> {
-    val gMagSq = gravityX * gravityX + gravityY * gravityY
-    if (gMagSq <= GRAVITY_DIR_THRESHOLD_SQ) return 0f to -1f
-    val invMag = 1f / sqrt(gMagSq)
-    val nx = gravityX * invMag
-    val ny = gravityY * invMag
-    val stepRad = (stepDegrees * PI / 180.0).toFloat()
-    if (stepRad <= 0f) return nx to ny
-    val angle = atan2(ny, nx)
-    val quantized = (angle / stepRad).roundToInt() * stepRad
-    return cos(quantized) to sin(quantized)
-}
 
 @Composable
 internal fun rememberBiliPaiGravityHighlight(
-    base: Highlight = iosIndicatorSpecular,
+    base: EdgeStroke = iosIndicatorSpecular,
     extraDegrees: Float = 0f,
     width: Dp = base.width,
     active: Boolean,
-): State<Highlight> {
-    val tiltState = rememberSharedGlassGravity(active)
-    val quantizedDirection = remember(tiltState) {
+): State<EdgeStroke> {
+    val highlightSector = rememberSharedGlassHighlightSector(active)
+    return remember(base, extraDegrees, highlightSector, width) {
         derivedStateOf {
-            quantizeGravityHighlightDirection(
-                gravityX = tiltState.value.gravityX,
-                gravityY = tiltState.value.gravityY,
-            )
-        }
-    }
-    return remember(base, extraDegrees, quantizedDirection, width) {
-        derivedStateOf {
-            val baseStyle = base.style as BloomStroke
-            val basePrimary = baseStyle.primaryLight
-            val (lx0, ly0) = quantizedDirection.value
-            val rad = extraDegrees * PI / 180.0
-            val c = cos(rad).toFloat()
-            val s = sin(rad).toFloat()
-            val lx = c * lx0 - s * ly0
-            val ly = s * lx0 + c * ly0
+            val angleRadians = (highlightSector.value * GRAVITY_HIGHLIGHT_QUANTIZE_DEGREES + extraDegrees) *
+                PI / 180.0
             base.copy(
                 width = width,
-                style = baseStyle.copy(
-                    primaryLight = basePrimary.copy(
-                        position = LightPosition(
-                            x = LIGHT_REF_X + lx,
-                            y = LIGHT_REF_Y + ly,
-                            z = basePrimary.position.z,
-                        ),
-                    ),
+                primary = base.primary.copy(
+                    x = LIGHT_REF_X + cos(angleRadians).toFloat(),
+                    y = LIGHT_REF_Y + sin(angleRadians).toFloat(),
                 ),
             )
         }
@@ -234,9 +182,9 @@ internal fun Modifier.biliPaiFloatingDockShell(
             effectPaddingPx = effectPaddingPx,
             materialBlur = materialBlur,
         )
-        val highlightBlock = remember(baseHighlight, highlightAlpha) {
-            val block: BackdropEffectScope.() -> Highlight? = {
-                baseHighlight.value.copy(alpha = highlightAlpha)
+        val drawRim = remember(baseHighlight, highlightAlpha, shapeBlock) {
+            val block: DrawScope.() -> Unit = {
+                if (highlightAlpha > 0f) drawEdgeStroke(shapeBlock(), baseHighlight.value, highlightAlpha)
             }
             block
         }
@@ -272,7 +220,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
                 effects = effects,
                 // Inline capsules (search/input) disable the shell lens and its rim highlight
                 // together; keeping the highlight alone leaves a one-pixel "shrimp line".
-                highlight = highlightBlock,
+                onDrawFront = drawRim,
                 layerBlock = interactionLayerBlock ?: layerBlock,
                 onDrawSurface = onDrawSurface,
             )
@@ -398,7 +346,7 @@ private fun rememberFloatingDockBackdropEffects(
             padding = maxOf(padding, effectPaddingPx)
         }
         // 折射可能扩大采样范围；在模糊之前确定最终边距，避免效果链二次求值。
-        if (shouldDrawLens && top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported() &&
+        if (shouldDrawLens && top.yukonga.miuix.kmp.material.isRuntimeShaderSupported() &&
             refractionHeightPx > 0f && refractionAmountPx > 0f
         ) {
             padding = maxOf(padding, refractionAmountPx)
@@ -472,7 +420,8 @@ internal fun Modifier.floatingDockIndicatorOptics(
     progressProvider: () -> Float,
     scaleXProvider: () -> Float,
     scaleYProvider: () -> Float,
-    highlightProvider: () -> Highlight?,
+    highlightProvider: () -> EdgeStroke?,
+    highlightAlphaProvider: () -> Float,
     vertical: Boolean = false,
     shellScaleProvider: () -> Float = { 1f },
     idleColor: Color? = null,
@@ -495,7 +444,7 @@ internal fun Modifier.floatingDockIndicatorOptics(
                 gapOnlyDispersion = gapOnlyDispersion,
             )
         },
-        highlight = { highlightProvider() },
+        onDrawFront = { highlightProvider()?.let { drawEdgeStroke(shape, it, highlightAlphaProvider()) } },
         layerBlock = {
             this.scaleX = scaleXProvider()
             this.scaleY = scaleYProvider()
@@ -599,7 +548,9 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
                                     ),
                                 )
                             },
-                            highlight = { if (highlightEnabled) pillHighlight.value.copy(alpha = pressProgress) else null },
+                            onDrawFront = {
+                                if (highlightEnabled) drawEdgeStroke(shape, pillHighlight.value, pressProgress)
+                            },
                             layerBlock = {
                                 this.scaleX = liquidWobbleScaleX(
                                     com.android.purebilibili.core.ui.animation.LiquidIndicatorMotion.scaleX(scaleX, velocity), recoilStretch(),

@@ -23,15 +23,15 @@ class ContinuousBackdrop(private val source: Backdrop) : Backdrop {
         density: Density,
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
-        downscaleFactor: Int,
+        downscaleFactor: Float,
     ) {
-        val factor = downscaleFactor.coerceAtLeast(1)
-        if (factor == 1) {
-            with(source) { drawBackdrop(density, coordinates, layerBlock, 1) }
+        val factor = downscaleFactor
+        if (factor == 1f) {
+            with(source) { drawBackdrop(density, coordinates, layerBlock, 1f) }
         } else {
             // 围绕左上角等比缩放，与源内部的逆向缩放/旋转补偿相容。
             scale(1f / factor, 1f / factor, Offset.Zero) {
-                with(source) { drawBackdrop(density, coordinates, layerBlock, 1) }
+                with(source) { drawBackdrop(density, coordinates, layerBlock, 1f) }
             }
         }
     }

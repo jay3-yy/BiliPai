@@ -4,6 +4,8 @@ package com.android.purebilibili.core.lifecycle
 internal class PendingResource<T : Any>(value: T, private val release: (T) -> Unit) {
     private var pending: T? = value
 
+    val isAvailable: Boolean get() = pending != null
+
     fun take(): T? = pending.also { pending = null }
 
     fun dispose() {

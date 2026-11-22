@@ -1,14 +1,18 @@
 package com.android.purebilibili.feature.video.screen
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.exoplayer.ExoPlayer
+import com.android.purebilibili.core.lifecycle.PendingResource
+import com.android.purebilibili.core.ui.LocalVisualWorkAllowed
 import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
-import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
-import com.android.purebilibili.feature.video.viewmodel.VideoComposerViewModel
-import com.android.purebilibili.feature.video.viewmodel.VideoEngagementViewModel
+import com.android.purebilibili.feature.video.state.shouldReuseMiniPlayerAtEntry
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
-import com.android.purebilibili.feature.video.viewmodel.VideoSupplementViewModel
 
 /**
  * Navigation-facing video detail entry point.
@@ -17,7 +21,7 @@ import com.android.purebilibili.feature.video.viewmodel.VideoSupplementViewModel
  * [VideoDetailScreenStateHolder], while transition and platform behavior have dedicated owners.
  */
 @Composable
-fun VideoDetailScreen(
+internal fun VideoDetailScreen(
     bvid: String,
     cid: Long = 0L,
     coverUrl: String = "",
@@ -60,22 +64,58 @@ fun VideoDetailScreen(
     isOrientationOwner: Boolean = isVisible && !keepLoadedContentForBackPreview,
     onImmersivePlaybackChanged: (Boolean) -> Unit = {},
     onPlaybackIdentityChanged: (String, Long) -> Unit = { _, _ -> },
-    viewModel: VideoPlaybackViewModel = viewModel(),
-    engagementViewModel: VideoEngagementViewModel = viewModel(),
-    composerViewModel: VideoComposerViewModel = viewModel(),
-    supplementViewModel: VideoSupplementViewModel = viewModel(),
-    commentViewModel: VideoCommentViewModel = viewModel(),
     onBgmClick: (BgmInfo) -> Unit = {},
-    takePreparedPlayer: (() -> androidx.media3.exoplayer.ExoPlayer?)? = null,
+    preparedPlayer: PendingResource<ExoPlayer>? = null,
 ) {
-    val visualWorkAllowed = com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current &&
-        isVisible && !keepLoadedContentForBackPreview
-    androidx.compose.runtime.CompositionLocalProvider(
-        com.android.purebilibili.core.ui.LocalVisualWorkAllowed provides visualWorkAllowed,
+    val context = LocalContext.current
+    val reuseAtEntry = remember(context, bvid, cid) {
+        val manager = miniPlayerManager ?: MiniPlayerManager.getInstance(context)
+        shouldReuseMiniPlayerAtEntry(
+            isMiniPlayerActive = manager.isActive,
+            miniPlayerBvid = manager.currentBvid,
+            miniPlayerCid = manager.currentCid,
+            hasMiniPlayerInstance = manager.player != null,
+            requestBvid = bvid,
+            requestCid = cid,
+        )
+    }
+    val pending = rememberVideoDetailEntryPlayer(
+        context = context,
+        bvid = bvid,
+        cid = cid,
+        preparedPlayer = preparedPlayer,
+        reuseAtEntry = reuseAtEntry,
+        canPrepare = isVisible || isPlaybackSessionActive,
+    )
+    val horizontalAdaptationEnabled = rememberVideoDetailHorizontalAdaptation(context)
+    if (!reuseAtEntry && pending == null) {
+        VideoDetailOpeningPreview(
+            bvid = bvid,
+            coverUrl = coverUrl,
+            isVertical = initialVerticalFromRoute,
+            fullscreen = startInFullscreen || isInPipMode || (
+                !suppressPortraitAutoEnter && shouldStartInPortraitFullscreenFromRouteHint(
+                    autoEnterPortraitFromRoute = autoEnterPortraitFromRoute,
+                    startAudioFromRoute = startAudioFromRoute,
+                    initialVerticalFromRoute = initialVerticalFromRoute,
+                    directPortraitEntryFromRoute = directPortraitEntryFromRoute,
+                )
+            ),
+            horizontalAdaptationEnabled = horizontalAdaptationEnabled.value,
+        )
+        return
+    }
+
+    val viewModel: VideoPlaybackViewModel = viewModel()
+    val takePreparedPlayer = remember(pending) { pending?.let { it::take } }
+    val visualWorkAllowed = LocalVisualWorkAllowed.current && isVisible && !keepLoadedContentForBackPreview
+    CompositionLocalProvider(
+        LocalVisualWorkAllowed provides visualWorkAllowed,
     ) {
         ProvideVideoUiWork(viewModel) {
             VideoDetailScreenStateHolder(
                 takePreparedPlayer = takePreparedPlayer,
+                horizontalAdaptationEnabled = horizontalAdaptationEnabled,
                 bvid = bvid,
                 cid = cid,
                 coverUrl = coverUrl,
@@ -119,12 +159,11 @@ fun VideoDetailScreen(
                 onImmersivePlaybackChanged = onImmersivePlaybackChanged,
                 onPlaybackIdentityChanged = onPlaybackIdentityChanged,
                 viewModel = viewModel,
-                engagementViewModel = engagementViewModel,
-                composerViewModel = composerViewModel,
-                supplementViewModel = supplementViewModel,
-                commentViewModel = commentViewModel,
                 onBgmClick = onBgmClick,
             )
         }
     }
+
+    // 小窗在后台构造期间变为可复用时，播放器侧优先接管小窗实例。
+    if (pending?.isAvailable == true) SideEffect { pending.dispose() }
 }

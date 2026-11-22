@@ -91,7 +91,7 @@ internal fun resolveMiuixPreferredHomeNavigationIcon(
     return resolveMiuixHomeNavigationIcon(role, selected)
 }
 
-/** Top tabs and bottom navigation share the same selected glyph for the same role. */
+/** Top tabs share the same selected glyph for the same role. */
 private fun resolveMiuixNavigationFilledResource(role: HomeNavigationIconRole): Int? = when (role) {
     HomeNavigationIconRole.HOME -> R.drawable.ms_home_fill_24
     HomeNavigationIconRole.DYNAMIC -> R.drawable.bp_nav_community_filled_24
@@ -113,14 +113,26 @@ private fun resolveMiuixNavigationFilledResource(role: HomeNavigationIconRole): 
     HomeNavigationIconRole.SUBSCRIPTIONS -> R.drawable.ms_rss_feed_24
 }
 
-@Composable
+/**
+ * 底栏与侧栏固定使用同一个 Miuix 字形，选中态由颜色、胶囊和标签字重表达。
+ * 顶部分区仍沿用 [resolveMiuixPreferredHomeNavigationIcon] 的共享映射。
+ */
+@Suppress("UNUSED_PARAMETER")
 internal fun resolveMiuixBottomNavigationIcon(
     item: BottomNavItem,
     selected: Boolean,
-): ImageVector = if (item == BottomNavItem.LIVE && !selected) {
-    ImageVector.vectorResource(R.drawable.ic_home_nav_live)
-} else {
-    resolveMiuixPreferredHomeNavigationIcon(item.name, selected = selected)
+): ImageVector = when (item) {
+    BottomNavItem.HOME -> MiuixIcons.Regular.Home
+    BottomNavItem.DYNAMIC -> MiuixIcons.Regular.Community
+    BottomNavItem.STORY -> MiuixIcons.Regular.Play
+    BottomNavItem.HISTORY -> MiuixIcons.Regular.Recent
+    BottomNavItem.LISTEN_VIDEO -> MiuixIcons.Regular.Music
+    BottomNavItem.PROFILE -> MiuixIcons.Regular.ContactsCircle
+    BottomNavItem.FAVORITE -> MiuixIcons.Regular.Favorites
+    BottomNavItem.LIVE -> MiuixIcons.Regular.Recording
+    BottomNavItem.WATCHLATER -> MiuixIcons.Regular.Stopwatch
+    BottomNavItem.SETTINGS -> MiuixIcons.Regular.Settings
+    BottomNavItem.PLUGINS -> MiuixIcons.Regular.Folder
 }
 
 @Composable

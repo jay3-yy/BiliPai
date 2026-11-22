@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -233,10 +233,16 @@ private fun MiuixDownloadStatus(
             fontWeight = FontWeight.Medium,
         )
         if (state.isActiveDownload()) {
-            LinearProgressIndicator(
-                progress = state.progress.takeIf { state.totalBytes > 0L },
-                modifier = Modifier.padding(top = 12.dp),
-            )
+            if (state.totalBytes > 0L) {
+                LinearProgressIndicator(
+                    progress = state.progress,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            } else {
+                com.android.purebilibili.core.ui.components.AppLinearProgressIndicator(
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
         }
         if (state.status == AppUpdateDownloadStatus.COMPLETED) {
             Text(

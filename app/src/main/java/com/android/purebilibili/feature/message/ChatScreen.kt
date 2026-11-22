@@ -113,6 +113,7 @@ import com.android.purebilibili.data.model.response.EmoteInfo
 import com.android.purebilibili.data.model.response.PrivateMessageItem
 import com.android.purebilibili.data.repository.MessageSessionControlInfo
 import com.android.purebilibili.feature.home.HomeWallpaperBackdrop
+import com.android.purebilibili.feature.home.LocalRootOwnsMovingWallpaper
 import com.android.purebilibili.feature.home.resolveHomeWallpaperBackdropAppearance
 import com.android.purebilibili.feature.home.resolveHomeWallpaperUri
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoCardFrame
@@ -637,6 +638,7 @@ private fun ChatWallpaperHost(
     content: @Composable (@Composable () -> Unit) -> Unit,
 ) {
     val wallpaperAllowed = LocalGlobalWallpaperBackdropVisible.current
+    val rootOwnsMovingWallpaper = wallpaperAllowed && LocalRootOwnsMovingWallpaper.current
     val context = LocalContext.current
     val configuredHomeWallpaperUri = com.android.purebilibili.core.ui.wallpaper.LocalHomeWallpaperSelection.current.uri
     val splashWallpaperUri by SettingsManager.getSplashWallpaperUri(context)
@@ -672,11 +674,10 @@ private fun ChatWallpaperHost(
     }
     val wallpaperVisible = wallpaperAppearance.visible && wallpaperUri.isNotBlank()
 
-    // Keep an opaque retained-navigation root. Its wallpaper is drawn inside the
-    // scaffold body so the external chrome source includes message content as well.
-    Box(modifier = Modifier.fillMaxSize().background(baseColor)) {
+    // 静态底图仍进入聊天顶栏采样。动态壁纸留在导航根层，聊天仅绘制保护色。
+    Box(modifier = Modifier.fillMaxSize().background(if (rootOwnsMovingWallpaper) Color.Transparent else baseColor)) {
         CompositionLocalProvider(
-            LocalGlobalWallpaperBackdropVisible provides wallpaperVisible,
+            LocalGlobalWallpaperBackdropVisible provides (wallpaperVisible || rootOwnsMovingWallpaper),
             LocalWallpaperPalette provides wallpaperPalette,
         ) {
             content {
@@ -684,13 +685,17 @@ private fun ChatWallpaperHost(
                     Modifier.fillMaxSize()
                         .then(wallpaperBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier)
                 ) {
-                    HomeWallpaperBackdrop(
-                        wallpaperUri = wallpaperUri,
-                        appearance = wallpaperAppearance,
-                        baseColor = baseColor,
-                        isDataSaverActive = isDataSaverActive,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    if (rootOwnsMovingWallpaper) {
+                        Box(Modifier.fillMaxSize().background(baseColor.copy(alpha = if (isLightBackground) 0.16f else 0.22f)))
+                    } else {
+                        HomeWallpaperBackdrop(
+                            wallpaperUri = wallpaperUri,
+                            appearance = wallpaperAppearance,
+                            baseColor = baseColor,
+                            isDataSaverActive = isDataSaverActive,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
             }
         }
@@ -1214,38 +1219,38 @@ private fun MessageLargeVideoCard(
         key = preview.bvid,
         enabled = preview.bvid.isNotBlank(),
     )
-    val openVideo = {
+    val openVideo = openVideo@{
         if (!CardPositionManager.isVideoNavigationDebounceActive()) {
-            if (preview.bvid.isNotBlank()) {
-                cardCoordinates.value?.takeIf { it.isAttached }?.let { coordinates ->
-                    val coverBounds = coverCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
-                    CardPositionManager.recordVideoCardPosition(
-                        bvid = preview.bvid,
-                        sourceRoute = sourceRoute,
-                        bounds = coordinates.videoCardSourceBoundsInRoot(),
-                        screenWidth = with(density) { configuration.screenWidthDp.dp.toPx() },
-                        screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() },
-                        density = density.density,
-                        sourceCornerDp = cardCorner.value.roundToInt(),
-                        coverBounds = coverBounds,
-                        infoBounds = infoCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
-                        sourceLayout = VideoCardSourceLayout.STACKED,
-                        sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
-                            title = preview.title,
-                            ownerName = preview.subtitle,
-                            durationText = preview.duration.takeIf { it > 0 }?.let(::formatDuration).orEmpty(),
-                            coverUrl = preview.cover,
-                            coverCacheKey = preview.cover,
-                            coverPresentation = VideoCardSourceCoverPresentation(
-                                showDurationOnCover = preview.duration > 0,
-                                cornerRadiusDp = cardCorner.value,
-                            ),
-                        ).withMeasuredCoverDecodeSize(coverBounds),
-                    )
-                    nativeSnapshot.capture()
-                }
+            val coordinates = cardCoordinates.value?.takeIf { it.isAttached }
+            if (preview.bvid.isBlank() || coordinates == null) {
+                onClick()
+                return@openVideo
             }
-            onClick()
+            val coverBounds = coverCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
+            CardPositionManager.recordVideoCardPosition(
+                bvid = preview.bvid,
+                sourceRoute = sourceRoute,
+                bounds = coordinates.videoCardSourceBoundsInRoot(),
+                screenWidth = with(density) { configuration.screenWidthDp.dp.toPx() },
+                screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() },
+                density = density.density,
+                sourceCornerDp = cardCorner.value.roundToInt(),
+                coverBounds = coverBounds,
+                infoBounds = infoCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
+                sourceLayout = VideoCardSourceLayout.STACKED,
+                sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                    title = preview.title,
+                    ownerName = preview.subtitle,
+                    durationText = preview.duration.takeIf { it > 0 }?.let(::formatDuration).orEmpty(),
+                    coverUrl = preview.cover,
+                    coverCacheKey = preview.cover,
+                    coverPresentation = VideoCardSourceCoverPresentation(
+                        showDurationOnCover = preview.duration > 0,
+                        cornerRadiusDp = cardCorner.value,
+                    ),
+                ).withMeasuredCoverDecodeSize(coverBounds),
+            )
+            nativeSnapshot.captureThen(onClick)
         }
     }
 

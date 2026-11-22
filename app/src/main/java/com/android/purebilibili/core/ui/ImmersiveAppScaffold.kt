@@ -48,6 +48,7 @@ internal fun ImmersiveAppScaffold(
     externalHazeState: HazeState? = null,
     // Keep false until any outgoing skeleton transition has left composition.
     blurContentReady: Boolean = true,
+    wallpaperChrome: Boolean = false,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     val config = LocalAppThemeConfig.current
@@ -86,7 +87,9 @@ internal fun ImmersiveAppScaffold(
     val hazeActive = renderMode == TopChromeRenderMode.HAZE
     val progressiveActive = renderMode == TopChromeRenderMode.PROGRESSIVE
     val fadeActive = config.progressiveTopFadeEnabled && !hazeActive
-    val blurActive = hazeActive || progressiveActive || fadeActive
+    val visibleWallpaperChrome = wallpaperChrome && LocalGlobalWallpaperBackdropVisible.current
+    val chromeSurfaceColor = if (visibleWallpaperChrome) topBarSurfaceColor
+        else globalWallpaperAwareChromeColor(topBarSurfaceColor)
     AppScaffold(
         modifier = modifier,
         topBarBlurHandledExternally = true,
@@ -98,8 +101,9 @@ internal fun ImmersiveAppScaffold(
                     backdrop = backdrop.takeIf { progressiveActive },
                     enabled = progressiveActive,
                     headerBlurActive = hazeActive,
-                    surfaceColor = globalWallpaperAwareChromeColor(topBarSurfaceColor),
+                    surfaceColor = chromeSurfaceColor,
                     fadeEnabled = fadeActive,
+                    opaqueBackgroundFallback = !visibleWallpaperChrome,
                     extendBelowBounds = false,
                     modifier = Modifier.then(
                         if (progressiveActive || fadeActive) {
@@ -113,11 +117,10 @@ internal fun ImmersiveAppScaffold(
                                     preferWindowBackdrop = externalHazeState == null && chromeBackdropSource == null,
                                 )
                                 .background(
-                                    globalWallpaperAwareChromeColor(topBarSurfaceColor)
-                                        .copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
+                                    chromeSurfaceColor.copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
                                 )
                         } else {
-                            Modifier.background(globalWallpaperAwareChromeColor(topBarSurfaceColor))
+                            Modifier.background(chromeSurfaceColor)
                         }
                     ),
                     content = topBar,

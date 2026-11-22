@@ -53,12 +53,12 @@ fun Md3ScreenshotRefreshIndicator(
         isRefreshing = isRefreshing,
         isStateAnimating = state.isAnimating
     )
-    val alpha by animateFloatAsState(
+    val alphaState = animateFloatAsState(
         targetValue = if (progress > 0.08f || isRefreshing) 1f else 0f,
         animationSpec = md3RefreshAlphaMotionSpec(),
         label = "md3_screenshot_pull_alpha"
     )
-    val indicatorScale by animateFloatAsState(
+    val indicatorScaleState = animateFloatAsState(
         targetValue = when {
             isRefreshing -> 1f
             progress >= 1f && !state.isAnimating -> 1.04f
@@ -74,9 +74,10 @@ fun Md3ScreenshotRefreshIndicator(
         modifier = modifier
             .fillMaxWidth()
             .graphicsLayer {
-                this.alpha = alpha
-                scaleX = indicatorScale
-                scaleY = indicatorScale
+                this.alpha = alphaState.value
+                val scale = indicatorScaleState.value
+                scaleX = scale
+                scaleY = scale
             },
         contentAlignment = Alignment.Center
     ) {
@@ -148,21 +149,21 @@ fun HomeRefreshIndicator(
     )
 
     //  箭头只表达阈值状态，使用高阻尼避免松手前后出现夸张回弹。
-    val arrowRotation by animateFloatAsState(
+    val arrowRotationState = animateFloatAsState(
         targetValue = if (isOverThreshold) 180f else 0f,
         animationSpec = iosRefreshArrowMotionSpec(),
         label = "arrow_rotation"
     )
 
     //  透明度动画
-    val alpha by animateFloatAsState(
+    val alphaState = animateFloatAsState(
         targetValue = if (progress > 0.1f || isRefreshing) 1f else 0f,
         animationSpec = iosRefreshAlphaMotionSpec(),
         label = "alpha"
     )
 
     //  缩放跟随手势强度，阈值态只做轻强调，不制造果冻感。
-    val scale by animateFloatAsState(
+    val scaleState = animateFloatAsState(
         targetValue = when {
             isRefreshing -> 1f
             isOverThreshold -> 1.03f
@@ -176,7 +177,8 @@ fun HomeRefreshIndicator(
         modifier = modifier
             .fillMaxWidth()
             .graphicsLayer {
-                this.alpha = alpha
+                this.alpha = alphaState.value
+                val scale = scaleState.value
                 this.scaleX = scale
                 this.scaleY = scale
             },
@@ -198,7 +200,7 @@ fun HomeRefreshIndicator(
                     fontSize = MaterialTheme.typography.titleMedium.fontSize,
                     fontWeight = FontWeight.Bold,
                     color = AppContentColors.accent(),
-                    modifier = Modifier.rotate(arrowRotation)
+                    modifier = Modifier.graphicsLayer { rotationZ = arrowRotationState.value }
                 )
             }
 

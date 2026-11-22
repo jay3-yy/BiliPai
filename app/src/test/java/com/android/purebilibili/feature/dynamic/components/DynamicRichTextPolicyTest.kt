@@ -3,7 +3,14 @@ package com.android.purebilibili.feature.dynamic.components
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
+import com.android.purebilibili.data.model.response.DynamicContentModule
 import com.android.purebilibili.data.model.response.DynamicDesc
+import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.data.model.response.DynamicMajor
+import com.android.purebilibili.data.model.response.DynamicModules
+import com.android.purebilibili.data.model.response.OpusContentBlock
+import com.android.purebilibili.data.model.response.OpusMajor
+import com.android.purebilibili.data.model.response.OpusPic
 import com.android.purebilibili.data.model.response.RichTextNode
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -29,6 +36,36 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
             AnnotatedString.Range(tag.removePrefix(prefix), annotation.start, annotation.end)
         }
 
+
+    @Test
+    fun copyFullTextPreservesParagraphOrderAcrossImagesAndUsesTheFullBody() {
+        val item = DynamicItem(
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    desc = DynamicDesc(text = "只有摘要"),
+                    major = DynamicMajor(
+                        opus = OpusMajor(
+                            title = "动态标题",
+                            contentBlocks = listOf(
+                                OpusContentBlock.Text("第一段"),
+                                OpusContentBlock.Image(OpusPic(url = "https://i0.hdslb.com/photo.jpg")),
+                                OpusContentBlock.Text(
+                                    text = "",
+                                    richTextNodes = listOf(
+                                        RichTextNode(text = "第二段"),
+                                        RichTextNode(text = "\n"),
+                                        RichTextNode(text = "下一行"),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals("动态标题\n\n第一段\n\n第二段\n下一行", resolveDynamicFullText(item))
+    }
 
     @Test
     fun resolveDynamicDescForImages_hidesStandaloneImagePlaceholderWhenMediaExists() {

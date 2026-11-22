@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.player
 
 import android.content.Context
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -44,6 +45,15 @@ internal class PlayerBackgroundPlaybackSession {
 /** 按播放器与内容隔离；后端同步读取同一份状态，不依赖菜单是否仍在组合中。 */
 internal object PlayerBackgroundPlaybackSessions {
     private val owners = WeakHashMap<Any, LinkedHashMap<String, PlayerBackgroundPlaybackSession>>()
+    private val timerPauseVersions = WeakHashMap<ExoPlayer, Long>()
+
+    fun timerPauseVersion(player: ExoPlayer): Long = timerPauseVersions[player] ?: 0L
+
+    fun pauseForSleepTimer(player: ExoPlayer) {
+        timerPauseVersions[player] = timerPauseVersion(player) + 1
+        // An already background-paused player emits no second playWhenReady event.
+        player.pause()
+    }
 
     @Synchronized
     fun forContent(owner: Any, key: String): PlayerBackgroundPlaybackSession {
@@ -73,13 +83,20 @@ internal fun rememberPlayerBackgroundPlaybackSession(owner: Any?, key: String): 
 
 /** 独立番剧播放器的生命周期规则：不允许后台时暂停，返回前台再恢复；画中画保持原路径。 */
 @Composable
-internal fun PlayerBackgroundPlaybackLifecycleEffect(player: ExoPlayer, key: String, isInPipMode: Boolean) {
+internal fun PlayerBackgroundPlaybackLifecycleEffect(
+    player: ExoPlayer,
+    key: String,
+    isInPipMode: Boolean,
+    sleepDeadlineMs: () -> Long?,
+) {
     val context = LocalContext.current
     val activity = context.findActivity()
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestPip by rememberUpdatedState(isInPipMode)
+    val latestSleepDeadline by rememberUpdatedState(sleepDeadlineMs)
     DisposableEffect(player, key, lifecycleOwner, activity) {
         var resumeOnForeground = false
+        var timerVersionAtPause = 0L
         var applyingPause = false
         fun pauseIfNeeded() {
             val inPip = latestPip || activity?.isInPictureInPictureMode == true
@@ -87,8 +104,10 @@ internal fun PlayerBackgroundPlaybackLifecycleEffect(player: ExoPlayer, key: Str
                 player, key, SettingsManager.getBackgroundPlaybackEnabledSync(context),
             )
             if (!inPip && !enabled) {
-                resumeOnForeground = resumeOnForeground ||
-                    (player.playWhenReady && player.playbackState != androidx.media3.common.Player.STATE_ENDED)
+                if (player.playWhenReady && player.playbackState != androidx.media3.common.Player.STATE_ENDED) {
+                    resumeOnForeground = true
+                    timerVersionAtPause = PlayerBackgroundPlaybackSessions.timerPauseVersion(player)
+                }
                 applyingPause = true
                 try { player.pause() } finally { applyingPause = false }
             }
@@ -106,7 +125,10 @@ internal fun PlayerBackgroundPlaybackLifecycleEffect(player: ExoPlayer, key: Str
                 Lifecycle.Event.ON_STOP -> pauseIfNeeded()
                 Lifecycle.Event.ON_START -> if (resumeOnForeground) {
                     resumeOnForeground = false
-                    player.play()
+                    val sleepDue = latestSleepDeadline()?.let { it <= SystemClock.elapsedRealtime() } == true
+                    if (!sleepDue && timerVersionAtPause == PlayerBackgroundPlaybackSessions.timerPauseVersion(player)) {
+                        player.play()
+                    }
                 }
                 else -> Unit
             }

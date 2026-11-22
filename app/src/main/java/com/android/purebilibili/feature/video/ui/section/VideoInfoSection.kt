@@ -18,14 +18,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.layout.*
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.selection.DisableSelection
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,8 +43,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -51,11 +54,17 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -443,6 +452,61 @@ fun VideoDetailSponsorLabelChip(
     }
 }
 
+@Composable
+private fun VideoTitleWithInlineSponsor(
+    title: String,
+    label: String,
+    maxLines: Int,
+    modifier: Modifier = Modifier,
+) {
+    val titleStyle = MaterialTheme.typography.titleMedium
+    val titleColor = AppContentColors.primaryText()
+    SubcomposeLayout(modifier) { constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val badge = subcompose("badge") {
+            DisableSelection {
+                VideoDetailSponsorLabelChip(label, modifier = Modifier.padding(top = 2.dp))
+            }
+        }.single().measure(loose)
+        val inlineIndent = badge.width + 6.dp.roundToPx()
+        // 预留至少约三个全宽字的空间，窄窗口和大字号下将徽标放到标题上方。
+        val inline = title.isNotEmpty() && constraints.maxWidth - inlineIndent >= titleStyle.fontSize.toPx() * 3
+        val titleTop = if (inline) 0 else badge.height
+        val titleText = buildAnnotatedString {
+            append(title)
+            if (inline) {
+                val firstParagraphEnd = title.indexOf('\n').let { if (it < 0) title.length else it + 1 }
+                addStyle(
+                    ParagraphStyle(
+                        textIndent = TextIndent(firstLine = inlineIndent.toDp().toSp()),
+                        textDirection = if (layoutDirection == LayoutDirection.Rtl) TextDirection.Rtl else TextDirection.Ltr,
+                    ),
+                    start = 0,
+                    end = firstParagraphEnd,
+                )
+            }
+        }
+        val heading = subcompose("title") {
+            AppText(
+                text = titleText,
+                style = titleStyle,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = maxLines,
+                overflow = TextOverflow.Ellipsis,
+                color = titleColor,
+                tapToCopyEnabled = false,
+            )
+        }.single().measure(loose.offset(vertical = -titleTop))
+        layout(
+            width = constraints.constrainWidth(maxOf(badge.width, heading.width)),
+            height = constraints.constrainHeight(maxOf(badge.height, titleTop + heading.height)),
+        ) {
+            heading.placeRelative(0, titleTop)
+            badge.placeRelative(0, 0)
+        }
+    }
+}
+
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class, androidx.compose.animation.ExperimentalSharedTransitionApi::class)
 @Composable
 fun VideoTitleWithDesc(
@@ -595,24 +659,27 @@ fun VideoTitleWithDesc(
                 }
             }
 
-            if (sponsorLabel.isNotBlank() && !stackSponsorLabel) {
-                VideoDetailSponsorLabelChip(
-                    label = sponsorLabel,
-                    modifier = Modifier.padding(end = 6.dp, top = 2.dp)
-                )
-            }
             SelectionContainer(modifier = Modifier.weight(1f)) {
-                AppText(
-                    text = info.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    // PiliPlus 同款：收起时 2 行省略，展开后全文。
-                    maxLines = if (expanded) Int.MAX_VALUE else 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = AppContentColors.primaryText(),
-                    modifier = titleModifier,
-                    tapToCopyEnabled = false,
-                )
+                val titleMaxLines = if (expanded) Int.MAX_VALUE else 2
+                if (sponsorLabel.isNotBlank() && !stackSponsorLabel) {
+                    VideoTitleWithInlineSponsor(
+                        title = info.title,
+                        label = sponsorLabel,
+                        maxLines = titleMaxLines,
+                        modifier = titleModifier,
+                    )
+                } else {
+                    AppText(
+                        text = info.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = titleMaxLines,
+                        overflow = TextOverflow.Ellipsis,
+                        color = AppContentColors.primaryText(),
+                        modifier = titleModifier,
+                        tapToCopyEnabled = false,
+                    )
+                }
             }
         }
 

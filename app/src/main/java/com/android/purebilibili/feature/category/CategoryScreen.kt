@@ -254,7 +254,8 @@ fun CategoryScreen(
         }
     }
 
-    val categoryBackdrop = rememberLayerBackdrop()
+    val categoryGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+    val categoryBackdrop = if (categoryGlassEnabled) rememberLayerBackdrop() else null
 
     AppScaffold(
         topBar = {
@@ -299,7 +300,7 @@ fun CategoryScreen(
                     indicatorTopInset = 0.dp,
                     modifier = Modifier
                         .fillMaxSize()
-                        .layerBackdrop(categoryBackdrop)
+                        .then(if (categoryBackdrop != null) Modifier.layerBackdrop(categoryBackdrop) else Modifier)
                 ) {
                     // 视频网格
                     val alignRows = gridColumns > 1 && !homeSettings.showFullVideoCardContent

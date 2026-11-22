@@ -81,15 +81,26 @@ internal fun rememberBiliPaiBottomBarSearchLayoutState(
         )
     }
     val emptySize = remember { mutableStateOf(AppSpacingTokens.None) }
+    val reduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current ||
+        !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+    val nativeStandardDpSpec = com.android.purebilibili.core.ui.motion.AppMotionTokens.standardSpec<Dp>()
     if (!searchEnabled) {
         val dockWidth = animateDpAsState(
             targetValue = targetSearchLayout.dockWidth,
-            animationSpec = bottomBarDockWidthMotionSpec(),
+            animationSpec = when {
+                reduceMotion -> snap()
+                glassMotionEnabled -> bottomBarDockWidthMotionSpec()
+                else -> nativeStandardDpSpec
+            },
             label = "bottomBarDockWidth"
         )
         val dockHeight = animateDpAsState(
             targetValue = targetDockHeight,
-            animationSpec = bottomBarChromeHeightMotionSpec(),
+            animationSpec = when {
+                reduceMotion -> snap()
+                glassMotionEnabled -> bottomBarChromeHeightMotionSpec()
+                else -> nativeStandardDpSpec
+            },
             label = "bottomBarDockHeight"
         )
         return remember(
@@ -112,8 +123,6 @@ internal fun rememberBiliPaiBottomBarSearchLayoutState(
 
     // One transition owns all geometry so a reversal starts from the displayed sizes
     // and width, height and spacing reach their targets together.
-    val reduceMotion = com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion() ||
-        !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
     val motionStyle = rememberGlassDockMotionStyle(glassMotionEnabled && !hasUiSkinDecoration)
     val geometry = updateTransition(
         targetState = BottomBarSearchGeometry(
@@ -125,25 +134,29 @@ internal fun rememberBiliPaiBottomBarSearchLayoutState(
         ),
         label = "bottomBarSearchGeometry",
     )
+    fun androidx.compose.animation.core.Transition.Segment<BottomBarSearchGeometry>.resolveGeometrySpec():
+        androidx.compose.animation.core.FiniteAnimationSpec<Dp> = when {
+        reduceMotion -> snap()
+        glassMotionEnabled -> glassDockMorphSpring(
+            motionStyle,
+            expanding = targetState.searchWidth > initialState.searchWidth,
+        )
+        else -> nativeStandardDpSpec
+    }
     val dockWidth = geometry.animateDp(
-        transitionSpec = { if (reduceMotion) snap() else glassDockMorphSpring(motionStyle,
-            expanding = targetState.searchWidth > initialState.searchWidth) }, label = "bottomBarDockWidth",
+        transitionSpec = { resolveGeometrySpec() }, label = "bottomBarDockWidth",
     ) { it.dockWidth }
     val searchWidth = geometry.animateDp(
-        transitionSpec = { if (reduceMotion) snap() else glassDockMorphSpring(motionStyle,
-            expanding = targetState.searchWidth > initialState.searchWidth) }, label = "bottomBarSearchWidth",
+        transitionSpec = { resolveGeometrySpec() }, label = "bottomBarSearchWidth",
     ) { it.searchWidth }
     val searchGap = geometry.animateDp(
-        transitionSpec = { if (reduceMotion) snap() else glassDockMorphSpring(motionStyle,
-            expanding = targetState.searchWidth > initialState.searchWidth) }, label = "bottomBarSearchGap",
+        transitionSpec = { resolveGeometrySpec() }, label = "bottomBarSearchGap",
     ) { it.gap }
     val dockHeight = geometry.animateDp(
-        transitionSpec = { if (reduceMotion) snap() else glassDockMorphSpring(motionStyle,
-            expanding = targetState.searchWidth > initialState.searchWidth) }, label = "bottomBarDockHeight",
+        transitionSpec = { resolveGeometrySpec() }, label = "bottomBarDockHeight",
     ) { it.dockHeight }
     val searchHeight = geometry.animateDp(
-        transitionSpec = { if (reduceMotion) snap() else glassDockMorphSpring(motionStyle,
-            expanding = targetState.searchWidth > initialState.searchWidth) }, label = "bottomBarSearchHeight",
+        transitionSpec = { resolveGeometrySpec() }, label = "bottomBarSearchHeight",
     ) { it.searchHeight }
     val shellHeight = remember(dockHeight, searchHeight) {
         derivedStateOf { maxOf(dockHeight.value, searchHeight.value) }

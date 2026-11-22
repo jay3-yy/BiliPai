@@ -663,16 +663,26 @@ internal fun AudioModeMusicPlayer(
         }
     }
     if (showComments) {
-        VideoCommentSheetHost(
-            mainSheetVisible = true,
-            onDismiss = { showComments = false },
-            commentViewModel = commentViewModel,
-            aid = info.aid,
-            upMid = info.owner.mid,
-            expectedReplyCount = info.stat.reply,
-            onUserClick = {},
-            onTimestampClick = { timestampMs -> player?.seekTo(timestampMs) }
-        )
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.android.purebilibili.feature.share.LocalReplyShareContext provides
+                com.android.purebilibili.feature.share.videoReplyShareContext(
+                    bvid = info.bvid,
+                    title = displayTitle,
+                    cover = info.pic,
+                    page = info.pages.indexOfFirst { it.cid == info.cid }.coerceAtLeast(0) + 1,
+                ),
+        ) {
+            VideoCommentSheetHost(
+                mainSheetVisible = true,
+                onDismiss = { showComments = false },
+                commentViewModel = commentViewModel,
+                aid = info.aid,
+                upMid = info.owner.mid,
+                expectedReplyCount = info.stat.reply,
+                onUserClick = {},
+                onTimestampClick = { timestampMs -> player?.seekTo(timestampMs) }
+            )
+        }
     }
 
     if (showSpeedMenu) {

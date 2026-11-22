@@ -9,7 +9,7 @@ import com.android.purebilibili.core.ui.AppContentColors
 
 import android.view.ViewGroup
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column

@@ -2,6 +2,7 @@
 package com.android.purebilibili.feature.home.components.cards
 
 import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
+import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
@@ -127,6 +128,7 @@ internal fun StoryVideoCard(
     coverRequestSpec: HomeCoverRequestSpec? = null,
     showCoverGlassBadges: Boolean = false,
     showInfoGlassBadges: Boolean = false,
+    wallpaperVisible: Boolean = false,
     showUpBadge: Boolean? = null,
     showUpAvatar: Boolean? = null,
     homeDurationStyle: HomeDurationStyle = HomeDurationStyle.OUTSIDE_COVER,
@@ -234,6 +236,7 @@ internal fun StoryVideoCard(
     )
     val captureState = if (prepareCardTransition) rememberVideoCardCaptureState(video.bvid) else null
     val captureScope = if (prepareCardTransition) rememberCoroutineScope() else null
+    val hasWallpaperBackdrop = wallpaperVisible || isGlobalWallpaperVisibleForHomeCard()
     val triggerCardClick by rememberUpdatedState(appActionWithFeedback {
         if (CardPositionManager.isVideoNavigationDebounceActive()) {
             // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
@@ -251,6 +254,7 @@ internal fun StoryVideoCard(
                 coverBounds = coverCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
                 sourceLayout = com.android.purebilibili.core.ui.transition.VideoCardSourceLayout.STACKED,
                 sourceChromeSnapshot = com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot(
+                    hasWallpaperBackdrop = hasWallpaperBackdrop,
                     title = video.title,
                     ownerName = video.owner.name,
                     ownerFaceUrl = video.owner.face,
@@ -375,7 +379,12 @@ internal fun StoryVideoCard(
             .then(cardVisibility.observerModifier)
             .fillMaxWidth()
             .adaptiveCardHoverEffect(shape = cardShellShape)
-            .videoCardSourceAnchor(video.bvid, cardShellShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
+            .videoCardSourceAnchor(
+                video.bvid,
+                cardShellShape,
+                landingStyle = NavigationReturnLandingStyle.VIDEO_CARD,
+                sourceLayout = VideoCardSourceLayout.STACKED,
+            )
             .padding(horizontal = cardHorizontalPadding, vertical = AppSpacingTokens.Small)
             .animateEnter(
                 index = index,

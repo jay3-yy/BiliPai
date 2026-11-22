@@ -530,6 +530,19 @@ internal fun resolveVideoCardReturnSettleFromMorphDepth(morphDepthProgress: Floa
 }
 
 /**
+ * morph 末段预发布落位冲量的深度阈值（1=详情满屏，0=列表落位）。
+ *
+ * 压缩弹簧峰位在启动后约 54ms（ζ=0.8/stiffness 400）：在剩余约 0.5% 行程时发布，
+ * 峰位正好压住落位尾巴的最后几帧，而不是等完全静止后再另起一拍。发布过早会让
+ * 峰位埋在飞行壳下方、卸层时只剩衰减尾；发布过晚则落位与回弹之间出现静止空档。
+ */
+internal const val VIDEO_CARD_RETURN_LANDING_MORPH_DEPTH = 0.005f
+
+internal fun shouldPublishVideoCardReturnLanding(morphDepth: Float): Boolean {
+    return morphDepth in 0f..VIDEO_CARD_RETURN_LANDING_MORPH_DEPTH
+}
+
+/**
  * 统一返回 settle 进度 0→1（刚开始缩回 → 完全落位）。
  *
  * 优先使用 [morphDepthProgress]（单时钟）。若未提供则回退旧双源 max 语义，

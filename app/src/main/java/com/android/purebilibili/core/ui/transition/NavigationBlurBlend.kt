@@ -38,6 +38,10 @@ internal fun Modifier.navigationBlurBlend(
         onDrawWithContent {
             val frame = frameProvider()
             if (frame.alpha <= 0f) {
+                if (effectRecorded) {
+                    blurred.renderEffect = null
+                    effectRecorded = false
+                }
                 drawContent()
             } else {
                 source.record { this@onDrawWithContent.drawContent() }

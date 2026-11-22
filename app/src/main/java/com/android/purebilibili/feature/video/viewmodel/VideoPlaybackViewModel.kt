@@ -104,6 +104,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.android.purebilibili.feature.audio.player.PlaybackSleepTimer
+import com.android.purebilibili.feature.video.player.PlayerBackgroundPlaybackSessions
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.PlaylistManager
@@ -2022,72 +2024,46 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         isCommentInteractionActive = active
     }
 
-    //  Sleep Timer State
-    private val _sleepTimerMinutes = MutableStateFlow<Int?>(null)
-    val sleepTimerMinutes = _sleepTimerMinutes.asStateFlow()
-    private val _sleepAfterCurrent = MutableStateFlow(false)
-    val sleepAfterCurrent = _sleepAfterCurrent.asStateFlow()
-    private var sleepEndIdentity: Pair<String, Long>? = null
-    private var sleepTimerJob: Job? = null
+    private val sleepTimerManager = MiniPlayerManager.getInstance(application)
+    private val sleepTimerPlayer = MutableStateFlow<ExoPlayer?>(null)
+    private val playerSleepTimer = combine(sleepTimerManager.sleepTimer, sleepTimerPlayer) { timer, player ->
+        timer?.takeIf { it.player === player }?.timer
+    }
+    val sleepTimerMinutes = playerSleepTimer
+        .map { (it as? PlaybackSleepTimer.Countdown)?.minutes }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val sleepAfterCurrent = playerSleepTimer
+        .map { it is PlaybackSleepTimer.AfterCurrent }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    /**
-     * 设置定时关闭
-     * @param minutes 分钟数，null 表示关闭定时
-     */
     fun setSleepTimer(minutes: Int?) {
-        sleepTimerJob?.cancel()
-        _sleepAfterCurrent.value = false
-        sleepEndIdentity = null
-        _sleepTimerMinutes.value = minutes
-        
-        if (minutes != null) {
-            sleepTimerJob = viewModelScope.launch {
-                Logger.d("PlayerVM", "⏰ 定时关闭已启动: ${minutes}分钟")
-                toast("将在 ${minutes} 分钟后停止播放")
-                delay(minutes * 60 * 1000L)
-                
-                // 定时结束
-                withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
-                    exoPlayer?.pause()
-                    toast("⏰ 定时结束，已暂停播放")
-                    _sleepTimerMinutes.value = null
-                    // 如果需要关闭应用或退出页面，可以在这里添加逻辑
-                }
-            }
-        } else {
-            Logger.d("PlayerVM", "⏰ 定时关闭已取消")
-            toast("定时关闭已取消")
+        val player = exoPlayer ?: return
+        val timer = minutes?.let {
+            PlaybackSleepTimer.Countdown(it, android.os.SystemClock.elapsedRealtime() + it * 60_000L)
         }
+        sleepTimerManager.setSleepTimer(player, timer)
+        toast(if (minutes == null) "定时关闭已取消" else "将在 ${minutes} 分钟后停止播放")
     }
 
     fun setSleepAfterCurrent(enabled: Boolean) {
-        sleepTimerJob?.cancel()
-        sleepTimerJob = null
-        _sleepTimerMinutes.value = null
-        sleepEndIdentity = if (enabled && currentBvid.isNotBlank()) currentBvid to currentCid else null
-        _sleepAfterCurrent.value = sleepEndIdentity != null
-        if (_sleepAfterCurrent.value) exoPlayer?.repeatMode = Player.REPEAT_MODE_OFF
-        toast(if (_sleepAfterCurrent.value) "播完当前内容后暂停" else "定时关闭已取消")
+        val player = exoPlayer ?: return
+        val timer = currentBvid.takeIf { enabled && it.isNotBlank() }
+            ?.let { PlaybackSleepTimer.AfterCurrent(it, currentCid) }
+        sleepTimerManager.setSleepTimer(player, timer)
+        toast(if (timer != null) "播完当前内容后暂停" else "定时关闭已取消")
     }
 
     private fun cancelSleepAfterCurrentForSwitch(bvid: String, cid: Long) {
-        val target = sleepEndIdentity ?: return
-        if (target.first != bvid || (cid > 0L && target.second != cid)) {
-            sleepEndIdentity = null
-            _sleepAfterCurrent.value = false
-        }
+        exoPlayer?.let { sleepTimerManager.cancelSleepAfterCurrentForSwitch(it, bvid, cid) }
     }
 
     private fun finishSleepAfterCurrent(): Boolean {
-        if (!_sleepAfterCurrent.value || !shouldStopAfterCurrentPlayback(sleepEndIdentity, currentBvid, currentCid)) return false
-        sleepEndIdentity = null
-        _sleepAfterCurrent.value = false
-        exoPlayer?.pause()
+        val player = exoPlayer ?: return false
+        if (!sleepTimerManager.finishSleepAfterCurrent(player, currentBvid, currentCid)) return false
         _showPlaybackEndedDialog.value = false
-        toast("当前内容播放结束，已暂停")
         return true
     }
-    
+
     // ========== 收藏夹相关状态 ==========
     private val _favoriteFolderDialogVisible = MutableStateFlow(false)
     val favoriteFolderDialogVisible = _favoriteFolderDialogVisible.asStateFlow()
@@ -2467,6 +2443,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     
     @SuppressLint("UnsafeOptInUsageError")
     fun attachPlayer(player: ExoPlayer) {
+        if (exoPlayer === player) {
+            // 重进活跃会话仍需解除临时静音，已有的监听器和历史会话继续使用。
+            com.android.purebilibili.core.player.PlayerVolumeController.applyPreferredVolume(player)
+            signalPlaybackTaskChanges()
+            return
+        }
         com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.measureWork("player_attach") {
             attachPlayerInternal(player)
         }
@@ -2474,28 +2456,25 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     @SuppressLint("UnsafeOptInUsageError")
     private fun attachPlayerInternal(player: ExoPlayer) {
-        val changed = exoPlayer !== player
-        if (changed) playbackRecoveryGeneration++
+        playbackRecoveryGeneration++
         val previousPlayer = exoPlayer
 
-        if (changed && previousPlayer != null) {
+        if (previousPlayer != null) {
             cancelPlaybackStallRecovery()
             playbackStallRecoveryFirstFrameRendered = false
             flushPlaybackHeartbeatSnapshot(reason = "replace_player")
             saveCurrentPosition()
             // 切换播放器时立即停止旧实例，避免转场期间双播
+            sleepTimerManager.setSleepTimer(previousPlayer, null)
             previousPlayer.removeListener(playbackEndListener)
             previousPlayer.playWhenReady = false
             previousPlayer.pause()
         }
 
         exoPlayer = player
+        sleepTimerPlayer.value = player
         playbackUseCase.attachPlayer(player)
         PlayerHistorySessions.forPlayer(player)
-        com.android.purebilibili.core.player.PlayerVolumeController.applyPreferredVolume(player)
-        
-        // 防止重复添加同一个 listener（同一 player 多次 attach 的场景）
-        player.removeListener(playbackEndListener)
         player.addListener(playbackEndListener)
         signalPlaybackTaskChanges()
     }
@@ -2786,7 +2765,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     internal fun resolveNextWatchSuggestion(): com.android.purebilibili.feature.video.playback.next.NextWatchSuggestion? {
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return null
         val context = appContext ?: return null
-        if (isPortraitPlaybackSessionActive || _isInAudioMode.value || _sleepTimerMinutes.value != null || _sleepAfterCurrent.value) return null
+        if (isPortraitPlaybackSessionActive || _isInAudioMode.value || exoPlayer?.let(sleepTimerManager::sleepTimerFor) != null) return null
         val behavior = SettingsManager.getPlaybackCompletionBehaviorSync(context)
         if (behavior == com.android.purebilibili.core.store.PlaybackCompletionBehavior.REPEAT_ONE) return null
         val info = current.info
@@ -3541,6 +3520,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         playerInfoJob?.cancel()
         activeLoadJob?.cancel()
         activeLoadAutoPlay = playbackRequest.autoPlay
+        val timerVersionAtLoadStart = exoPlayer?.let(PlayerBackgroundPlaybackSessions::timerPauseVersion) ?: 0L
         relatedLoadJob?.cancel()
         relatedLoadJob = null
         cancelRelatedPreload()
@@ -3841,7 +3821,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             adaptiveDashSource = result.adaptiveDashSource
                         )
 
-                        // Play video
+                        // A timer may have expired while the media request was in flight.
+                        val startPlayback = (activeLoadAutoPlay ?: shouldAutoPlay) &&
+                            (exoPlayer?.let(PlayerBackgroundPlaybackSessions::timerPauseVersion) ?: 0L) == timerVersionAtLoadStart
                         if (!shouldSkipPlayerPrepare) {
                             relatedPlaybackPreparedToken = requestToken
                             val prepared = provisionalPlayer
@@ -3860,15 +3842,15 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                                 }
                                 armPlaybackCdnFallback(
                                     cdnSelection.fallbackState,
-                                    activeLoadAutoPlay ?: shouldAutoPlay,
+                                    startPlayback,
                                 )
-                                prepared.playWhenReady = activeLoadAutoPlay ?: shouldAutoPlay
+                                prepared.playWhenReady = startPlayback
                             } else playResolvedPlayback(
                                 videoUrl = cdnSelection.playUrl,
                                 audioUrl = cdnSelection.audioUrl,
                                 adaptiveDashSource = cdnSelection.adaptiveDashSource,
                                 startPositionMs = startPos,
-                                playWhenReady = activeLoadAutoPlay ?: shouldAutoPlay,
+                                playWhenReady = startPlayback,
                                 cdnFallbackState = cdnSelection.fallbackState,
                                 cdnCacheKeysByUrl = cdnSelection.cdnCacheKeysByUrl
                             )
@@ -3881,9 +3863,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                              exoPlayer?.let { p ->
                                  PlayerHistorySessions.forPlayer(p).onIsPlayingChanged(p.isPlaying)
                                  com.android.purebilibili.core.player.PlayerVolumeController.applyPreferredVolume(p)
-                                 val autoPlayNow = activeLoadAutoPlay ?: shouldAutoPlay
-                                 if (autoPlayNow && !p.isPlaying) p.play()
-                                 else if (!autoPlayNow) p.pause()
+                                 if (startPlayback && !p.isPlaying) p.play()
+                                 else if (!startPlayback) p.pause()
                              }
                         }
                         

@@ -9,6 +9,7 @@ import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.appElasticPress
 
 
+import com.android.purebilibili.feature.video.player.PlayerBackgroundPlaybackSessions
 import com.android.purebilibili.feature.video.screen.resolvePhoneInlineVideoViewportHeightDp
 import com.android.purebilibili.feature.video.screen.resolveVideoDetailStableStatusBarHeightDp
 import com.android.purebilibili.feature.video.screen.resolveVideoDetailPortraitPlayerTopInsetDp
@@ -432,9 +433,10 @@ fun BangumiPlayerScreen(
             cid = currentCidForDebug
         )
     }
-    //  空降助手：定期检查播放位置
-    LaunchedEffect(sponsorBlockEnabled, uiState) {
-        if (sponsorBlockEnabled && uiState is BangumiPlayerState.Success) {
+    //  空降助手：定期检查播放位置（仅在前台活跃时轮询）
+    val bangumiSkipVisualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    LaunchedEffect(sponsorBlockEnabled, uiState is BangumiPlayerState.Success, bangumiSkipVisualWorkActive) {
+        if (sponsorBlockEnabled && uiState is BangumiPlayerState.Success && bangumiSkipVisualWorkActive) {
             while (true) {
                 kotlinx.coroutines.delay(500)
                 viewModel.checkAndSkipSponsor(context)
@@ -444,9 +446,10 @@ fun BangumiPlayerScreen(
     LaunchedEffect(
         autoSkipOpEd,
         successState?.currentEpisode?.id,
-        successState?.currentEpisode?.skip
+        successState?.currentEpisode?.skip,
+        bangumiSkipVisualWorkActive,
     ) {
-        if (autoSkipOpEd && successState?.currentEpisode?.skip != null) {
+        if (autoSkipOpEd && successState?.currentEpisode?.skip != null && bangumiSkipVisualWorkActive) {
             while (true) {
                 kotlinx.coroutines.delay(250)
                 viewModel.checkAndSkipEpisodeOpEd()
@@ -493,10 +496,12 @@ fun BangumiPlayerScreen(
             .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, isAudioOnly).build()
     }
     var sleepTimerMinutes by rememberSaveable(seasonId) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(sleepTimerMinutes) {
-        val minutes = sleepTimerMinutes ?: return@LaunchedEffect
-        kotlinx.coroutines.delay(minutes * 60_000L)
-        exoPlayer.pause()
+    var sleepDeadlineMs by rememberSaveable(seasonId) { mutableStateOf<Long?>(null) }
+    LaunchedEffect(sleepDeadlineMs, exoPlayer) {
+        val deadline = sleepDeadlineMs ?: return@LaunchedEffect
+        kotlinx.coroutines.delay((deadline - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+        PlayerBackgroundPlaybackSessions.pauseForSleepTimer(exoPlayer)
+        sleepDeadlineMs = null
         sleepTimerMinutes = null
         Toast.makeText(context, "定时停止播放", Toast.LENGTH_SHORT).show()
     }
@@ -550,7 +555,11 @@ fun BangumiPlayerScreen(
         onSaveCover = { viewModel.saveCover(context) },
         onDownloadAudio = viewModel::downloadAudio,
         sleepTimerMinutes = sleepTimerMinutes,
-        onSleepTimerChange = { sleepTimerMinutes = it?.takeIf { value -> value > 0 } },
+        sleepDeadlineMs = { sleepDeadlineMs },
+        onSleepTimerChange = { minutes ->
+            sleepTimerMinutes = minutes?.takeIf { it > 0 }
+            sleepDeadlineMs = sleepTimerMinutes?.let { android.os.SystemClock.elapsedRealtime() + it * 60_000L }
+        },
         subtitle = subtitleState,
     )
     val danmakuEnabled = danmakuSettings.enabled && danmakuAllowed
@@ -1191,6 +1200,7 @@ fun BangumiPlayerScreen(
 
         // 折叠自动暂停 / 展开自动恢复
         var autoPausedByPlayerCollapse by remember(currentEpisodeIdForDebug) { mutableStateOf(false) }
+        var timerVersionAtCollapse by remember(currentEpisodeIdForDebug) { mutableLongStateOf(0L) }
         val isPlayerCollapsed = inlineCollapseEnabled && rawCollapseProgress >= 0.98f &&
             !inlinePlayerCollapseState.restoreRequested
         LaunchedEffect(isPlayerCollapsed, pauseOnPlayerCollapseEnabled, isFullscreen, currentEpisodeIdForDebug) {
@@ -1204,12 +1214,14 @@ fun BangumiPlayerScreen(
                 isPlaying = player.isPlaying,
                 isPortraitFullscreen = isFullscreen,
             )) {
+                timerVersionAtCollapse = PlayerBackgroundPlaybackSessions.timerPauseVersion(player)
                 player.pause()
                 autoPausedByPlayerCollapse = true
             } else if (shouldAutoResumeOnPlayerExpand(
                 autoPauseEnabled = pauseOnPlayerCollapseEnabled,
                 isPlayerCollapsed = collapsedForAutoPause,
-                wasAutoPausedByCollapse = autoPausedByPlayerCollapse,
+                wasAutoPausedByCollapse = autoPausedByPlayerCollapse &&
+                    timerVersionAtCollapse == PlayerBackgroundPlaybackSessions.timerPauseVersion(player),
                 isPortraitFullscreen = isFullscreen,
             )) {
                 autoPausedByPlayerCollapse = false

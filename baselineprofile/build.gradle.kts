@@ -9,7 +9,7 @@ android {
     namespace = "com.android.purebilibili.baselineprofile"
     compileSdk {
         version = release(37) {
-            minorApiLevel = 0
+            minorApiLevel = 2
         }
     }
 
@@ -53,6 +53,15 @@ kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
     }
+}
+
+// AGP 9 testedApks configurations omit TargetJvmEnvironment, causing KMP miuix transitive
+// modules (miuix-core / miuix-material) to fall back to desktop variants.
+configurations.matching { it.name.endsWith("TestedApks") }.configureEach {
+    attributes.attribute(
+        org.gradle.api.attributes.java.TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE,
+        objects.named(org.gradle.api.attributes.java.TargetJvmEnvironment.ANDROID),
+    )
 }
 
 dependencies {

@@ -58,6 +58,9 @@ internal class MusicViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow(MusicUiState())
     val uiState: StateFlow<MusicUiState> = _uiState.asStateFlow()
+    // 高频播放进度与顶层 MusicUiState 解耦，避免 4Hz 进度轮询驱动外层页面整树重组。
+    private val _positionMs = MutableStateFlow(0L)
+    val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
 
     private var miniPlayerManager: MiniPlayerManager? = null
     private var lyricsRepository: LyricsRepository? = null
@@ -89,12 +92,14 @@ internal class MusicViewModel : ViewModel() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             val player = observedPlayer
+            val nextPosition = player?.currentPosition?.coerceAtLeast(0L)
+            if (nextPosition != null) {
+                _positionMs.value = nextPosition
+            }
             _uiState.update {
                 it.copy(
                     isBuffering = playbackState == Player.STATE_BUFFERING,
                     durationMs = player?.duration?.coerceAtLeast(0L) ?: it.durationMs,
-                    currentPositionMs = player?.currentPosition?.coerceAtLeast(0L)
-                        ?: it.currentPositionMs
                 )
             }
         }
@@ -185,12 +190,19 @@ internal class MusicViewModel : ViewModel() {
 
     fun updateProgress() {
         val player = observedPlayer ?: return
-        _uiState.update {
-            it.copy(
-                isPlaying = player.isPlaying,
-                currentPositionMs = player.currentPosition.coerceAtLeast(0L),
-                durationMs = player.duration.coerceAtLeast(0L)
-            )
+        val nextPosition = player.currentPosition.coerceAtLeast(0L)
+        _positionMs.value = nextPosition
+        val isPlaying = player.isPlaying
+        val durationMs = player.duration.coerceAtLeast(0L)
+        _uiState.update { current ->
+            if (current.isPlaying == isPlaying && current.durationMs == durationMs) {
+                current
+            } else {
+                current.copy(
+                    isPlaying = isPlaying,
+                    durationMs = durationMs,
+                )
+            }
         }
     }
 

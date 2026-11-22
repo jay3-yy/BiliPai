@@ -2,7 +2,7 @@ package com.android.purebilibili.feature.video.screen
 
 import com.android.purebilibili.core.ui.AppContentColors
 
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.Context
@@ -13,7 +13,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,10 +51,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
 import com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
+import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.PlayMode
 import com.android.purebilibili.feature.video.state.rememberVideoPlayerState
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
@@ -314,7 +316,15 @@ fun AudioModeScreen(
     } else {
         null
     }
-    val player = standalonePlayerState?.player ?: viewModel.currentPlayer
+    val player = standalonePlayerState?.player ?: (viewModel.currentPlayer as? ExoPlayer)
+    DisposableEffect(player) {
+        val audioModePlayer = player
+        val miniPlayerManager = MiniPlayerManager.getInstance(context)
+        audioModePlayer?.let(miniPlayerManager::enterAudioMode)
+        onDispose {
+            audioModePlayer?.let(miniPlayerManager::exitAudioMode)
+        }
+    }
 
     // 复用旧 Success 进入（如小横条展开）时播放器可能已被释放：无 player 且入口
     // 未携带 bvid 时，用缓存内容强制重载自愈，避免停留在只有封面的死页面。

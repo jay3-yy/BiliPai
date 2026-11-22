@@ -97,7 +97,7 @@ internal fun FollowGroupOrderContent(
                     LazyColumn(
                         state = listState,
                         userScrollEnabled = !busy && draggedId == null,
-                        modifier = Modifier.fillMaxWidth().heightIn(max = listHeight),
+                        modifier = Modifier.fillMaxWidth().heightIn(max = listHeight).appScrollBoundaryHaptics(listState),
                     ) {
                         itemsIndexed(state.draft, key = { _, tag -> tag.tagid }) { index, tag ->
                             val dragging = draggedId == tag.tagid

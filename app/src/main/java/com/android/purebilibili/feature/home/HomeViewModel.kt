@@ -116,6 +116,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     internal val pendingMemoryRecovery = _pendingMemoryRecovery.asStateFlow()
     val currentCategory = homeStateFlow { it.currentCategory }
     val displayedTabIndex = homeStateFlow { it.displayedTabIndex }
+    val displayedTabEntry = homeStateFlow { it.displayedTabEntry }
     val popularSubCategory = homeStateFlow { it.popularSubCategory }
     val user = homeStateFlow { it.user }
     val messageUnreadCount = homeStateFlow { it.messageUnreadCount }
@@ -221,6 +222,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             isLoading = true,
             currentCategory = previous.currentCategory,
             displayedTabIndex = previous.displayedTabIndex,
+            displayedTabEntry = previous.displayedTabEntry,
             popularSubCategory = previous.popularSubCategory,
             liveSubCategory = if (TokenManager.sessDataCache.isNullOrEmpty()) {
                 LiveSubCategory.POPULAR
@@ -253,7 +255,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 blockedMids = list.map { it.mid }.toSet()
             }
         }
-        syncTodayWatchFeedbackFromStore()
+        viewModelScope.launch {
+            syncTodayWatchFeedbackFromStore()
+        }
         viewModelScope.launch {
             PluginManager.awaitPluginReady(BuiltinPluginIds.AD_FILTER)
             //  推荐流过滤插件的「启用态 + 配置」是在注册协程里异步回填的(DataStore)。
@@ -660,7 +664,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // 分类选择同步发布，加载任务只消费入口捕获的分类身份。
     fun switchCategory(category: HomeCategory) {
         val current = _uiState.value
-        if (current.currentCategory == category) return
+        val targetEntry = HomeTopTabEntry.Category(category)
+        if (current.currentCategory == category) {
+            if (current.displayedTabEntry != targetEntry) {
+                _uiState.value = current.copy(displayedTabEntry = targetEntry)
+            }
+            return
+        }
         com.android.purebilibili.core.util.CardPositionManager.isSwitchingCategory = true
         val liveSubCategory = if (category == HomeCategory.LIVE && TokenManager.sessDataCache.isNullOrEmpty()) {
             LiveSubCategory.POPULAR
@@ -757,6 +767,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun updateDisplayedTabIndex(index: Int) {
         val normalized = index.coerceAtLeast(0)
         _uiState.value = _uiState.value.copy(displayedTabIndex = normalized)
+    }
+
+    fun updateDisplayedTab(index: Int, entry: HomeTopTabEntry) {
+        val normalized = index.coerceAtLeast(0)
+        _uiState.value = _uiState.value.copy(
+            displayedTabIndex = normalized,
+            displayedTabEntry = entry,
+        )
     }
     
     //  [新增] 开始消散动画（触发 UI 播放粒子动画）
@@ -944,28 +962,41 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         video: VideoItem,
         action: HomeNotInterestedAction
     ) {
-        val snapshot = TodayWatchFeedbackStore.getSnapshot(getApplication()).withDislikedVideoFeedback(
-            video = TodayWatchDislikedVideoSnapshot(
-                bvid = video.bvid,
-                title = video.title,
-                creatorName = video.owner.name,
-                creatorMid = video.owner.mid,
-                dislikedAtMillis = System.currentTimeMillis()
-            ),
-            keywords = action.keywords,
-            includeCreatorSignal = action.shouldBlockCreator
-        )
-        todayDislikedBvids.clear()
-        todayDislikedBvids.addAll(snapshot.dislikedBvids)
-        todayDislikedCreatorMids.clear()
-        todayDislikedCreatorMids.addAll(snapshot.dislikedCreatorMids)
-        todayDislikedKeywords.clear()
-        todayDislikedKeywords.addAll(snapshot.dislikedKeywords)
-        TodayWatchFeedbackStore.saveSnapshot(getApplication(), snapshot)
+        if (video.bvid.isNotBlank()) todayDislikedBvids.add(video.bvid)
+        if (action.shouldBlockCreator && video.owner.mid > 0L) todayDislikedCreatorMids.add(video.owner.mid)
+        todayDislikedKeywords.addAll(action.keywords.map { it.trim() }.filter { it.isNotEmpty() })
+        val dislikedAtMillis = System.currentTimeMillis()
+        val appContext = getApplication<Application>()
+        viewModelScope.launch {
+            val snapshot = withContext(Dispatchers.IO) {
+                val updated = TodayWatchFeedbackStore.getSnapshot(appContext).withDislikedVideoFeedback(
+                    video = TodayWatchDislikedVideoSnapshot(
+                        bvid = video.bvid,
+                        title = video.title,
+                        creatorName = video.owner.name,
+                        creatorMid = video.owner.mid,
+                        dislikedAtMillis = dislikedAtMillis
+                    ),
+                    keywords = action.keywords,
+                    includeCreatorSignal = action.shouldBlockCreator
+                )
+                TodayWatchFeedbackStore.saveSnapshot(appContext, updated)
+                updated
+            }
+            todayDislikedBvids.clear()
+            todayDislikedBvids.addAll(snapshot.dislikedBvids)
+            todayDislikedCreatorMids.clear()
+            todayDislikedCreatorMids.addAll(snapshot.dislikedCreatorMids)
+            todayDislikedKeywords.clear()
+            todayDislikedKeywords.addAll(snapshot.dislikedKeywords)
+        }
     }
 
-    private fun syncTodayWatchFeedbackFromStore() {
-        val snapshot = TodayWatchFeedbackStore.getSnapshot(getApplication())
+    private suspend fun syncTodayWatchFeedbackFromStore() {
+        val appContext = getApplication<Application>()
+        val snapshot = withContext(Dispatchers.IO) {
+            TodayWatchFeedbackStore.getSnapshot(appContext)
+        }
         todayDislikedBvids.clear()
         todayDislikedBvids.addAll(snapshot.dislikedBvids)
         todayDislikedCreatorMids.clear()
@@ -984,16 +1015,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun persistTodayWatchFeedback() {
-        val currentSnapshot = TodayWatchFeedbackStore.getSnapshot(getApplication())
-        TodayWatchFeedbackStore.saveSnapshot(
-            context = getApplication(),
-            snapshot = com.android.purebilibili.core.store.TodayWatchFeedbackSnapshot(
-                dislikedBvids = todayDislikedBvids.toSet(),
-                dislikedCreatorMids = todayDislikedCreatorMids.toSet(),
-                dislikedKeywords = todayDislikedKeywords.toSet(),
-                recentDislikedVideos = currentSnapshot.recentDislikedVideos
+        val bvids = todayDislikedBvids.toSet()
+        val creatorMids = todayDislikedCreatorMids.toSet()
+        val keywords = todayDislikedKeywords.toSet()
+        val appContext = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentSnapshot = TodayWatchFeedbackStore.getSnapshot(appContext)
+            TodayWatchFeedbackStore.saveSnapshot(
+                context = appContext,
+                snapshot = com.android.purebilibili.core.store.TodayWatchFeedbackSnapshot(
+                    dislikedBvids = bvids,
+                    dislikedCreatorMids = creatorMids,
+                    dislikedKeywords = keywords,
+                    recentDislikedVideos = currentSnapshot.recentDislikedVideos
+                )
             )
-        )
+        }
     }
 
     private fun loadData() {
@@ -1061,6 +1098,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun refresh(
         category: HomeCategory = _uiState.value.currentCategory,
         popularSubCategory: PopularSubCategory = _uiState.value.popularSubCategory,
+        onNewCards: ((Set<String>) -> Unit)? = null,
     ) {
         if (shouldEmbedLivePageInHomeTopTab(category)) return
         if (_isRefreshing.value) return
@@ -1074,6 +1112,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _isRefreshing.value = true
             try {
                 val refreshingCategory = category
+                val previousVideos = onNewCards?.let {
+                    _uiState.value.homeCategoryContent(category, popularSubCategory).videos
+                }
                 _undoSnapshot = buildHomeRefreshUndoSnapshot(
                     refreshingCategory = refreshingCategory,
                     recommendCategoryState = _uiState.value.categoryStates[HomeCategory.RECOMMEND],
@@ -1147,6 +1188,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     //  刷新成功且是推荐分类时标记可撤销
                     undoAvailable = undoAvailable
                 )
+                if (onNewCards != null && previousVideos != null && refreshedState != null) {
+                    val previousKeys = previousVideos.mapTo(HashSet(), HomeFeedMergePolicy::keyOf)
+                    val newKeys = refreshedState.videos.asSequence()
+                        .map(HomeFeedMergePolicy::keyOf)
+                        .filterNot(previousKeys::contains)
+                        .toSet()
+                    if (newKeys.isNotEmpty()) onNewCards(newKeys)
+                }
                 if (undoAvailable) {
                     scheduleUndoDismiss()
                 } else {

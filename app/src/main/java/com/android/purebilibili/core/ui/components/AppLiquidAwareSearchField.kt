@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Clear
@@ -18,12 +20,19 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
+import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppHapticScene
+import com.android.purebilibili.core.ui.ProvideAppHapticScene
 import com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock
 import com.android.purebilibili.feature.home.components.resolveFloatingDockGeometryScale
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -77,18 +86,10 @@ fun AppLiquidAwareSearchField(
         }
         return
     }
-    BottomBarMatchedReusableLiquidDock(
-        shape = CircleShape,
+    AppSearchFieldDock(
         modifier = modifier,
         backdrop = backdrop,
-        reuseEnabled = true,
-        elasticFeedbackEnabled = true,
-        elasticFeedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
-        useNeutralLiquidContainer = true,
-        drawShellLens = true,
-        shellLensIntensity = resolveFloatingDockGeometryScale(
-            liquidHeight.value
-        ),
+        liquidHeight = liquidHeight,
         isScrollInProgressProvider = isScrollInProgressProvider,
         captureShellForContent = captureShellForContent,
     ) { liquidChromeActive ->
@@ -135,6 +136,86 @@ fun AppLiquidAwareSearchField(
     }
 }
 
+// 设置搜索显式选用同一份编辑状态，各材质仍沿用自己的输入布局。
+@Composable
+internal fun AppLiquidAwareSearchTopBarField(
+    state: TextFieldState,
+    placeholder: String,
+    onSearch: () -> Unit,
+    autoFocusEnabled: Boolean,
+    backdrop: Backdrop?,
+    modifier: Modifier = Modifier,
+) {
+    val requester = remember { FocusRequester() }
+    LaunchedEffect(requester, autoFocusEnabled) {
+        if (autoFocusEnabled) requester.requestFocus()
+    }
+    val height = AppChromeSizeTokens.LiquidSearchFieldHeightDp.dp
+    AppSearchFieldDock(
+        modifier = modifier,
+        backdrop = backdrop,
+        liquidHeight = height,
+        isScrollInProgressProvider = { false },
+        captureShellForContent = false,
+    ) { liquidChromeActive ->
+        if (liquidChromeActive) {
+            val contentColor = AppContentColors.primaryText()
+            CompactLiquidSearchRow(height, leadingIconHorizontalOffset = 0.dp) { hintColor ->
+                ProvideAppHapticScene(AppHapticScene.TEXT) {
+                    BasicTextField(
+                        state = state,
+                        modifier = Modifier.weight(1f).focusRequester(requester).padding(vertical = 6.dp),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = contentColor),
+                        lineLimits = TextFieldLineLimits.SingleLine,
+                        cursorBrush = SolidColor(contentColor),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        onKeyboardAction = { onSearch() },
+                        decorator = { innerTextField ->
+                            CompactLiquidSearchText(placeholder, state.text.isEmpty(), hintColor, innerTextField)
+                        },
+                    )
+                }
+            }
+        } else {
+            AppCompactSearchInputField(
+                state = state,
+                onSearch = onSearch,
+                modifier = Modifier.fillMaxWidth().focusRequester(requester),
+                placeholder = placeholder,
+                height = height,
+                leadingIcon = {
+                    AppIcon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(22.dp))
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppSearchFieldDock(
+    modifier: Modifier,
+    backdrop: Backdrop?,
+    liquidHeight: Dp,
+    isScrollInProgressProvider: () -> Boolean,
+    captureShellForContent: Boolean,
+    content: @Composable BoxScope.(Boolean) -> Unit,
+) {
+    BottomBarMatchedReusableLiquidDock(
+        shape = CircleShape,
+        modifier = modifier,
+        backdrop = backdrop,
+        reuseEnabled = true,
+        elasticFeedbackEnabled = true,
+        elasticFeedbackStrength = APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
+        useNeutralLiquidContainer = true,
+        drawShellLens = true,
+        shellLensIntensity = resolveFloatingDockGeometryScale(liquidHeight.value),
+        isScrollInProgressProvider = isScrollInProgressProvider,
+        captureShellForContent = captureShellForContent,
+        content = content,
+    )
+}
+
 @Composable
 private fun CompactLiquidSearchInput(
     query: String,
@@ -149,12 +230,43 @@ private fun CompactLiquidSearchInput(
     interactionSource: MutableInteractionSource?,
     leadingIconHorizontalOffset: Dp,
 ) {
-    val requester = focusRequester ?: androidx.compose.runtime.remember { FocusRequester() }
-    androidx.compose.runtime.LaunchedEffect(requester, autoFocusEnabled) {
+    val requester = focusRequester ?: remember { FocusRequester() }
+    LaunchedEffect(requester, autoFocusEnabled) {
         if (autoFocusEnabled) requester.requestFocus()
     }
-    val contentColor = com.android.purebilibili.core.ui.AppContentColors.primaryText()
-    val hintColor = com.android.purebilibili.core.ui.AppContentColors.secondaryText()
+    val contentColor = AppContentColors.primaryText()
+    CompactLiquidSearchRow(height, leadingIconHorizontalOffset) { hintColor ->
+        ProvideAppHapticScene(AppHapticScene.TEXT) {
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.weight(1f).focusRequester(requester).padding(vertical = 6.dp),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = contentColor),
+                singleLine = true,
+                interactionSource = interactionSource,
+                cursorBrush = SolidColor(contentColor),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+                decorationBox = { innerTextField ->
+                    CompactLiquidSearchText(placeholder, query.isEmpty(), hintColor, innerTextField)
+                },
+            )
+        }
+        if (showClearAction && query.isNotEmpty()) {
+            AppIconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
+                AppIcon(Icons.Default.Clear, contentDescription = "清除搜索内容", tint = hintColor)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactLiquidSearchRow(
+    height: Dp,
+    leadingIconHorizontalOffset: Dp,
+    content: @Composable RowScope.(Color) -> Unit,
+) {
+    val hintColor = AppContentColors.secondaryText()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -169,37 +281,27 @@ private fun CompactLiquidSearchInput(
             tint = hintColor,
             modifier = Modifier.padding(start = leadingIconHorizontalOffset).size(24.dp),
         )
-        com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                modifier = Modifier.weight(1f).focusRequester(requester).padding(vertical = 6.dp),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = contentColor),
-                singleLine = true,
-                interactionSource = interactionSource,
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(contentColor),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                decorationBox = { innerTextField ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (query.isEmpty()) {
-                            AppText(
-                                placeholder,
-                                color = hintColor,
-                                style = MaterialTheme.typography.bodyLarge,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            )
-                        }
-                        innerTextField()
-                    }
-                },
+        content(hintColor)
+    }
+}
+
+@Composable
+private fun CompactLiquidSearchText(
+    placeholder: String,
+    isEmpty: Boolean,
+    hintColor: Color,
+    innerTextField: @Composable () -> Unit,
+) {
+    Box(contentAlignment = Alignment.CenterStart) {
+        if (isEmpty) {
+            AppText(
+                placeholder,
+                color = hintColor,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        if (showClearAction && query.isNotEmpty()) {
-            AppIconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
-                AppIcon(Icons.Default.Clear, contentDescription = "清除搜索内容", tint = hintColor)
-            }
-        }
+        innerTextField()
     }
 }

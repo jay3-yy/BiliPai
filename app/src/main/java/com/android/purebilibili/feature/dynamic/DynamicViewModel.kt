@@ -27,24 +27,29 @@ import com.android.purebilibili.core.network.buildDynamicRepostRequest
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.AccountSessionStore
 import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.core.store.home.DynamicSettingsStore
 import com.android.purebilibili.core.util.appendDistinctByKey
 import com.android.purebilibili.core.util.prependDistinctByKey
+import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.data.model.response.CommentMainListContinuation
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.data.model.response.LiveRoom
+import com.android.purebilibili.data.model.response.ReplyControl
 import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.ReplyInteractionData
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyPicture
 import com.android.purebilibili.data.repository.ActionRepository
 import com.android.purebilibili.data.repository.BlockedUpRepository
+import com.android.purebilibili.data.repository.CommentFraudRepository
 import com.android.purebilibili.data.repository.CommentRepository
 import com.android.purebilibili.data.repository.DynamicCreateRepository
 import com.android.purebilibili.data.repository.DynamicRepository
 import com.android.purebilibili.data.repository.retainLocatedDynamicCommentPreviews
 import com.android.purebilibili.data.repository.LiveRepository
 import com.android.purebilibili.data.repository.SessionRepository
+import com.android.purebilibili.feature.comment.CommentDetailFraudResult
 import com.android.purebilibili.feature.dynamic.components.DynamicManageAction
 import com.android.purebilibili.feature.dynamic.components.resolveDynamicFoldIds
 import com.android.purebilibili.feature.dynamic.components.unfoldRelatedDynamicItems
@@ -55,6 +60,7 @@ import com.android.purebilibili.feature.dynamic.components.resolveDynamicVisibil
 import com.android.purebilibili.feature.dynamic.notification.LiveReserveReminderScheduler
 import com.android.purebilibili.feature.comment.SentCommentReplyStore
 import com.android.purebilibili.feature.comment.SentCommentReplyStores
+import com.android.purebilibili.feature.video.ui.components.resolveReplyMemberMid
 import com.android.purebilibili.feature.video.viewmodel.mergeSentSubReplies
 import com.android.purebilibili.feature.video.viewmodel.withSentSubReply
 import com.android.purebilibili.feature.video.viewmodel.CommentComposerDraft
@@ -84,9 +90,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
@@ -149,6 +157,10 @@ internal fun hasLoadedAllDynamicFollowings(
 class DynamicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val appContext = getApplication<Application>()
+    internal val sidebarLiveUsersVisible: StateFlow<Boolean?> =
+        DynamicSettingsStore.observeSidebarLiveUsersVisible(appContext)
+            .stateIn(viewModelScope, SharingStarted.Lazily, null)
+
     private var activeAccountIdentity = TokenManager.accountIdentity.value
     private var accountScope = CoroutineScope(
         viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job])
@@ -709,7 +721,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 name = room.uname,
                 face = room.face,
                 isLive = true,
-                lastActiveTs = nowSeconds  // 直播中视作最近活跃
+                lastActiveTs = nowSeconds, // 直播中视作最近活跃
+                liveRoomId = room.roomid,
+                liveRoomTitle = room.title,
             )
         }
     }
@@ -915,6 +929,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
      */
     fun toggleSidebar() {
         _isSidebarExpanded.value = !_isSidebarExpanded.value
+    }
+
+    internal fun toggleSidebarLiveUsers() {
+        viewModelScope.launch {
+            DynamicSettingsStore.toggleSidebarLiveUsersVisible(appContext)
+        }
     }
 
     fun togglePinUser(uid: Long) {
@@ -1214,6 +1234,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         cacheSaveJob?.cancel()
         userDynamicsJob?.cancel()
         userSelectionJob?.cancel()
+        commentFraudCheckJob?.cancel()
         super.onCleared()
     }
     
@@ -1257,6 +1278,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var remoteSubReplies: List<ReplyItem> = emptyList()
     private var remoteMainReplies: List<ReplyItem> = emptyList()
     private val pendingCommentLikes = mutableSetOf<Pair<Long, Long>>()
+    private val _commentFraudEvent = MutableSharedFlow<CommentDetailFraudResult>(extraBufferCapacity = 1)
+    val commentFraudEvent = _commentFraudEvent.asSharedFlow()
+    private var commentFraudCheckJob: Job? = null
 
     private fun selectCommentSubject(dynamicId: String, target: DynamicCommentTarget? = null) {
         val changedDynamic = sentCommentDynamicId != dynamicId
@@ -1418,6 +1442,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 target = target,
                 cachedAtMs = System.currentTimeMillis(),
                 remoteReplies = remoteMainReplies,
+                pinnedReplyIds = _commentUiState.value.pinnedReplyIds,
             ),
         )
     }
@@ -1520,6 +1545,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         mainCommentPagingJob?.cancel()
         commentLoadJob?.cancel()
         commentLoadJob = null
+        commentFraudCheckJob?.cancel()
+        commentFraudCheckJob = null
         pinnedReplyLoadJob?.cancel()
         pinnedReplyLoadJob = null
         _selectedDynamic.value = null
@@ -1574,7 +1601,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         commentLoadJob = launchAccount {
             val routeIntentActive = routeIntentSession == subReplyLoadRequestId
             val sortMode = _dynamicCommentSortMode.value
-            val fallbackCount = item.modules.module_stat?.comment?.count ?: 0
+            val seededCount = item.modules.module_stat?.comment?.count
+            val fallbackCount = seededCount ?: 0
             val dynamicId = item.id_str
             // 命中缓存先秒出旧评论，再后台静默刷新（stale-while-revalidate）。
             val cached = if (isRefresh) null else commentCache.get(dynamicId, sortMode.apiMode)
@@ -1591,11 +1619,13 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         hasMore = !cached.isEnd,
                         nextPage = cached.nextPage,
                         totalCount = maxOf(cached.totalCount, fallbackCount),
+                        totalCountKnown = true,
                         isLoading = false,
                         isRefreshing = false,
                         isLoadingMore = false,
                         refreshError = null,
                         dynamicId = dynamicId,
+                        pinnedReplyIds = cached.pinnedReplyIds,
                     )
                 }
             } else {
@@ -1607,11 +1637,13 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         hasMore = false,
                         nextPage = 1,
                         totalCount = if (isRefresh) it.totalCount else fallbackCount,
+                        totalCountKnown = if (isRefresh) it.totalCountKnown else seededCount != null,
                         isLoading = !isRefresh,
                         isRefreshing = isRefresh,
                         isLoadingMore = false,
                         refreshError = null,
                         dynamicId = dynamicId,
+                        pinnedReplyIds = if (isRefresh) it.pinnedReplyIds else emptySet(),
                     )
                 }
                 if (!isRefresh) {
@@ -1705,7 +1737,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                             comments = emptyList(),
                             hasMore = false,
                             nextPage = 1,
-                            totalCount = fallbackCount,
                             dynamicId = dynamicId,
                             refreshError = firstFailureMessage ?: "评论加载失败，请重试",
                         )
@@ -1892,6 +1923,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         isEnd = data.cursor.isEnd,
                         grpcNextOffset = data.grpcNextOffset.takeIf { it.isNotBlank() },
                         mainListContinuation = data.mainListContinuation,
+                        pinnedReplyIds = payload.pinnedReplyIds,
                     )
                 )
             },
@@ -1922,7 +1954,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             ) return@launchAccount
             updateCommentUiState { current ->
                 // 保留请求期间发评、删评产生的本地数量变化。
-                current.copy(totalCount = (count + current.totalCount - countAtRequest).coerceAtLeast(0))
+                current.copy(
+                    totalCount = (count + current.totalCount - countAtRequest).coerceAtLeast(0),
+                    totalCountKnown = true,
+                )
             }
             cacheCurrentComments(_commentUiState.value.comments)
         }
@@ -1971,10 +2006,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 hasMore = if (alreadyPagedFurther) it.hasMore else !attempt.isEnd,
                 nextPage = if (alreadyPagedFurther) it.nextPage else attempt.nextPage,
                 totalCount = if (sameSubject) maxOf(attempt.totalCount, it.totalCount) else attempt.totalCount,
+                totalCountKnown = true,
                 isLoading = false,
                 isRefreshing = false,
                 refreshError = null,
                 dynamicId = dynamicId,
+                pinnedReplyIds = attempt.pinnedReplyIds,
             )
         }
         cacheCurrentComments(appliedReplies, sortMode.apiMode)
@@ -2697,18 +2734,90 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             onResult(false, "无法确定评论参数")
             return
         }
+        val dynamicId = _selectedDynamic.value?.id_str ?: return
+        val subjectSession = commentSubjectSession
+        val account = activeAccountIdentity
+        val isCurrentlyTop = reply.rpid in _commentUiState.value.pinnedReplyIds || reply.replyControl?.isUpTop == true
         launchAccount {
-            CommentRepository.setCommentTopForSubject(
+            val result = CommentRepository.setCommentTopForSubject(
                 oid = target.oid,
                 type = target.type,
                 rpid = reply.rpid,
-                isCurrentlyTop = reply.replyControl?.isUpTop == true,
-            ).fold(
+                isCurrentlyTop = isCurrentlyTop,
+            )
+            if (account != activeAccountIdentity || account != TokenManager.accountIdentity.value ||
+                !shouldApplyDynamicSentComment(
+                    dynamicId, target, subjectSession, _selectedDynamic.value?.id_str,
+                    _selectedCommentTarget.value, commentSubjectSession,
+                )
+            ) return@launchAccount
+            result.fold(
                 onSuccess = {
-                    _selectedDynamic.value?.id_str?.takeIf(String::isNotBlank)?.let(::loadComments)
-                    onResult(true, if (reply.replyControl?.isUpTop == true) "已取消置顶" else "已置顶")
+                    val nextPinnedIds = if (isCurrentlyTop) {
+                        _commentUiState.value.pinnedReplyIds - reply.rpid
+                    } else {
+                        setOf(reply.rpid)
+                    }
+                    updateCommentUiState { it.copy(pinnedReplyIds = nextPinnedIds) }
+                    _subReplyState.update { sub ->
+                        if (sub.rootReply?.rpid == reply.rpid) {
+                            val updatedControl = (sub.rootReply.replyControl ?: ReplyControl()).copy(isUpTop = !isCurrentlyTop)
+                            sub.copy(rootReply = sub.rootReply.copy(replyControl = updatedControl))
+                        } else sub
+                    }
+                    cacheCurrentComments(_commentUiState.value.comments)
+                    loadComments(dynamicId)
+                    onResult(true, if (isCurrentlyTop) "已取消置顶" else "已置顶")
                 },
                 onFailure = { onResult(false, it.message ?: "置顶操作失败") },
+            )
+        }
+    }
+
+    fun checkDynamicCommentFraud(
+        reply: ReplyItem,
+        onMessage: (String) -> Unit = {},
+    ) {
+        val target = _selectedCommentTarget.value
+        if (target == null || reply.rpid <= 0L) {
+            onMessage("无法确定评论参数")
+            return
+        }
+        val account = activeAccountIdentity
+        val session = commentSubjectSession
+        commentFraudCheckJob?.cancel()
+        commentFraudCheckJob = launchAccount {
+            val status = CommentRepository.checkCommentStatus(
+                aid = target.oid,
+                rpid = reply.rpid,
+                rootId = reply.root,
+                type = target.type,
+            ).getOrElse { CommentFraudStatus.UNKNOWN }
+            if (account != activeAccountIdentity ||
+                account != TokenManager.accountIdentity.value ||
+                session != commentSubjectSession ||
+                _selectedCommentTarget.value != target
+            ) {
+                return@launchAccount
+            }
+            CommentFraudRepository.saveRecord(
+                rpid = reply.rpid,
+                oid = target.oid,
+                type = target.type,
+                root = reply.root,
+                uid = account.mid ?: resolveReplyMemberMid(reply),
+                message = reply.content.message,
+                status = status,
+                initialStatus = null,
+            )
+            _commentFraudEvent.tryEmit(
+                CommentDetailFraudResult(
+                    rpid = reply.rpid,
+                    oid = target.oid,
+                    type = target.type,
+                    message = reply.content.message,
+                    status = status,
+                )
             )
         }
     }
@@ -3403,7 +3512,9 @@ data class SidebarUser(
     val isLive: Boolean = false,
     val lastActiveTs: Long = 0L,
     val isPinned: Boolean = false,
-    val isHidden: Boolean = false
+    val isHidden: Boolean = false,
+    val liveRoomId: Long = 0L,
+    val liveRoomTitle: String = "",
 )
 
 /**

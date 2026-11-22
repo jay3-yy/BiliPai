@@ -56,7 +56,8 @@ class BiliPaiBaselineProfileGenerator {
             exerciseSpaceFeed()
             exerciseWebSession()
 
-            exerciseHomeCardSharedTransition()
+            exerciseHomeCardSharedTransition(exerciseComments = true)
+            exerciseWatchLaterAndFavorites()
 
             startVideoDetailActivity()
             scrollVideoDetailContent()
@@ -77,8 +78,12 @@ class BiliPaiBaselineProfileGenerator {
         ) {
             pressHome()
             startActivityAndWait()
-            check(device.wait(Until.hasObject(By.desc("首页")), 8_000) ||
-                device.wait(Until.hasObject(By.text("首页")), 2_000)) {
+            check(
+                device.wait(Until.hasObject(By.desc("推荐")), 4_000) ||
+                    device.wait(Until.hasObject(By.text("推荐")), 4_000) ||
+                    device.wait(Until.hasObject(By.desc("首页")), 1_000) ||
+                    device.wait(Until.hasObject(By.text("首页")), 1_000)
+            ) {
                 "启动后未找到首页导航"
             }
         }
@@ -154,7 +159,10 @@ class BiliPaiBaselineProfileGenerator {
 
     private fun MacrobenchmarkScope.returnToMainTabs() {
         repeat(8) {
-            val hasHome = device.hasObject(By.desc("首页")) || device.hasObject(By.text("首页"))
+            val hasHome = device.hasObject(By.desc("推荐")) ||
+                device.hasObject(By.text("推荐")) ||
+                device.hasObject(By.desc("首页")) ||
+                device.hasObject(By.text("首页"))
             val hasProfile = device.hasObject(By.desc("我的")) || device.hasObject(By.text("我的"))
             if (hasHome && hasProfile) return
             device.pressBack()
@@ -211,16 +219,27 @@ class BiliPaiBaselineProfileGenerator {
     }
 
     private fun MacrobenchmarkScope.clickBottomTab(label: String) {
-        val byDesc = device.wait(Until.findObject(By.desc(label)), 2_000)
-        if (byDesc != null) {
-            byDesc.click()
-            device.waitForIdle()
-            return
+        val candidates = if (label == "首页" || label == "推荐") {
+            listOf("推荐", "首页")
+        } else {
+            listOf(label)
         }
-
-        val byText = device.wait(Until.findObject(By.text(label)), 2_000)
-        checkNotNull(byText) { "找不到主导航：$label" }.click()
-        device.waitForIdle()
+        for (candidate in candidates) {
+            val byDesc = device.wait(Until.findObject(By.desc(candidate)), 1_500)
+            if (byDesc != null) {
+                byDesc.click()
+                device.waitForIdle()
+                return
+            }
+            val byText = device.findObjects(By.text(candidate)).lastOrNull()
+                ?: device.wait(Until.findObject(By.text(candidate)), 1_500)
+            if (byText != null) {
+                byText.click()
+                device.waitForIdle()
+                return
+            }
+        }
+        error("找不到主导航：$label")
     }
 
     private fun MacrobenchmarkScope.scrollFeedOnce(reverse: Boolean = false) {
@@ -310,7 +329,9 @@ class BiliPaiBaselineProfileGenerator {
         device.waitForIdle()
     }
 
-    private fun MacrobenchmarkScope.exerciseHomeCardSharedTransition() {
+    private fun MacrobenchmarkScope.exerciseHomeCardSharedTransition(
+        exerciseComments: Boolean = false,
+    ) {
         clickBottomTab("首页")
         device.waitForIdle()
         val videoTitle = requireObject(By.descStartsWith("视频标题: "), "首页视频卡片")
@@ -318,9 +339,33 @@ class BiliPaiBaselineProfileGenerator {
         device.waitForIdle()
         SystemClock.sleep(NETWORK_CONTENT_SETTLE_MS)
         requireObject(By.text("简介"), "卡片展开后的详情内容")
+        if (exerciseComments) {
+            device.findObject(By.textStartsWith("评论"))?.let { commentsTab ->
+                commentsTab.click()
+                device.waitForIdle()
+                SystemClock.sleep(NETWORK_CONTENT_SETTLE_MS)
+                scrollVideoDetailContent()
+            }
+        }
         device.pressBack()
         device.waitForIdle()
         requireObject(By.descStartsWith("视频标题: "), "返回后的来源视频列表")
+    }
+
+    private fun MacrobenchmarkScope.exerciseWatchLaterAndFavorites() {
+        clickBottomTab("我的")
+        device.waitForIdle()
+        listOf("稍后再看", "收藏").forEach { entry ->
+            device.findObject(By.text(entry))?.let { target ->
+                target.click()
+                device.waitForIdle()
+                SystemClock.sleep(NETWORK_CONTENT_SETTLE_MS)
+                scrollFeedOnce()
+                device.pressBack()
+                device.waitForIdle()
+            }
+        }
+        returnToMainTabs()
     }
 
     private fun resolveBenchmarkBvid(): String {

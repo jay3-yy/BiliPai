@@ -75,7 +75,13 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = settingsDestinationCopy(SettingsSearchTarget.INTERFACE_THEME).title,
         subtitle = settingsDestinationCopy(SettingsSearchTarget.INTERFACE_THEME).summary,
         section = "设置",
-        aliases = listOf("界面与主题", "外观与动画", "界面", "主题", "ui预设", "md3", "miuix", "字体", "dpi", "动态图标", "应用图标", "开屏", "开屏壁纸")
+        aliases = listOf(
+            "界面与主题", "外观与主题", "外观与动画", "外观设置", "外观", "界面", "主题",
+            "ui预设", "md3", "miuix", "字体", "dpi", "动态图标", "应用图标", "开屏", "开屏壁纸",
+            "文字粗细", "参与随机的壁纸", "图标", "皮肤", "动态取色", "自定义颜色", "主题色",
+            "动态颜色", "语言", "应用字体", "本地字体", "导入字体", "自定义字体", "ttf", "otf",
+            "界面缩放", "自定义壁纸", "相册壁纸", "material", "android", "安卓", "原生",
+        ),
     ),
     SettingsSearchEntry(
         settingId = "legacy.002",
@@ -200,46 +206,6 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         subtitle = settingsDestinationCopy(SettingsSearchTarget.ABOUT_SUPPORT).summary,
         section = "设置",
         aliases = listOf("SHA-256", "provenance", "安装包来源验证", "版本来源", "关于与支持", "帮助与关于", "关于", "支持", "版本", "更新", "开源", "发布渠道", "小贴士", "默认打开链接", "telegram", "twitter", "捐赠", "打赏")
-    ),
-    SettingsSearchEntry(
-        settingId = "legacy.013",
-        target = SettingsSearchTarget.APPEARANCE,
-        title = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
-        subtitle = "主题、字体、缩放、开屏与应用图标",
-        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
-        // 泛入口别名：具体子项词（主题色/hex/md3颜色/字体大小/dpi/开屏壁纸等）交由
-        // 更具体的子项条目承接，避免泛条目靠堆叠别名压过具体结果。
-        aliases = listOf(
-            "文字粗细",
-            "参与随机的壁纸",
-            "首页卡片淡入",
-            "外观",
-            "主题",
-            "图标",
-            "皮肤",
-            "动态取色",
-            "自定义颜色",
-            "主题色",
-            "动态颜色",
-            "语言",
-            "字体",
-            "应用字体",
-            "本地字体",
-            "导入字体",
-            "自定义字体",
-            "ttf",
-            "otf",
-            "界面缩放",
-            "开屏",
-            "自定义壁纸",
-            "相册壁纸",
-            "应用图标",
-            "md3",
-            "material",
-            "android",
-            "安卓",
-            "原生",
-        )
     ),
     SettingsSearchEntry(
         settingId = "legacy.014",
@@ -701,10 +667,10 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     SettingsSearchEntry(
         settingId = "legacy.041",
         target = SettingsSearchTarget.HOME_FEED,
-        title = "卡片跟随背景变色",
-        subtitle = "独立控制视频卡片跟随壁纸或封面颜色",
+        title = "视频卡片背景",
+        subtitle = "选择跟随取色或固定高斯模糊",
         section = settingsDestinationCopy(SettingsSearchTarget.HOME_FEED).title,
-        aliases = listOf("卡片动态取色", "卡片取色", "封面取色", "视频卡片动态取色"),
+        aliases = listOf("卡片跟随背景变色", "卡片动态取色", "壁纸取色", "封面取色", "固定高斯模糊"),
         focusId = SettingsSearchFocusIds.HOME_OVERVIEW,
     ),
     SettingsSearchEntry(
@@ -737,10 +703,12 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     SettingsSearchEntry(
         settingId = "legacy.045",
         target = SettingsSearchTarget.ANIMATION,
-        title = "动画、振动与玻璃效果",
-        subtitle = "页面动画、玻璃效果与振动反馈",
-        section = "动画与触感",
+        title = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).summary,
+        section = "设置",
         aliases = listOf(
+            "动画、振动与玻璃效果",
+            "动画与振动",
             "返回时模糊背景",
             "加载占位动画",
             "动画与触感",
@@ -843,7 +811,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = "播放操作与内容显示",
         subtitle = "自动播放、双击操作、字幕、弹幕和笔记",
         section = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK).title,
-        aliases = listOf("双击快进或后退", "浏览评论时收起顶栏", "自动连播 / 跳过片头片尾 / 双击操作 / 弹幕 / 字幕 / 笔记", "自动连播", "自动播放下一个", "进入视频自动播放", "进入视频不要自动播放", "不要自动播放", "自动跳过片头片尾", "跳过片头", "跳过片尾", "跳过op", "跳过ed", "双击点赞", "双击跳转", "取消双击跳转", "关闭双击跳转", "双击快进", "双击后退", "快进秒数", "后退秒数", "关注点赞弹幕", "关注弹幕", "点赞弹幕", "三连弹幕", "弹幕屏蔽", "弹幕同步", "弹幕云同步", "同步弹幕设置", "弹幕设置同步", "网页版弹幕", "字幕", "自动启用字幕", "ai总结", "视频简介", "默认展开视频简介", "简介默认展开", "视频标签", "视频标签大小", "标签大小", "标签紧凑", "标签更小", "tag", "视频笔记", "显示视频笔记", "默认折叠视频笔记", "笔记折叠", "播放器缩小策略", "竖屏视频缩小", "竖屏评论区缩小", "评论上滑缩小播放器", "详情页控件随滚动隐藏", "详情页标签栏隐藏", "评论排序隐藏", "下滑隐藏详情控件", "回顶显示详情控件", "横屏视频缩小", "上滑隐藏播放器", "暂停时缩小", "暂停评论缩小", "缩小后自动暂停", "自动暂停", "相关推荐暂停", "点击视频直接播放"),
+        aliases = listOf("双击快进或后退", "浏览评论时收起顶栏", "自动连播 / 跳过片头片尾 / 双击操作 / 弹幕 / 字幕 / 笔记", "自动连播", "自动播放下一个", "进入视频自动播放", "进入视频不要自动播放", "不要自动播放", "自动跳过片头片尾", "跳过片头", "跳过片尾", "跳过op", "跳过ed", "双击点赞", "双击跳转", "取消双击跳转", "关闭双击跳转", "双击快进", "双击后退", "快进秒数", "后退秒数", "关注点赞弹幕", "关注弹幕", "点赞弹幕", "三连弹幕", "弹幕屏蔽", "字幕", "自动启用字幕", "ai总结", "视频简介", "默认展开视频简介", "简介默认展开", "视频标签", "视频标签大小", "标签大小", "标签紧凑", "标签更小", "tag", "视频笔记", "显示视频笔记", "默认折叠视频笔记", "笔记折叠", "播放器缩小策略", "竖屏视频缩小", "竖屏评论区缩小", "评论上滑缩小播放器", "详情页控件随滚动隐藏", "详情页标签栏隐藏", "评论排序隐藏", "下滑隐藏详情控件", "回顶显示详情控件", "横屏视频缩小", "上滑隐藏播放器", "暂停时缩小", "暂停评论缩小", "缩小后自动暂停", "自动暂停", "相关推荐暂停", "点击视频直接播放"),
         focusId = SettingsSearchFocusIds.PLAYBACK_INTERACTION
     ),
     SettingsSearchEntry(
@@ -1033,7 +1001,6 @@ internal fun resolveSettingsSearchResults(
                 "playback.comment_member_decorations_enabled" -> listOf("评论装扮", "个性装扮")
                 "playback.image_preview_long_press_save_enabled" -> listOf("图片长按保存", "长按保存图片")
                 "playback.video_info_default_expanded" -> listOf("简介默认展开")
-                "playback.sub_reply_threaded_enabled" -> listOf("评论树", "嵌套回复", "回复连线", "折叠分支")
                 "playback.sub_reply_loaded_count_enabled" -> listOf("楼中楼已加载数量", "已加载条数")
                 "playback.hide_interactive_command_danmaku" -> listOf("关注点赞弹幕", "关注弹幕", "点赞弹幕", "三连弹幕", "三连", "隐藏三连", "三连互动提示", "屏蔽互动提示")
                 else -> emptyList()

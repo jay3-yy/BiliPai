@@ -105,7 +105,9 @@ class MainActivityLinkNavigationPolicyTest {
     @Test
     fun searchTarget_mapsToSearchRoute_andCarriesKeyword() {
         val navigation = resolveMainActivityLinkNavigation(
-            BilibiliNavigationTarget.Search("黑神话")
+            BilibiliNavigationTargetParser.parse(
+                "https://search.bilibili.com/all?keyword=%E9%BB%91%E7%A5%9E%E8%AF%9D"
+            )!!
         )
 
         assertEquals("search", navigation?.pendingNavigationRoute)
@@ -125,20 +127,22 @@ class MainActivityLinkNavigationPolicyTest {
     @Test
     fun musicTarget_routesCopyrightMusicToNativeDetail() {
         val navigation = resolveMainActivityLinkNavigation(
-            BilibiliNavigationTarget.Music("ma123")
+            BilibiliNavigationTargetParser.parse(
+                "https://music.bilibili.com/h5/music-detail?music_id=ma123"
+            )!!
         )
 
         assertEquals("bgm_detail?musicId=ma123&aid=0&cid=0&showVideos=false", navigation?.pendingNavigationRoute)
     }
 
     @Test
-    fun unresolvedShortLink_extractsWebFallbackUrl() {
-        val route = resolveIntentLinkFallbackUrl("https://b23.tv/cm-yaoyue-0-3jgPM")
+    fun unresolvedShortLinkOpensOriginalShortUrlInWebFallback() {
+        val shortUrl = "https://b23.tv/cm-yaoyue-0-3jgPM"
+        val browserUrl = "bilibili://browser?url=https%3A%2F%2Fb23.tv%2Fcm-yaoyue-0-3jgPM"
 
-        assertEquals(
-            "https://b23.tv/cm-yaoyue-0-3jgPM",
-            route
-        )
+        for (link in listOf(shortUrl, browserUrl)) {
+            assertEquals(shortUrl, resolveIntentLinkFallbackUrl(link))
+        }
     }
 
     @Test

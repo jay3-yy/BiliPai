@@ -21,6 +21,8 @@ import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.resolveGlobalWallpaperProtectiveColor
 
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
@@ -40,6 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 //  Material Icons
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -88,6 +91,7 @@ import com.android.purebilibili.core.ui.common.TextSelectionPolicy
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.LinkInteractionListener
 import com.android.purebilibili.core.ui.common.detectTapWithSelectionFriendly
+import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import com.android.purebilibili.core.ui.rememberAppMoreIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppWarningIcon
@@ -123,6 +127,17 @@ import com.android.purebilibili.feature.dynamic.DynamicDeleteAction
 import com.android.purebilibili.feature.dynamic.resolveDynamicDeleteAction
 import com.android.purebilibili.feature.web.PublicWebLinkText
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
+internal fun shareDynamicLink(context: android.content.Context, item: DynamicItem) {
+    val dynamicUrl = "https://t.bilibili.com/${item.id_str}"
+    val description = item.modules.module_dynamic?.desc?.text?.take(100).orEmpty()
+    val shareText = "${description.ifBlank { "分享动态" }}\n$dynamicUrl"
+    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+    }
+    context.startActivity(android.content.Intent.createChooser(shareIntent, "分享动态"))
+}
 
 @Immutable
 data class DynamicCardNavigationActions(
@@ -173,6 +188,7 @@ data class DynamicCardPresentation(
     val likeOverride: Boolean? = null,
     val forwardCountDelta: Int = 0,
     val detailImageLayout: DynamicDetailImageLayout = DynamicDetailImageLayout.EXPANDED,
+    val allowCopyFullText: Boolean = false,
 )
 
 /** 信息流正文最多展示 6 行，溢出后通过「展开更多」进入详情。 */
@@ -527,10 +543,23 @@ fun DynamicCardV2(
         )
     }
 
+    val wallpaperSurface = if (!isDetail && LocalGlobalWallpaperBackdropVisible.current) {
+        Modifier
+            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = AppSpacingTokens.ExtraSmall)
+            .background(
+                resolveGlobalWallpaperProtectiveColor(
+                    AppSurfaceTokens.chromeBackground(),
+                    lightAlpha = 0.71f,
+                    darkAlpha = 0.78f,
+                ),
+                AppShapes.container(ContainerLevel.Card),
+            )
+    } else Modifier
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = resolveDynamicCardOuterPadding())
+            .then(wallpaperSurface)
     ) {
         Column(
             modifier = Modifier
@@ -671,6 +700,10 @@ fun DynamicCardV2(
                 val commentIcon = rememberAppCommentIcon()
                 val warningIcon = rememberAppWarningIcon()
                 val errorTint = AppContentColors.error()
+                val fullText = if (presentation.allowCopyFullText) {
+                    remember(item) { resolveDynamicFullText(item) }
+                } else ""
+                val copyFullText = if (fullText.isNotBlank()) rememberClipboardCopyHandler() else null
                 AppWindowActionMenu(
                     groups = listOf(
                         buildList {
@@ -693,28 +726,20 @@ fun DynamicCardV2(
                                     },
                                 )
                             )
+                            if (copyFullText != null) {
+                                add(
+                                    AppWindowAction(
+                                        label = "复制全文",
+                                        icon = Icons.Outlined.ContentCopy,
+                                        onClick = { copyFullText(fullText, "动态全文") },
+                                    )
+                                )
+                            }
                             add(
                                 AppWindowAction(
                                     label = "分享动态",
                                     icon = shareIcon,
-                                    onClick = {
-                                        val dynamicUrl = "https://t.bilibili.com/${item.id_str}"
-                                        val descText = content?.desc?.text?.take(100).orEmpty()
-                                        val shareText = if (descText.isNotBlank()) {
-                                            "$descText\n$dynamicUrl"
-                                        } else {
-                                            "分享动态\n$dynamicUrl"
-                                        }
-                                        val shareIntent = android.content.Intent(
-                                            android.content.Intent.ACTION_SEND
-                                        ).apply {
-                                            this.type = "text/plain"
-                                            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
-                                        }
-                                        context.startActivity(
-                                            android.content.Intent.createChooser(shareIntent, "分享动态")
-                                        )
-                                    },
+                                    onClick = { shareDynamicLink(context, item) },
                                 )
                             )
                             if (watchLaterAid != null && onWatchLaterClick != null) {
@@ -910,13 +935,13 @@ fun DynamicCardV2(
         }
 
         //  风险提示条（module_dispute：如“视频内含有危险行为，请勿模仿”，点击打开 jump_url）
-        val showDispute by androidx.compose.runtime.remember(context) {
-            com.android.purebilibili.core.store.ContentDisplaySettings.observe(
-                context, com.android.purebilibili.core.store.ContentDisplaySettings.DYNAMIC_WARNING
-            )
-        }.collectAsStateWithLifecycle(initialValue = false)
-        item.modules.module_dispute?.takeIf { showDispute }?.let { dispute ->
-            if (shouldShowDynamicDispute(dispute)) {
+        item.modules.module_dispute?.takeIf(::shouldShowDynamicDispute)?.let { dispute ->
+            val showDispute by androidx.compose.runtime.remember(context) {
+                com.android.purebilibili.core.store.ContentDisplaySettings.observe(
+                    context, com.android.purebilibili.core.store.ContentDisplaySettings.DYNAMIC_WARNING
+                )
+            }.collectAsStateWithLifecycle(initialValue = false)
+            if (showDispute) {
                 val disputeColors = resolveAccessibleContainerColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
                     contentColor = AppContentColors.secondaryText(),
@@ -1870,6 +1895,7 @@ fun DynamicCardV2(
         content?.major?.live_rcmd?.let { liveRcmd ->
             LiveCard(
                 liveRcmd = liveRcmd,
+                modifier = Modifier.fillMaxWidth(),
                 onLiveClick = { roomId, title, uname ->
                     dispatchDynamicCardPrimaryAction(
                         action = DynamicCardPrimaryAction.OpenLive(roomId, title, uname),
@@ -1888,6 +1914,7 @@ fun DynamicCardV2(
         content?.major?.live?.let { live ->
             LiveMajorCard(
                 live = live,
+                modifier = Modifier.fillMaxWidth(),
                 onLiveClick = { roomId, title, uname ->
                     dispatchDynamicCardPrimaryAction(
                         action = DynamicCardPrimaryAction.OpenLive(roomId, title, uname),
@@ -1906,6 +1933,7 @@ fun DynamicCardV2(
         content?.major?.subscription_new?.live_rcmd?.let { liveRcmd ->
             LiveCard(
                 liveRcmd = liveRcmd,
+                modifier = Modifier.fillMaxWidth(),
                 onLiveClick = { roomId, title, uname ->
                     dispatchDynamicCardPrimaryAction(
                         action = DynamicCardPrimaryAction.OpenLive(roomId, title, uname),

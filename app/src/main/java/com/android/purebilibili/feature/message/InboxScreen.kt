@@ -2,9 +2,12 @@
 package com.android.purebilibili.feature.message
 
 import com.android.purebilibili.navigation3.NavigationControlMotionGroup
+import com.android.purebilibili.navigation3.LocalNavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberNavigationControlMotionGroup
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
 import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -98,6 +101,7 @@ fun InboxScreen(
     onTopItemClick: (MessageCenterDestination) -> Unit,
     onSessionClick: (talkerId: Long, sessionType: Int, userName: String) -> Unit,
     paneWidth: Dp,
+    conversationWindowEnabled: Boolean = false,
     onOpenLink: (String) -> Unit = {},
     viewModel: InboxViewModel = viewModel()
 ) {
@@ -161,6 +165,9 @@ fun InboxScreen(
     ) { if (pendingBatch == 1) viewModel.markAllRead() else viewModel.clearSessions(); pendingBatch = null }
     var lastAutoLoadEndTs by remember(accountIdentity) { mutableLongStateOf(0L) }
     var pendingRemoveSession by remember(accountIdentity) { mutableStateOf<SessionItem?>(null) }
+    val conversationMotionGroup = if (conversationWindowEnabled) {
+        rememberNavigationControlMotionGroup(landAdjacentOnly = true)
+    } else null
 
     LaunchedEffect(uiState.sessions.firstOrNull()?.talker_id, uiState.isRefreshing, uiState.isLoading) {
         if (uiState.isRefreshing || uiState.isLoading) {
@@ -321,37 +328,44 @@ fun InboxScreen(
                                 }
                                 val userInfo = uiState.userInfoMap[session.talker_id]
                                 val imEntry = viewModel.entry(session)
-                                SessionListItem(
-                                    session = session,
-                                    userInfo = userInfo,
-                                    onClick = {
-                                        val userName = InboxUserInfoResolver.resolveDisplayName(
-                                            cached = userInfo,
-                                            session = session
-                                        )
-                                        val entry = viewModel.entry(session)
-                                        if (!viewModel.openFolder(session)) {
-                                            when {
-                                                entry?.systemNotice == true -> onTopItemClick(MessageCenterDestination.SystemNotice)
-                                                entry?.isPrivate == true -> onSessionClick(session.talker_id, 1, userName)
-                                                !entry?.chatUrl.isNullOrBlank() -> onOpenLink(entry!!.chatUrl)
-                                                session.talker_id > 0 -> onSessionClick(session.talker_id, session.session_type, userName)
+                                val conversationTarget = if (
+                                    conversationWindowEnabled && imEntry?.isPrivate == true &&
+                                    imEntry.folderPage == null && !imEntry.systemNotice && session.talker_id > 0L
+                                ) BiliPaiNavKey.Chat(session.talker_id, sessionType = 1) else null
+                                CompositionLocalProvider(LocalNavigationControlMotionGroup provides conversationMotionGroup) {
+                                    SessionListItem(
+                                        session = session,
+                                        userInfo = userInfo,
+                                        conversationTarget = conversationTarget,
+                                        onClick = {
+                                            val userName = InboxUserInfoResolver.resolveDisplayName(
+                                                cached = userInfo,
+                                                session = session
+                                            )
+                                            val entry = viewModel.entry(session)
+                                            if (!viewModel.openFolder(session)) {
+                                                when {
+                                                    entry?.systemNotice == true -> onTopItemClick(MessageCenterDestination.SystemNotice)
+                                                    entry?.isPrivate == true -> onSessionClick(session.talker_id, 1, userName)
+                                                    !entry?.chatUrl.isNullOrBlank() -> onOpenLink(entry!!.chatUrl)
+                                                    session.talker_id > 0 -> onSessionClick(session.talker_id, session.session_type, userName)
+                                                }
                                             }
-                                        }
-                                    },
-                                    onAvatarClick = viewModel.entry(session)?.profileMid?.takeIf { it > 0L }?.let { mid -> { onOpenLink("bilibili://space/$mid") } },
-                                    onRemove = { pendingRemoveSession = session },
-                                    onMarkRead = { viewModel.markRead(session) },
-                                    isPrivate = imEntry?.isPrivate == true,
-                                    unreadDot = imEntry?.unreadDot == true,
-                                    unreadLabel = imEntry?.unreadLabel.orEmpty(),
-                                    pendantUrl = imEntry?.pendantUrl.orEmpty(),
-                                    officialType = imEntry?.officialType,
-                                    vipColor = imEntry?.vipColor == true,
-                                    userLabel = imEntry?.userLabel.orEmpty(),
-                                    onToggleTop = { viewModel.toggleTop(session) },
-                                    onToggleDnd = { viewModel.toggleDnd(session) },
-                                )
+                                        },
+                                        onAvatarClick = viewModel.entry(session)?.profileMid?.takeIf { it > 0L }?.let { mid -> { onOpenLink("bilibili://space/$mid") } },
+                                        onRemove = { pendingRemoveSession = session },
+                                        onMarkRead = { viewModel.markRead(session) },
+                                        isPrivate = imEntry?.isPrivate == true,
+                                        unreadDot = imEntry?.unreadDot == true,
+                                        unreadLabel = imEntry?.unreadLabel.orEmpty(),
+                                        pendantUrl = imEntry?.pendantUrl.orEmpty(),
+                                        officialType = imEntry?.officialType,
+                                        vipColor = imEntry?.vipColor == true,
+                                        userLabel = imEntry?.userLabel.orEmpty(),
+                                        onToggleTop = { viewModel.toggleTop(session) },
+                                        onToggleDnd = { viewModel.toggleDnd(session) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -428,7 +442,7 @@ fun InboxScreen(
 private fun MessageCenterTopShortcutRow(
     items: List<MessageCenterTopItem>,
     onItemClick: (MessageCenterDestination) -> Unit
-) = NavigationControlMotionGroup {
+) = NavigationControlMotionGroup(landAdjacentOnly = true) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
@@ -620,7 +634,7 @@ private fun SessionListItemSkeleton(
 }
 
 @Composable
-fun SessionListItem(
+internal fun SessionListItem(
     session: SessionItem,
     userInfo: UserBasicInfo? = null,
     onClick: () -> Unit,
@@ -636,6 +650,7 @@ fun SessionListItem(
     vipColor: Boolean = false,
     userLabel: String = "",
     onAvatarClick: (() -> Unit)? = null,
+    conversationTarget: BiliPaiNavKey.Chat? = null,
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val useGroupedListCards = rememberAppSemanticVisualPolicy().prefersGroupedListCards
@@ -649,17 +664,20 @@ fun SessionListItem(
         session = session
     )
 
+    val shape = if (useGroupedListCards) AppShapes.container(ContainerLevel.Card) else RectangleShape
+    val conversation = conversationTarget?.let { rememberSystemWindowNavigationControl(it, shape, onClick) }
+    val returnMotion = conversation?.modifier ?: rememberSystemWindowControlNeighborModifier()
     AppSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .appCombinedClickable(onClick = appActionWithFeedback(onClick), onLongClick = { showMenu = true })
+            .appCombinedClickable(
+                onClick = appActionWithFeedback(conversation?.onClick ?: onClick),
+                onLongClick = { showMenu = true },
+            )
             .messageSecondaryClick { showMenu = true }
-            .padding(horizontal = if (useGroupedListCards) 12.dp else 0.dp, vertical = if (useGroupedListCards) 3.dp else 0.dp),
-        shape = if (useGroupedListCards) {
-            AppShapes.container(ContainerLevel.Card)
-        } else {
-            RectangleShape
-        },
+            .padding(horizontal = if (useGroupedListCards) 12.dp else 0.dp, vertical = if (useGroupedListCards) 3.dp else 0.dp)
+            .then(returnMotion),
+        shape = shape,
         color = when {
             useGroupedListCards && session.top_ts > 0 -> AppSurfaceTokens.secondaryContainer().copy(alpha = 0.55f)
             useGroupedListCards -> AppSurfaceTokens.surfaceContainer()

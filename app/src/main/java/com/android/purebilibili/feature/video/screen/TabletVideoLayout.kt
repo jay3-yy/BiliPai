@@ -51,7 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppSplitLayout
 import com.android.purebilibili.core.ui.components.AppSurface
@@ -294,6 +294,7 @@ internal fun TabletVideoLayout(
     externalQueueTitle: String = "播放列表",
     externalQueueContent: (@Composable () -> Unit)? = null,
     transitionChromeAlphaProvider: () -> Float = { 1f },
+    wallpaperCardBackingAlpha: (() -> Float)? = null,
 ) {
     val adaptiveInfo = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
     val companionPane = LocalVideoCompanionPane.current
@@ -355,7 +356,7 @@ internal fun TabletVideoLayout(
                     modifier = Modifier
                         .fillMaxSize()
                         .statusBarsPadding()
-                        .background(MaterialTheme.colorScheme.background)
+                        .videoDetailBacking(MaterialTheme.colorScheme.background, wallpaperCardBackingAlpha)
                 ) {
                 // 视频播放器（固定高度，不参与滚动）
 
@@ -1211,12 +1212,14 @@ internal fun TabletSecondaryContent(
                             onCommentLike = commentActions.likeComment,
                             onCommentHate = commentActions.hateComment,
                             onReportComment = commentActions.reportComment,
+                            onToggleTopComment = commentActions.toggleTopComment,
                             onUrlClick = openCommentUrl,
                             showIdentityDecorations = showIdentityDecorations,
                             onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUpClick) ?: Unit }
                         )
                     } else {
-                        val commentChromeBackdrop = rememberLayerBackdrop()
+                        val commentGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+                        val commentChromeBackdrop = if (commentGlassEnabled) rememberLayerBackdrop() else null
                         var showCommentSearchSheet by remember { mutableStateOf(false) }
                         Column(modifier = Modifier.fillMaxSize()) {
                             CommentSortHeader(
@@ -1242,7 +1245,10 @@ internal fun TabletSecondaryContent(
                                 state = listState,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .layerBackdrop(commentChromeBackdrop),
+                                    .then(
+                                        if (commentChromeBackdrop != null) Modifier.layerBackdrop(commentChromeBackdrop)
+                                        else Modifier
+                                    ),
                                 contentPadding = PaddingValues(
                                     start = 8.dp,
                                     top = 8.dp,
@@ -1275,6 +1281,13 @@ internal fun TabletSecondaryContent(
                                 key = { "reply_${it.rpid}" },
                                 contentType = { resolveReplyItemContentType(it) }
                             ) { reply ->
+                                val menuBindings = resolveReplyMenuBindings(
+                                    item = reply,
+                                    currentMid = commentState.currentMid,
+                                    upMid = success.info.owner.mid,
+                                    pinnedReplyIds = commentState.pinnedReplyIds,
+                                    callbacks = commentActions.replyMenuCallbacks(),
+                                )
                                 com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
                                     isDissolving = reply.rpid in commentState.dissolvingIds,
                                     onDissolveComplete = { commentActions.deleteComment(reply.rpid) },
@@ -1290,7 +1303,7 @@ internal fun TabletSecondaryContent(
                                         upMid = success.info.owner.mid,
                                         showUpFlag = commentState.showUpFlag,
                                         showIdentityDecorations = showIdentityDecorations,
-                                        isPinned = reply.rpid in commentState.pinnedReplyIds,
+                                        isPinned = menuBindings.isPinned,
                                         onClick = {},
                                         onSubClick = commentActions.openSubReply,
                                         onTimestampClick = { positionMs ->
@@ -1309,19 +1322,13 @@ internal fun TabletSecondaryContent(
                                         isLiked = reply.rpid in commentState.likedComments,
                                         isHated = reply.rpid in commentState.hatedComments,
                                         onReplyClick = { playbackActions.replyTo(reply) },
-                                        onReportClick = { reason -> commentActions.reportComment(reply.rpid, reason) },
-                                        canToggleTop = shouldShowReplyTopAction(
-                                            currentMid = commentState.currentMid,
-                                            upMid = success.info.owner.mid,
-                                            item = reply
-                                        ),
-                                        onToggleTopClick = { commentActions.toggleTopComment(reply) },
+                                        onReportClick = menuBindings.onReportClick,
+                                        canToggleTop = menuBindings.canToggleTop,
+                                        onToggleTopClick = menuBindings.onToggleTopClick,
                                         onDeleteClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
                                             { commentActions.startDissolve(reply.rpid) }
                                         } else null,
-                                        onCheckFraudClick = if (commentState.currentMid > 0 && reply.mid == commentState.currentMid) {
-                                            { commentActions.checkCommentFraud(reply) }
-                                        } else null,
+                                        onCheckFraudClick = menuBindings.onCheckFraudClick,
                                         onUrlClick = openCommentUrl,
                                         onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUpClick(it) } }
                                     )
@@ -1588,7 +1595,6 @@ private fun TabletCollectionPane(
                     collectionId = ugcSeason.id,
                     currentBvid = currentBvid,
                     currentAid = currentAid,
-                    fontSize = MaterialTheme.typography.labelMedium.fontSize,
                 )
             }
         }

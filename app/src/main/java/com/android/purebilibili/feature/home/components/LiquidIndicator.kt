@@ -140,19 +140,19 @@ internal fun LiquidIndicator(
 
     // 放大弹簧照搬 HyperIsland LiquidGlassNavigationBar：X 用 scaleSpring(0.6/250)、
     // Y 用 scaleYSpring(0.7/250)，不再叠加 BiliPai 早先恒为 1f 的 dragScale 层。
-    val scaleX by animateFloatAsState(
+    val scaleXState = animateFloatAsState(
         targetValue = targetScaleX,
         animationSpec = motionSpec.indicator.scaleSpring.toSpringSpec(),
         label = "scaleX"
     )
-    val scaleY by animateFloatAsState(
+    val scaleYState = animateFloatAsState(
         targetValue = targetScaleY,
         animationSpec = motionSpec.indicator.scaleYSpring.toSpringSpec(),
         label = "scaleY"
     )
 
     // 指示器形状
-    val shape = RoundedCornerShape(indicatorHeight / 2)
+    val shape = remember(indicatorHeight) { RoundedCornerShape(indicatorHeight / 2) }
     var containerWidthPx by remember { mutableFloatStateOf(0f) }
 
     Box(
@@ -176,8 +176,8 @@ internal fun LiquidIndicator(
                         viewportShiftPx = viewportShiftPx
                     )
 
-                    this.scaleX = scaleX
-                    this.scaleY = scaleY
+                    this.scaleX = scaleXState.value
+                    this.scaleY = scaleYState.value
                     shadowElevation = 0f
                 }
                 .size(indicatorWidth, indicatorHeight)

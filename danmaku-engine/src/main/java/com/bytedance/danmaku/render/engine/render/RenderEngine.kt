@@ -133,12 +133,38 @@ class RenderEngine(private val mController: DanmakuController) : ITouchDelegate 
 
         sortOnlyIfOutOfOrder(mDrawItems, mDrawOrderComparator)
 
-        val hasActiveMask = mController.config.mask.enable &&
-            mDrawItems.any { it.data?.layerType != LAYER_TYPE_MASK && it.isVisible } &&
-            mDrawItems.any { (it as? MaskDrawItem)?.drawPath?.isEmpty == false }
+        var hasVisibleDanmaku = false
+        var hasMaskPath = false
+        var layerLeft = mWidth.toFloat()
+        var layerTop = mHeight.toFloat()
+        var layerRight = 0F
+        var layerBottom = 0F
+        if (mController.config.mask.enable) {
+            for (i in 0 until mDrawItems.size) {
+                val item = mDrawItems[i]
+                if (item.data?.layerType == LAYER_TYPE_MASK) {
+                    if ((item as? MaskDrawItem)?.drawPath?.isEmpty == false) {
+                        hasMaskPath = true
+                    }
+                } else if (item.isVisible) {
+                    hasVisibleDanmaku = true
+                    if (item.x < layerLeft) layerLeft = item.x
+                    if (item.y < layerTop) layerTop = item.y
+                    val right = item.x + item.width
+                    val bottom = item.y + item.height
+                    if (right > layerRight) layerRight = right
+                    if (bottom > layerBottom) layerBottom = bottom
+                }
+            }
+        }
+        val hasActiveMask = hasVisibleDanmaku && hasMaskPath
         if (hasActiveMask) {
+            val left = layerLeft.coerceIn(0F, mWidth.toFloat())
+            val top = layerTop.coerceIn(0F, mHeight.toFloat())
+            val right = layerRight.coerceIn(left, mWidth.toFloat())
+            val bottom = layerBottom.coerceIn(top, mHeight.toFloat())
             @Suppress("DEPRECATION")
-            mSaveLayerValue = canvas.saveLayer(0F, 0F, mWidth.toFloat(), mHeight.toFloat(), null, Canvas.ALL_SAVE_FLAG)
+            mSaveLayerValue = canvas.saveLayer(left, top, right, bottom, null, Canvas.ALL_SAVE_FLAG)
         }
 
         mDrawItems.forEach {

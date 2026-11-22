@@ -18,7 +18,7 @@ import com.android.purebilibili.feature.home.homeFeedPinchZoom
 import com.android.purebilibili.feature.home.resolveHomeFeedPinchColumnBounds
 import com.android.purebilibili.feature.home.GridPinchColumnHudPill
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn

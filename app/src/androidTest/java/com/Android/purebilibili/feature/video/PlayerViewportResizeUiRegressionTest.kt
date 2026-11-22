@@ -88,11 +88,8 @@ class PlayerViewportResizeUiRegressionTest {
     fun nativeSurfaceRecoveryUsesCurrentViewportEvenWhenOnlyOuterBoundsWereUpdated() {
         rule.runOnUiThread {
             for (texture in listOf(false, true)) {
-                val view = if (texture) {
-                    LayoutInflater.from(rule.activity)
-                        .inflate(R.layout.view_player_texture, null, false) as PlayerView
-                } else PlayerView(rule.activity)
-                view.useController = false
+                val layoutRes = if (texture) R.layout.view_detail_player_texture else R.layout.view_detail_player_surface
+                val view = LayoutInflater.from(rule.activity).inflate(layoutRes, null, false) as PlayerView
                 view.findViewById<AspectRatioFrameLayout>(androidx.media3.ui.R.id.exo_content_frame)
                     .setAspectRatio(16f / 9f)
                 view.measure(

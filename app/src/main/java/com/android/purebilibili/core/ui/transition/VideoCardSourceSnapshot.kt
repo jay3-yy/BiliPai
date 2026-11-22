@@ -115,6 +115,8 @@ internal data class VideoCardSourceChromeSnapshot(
     val nativeInfoBounds: Rect? = null,
     /** Compact playback bar uses an early source-chrome handoff on return. */
     val isNowPlayingBar: Boolean = false,
+    /** The card was drawn over a wallpaper that should show through its landing outline. */
+    val hasWallpaperBackdrop: Boolean = false,
 )
 
 /** 相同内容也可能来自另一次点击；只有原始快照实例能使用该次点击的像素。 */

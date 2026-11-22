@@ -1,6 +1,8 @@
 // 文件路径: feature/dynamic/DynamicScreen.kt
 package com.android.purebilibili.feature.dynamic
 
+import com.android.purebilibili.feature.dynamic.components.DynamicUserMenuAnchor
+
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
@@ -33,7 +35,7 @@ import androidx.compose.foundation.border
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
@@ -124,7 +126,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardInteractio
 import com.android.purebilibili.feature.dynamic.components.DynamicCardNavigationActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardPresentation
 import com.android.purebilibili.feature.dynamic.components.DynamicSidebar
-import com.android.purebilibili.feature.dynamic.components.DynamicUserLiveBadge
+import com.android.purebilibili.feature.dynamic.components.DynamicUserAvatarWithLiveBadge
 import com.android.purebilibili.feature.dynamic.components.DynamicTopBarWithTabs
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOnIcon
@@ -396,6 +398,7 @@ fun DynamicScreen(
 
     //  布局模式状态（侧边栏/横向）
     val displayMode by viewModel.displayMode.collectAsStateWithLifecycle()
+    val sidebarLiveUsersVisible by viewModel.sidebarLiveUsersVisible.collectAsStateWithLifecycle()
     val upListVisible by remember(context) {
         com.android.purebilibili.core.store.home.DynamicSettingsStore.observeUpListVisible(context)
     }.collectAsStateWithLifecycle(initialValue = true)
@@ -809,6 +812,9 @@ fun DynamicScreen(
                                 selfUid = selfUid,
                                 isExpanded = isSidebarExpanded,
                                 userListState = sidebarUserListState,
+                                showLiveUsers = sidebarLiveUsersVisible,
+                                onToggleLiveUsers = viewModel::toggleSidebarLiveUsers,
+                                onLiveClick = onLiveClick,
                                 onUserClick = { userId ->
                                     handleUserSelection(userId)
                                     if (targetMode.isDrawer() && isSidebarExpanded) {
@@ -1238,6 +1244,7 @@ fun DynamicScreen(
                                     hiddenCount = hiddenUserIds.size,
                                     uplistUpdateMids = state.uplistUpdateMids,
                                     onUserClick = handleUserSelection,
+                                    onLiveClick = onLiveClick,
                                     onToggleShowHidden = { viewModel.toggleShowHiddenUsers() },
                                     onTogglePin = { viewModel.togglePinUser(it) },
                                     onToggleHidden = { viewModel.toggleHiddenUser(it) },
@@ -1290,6 +1297,8 @@ fun DynamicScreen(
                 com.android.purebilibili.feature.home.components.LastPositionPill(
                     refreshKey = locatorRefreshKey,
                     visible = isCurrentPage,
+                    // 内容录制在 AnimatedContent 内，定位按钮在其外侧。
+                    backdrop = activeDynamicBackdrop,
                     onDismiss = { oldContentLocatorDismissed = true },
                     onClick = {
                         val gridIndex = resolveDynamicRefreshDividerGridIndex(oldContentDividerIndex)
@@ -1672,7 +1681,7 @@ internal fun DynamicList(
             items(
                 count = com.android.purebilibili.feature.dynamic.components.DYNAMIC_FEED_SKELETON_ITEM_COUNT,
                 key = { index -> "dynamic_skeleton_$index" },
-                contentType = { "dynamic_card" }
+                contentType = { "dynamic_skeleton" }
             ) { index ->
                 com.android.purebilibili.feature.dynamic.components.DynamicFeedSkeletonCard(
                     modifier = when {
@@ -1710,7 +1719,7 @@ internal fun DynamicList(
             items(
                 count = oldContentDividerIndex,
                 key = { index -> dynamicGridKeys[index] },
-                contentType = { "dynamic_card" }
+                contentType = { index -> "dynamic_card_${filteredItems[index].type}" }
             ) { index ->
                 Box(modifier = Modifier.animateItem()) {
                     dynamicCard(filteredItems[index])
@@ -1729,7 +1738,9 @@ internal fun DynamicList(
                     val index = oldContentDividerIndex + offset
                     dynamicGridKeys[index]
                 },
-                contentType = { "dynamic_card" }
+                contentType = { offset ->
+                    "dynamic_card_${filteredItems[oldContentDividerIndex + offset].type}"
+                }
             ) { offset ->
                 Box(modifier = Modifier.animateItem()) {
                     dynamicCard(filteredItems[oldContentDividerIndex + offset])
@@ -1739,7 +1750,7 @@ internal fun DynamicList(
             items(
                 count = filteredItems.size,
                 key = { index -> dynamicGridKeys[index] },
-                contentType = { "dynamic_card" }
+                contentType = { index -> "dynamic_card_${filteredItems[index].type}" }
             ) { index ->
                 Box(modifier = Modifier.animateItem()) {
                     dynamicCard(filteredItems[index])
@@ -1933,6 +1944,7 @@ private fun HorizontalUserList(
     hiddenCount: Int,
     uplistUpdateMids: Set<Long> = emptySet(),
     onUserClick: (Long?) -> Unit,
+    onLiveClick: (Long, String, String) -> Unit,
     onToggleShowHidden: () -> Unit,
     onTogglePin: (Long) -> Unit,
     onToggleHidden: (Long) -> Unit,
@@ -1960,7 +1972,7 @@ private fun HorizontalUserList(
                     user.name
                 }
 
-                com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { showMenu = true }, enabled = !isShortcut) {
+                DynamicUserMenuAnchor(user, enabled = !isShortcut, onOpen = { showMenu = true }) { avatarModifier, menuSource ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
@@ -1971,7 +1983,31 @@ private fun HorizontalUserList(
                             .padding(AppSpacingTokens.ExtraSmall)
                             .alpha(if (user.isHidden) 0.5f else 1f)
                     ) {
-                        Box {
+                        DynamicUserAvatarWithLiveBadge(
+                            user = user,
+                            onLiveClick = onLiveClick,
+                            avatarModifier = avatarModifier,
+                            name = {
+                                AppText(
+                                    displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isSelected)
+                                        AppContentColors.accent()
+                                    else
+                                        AppContentColors.secondaryText(),
+                                    maxLines = 2,
+                                    minLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    // 长昵称可换行；统一文字行高，避免 miuix 默认正文行高
+                                    // 挤占头像、直播标记和名称的纵向空间。
+                                    modifier = Modifier.widthIn(
+                                        min = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Large,
+                                        max = 128.dp,
+                                    )
+                                )
+                            },
+                        ) {
                             val hasUpdate = user.uid in uplistUpdateMids
                             Box(
                                 modifier = Modifier
@@ -1984,15 +2020,16 @@ private fun HorizontalUserList(
                                                 AppContentColors.accent(),
                                                 CircleShape
                                             )
-                                            // 有新动态的 UP：主题色圆环提示，比单独的小红点更显眼
-                                            hasUpdate -> Modifier.border(
+                                            // 直播和未读状态共用主题色圆环。
+                                            hasUpdate || user.isLive -> Modifier.border(
                                                 2.dp,
                                                 AppContentColors.accent(),
                                                 CircleShape
                                             )
                                             else -> Modifier
                                         }
-                                    ),
+                                    )
+                                    .padding(if (user.isLive) 3.dp else 0.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isDynamicUpPanelAllShortcut(user.uid)) {
@@ -2024,33 +2061,12 @@ private fun HorizontalUserList(
                                 )
                             }
                         }
-                        if (shouldShowDynamicUserLiveBadge(user.isLive)) {
-                            DynamicUserLiveBadge(modifier = Modifier.padding(top = AppSpacingTokens.Micro))
-                        }
-                        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
-                        AppText(
-                            displayName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isSelected)
-                                AppContentColors.accent()
-                            else
-                                AppContentColors.secondaryText(),
-                            maxLines = 2,
-                            minLines = 2,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            // 长昵称可换行；统一文字行高，避免 miuix 默认正文行高
-                            // 挤占头像、直播标记和名称的纵向空间。
-                            modifier = Modifier.widthIn(
-                                min = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Large,
-                                max = 128.dp,
-                            )
-                        )
                     }
 
                     AppDropdownMenu(
                         expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
+                        onDismissRequest = { showMenu = false },
+                        glassSource = menuSource,
                     ) {
                         AppDropdownMenuItem(
                             text = { AppText(if (user.isPinned) "取消置顶" else "置顶") },

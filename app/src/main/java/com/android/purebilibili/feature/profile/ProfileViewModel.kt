@@ -20,6 +20,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.FavFolderSource
 import com.android.purebilibili.data.model.response.NavData
+import com.android.purebilibili.data.model.response.SpaceAggregateImages
 import com.android.purebilibili.data.model.response.SpaceUserInfo
 import com.android.purebilibili.data.model.response.SpaceVideoItem
 import com.android.purebilibili.data.model.response.WbiImg
@@ -36,6 +37,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.net.UnknownHostException
 import java.net.SocketTimeoutException
@@ -61,7 +63,8 @@ sealed class ProfileUiState {
         val user: UserState,
         val favoriteFolders: List<FavFolder> = emptyList(),
         val space: ProfileSpaceUiState = ProfileSpaceUiState(),
-        val editableAccount: ProfileEditableAccountState = ProfileEditableAccountState()
+        val editableAccount: ProfileEditableAccountState = ProfileEditableAccountState(),
+        val accountHeaderImages: SpaceAggregateImages? = null,
     ) : ProfileUiState()
     // LoggedOut 代表“当前是游客/未登录状态”，UI 应该显示“去登录”
     // [Modified] Support wallpaper in guest mode
@@ -351,8 +354,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             dynamic = cached?.user?.dynamic ?: 0,
             isVip = data.vip.status == 1,
             vipLabel = data.vip.label.text,
-            // The theme gradient is the default header. Only an explicitly chosen
-            // wallpaper replaces it; the account's remote banner must not mask it.
             topPhoto = resolveProfileTopPhoto(customBgUri)
         )
         _uiState.value = ProfileUiState.Success(
@@ -369,7 +370,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 contributionLoadState = ProfileContributionLoadState.IDLE
             ),
             editableAccount = cached?.editableAccount
-                ?: resolveProfileEditableAccountState(account = null, user = user)
+                ?: resolveProfileEditableAccountState(account = null, user = user),
+            accountHeaderImages = cached?.accountHeaderImages,
         )
     }
 
@@ -456,13 +458,14 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun loadProfileAggregate(generation: Long, mid: Long) {
         val aggregate = profileRequestOrNull {
-            NetworkModule.spaceApi.getSpaceAggregate(mid).data
+            NetworkModule.spaceApi.getSpaceAggregate(mid).takeIf { it.code == 0 }?.data
         } ?: return
         updateProfileSuccess(generation, mid) { current ->
             val nextSpace = mergeProfileAggregateState(current.space, aggregate)
             current.copy(
                 favoriteFolders = nextSpace.favoriteFolders,
                 space = nextSpace,
+                accountHeaderImages = aggregate.images,
                 editableAccount = current.editableAccount.copy(
                     sign = current.editableAccount.sign.ifBlank {
                         aggregate.card?.sign.orEmpty()
@@ -1063,6 +1066,13 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             runCatching {
                 File(context.filesDir, "images/profile_bg.jpg").delete()
             }
+            _uiState.update { state ->
+                when (state) {
+                    is ProfileUiState.Success -> state.copy(user = state.user.copy(topPhoto = ""))
+                    is ProfileUiState.LoggedOut -> state.copy(topPhoto = "")
+                    else -> state
+                }
+            }
             loadProfile(force = true)
         }
     }
@@ -1301,11 +1311,11 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun setCustomHomeWallpaper(
+    internal fun setLocalHomeWallpaper(
         uri: String,
-        mobileTransform: WallpaperTransform = WallpaperTransform(),
-        tabletTransform: WallpaperTransform = WallpaperTransform(),
-        onComplete: () -> Unit = {}
+        mobileTransform: WallpaperTransform,
+        tabletTransform: WallpaperTransform,
+        onComplete: () -> Unit,
     ) {
         if (_splashSaveState.value is WallpaperSaveState.Loading) return
         _splashSaveState.value = WallpaperSaveState.Loading
@@ -1314,14 +1324,24 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             var committed = false
             try {
                 val context = getApplication<Application>()
-                val file = importWallpaperMedia(context, Uri.parse(uri), File(context.filesDir, "home_wallpaper"))
-                pendingFile = file
+                val isBundled = uri == ALPINE_PAGE_WALLPAPER_URI
+                val savedUri = if (isBundled) {
+                    uri
+                } else {
+                    val file = importWallpaperMedia(context, Uri.parse(uri), File(context.filesDir, "home_wallpaper"))
+                    pendingFile = file
+                    Uri.fromFile(file).toString()
+                }
                 withContext(kotlinx.coroutines.NonCancellable) {
-                    SettingsManager.setHomeWallpaperSelection(context, HomeWallpaperSelection(
-                        uri = Uri.fromFile(file).toString(),
-                        mobileTransform = mobileTransform,
-                        tabletTransform = tabletTransform,
-                    ))
+                    SettingsManager.setHomeWallpaperSelection(
+                        context = context,
+                        selection = HomeWallpaperSelection(
+                            uri = savedUri,
+                            mobileTransform = mobileTransform,
+                            tabletTransform = tabletTransform,
+                        ),
+                        enableOriginalIfOff = isBundled,
+                    )
                     committed = true
                 }
                 withContext(Dispatchers.Main.immediate) {

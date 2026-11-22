@@ -9,6 +9,8 @@ import com.android.purebilibili.data.model.response.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -1030,20 +1032,44 @@ object LiveRepository {
      */
     suspend fun getFollowedLive(page: Int = 1): Result<List<LiveRoom>> = getFollowedLivePage(page).map { it.items }
 
-    /** 首页关注条聚合各页，不把接口首批数据当作完整关注列表。 */
+    /** 首页关注条聚合各页，不把接口首批数据当作完整关注列表；已知总页数时剩余页并发拉取。 */
     private suspend fun getAllFollowedLive(): Result<LivePagedResult<LiveRoom>> {
         val rooms = linkedMapOf<Long, LiveRoom>()
-        var page = 1
         var total: Int? = null
+        fun merge(data: LivePagedResult<LiveRoom>) {
+            data.items.forEach { rooms[it.roomid] = it }
+            total = data.totalCount ?: total
+        }
+        val first = getFollowedLivePage(1).getOrElse { return Result.failure(it) }
+        merge(first)
+        if (!first.hasMore) {
+            return Result.success(LivePagedResult(rooms.values.toList(), false, 2, total))
+        }
+        if (first.totalPages >= 2) {
+            // 总页数已知：剩余页一次并发拉完，避免逐页串行拖慢关注条与整轮刷新。
+            var failed: Throwable? = null
+            coroutineScope {
+                (2..first.totalPages).map { page ->
+                    async {
+                        getFollowedLivePage(page).onSuccess(::merge).onFailure { error ->
+                            if (error is CancellationException) throw error
+                            if (failed == null) failed = error
+                        }
+                    }
+                }.awaitAll()
+            }
+            if (rooms.isEmpty() && failed != null) return Result.failure(failed!!)
+            return Result.success(LivePagedResult(rooms.values.toList(), failed != null, first.totalPages + 1, total))
+        }
+        // 总页数未知：退回逐页串行，直到接口不再有下一页。
+        var page = 2
         while (true) {
-            val result = getFollowedLivePage(page)
-            val data = result.getOrElse {
+            val data = getFollowedLivePage(page).getOrElse {
                 if (rooms.isEmpty()) return Result.failure(it)
                 return Result.success(LivePagedResult(rooms.values.toList(), true, page, total))
             }
             val before = rooms.size
-            data.items.forEach { rooms[it.roomid] = it }
-            total = data.totalCount ?: total
+            merge(data)
             if (!data.hasMore || (data.items.isNotEmpty() && rooms.size == before)) {
                 return Result.success(LivePagedResult(rooms.values.toList(), false, page + 1, total))
             }
@@ -1066,10 +1092,11 @@ object LiveRepository {
 
             val liveRooms = followedRooms.map { it.toLiveRoom() }
             val pageInfo = resp.data?.pageinfo
+            val totalPages = data.totalPage.takeIf { it > 0 } ?: pageInfo?.total_page ?: 0
             val hasMore = hasMoreFollowedLivePages(
                 page = page,
                 returnedRoomCount = rooms.size,
-                totalPages = data.totalPage.takeIf { it > 0 } ?: pageInfo?.total_page ?: 0,
+                totalPages = totalPages,
             )
 
             Result.success(
@@ -1077,7 +1104,8 @@ object LiveRepository {
                     items = liveRooms.distinctBy { it.roomid },
                     hasMore = hasMore,
                     nextPage = page + 1,
-                    totalCount = data.livingNum?.takeIf { it >= 0 }?.coerceAtLeast(liveRooms.size)
+                    totalCount = data.livingNum?.takeIf { it >= 0 }?.coerceAtLeast(liveRooms.size),
+                    totalPages = totalPages,
                 )
             )
         } catch (e: Exception) {

@@ -420,7 +420,9 @@ internal fun resolveMergedFollowedUsers(
             if (existing != null) {
                 merged[liveUser.uid] = existing.copy(
                     isLive = true,
-                    lastActiveTs = max(existing.lastActiveTs, liveUser.lastActiveTs)
+                    lastActiveTs = max(existing.lastActiveTs, liveUser.lastActiveTs),
+                    liveRoomId = liveUser.liveRoomId,
+                    liveRoomTitle = liveUser.liveRoomTitle,
                 )
             } else {
                 // 来自 getFollowedLive 的用户本身即为已关注且正在直播，可加入

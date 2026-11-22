@@ -170,8 +170,8 @@ internal class PopupSurfaceOutlineCache {
 
 /** 同一弹窗的降采样档独立缓存，避免混合采样时反复替换效果。 */
 internal class PopupSurfaceLensCache {
-    private val levels = mutableMapOf<Int, BackdropRenderEffectCache>()
-    fun forScale(factor: Int): BackdropRenderEffectCache =
+    private val levels = mutableMapOf<Float, BackdropRenderEffectCache>()
+    fun forScale(factor: Float): BackdropRenderEffectCache =
         levels.getOrPut(factor) { BackdropRenderEffectCache(15) }
 }
 
@@ -184,11 +184,10 @@ internal fun BackdropEffectScope.popupSurfaceLens(
 ) {
     if (height <= 0f || amount <= 0f || frame.rect.isEmpty) return
     padding = max(padding, amount)
-    val factor = downscaleFactor.coerceAtLeast(1)
-    val sf = factor.toFloat()
+    val sf = downscaleFactor
     val main = frame.rect.translate(-origin)
     val source = (frame.sourceRect ?: frame.rect).translate(-origin)
-    val effectCache = cache.forScale(factor)
+    val effectCache = cache.forScale(sf)
     effectCache[0] = -padding / sf
     effectCache[1] = -padding / sf
     effectCache[2] = main.center.x / sf

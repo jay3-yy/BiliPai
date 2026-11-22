@@ -29,6 +29,7 @@ import android.widget.EditText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.isSpecified
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
@@ -40,13 +41,36 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.asDrawable
 import coil3.imageLoader
 import coil3.request.Disposable
 import coil3.request.ImageRequest
 import coil3.request.target
+import com.android.purebilibili.core.ui.AppContentColors
+
+internal fun resolveCommentEmoteTextColor(
+    styleColor: Color,
+    fallbackColor: Color,
+): Color = if (styleColor.isSpecified) styleColor else fallbackColor
+
+internal fun resolveCommentEmoteFontSize(
+    fontSize: TextUnit,
+    fallbackSize: TextUnit = 16.sp,
+): TextUnit = if (fontSize.isSpecified) fontSize else fallbackSize
+
+internal fun clampCommentEmoteSelection(
+    start: Int,
+    end: Int,
+    textLength: Int,
+): TextRange {
+    val maxOffset = textLength.coerceAtLeast(0)
+    return TextRange(start.coerceIn(0, maxOffset), end.coerceIn(0, maxOffset))
+}
 
 /** Image spans replace only the drawing: the editable buffer, clipboard and draft retain [doge]. */
 @Composable
@@ -65,7 +89,14 @@ internal fun CommentEmoteTextField(
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
-    val textSizePx = with(density) { textStyle.fontSize.toPx() }
+    val fallbackTextColor = AppContentColors.primaryText()
+    val fallbackHintColor = AppContentColors.secondaryText()
+    val fallbackCursorColor = AppContentColors.accent()
+    val resolvedTextColor = resolveCommentEmoteTextColor(textStyle.color, fallbackTextColor)
+    val resolvedHintColor = resolveCommentEmoteTextColor(hintColor, fallbackHintColor)
+    val resolvedCursorColor = resolveCommentEmoteTextColor(cursorColor, fallbackCursorColor)
+    val resolvedFontSize = resolveCommentEmoteFontSize(textStyle.fontSize)
+    val textSizePx = with(density) { resolvedFontSize.toPx() }
     val emoteSizePx = with(density) { 22.dp.roundToPx() }
     val emotePaddingPx = with(density) { 2.dp.roundToPx() }
     val cursorWidthPx = with(density) { 2.dp.roundToPx() }
@@ -105,7 +136,7 @@ internal fun CommentEmoteTextField(
             }
             setSelection { start, end, _ ->
                 val view = editor
-                if (view == null || start !in 0..value.text.length || end !in 0..value.text.length) {
+                if (view == null || start !in 0..view.length() || end !in 0..view.length()) {
                     false
                 } else {
                     view.setSelection(start, end)
@@ -126,16 +157,16 @@ internal fun CommentEmoteTextField(
         update = { view ->
             view.setTextSize(TypedValue.COMPLEX_UNIT_PX, textSizePx)
             view.typeface = typeface
-            view.setTextColor(textStyle.color.toArgb())
-            view.setHintTextColor(hintColor.toArgb())
-            view.highlightColor = cursorColor.copy(alpha = 0.3f).toArgb()
+            view.setTextColor(resolvedTextColor.toArgb())
+            view.setHintTextColor(resolvedHintColor.toArgb())
+            view.highlightColor = resolvedCursorColor.copy(alpha = 0.3f).toArgb()
             view.hint = hint
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val color = cursorColor.toArgb()
+                val color = resolvedCursorColor.toArgb()
                 if (view.cursorColor != color) {
                     view.textCursorDrawable = GradientDrawable().apply {
                         setColor(color)
-                        setSize(cursorWidthPx, textSizePx.toInt())
+                        setSize(cursorWidthPx, textSizePx.toInt().coerceAtLeast(1))
                     }
                     view.cursorColor = color
                 }
@@ -199,6 +230,9 @@ private class CommentEmoteEditText(
     }
 
     init {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            isForceDarkAllowed = false
+        }
         background = null
         setPadding(0, 0, 0, 0)
         gravity = Gravity.TOP or Gravity.START
@@ -239,8 +273,13 @@ private class CommentEmoteEditText(
         syncing = true
         try {
             if (textChanged) setText(value.text)
-            if (selectionStart != value.selection.start || selectionEnd != value.selection.end) {
-                setSelection(value.selection.start, value.selection.end)
+            val clampedSelection = clampCommentEmoteSelection(
+                start = value.selection.start,
+                end = value.selection.end,
+                textLength = length(),
+            )
+            if (selectionStart != clampedSelection.start || selectionEnd != clampedSelection.end) {
+                setSelection(clampedSelection.start, clampedSelection.end)
             }
         } finally {
             syncing = false

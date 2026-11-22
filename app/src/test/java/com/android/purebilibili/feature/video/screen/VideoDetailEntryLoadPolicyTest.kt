@@ -7,18 +7,18 @@ import org.junit.Test
 
 class VideoDetailEntryLoadPolicyTest {
     @Test
-    fun ordinaryNavigationStaggersEntryWorkEvenWhenCardAnimationIsOff() {
-        val defer = shouldDeferVideoDetailLoadUntilEntryTransitionFinished(
-            transitionEnabled = false,
-            detailShellSharedBoundsEnabled = false,
-            reuseFromMiniPlayerAtEntry = false,
-            hasNavigationTransitionScope = true,
+    fun cachedPlaybackCanResumeWhileNavigationStillDefersTheBody() {
+        assertTrue(
+            shouldDeferVideoDetailContentUntilEntryTransitionFinished(
+                transitionEnabled = false,
+                detailShellSharedBoundsEnabled = false,
+                hasNavigationTransitionScope = true,
+            )
         )
-        assertTrue(defer)
-        assertTrue(shouldStaggerVideoDetailEntryWork(defer, false))
-        // 已有播放器复用不新增等待；无导航许可的直接入口仍直接放行。
-        assertFalse(shouldStaggerVideoDetailEntryWork(defer, true))
-        assertFalse(shouldStaggerVideoDetailEntryWork(false, false))
+        assertTrue(isVideoDetailEntryPlaybackReady(true, false, VideoDetailEntryWorkPhase.Content))
+        assertFalse(isVideoDetailEntryPlaybackReady(false, false, VideoDetailEntryWorkPhase.Content))
+        assertFalse(isVideoDetailEntryPlaybackReady(false, true, VideoDetailEntryWorkPhase.Content))
+        assertTrue(isVideoDetailEntryPlaybackReady(false, true, VideoDetailEntryWorkPhase.Playback))
     }
 
     @Test
@@ -68,49 +68,38 @@ class VideoDetailEntryLoadPolicyTest {
     }
 
     @Test
-    fun deferLoad_requiresCardShellTransitionWithoutMiniPlayerReuse() {
+    fun deferContent_requiresCardShellTransition() {
         assertTrue(
-            shouldDeferVideoDetailLoadUntilEntryTransitionFinished(
+            shouldDeferVideoDetailContentUntilEntryTransitionFinished(
                 transitionEnabled = true,
                 detailShellSharedBoundsEnabled = true,
-                reuseFromMiniPlayerAtEntry = false,
             )
         )
     }
 
     @Test
-    fun deferLoad_disabledWhenReturningFromRelatedVideoDetail() {
+    fun deferContent_disabledWhenReturningFromRelatedVideoDetail() {
         assertFalse(
-            shouldDeferVideoDetailLoadUntilEntryTransitionFinished(
+            shouldDeferVideoDetailContentUntilEntryTransitionFinished(
                 transitionEnabled = true,
                 detailShellSharedBoundsEnabled = true,
-                reuseFromMiniPlayerAtEntry = false,
                 isReturningFromDetail = true,
             )
         )
     }
 
     @Test
-    fun deferLoad_disabledWhenTransitionOffOrNoShellOrMiniPlayerReuse() {
+    fun deferContent_disabledWithoutNavigationScopeOrSharedCardMotion() {
         assertFalse(
-            shouldDeferVideoDetailLoadUntilEntryTransitionFinished(
+            shouldDeferVideoDetailContentUntilEntryTransitionFinished(
                 transitionEnabled = false,
                 detailShellSharedBoundsEnabled = true,
-                reuseFromMiniPlayerAtEntry = false,
             )
         )
         assertFalse(
-            shouldDeferVideoDetailLoadUntilEntryTransitionFinished(
+            shouldDeferVideoDetailContentUntilEntryTransitionFinished(
                 transitionEnabled = true,
                 detailShellSharedBoundsEnabled = false,
-                reuseFromMiniPlayerAtEntry = false,
-            )
-        )
-        assertFalse(
-            shouldDeferVideoDetailLoadUntilEntryTransitionFinished(
-                transitionEnabled = true,
-                detailShellSharedBoundsEnabled = true,
-                reuseFromMiniPlayerAtEntry = true,
             )
         )
     }
@@ -188,29 +177,12 @@ class VideoDetailEntryLoadPolicyTest {
     }
 
     @Test
-    fun ordinaryNavigation_defersPreparationEvenWithoutSharedCardAnimation() {
-        assertTrue(
-            shouldDeferVideoDetailLoadUntilEntryTransitionFinished(
-                transitionEnabled = false,
-                detailShellSharedBoundsEnabled = false,
-                reuseFromMiniPlayerAtEntry = false,
-                hasNavigationTransitionScope = true,
-            )
-        )
-        assertFalse(
-            shouldDeferVideoDetailLoadUntilEntryTransitionFinished(
-                transitionEnabled = false,
-                detailShellSharedBoundsEnabled = false,
-                reuseFromMiniPlayerAtEntry = true,
-                hasNavigationTransitionScope = true,
-            )
-        )
+    fun ordinaryNavigation_keepsFreshBodyDeferredDuringChainedReturns() {
         // 快速返回时不能借全局返回标志提前准备，已完成父详情由 observer 的锁存放行。
         assertTrue(
-            shouldDeferVideoDetailLoadUntilEntryTransitionFinished(
+            shouldDeferVideoDetailContentUntilEntryTransitionFinished(
                 transitionEnabled = false,
                 detailShellSharedBoundsEnabled = false,
-                reuseFromMiniPlayerAtEntry = false,
                 isReturningFromDetail = true,
                 hasNavigationTransitionScope = true,
             )

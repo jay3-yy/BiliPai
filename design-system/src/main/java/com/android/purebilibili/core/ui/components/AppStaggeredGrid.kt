@@ -49,6 +49,9 @@ fun AppLazyVerticalStaggeredGrid(
                 (LocalListAuxiliaryWorkAllowed.current && !state.isScrollInProgress),
         ) {
             LazyVerticalStaggeredGrid(
+                modifier = if (userScrollEnabled) {
+                    Modifier.appScrollBoundaryHaptics(state, reverseLayout)
+                } else Modifier,
                 columns = columns, state = state, contentPadding = contentPadding,
                 reverseLayout = reverseLayout, verticalItemSpacing = verticalItemSpacing,
                 horizontalArrangement = horizontalArrangement, flingBehavior = flingBehavior,

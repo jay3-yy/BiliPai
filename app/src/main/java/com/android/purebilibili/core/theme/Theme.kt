@@ -904,8 +904,23 @@ fun PureBiliBiliTheme(
         uiStyle = uiStyle
     )
     val shapes = resolveMaterialShapes(uiStyle)
-    val appFontFamily = remember(context, appFontFileName) {
-        loadStoredAppFontFamily(context, appFontFileName)
+    val appFontFamily by androidx.compose.runtime.produceState<androidx.compose.ui.text.font.FontFamily?>(
+        initialValue = cachedStoredAppFontFamily(appFontFileName),
+        key1 = context,
+        key2 = appFontFileName,
+    ) {
+        if (appFontFileName.isBlank()) {
+            value = null
+            return@produceState
+        }
+        val cached = cachedStoredAppFontFamily(appFontFileName)
+        if (cached != null) {
+            value = cached
+            return@produceState
+        }
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            loadStoredAppFontFamily(context, appFontFileName)
+        }
     }
     val materialTypography = resolveMaterialTypography(uiStyle, liquidGlassEnabled)
         .scaled(fontSizePreset.multiplier)

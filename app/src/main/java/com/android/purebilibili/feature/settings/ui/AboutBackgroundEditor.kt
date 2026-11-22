@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -51,14 +51,14 @@ import kotlinx.coroutines.launch
 /** 持久设置在宿主收集；预览和编辑器只接收值与保存回调。 */
 @Composable
 internal fun MiuixAboutAppearanceHost(
-    content: @Composable (AboutBackgroundSettings, () -> Unit) -> Unit,
+    content: @Composable (AboutBackgroundSettings, Boolean, () -> Unit) -> Unit,
 ) {
     val context = LocalContext.current
     val settings by remember(context) { AboutAppearanceStore.observe(context) }
         .collectAsStateWithLifecycle(initialValue = AboutBackgroundSettings())
     val scope = rememberCoroutineScope()
     var showEditor by rememberSaveable { mutableStateOf(false) }
-    content(settings) { showEditor = true }
+    content(settings, showEditor) { showEditor = true }
     if (showEditor) {
         AboutBackgroundEditor(
             initialSettings = settings,

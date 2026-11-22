@@ -339,7 +339,7 @@ class AdaptiveListComponentPolicyTest {
         )
 
         assertEquals(
-            colorScheme.surfaceContainer.copy(alpha = 0.62f),
+            colorScheme.surfaceContainer.copy(alpha = 0.84f),
             resolveAdaptiveGroupContainerColor(
                 uiStyle = AppUiStyle.MIUIX,
                 colorScheme = colorScheme,

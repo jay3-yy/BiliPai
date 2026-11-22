@@ -21,7 +21,8 @@ internal const val DYNAMIC_COMMENT_PAGE_SIZE = 30
 
 internal data class DynamicCommentPayload(
     val replies: List<ReplyItem>,
-    val totalCount: Int
+    val totalCount: Int,
+    val pinnedReplyIds: Set<Long> = emptySet(),
 )
 
 internal data class DynamicCommentLoadAttempt(
@@ -33,6 +34,7 @@ internal data class DynamicCommentLoadAttempt(
     val isEnd: Boolean = true,
     val grpcNextOffset: String? = null,
     val mainListContinuation: CommentMainListContinuation? = null,
+    val pinnedReplyIds: Set<Long> = emptySet(),
 )
 
 internal data class DynamicDetailInteractionModel(
@@ -45,8 +47,9 @@ internal fun resolveDynamicCommentPayload(
     fallbackCount: Int,
     includeHotReplies: Boolean = true
 ): DynamicCommentPayload {
+    val topReplies = data.collectTopReplies()
     val replies = buildList {
-        addAll(data.collectTopReplies())
+        addAll(topReplies)
         if (includeHotReplies) {
             addAll(data.hots.orEmpty())
         }
@@ -59,7 +62,8 @@ internal fun resolveDynamicCommentPayload(
             data.getAllCount(),
             fallbackCount,
             replies.size
-        )
+        ),
+        pinnedReplyIds = topReplies.mapTo(mutableSetOf()) { it.rpid },
     )
 }
 
@@ -158,6 +162,7 @@ internal fun resolveDynamicSubReplyStateAfterFailure(
 internal data class DynamicCommentUiState(
     val comments: List<ReplyItem> = emptyList(),
     val totalCount: Int = 0,
+    val totalCountKnown: Boolean = false,
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val isLoadingMore: Boolean = false,
@@ -169,6 +174,7 @@ internal data class DynamicCommentUiState(
     val pinnedTargetReplyId: Long = 0L,
     val pinnedReply: ReplyItem? = null,
     val pinnedReplyError: String? = null,
+    val pinnedReplyIds: Set<Long> = emptySet(),
 )
 
 /** Route-local placement does not change the server order or the cached first page. */
@@ -217,6 +223,7 @@ internal data class DynamicCommentCacheSnapshot(
     val cachedAtMs: Long,
     val mainListContinuation: CommentMainListContinuation? = null,
     val remoteReplies: List<ReplyItem> = replies,
+    val pinnedReplyIds: Set<Long> = emptySet(),
 )
 
 /**

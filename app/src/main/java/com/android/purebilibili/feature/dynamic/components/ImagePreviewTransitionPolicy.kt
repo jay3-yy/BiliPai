@@ -199,7 +199,10 @@ internal fun resolveImagePreviewVisualFrame(
 
 /** Keep a smooth ease-out landing while shortening the route response. */
 internal fun imagePreviewOpenTween(): TweenSpec<Float> =
-    tween(durationMillis = IMAGE_PREVIEW_OPEN_DURATION_MS, easing = CubicBezierEasing(0f, 0f, 0.58f, 1f))
+    tween(
+        durationMillis = IMAGE_PREVIEW_OPEN_DURATION_MS,
+        easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.StandardEaseOut,
+    )
 
 /**
  * 关闭回位用临界阻尼 spring 而非 easeIn tween：easeIn 在 t=0 斜率为 0，

@@ -4,9 +4,6 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.core.store.DanmakuPanelWidthMode
-import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncStatus
-import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
-import com.android.purebilibili.feature.video.danmaku.resolveDanmakuCloudSyncToggleSubtitle
 import com.android.purebilibili.feature.video.danmaku.DanmakuBlockRuleSections
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -173,49 +170,6 @@ class DanmakuSettingsPanelPolicyTest {
                 touchSlopPx = 8f
             )
         )
-    }
-
-    @Test
-    fun syncStatusBadge_usesExpectedLabels() {
-        assertEquals(
-            "待同步",
-            resolveDanmakuSyncStatusBadgeText(
-                DanmakuCloudSyncUiState(status = DanmakuCloudSyncStatus.PENDING)
-            )
-        )
-        assertEquals(
-            "同步中",
-            resolveDanmakuSyncStatusBadgeText(
-                DanmakuCloudSyncUiState(status = DanmakuCloudSyncStatus.SYNCING)
-            )
-        )
-        assertEquals(
-            "已同步",
-            resolveDanmakuSyncStatusBadgeText(
-                DanmakuCloudSyncUiState(status = DanmakuCloudSyncStatus.SUCCESS)
-            )
-        )
-        assertEquals(
-            "同步失败",
-            resolveDanmakuSyncStatusBadgeText(
-                DanmakuCloudSyncUiState(status = DanmakuCloudSyncStatus.FAILURE)
-            )
-        )
-    }
-
-    @Test
-    fun cloudSyncToggleSubtitle_mentionsWebImpactWhenEnabled() {
-        assertTrue(resolveDanmakuCloudSyncToggleSubtitle(enabled = true).contains("网页版"))
-        assertTrue(resolveDanmakuCloudSyncToggleSubtitle(enabled = false).contains("本机"))
-    }
-
-    @Test
-    fun syncRetryVisibility_onlyAppearsForFailure() {
-        assertFalse(shouldShowDanmakuSyncRetry(DanmakuCloudSyncStatus.IDLE))
-        assertFalse(shouldShowDanmakuSyncRetry(DanmakuCloudSyncStatus.PENDING))
-        assertFalse(shouldShowDanmakuSyncRetry(DanmakuCloudSyncStatus.SYNCING))
-        assertFalse(shouldShowDanmakuSyncRetry(DanmakuCloudSyncStatus.SUCCESS))
-        assertTrue(shouldShowDanmakuSyncRetry(DanmakuCloudSyncStatus.FAILURE))
     }
 
     @Test

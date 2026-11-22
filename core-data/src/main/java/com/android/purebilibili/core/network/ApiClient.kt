@@ -1117,23 +1117,6 @@ interface BilibiliApi {
         @Query("oid") oid: Long,
         @Query("pid") pid: Long
     ): ResponseBody
-
-    // [新增] 同步弹幕个人配置（账号云同步）
-    @retrofit2.http.FormUrlEncoded
-    @retrofit2.http.POST("x/v2/dm/web/config")
-    suspend fun updateDanmakuWebConfig(
-        @retrofit2.http.Field("dm_switch") dmSwitch: String,
-        @retrofit2.http.Field("blockscroll") blockScroll: String,
-        @retrofit2.http.Field("blocktop") blockTop: String,
-        @retrofit2.http.Field("blockbottom") blockBottom: String,
-        @retrofit2.http.Field("blockcolor") blockColor: String,
-        @retrofit2.http.Field("blockspecial") blockSpecial: String,
-        @retrofit2.http.Field("opacity") opacity: Float,
-        @retrofit2.http.Field("dmarea") dmArea: Int,
-        @retrofit2.http.Field("speedplus") speedPlus: Float,
-        @retrofit2.http.Field("fontsize") fontSize: Float,
-        @retrofit2.http.Field("csrf") csrf: String
-    ): SimpleApiResponse
     
     // [新增] 发送弹幕
     @retrofit2.http.FormUrlEncoded
@@ -3283,6 +3266,7 @@ object NetworkModule {
         CoreNetworkRuntime.config = config
         appContext = context.applicationContext
         com.android.purebilibili.core.store.NetworkProxyStore.init(context.applicationContext)
+        com.android.purebilibili.core.store.GithubMirrorStore.init(context.applicationContext)
     }
 
     fun clearRuntimeCookies() {
@@ -3697,6 +3681,7 @@ object NetworkModule {
                 }
             }
             // 最终网络请求与响应固定使用同一账号的完整 Cookie 集合。
+            .addInterceptor(GithubMirrorInterceptor())
             .addNetworkInterceptor(AccountCookieInterceptor())
             .build()
     }

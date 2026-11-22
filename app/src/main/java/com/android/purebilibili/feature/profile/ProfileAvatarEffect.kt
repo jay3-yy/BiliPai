@@ -40,6 +40,7 @@ import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 import com.android.purebilibili.feature.home.UserState
 import kotlin.math.roundToInt
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 
 /** Keep native fusion off the page backdrop; only the avatar/cutout enter its buffers. */
 @Composable
@@ -52,6 +53,7 @@ internal fun ProfileAvatarEffect(
     flingBehavior: FlingBehavior,
     onAvatarClick: () -> Unit,
     avatarSourceRect: androidx.compose.runtime.MutableState<androidx.compose.ui.geometry.Rect?>,
+    avatarEntranceScale: () -> Float,
     modifier: Modifier = Modifier,
     photoScrollConnection: NestedScrollConnection? = null,
 ) {
@@ -67,6 +69,7 @@ internal fun ProfileAvatarEffect(
     val motionEnabled = LocalComponentMotionEnabled.current && !rememberSystemReduceMotion() && !lowBudget
     val latestMotion = rememberUpdatedState(motionEnabled)
     val latestProvider = rememberUpdatedState(expandedFractionProvider)
+    val latestEntranceScale = rememberUpdatedState(avatarEntranceScale)
     val latestPhotoScrollConnection = rememberUpdatedState(photoScrollConnection)
     val latestTop = rememberUpdatedState(with(density) { statusBarTopPadding.toPx() })
     val host = remember { arrayOfNulls<ProfileAvatarFusionView>(1) }
@@ -85,6 +88,7 @@ internal fun ProfileAvatarEffect(
             .drawWithContent {
                 // Observe scroll in Compose's draw phase, including reverse gestures after disappearance.
                 latestProvider.value()
+                latestEntranceScale.value()
                 host[0]?.prepareFrame()
                 this@drawWithContent.drawContent()
             },
@@ -116,6 +120,7 @@ internal fun ProfileAvatarEffect(
                                     .clip(CircleShape)
                                     .border(2.dp, latestBorder.value, CircleShape)
                                     .then(latestPhotoScrollConnection.value?.let { Modifier.nestedScroll(it) } ?: Modifier)
+                                    .appScrollBoundaryHaptics(listState)
                                     .scrollable(listState, Orientation.Vertical, reverseDirection = true, flingBehavior = latestFling.value)
                                     .clickable {
                                         val location = IntArray(2)
@@ -141,18 +146,20 @@ internal fun ProfileAvatarEffect(
                     // Cutout bounds are already physical pixels in this host's viewport.
                     val layoutDensity = latestDensity.value.density
                     val cutout = notchInfo
-                    val sizePx = resolveProfileAvatarSizePx(
+                    val restingSizePx = resolveProfileAvatarSizePx(
                         density = layoutDensity,
                         expandedFraction = expanded,
                         circularCutoutWidthPx = if (cutout != null && cutout.isLikelyCircle) cutout.bounds.width() else 0f,
                     )
+                    // 入场缩放围绕头像中心，收起时继续沿用刘海融合的原始尺寸。
+                    val sizePx = restingSizePx * (1f + (latestEntranceScale.value() - 1f) * expanded)
                     val scale = sizePx / avatar.layoutParams.width
                     val endY = if (cutout != null && cutout.isLikelyCircle) cutout.bounds.centerY() else -29f * layoutDensity
                     val startY = latestTop.value + PROFILE_EXPANDED_AVATAR_TOP_DP * layoutDensity
                     avatar.scaleX = scale
                     avatar.scaleY = scale
                     avatar.translationX = (width - sizePx) / 2f
-                    avatar.translationY = endY + (startY - endY) * expanded
+                    avatar.translationY = endY + (startY - endY) * expanded + (restingSizePx - sizePx) / 2f
                     setStatusBarHeight(latestTop.value.toInt())
                     updateFrame(1f - expanded, latestMotion.value)
                 }

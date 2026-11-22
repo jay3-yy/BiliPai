@@ -11,7 +11,7 @@ import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.fastCoerceAtMost
 import top.yukonga.miuix.kmp.blur.BackdropEffectScope
-import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.runtimeShaderEffect
 import kotlin.math.ceil
 
@@ -88,7 +88,7 @@ fun BackdropEffectScope.lens(
         }
     val key = if (dispersionEnabled) "LiquidGlassLensDispersion" else "LiquidGlassLens"
 
-    val sf = downscaleFactor.coerceAtLeast(1).toFloat()
+    val sf = downscaleFactor
     if (chromaticEdgeBand != null) {
         // Miuix records at integer scaled padding and places the texture with an
         // integer topLeft. Keep the rim's shader origin on that same grid; a

@@ -16,6 +16,7 @@ internal class ProfileBackgroundMotion(
     val scrollOffsetPx: () -> Float,
     val pullOffsetPx: () -> Float,
     val avatarShiftYPx: () -> Float,
+    val wallpaperBoundaryPx: (() -> Float)? = null,
 )
 
 internal val LocalProfileBackgroundMotion = staticCompositionLocalOf<ProfileBackgroundMotion?> { null }
@@ -32,13 +33,17 @@ internal fun resolveProfileBackgroundFrame(baseHeight: Float, pull: Float, scrol
 internal fun Modifier.profileHeaderBackgroundMotion(heroHeight: Dp): Modifier {
     val motion = LocalProfileBackgroundMotion.current ?: return height(heroHeight)
     return clipToBounds().layout { measurable, constraints ->
-        val frame = resolveProfileBackgroundFrame(heroHeight.toPx(), motion.pullOffsetPx(), motion.scrollOffsetPx(), constraints.maxHeight)
+        val pull = motion.pullOffsetPx()
+        val scroll = motion.scrollOffsetPx()
+        val frame = resolveProfileBackgroundFrame(heroHeight.toPx(), pull, scroll, constraints.maxHeight)
         // Keep the wallpaper plane intact while clipping the visible header, just as
         // the header clips its gradient. Scroll must not repeatedly recrop the bitmap.
         val child = measurable.measure(constraints.copy(minHeight = frame.sourceHeight, maxHeight = frame.sourceHeight))
-        layout(child.width, frame.visibleHeight) {
-            // The photo only covers the identity area. Keep the header background
-            // opaque beneath the statistics instead of exposing a black underlay.
+        val visibleHeight = motion.wallpaperBoundaryPx?.let { boundary ->
+            val headerBottom = boundary() + pull - scroll
+            headerBottom.coerceIn(0f, frame.visibleHeight.toFloat()).roundToInt()
+        } ?: frame.visibleHeight
+        layout(child.width, visibleHeight) {
             child.placeRelative(0, motion.avatarShiftYPx().roundToInt())
         }
     }

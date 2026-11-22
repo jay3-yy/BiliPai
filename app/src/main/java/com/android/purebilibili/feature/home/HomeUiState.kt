@@ -180,6 +180,8 @@ data class HomeUiState(
     val messageUnreadCount: Int = 0,
     //  [新增] 标签页显示索引（独立于内容分类，用于特殊分类导航后保持标签位置）
     val displayedTabIndex: Int = 0,
+    // 稳定记录当前展示的顶栏页签身份，避免标签重排后仅靠数字索引误判到分区/订阅或其他分类。
+    val displayedTabEntry: HomeTopTabEntry = HomeTopTabEntry.Category(currentCategory),
     //  [彩蛋] 刷新成功后的趣味消息
     val refreshMessage: String? = null,
     //  [新增] 增量刷新新增条数（null 表示不展示）

@@ -37,6 +37,7 @@ import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -89,6 +90,10 @@ import com.android.purebilibili.feature.video.usecase.VideoPlaybackUseCase
 import com.android.purebilibili.feature.video.usecase.pausePlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
+import com.android.purebilibili.feature.audio.player.PlaybackSleepTimer
+import com.android.purebilibili.feature.video.viewmodel.shouldStopAfterCurrentPlayback
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 
 private const val TAG = "MiniPlayerManager"
@@ -97,6 +102,11 @@ private const val FOREGROUND_START_DEBOUNCE_MS = 1500L
 private const val USER_LEAVE_HINT_WINDOW_MS = 1500L
 private const val SESSION_COMMAND_SKIP_TO_PREVIOUS = "SKIP_TO_PREVIOUS"
 private const val SESSION_COMMAND_SKIP_TO_NEXT = "SKIP_TO_NEXT"
+
+private class SavedVideoTrackParameters(
+    val player: java.lang.ref.WeakReference<ExoPlayer>,
+    val videoEnabled: TrackSelectionParameters,
+)
 
 internal fun shouldShowInAppMiniPlayerByPolicy(
     mode: SettingsManager.MiniPlayerMode,
@@ -271,6 +281,32 @@ internal fun shouldDisableVideoTrackOnEnterBackground(
     return shouldPauseBuffering || shouldContinueBackgroundAudio
 }
 
+internal fun shouldOptimizeDetachedAudioImmediatelyOnBackground(
+    isPageRetained: Boolean,
+    isAudioNowPlayingActive: Boolean,
+    isMiniMode: Boolean,
+    isPipActiveOrPending: Boolean,
+    isLiveMode: Boolean,
+): Boolean = shouldOptimizeDetachedAudioPlayback(
+    isPageRetained = isPageRetained,
+    isAudioNowPlayingActive = isAudioNowPlayingActive,
+    isMiniMode = isMiniMode,
+    isPipActiveOrPending = isPipActiveOrPending,
+    isLiveMode = isLiveMode,
+)
+
+internal fun shouldOptimizeDetachedAudioPlayback(
+    isPageRetained: Boolean,
+    isAudioNowPlayingActive: Boolean,
+    isMiniMode: Boolean,
+    isPipActiveOrPending: Boolean,
+    isLiveMode: Boolean,
+): Boolean = !isPageRetained &&
+    isAudioNowPlayingActive &&
+    !isMiniMode &&
+    !isPipActiveOrPending &&
+    !isLiveMode
+
 internal fun shouldRetainBackgroundAudioSession(
     shouldContinueBackgroundAudio: Boolean,
     wasPlaybackActive: Boolean
@@ -372,6 +408,12 @@ internal fun resolveTrackSelectionParametersForBackground(
     shouldDisableVideoTrack: Boolean
 ): androidx.media3.common.TrackSelectionParameters {
     if (!shouldDisableVideoTrack) return currentTrackSelectionParameters
+    return resolveTrackSelectionParametersWithoutVideo(currentTrackSelectionParameters)
+}
+
+internal fun resolveTrackSelectionParametersWithoutVideo(
+    currentTrackSelectionParameters: androidx.media3.common.TrackSelectionParameters,
+): androidx.media3.common.TrackSelectionParameters {
     return currentTrackSelectionParameters
         .buildUpon()
         .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
@@ -802,6 +844,58 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     // --- 协程作用域 ---
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    internal data class LocalSleepTimer(val player: ExoPlayer, val timer: PlaybackSleepTimer)
+
+    private val _sleepTimer = MutableStateFlow<LocalSleepTimer?>(null)
+    internal val sleepTimer = _sleepTimer.asStateFlow()
+    private var sleepTimerJob: Job? = null
+
+    internal fun sleepTimerFor(target: ExoPlayer): PlaybackSleepTimer? =
+        _sleepTimer.value?.takeIf { it.player === target }?.timer
+
+    internal fun setSleepTimer(target: ExoPlayer, timer: PlaybackSleepTimer?) {
+        if (timer == null && sleepTimerFor(target) == null) return
+        sleepTimerJob?.cancel()
+        _sleepTimer.value = timer?.let { LocalSleepTimer(target, it) }
+        sleepTimerJob = when (timer) {
+            is PlaybackSleepTimer.Countdown -> scope.launch {
+                delay((timer.deadlineMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+                expireSleepCountdown(target)
+            }
+            is PlaybackSleepTimer.AfterCurrent -> {
+                target.repeatMode = Player.REPEAT_MODE_OFF
+                null
+            }
+            null -> null
+        }
+    }
+
+    private fun expireSleepCountdown(target: ExoPlayer) {
+        val timer = sleepTimerFor(target) as? PlaybackSleepTimer.Countdown ?: return
+        if (timer.deadlineMs > SystemClock.elapsedRealtime()) return
+        setSleepTimer(target, null)
+        pauseForSleepTimer(target)
+    }
+
+    private fun pauseForSleepTimer(target: ExoPlayer) {
+        if (backgroundOptimizationPlayer === target) foregroundResumeIntent = false
+        PlayerBackgroundPlaybackSessions.pauseForSleepTimer(target)
+        android.widget.Toast.makeText(context, "定时结束，已暂停播放", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    internal fun cancelSleepAfterCurrentForSwitch(target: ExoPlayer, bvid: String, cid: Long) {
+        val timer = sleepTimerFor(target) as? PlaybackSleepTimer.AfterCurrent ?: return
+        if (timer.bvid != bvid || (cid > 0L && timer.cid != cid)) setSleepTimer(target, null)
+    }
+
+    internal fun finishSleepAfterCurrent(target: ExoPlayer, bvid: String?, cid: Long): Boolean {
+        val timer = sleepTimerFor(target) as? PlaybackSleepTimer.AfterCurrent ?: return false
+        if (bvid == null || !shouldStopAfterCurrentPlayback(timer.bvid to timer.cid, bvid, cid)) return false
+        setSleepTimer(target, null)
+        pauseForSleepTimer(target)
+        return true
+    }
+
     private val remoteAudio = com.android.purebilibili.feature.audio.player.BackgroundAudioConnection(context) { remote ->
         val extras = remote.currentMediaItem?.mediaMetadata?.extras ?: android.os.Bundle.EMPTY
         val bvid = extras.getString("bvid")
@@ -852,6 +946,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             savedShuffle = PlaylistManager.savedTransport.value.shuffleEnabled,
             backgroundPlaybackOverride = PlayerBackgroundPlaybackSessions.selection(local, "video:$currentBvid"),
             backgroundOverrideBvid = currentBvid,
+            sleepTimer = sleepTimerFor(local),
         )
         if (!com.android.purebilibili.feature.audio.player.canTransferBackgroundAudio(
                 listening = AudioNowPlayingSession.active.value,
@@ -868,6 +963,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 transferred = remoteAudio.transfer(request) {
                     if (player !== local || pageOwnership.isRetained(local) || !AudioNowPlayingSession.active.value ||
                         !local.playWhenReady || !shouldContinueBackgroundAudio() ||
+                        sleepTimerFor(local) != request.sleepTimer ||
                         isLiveMode || isSystemPipActive || isMiniMode) null else {
                         val handoffPosition = local.currentPosition.coerceAtLeast(0L)
                         resetBackgroundOptimizationState()
@@ -880,6 +976,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     }
                 }
                 if (transferred) {
+                    setSleepTimer(local, null)
                     remoteBackgroundOverride = request.backgroundPlaybackOverride?.let { value ->
                         request.backgroundOverrideBvid?.let { it to value }
                     }
@@ -902,7 +999,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     remoteAudio.close()
                     if (stoppedLocal && player === local && !pageOwnership.isRetained(local)) {
                         local.prepare()
-                        local.playWhenReady = true
+                        local.playWhenReady = (request.sleepTimer as? PlaybackSleepTimer.Countdown)
+                            ?.let { it.deadlineMs > SystemClock.elapsedRealtime() } ?: true
                         updateMediaSession(local)
                     }
                 }
@@ -1158,10 +1256,28 @@ class MiniPlayerManager private constructor(private val context: Context) :
             currentPlayer.pause()
             Logger.d(TAG, "🔋 后台轻量模式：未播放，先暂停缓冲")
         } else if (shouldKeepBackgroundAudio) {
-            Logger.d(TAG, "🔋 后台轻量模式：先保留视频链路，延迟切到仅音频")
+            Logger.d(TAG, "🔋 后台轻量模式：音频继续，按详情页是否驻留优化视频链路")
         }
 
         if (!shouldDisableVideoTrack) {
+            return
+        }
+
+        if (shouldOptimizeDetachedAudioImmediatelyOnBackground(
+                isPageRetained = pageOwnership.isRetained(currentPlayer),
+                isAudioNowPlayingActive = AudioNowPlayingSession.active.value,
+                isMiniMode = isMiniMode,
+                isPipActiveOrPending = shouldKeepPlaybackForPipTransition(),
+                isLiveMode = isLiveMode,
+            )
+        ) {
+            Logger.d(TAG, "🔋 后台纯音频：立即禁用视频轨并释放详情缓存")
+            applyHeavyBackgroundVideoOptimization(
+                currentPlayer = currentPlayer,
+                shouldKeepBackgroundAudio = shouldKeepBackgroundAudio,
+                wasPlaybackActive = foregroundResumeIntent,
+                requestIdlePlaybackRelease = true,
+            )
             return
         }
 
@@ -1268,6 +1384,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
     
     override fun onEnterForeground() {
         if (remoteAudio.active) return
+        player?.let(::expireSleepCountdown)
         backgroundPausedReleaseJob?.cancel()
         backgroundPausedReleaseJob = null
         if (!isLowMemoryMode) return
@@ -1380,6 +1497,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         if (shouldTrimDanmakuCachesOnEnterBackground(shouldDisableVideoTrack = true)) {
             com.android.purebilibili.feature.video.danmaku.DanmakuSessionFactory.trimCachesForBackground()
         }
+        if (!pageOwnership.isRetained(currentPlayer)) cachedUiState = null
         pendingHeavyBackgroundVideoOptimization = false
         didApplyHeavyBackgroundVideoOptimization = true
         pendingForegroundSurfaceRecovery = true
@@ -1409,6 +1527,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         runCatching {
             currentPlayer.clearVideoSurface()
             currentPlayer.stop()
+            if (!pageOwnership.isRetained(currentPlayer)) cachedUiState = null
         }.onFailure { error ->
             Logger.w(TAG, "闲置 stop 释放失败: ${error.message}")
         }
@@ -1661,6 +1780,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
     //  外部播放器引用（来自 VideoDetailScreen 的 VideoPlayerState）
     private var _externalPlayer by mutableStateOf<ExoPlayer?>(null)
     private val pageOwnership = PlaybackPageOwnership()
+    private var transferredDetailPlayer: java.lang.ref.WeakReference<ExoPlayer>? = null
+    private var detachedAudioTrackParameters: SavedVideoTrackParameters? = null
+    private var audioModeTrackParameters: SavedVideoTrackParameters? = null
     //  优先使用外部播放器（如果存在）
     val player: ExoPlayer?
         get() = _externalPlayer ?: _player
@@ -1679,16 +1801,92 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     internal fun retainPlayerForPage(target: ExoPlayer) {
         remoteTransferJob?.cancel()
+        if (transferredDetailPlayer?.get() === target) transferredDetailPlayer = null
         // A detail can reclaim the same instance from the bottom bar. Replacing the
         // reference is then a no-op, so explicitly restore the saved video tracks and
         // cancel delayed background jobs before the page binds its new video surface.
         if (target === player) resetBackgroundOptimizationState()
+        // While the audio route is still in the navigation transition, its dispose owns the
+        // handoff back to video. If it already disposed, the detached state below is restored.
+        if (audioModeTrackParameters?.player?.get() !== target) {
+            detachedAudioTrackParameters?.takeIf { it.player.get() === target }?.let { saved ->
+                target.trackSelectionParameters = saved.videoEnabled
+                detachedAudioTrackParameters = null
+            }
+        }
         pageOwnership.retain(target)
+    }
+
+    internal fun enterAudioMode(target: ExoPlayer) {
+        if (audioModeTrackParameters?.player?.get() === target) return
+        val videoEnabledTrackParameters = detachedAudioTrackParameters
+            ?.takeIf { it.player.get() === target }
+            ?.videoEnabled
+            ?: savedTrackParams?.takeIf { backgroundOptimizationPlayer === target }
+            ?: target.trackSelectionParameters
+        audioModeTrackParameters = SavedVideoTrackParameters(
+            player = java.lang.ref.WeakReference(target),
+            videoEnabled = videoEnabledTrackParameters,
+        )
+        target.trackSelectionParameters =
+            resolveTrackSelectionParametersWithoutVideo(target.trackSelectionParameters)
+    }
+
+    internal fun exitAudioMode(target: ExoPlayer) {
+        val saved = audioModeTrackParameters?.takeIf { it.player.get() === target } ?: return
+        audioModeTrackParameters = null
+        if (target !== player) return
+        if (pageOwnership.isRetained(target) || !AudioNowPlayingSession.active.value) {
+            target.trackSelectionParameters = saved.videoEnabled
+        } else {
+            detachedAudioTrackParameters = saved
+        }
     }
 
     internal fun releasePlayerFromPage(target: ExoPlayer) {
         pageOwnership.release(target)
+        if (target === player && isActive &&
+            shouldOptimizeDetachedAudioPlayback(
+                isPageRetained = pageOwnership.isRetained(target),
+                isAudioNowPlayingActive = AudioNowPlayingSession.active.value,
+                isMiniMode = isMiniMode,
+                isPipActiveOrPending = shouldKeepPlaybackForPipTransition(),
+                isLiveMode = isLiveMode,
+            )
+        ) {
+            val videoEnabledTrackParameters = audioModeTrackParameters
+                ?.takeIf { it.player.get() === target }
+                ?.videoEnabled
+                ?: target.trackSelectionParameters
+            detachedAudioTrackParameters = SavedVideoTrackParameters(
+                player = java.lang.ref.WeakReference(target),
+                videoEnabled = videoEnabledTrackParameters,
+            )
+            target.trackSelectionParameters =
+                resolveTrackSelectionParametersWithoutVideo(videoEnabledTrackParameters)
+        }
+        if (target === _externalPlayer && !pageOwnership.isRetained(target)) {
+            transferredDetailPlayer = java.lang.ref.WeakReference(target)
+            if (target.playWhenReady) {
+                target.clearVideoSurface()
+            } else {
+                releasePausedDetachedDetailBuffers()
+            }
+        }
         tryTransferDetachedAudio()
+    }
+
+    private fun releasePausedDetachedDetailBuffers() {
+        val target = transferredDetailPlayer?.get()?.takeIf { it === _externalPlayer } ?: return
+        if (!isActive || !AudioNowPlayingSession.active.value || BackgroundManager.isInBackground ||
+            isLiveMode || isMiniMode || shouldKeepPlaybackForPipTransition() || target.playWhenReady
+        ) return
+        if (target.playbackState == Player.STATE_READY || target.playbackState == Player.STATE_BUFFERING) {
+            // 详情页已交出播放器，暂停的小横条只需要曲目和进度。
+            target.clearVideoSurface()
+            target.stop()
+        }
+        cachedUiState = null
     }
 
     internal fun isPlayerRetainedByPage(target: ExoPlayer): Boolean =
@@ -1698,8 +1896,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * 仅当外部播放器引用匹配目标实例时才清理，避免误清理新播放器引用。
      */
     fun clearExternalPlayerIfMatches(target: ExoPlayer): Boolean {
+        setSleepTimer(target, null)
         if (_externalPlayer === target) {
             resetBackgroundOptimizationState()
+            clearDetachedAudioTrackParameters(target)
+            clearAudioModeTrackParameters(target)
             Logger.d(TAG, "clearExternalPlayerIfMatches: cleared external player ${target.hashCode()}")
             target.removeListener(playerListener)
             _externalPlayer = null
@@ -1716,8 +1917,33 @@ class MiniPlayerManager private constructor(private val context: Context) :
     fun resetExternalPlayer() {
         resetBackgroundOptimizationState()
         Logger.d(TAG, " resetExternalPlayer: clearing external player reference")
-        _externalPlayer?.removeListener(playerListener)
+        _externalPlayer?.let {
+            clearDetachedAudioTrackParameters(it)
+            clearAudioModeTrackParameters(it)
+            setSleepTimer(it, null)
+            it.removeListener(playerListener)
+        }
         _externalPlayer = null
+    }
+
+    private fun releaseDetachedPlayer(player: ExoPlayer) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            if (!pageOwnership.isRetained(player) && !isPlayerManaged(player)) {
+                player.release()
+            }
+        }
+    }
+
+    private fun clearDetachedAudioTrackParameters(target: ExoPlayer? = null) {
+        if (target == null || detachedAudioTrackParameters?.player?.get() === target) {
+            detachedAudioTrackParameters = null
+        }
+    }
+
+    private fun clearAudioModeTrackParameters(target: ExoPlayer? = null) {
+        if (target == null || audioModeTrackParameters?.player?.get() === target) {
+            audioModeTrackParameters = null
+        }
     }
 
     // --- MediaSession ---
@@ -2206,7 +2432,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             _player?.let { player ->
                 player.volume = 0f
                 player.playWhenReady = false
-                player.pause()
+                player.stop()
             }
             
             // 🔧 [修复] 标记非活跃状态，允许 VideoPlayerState.onDispose 正确释放资源
@@ -2214,9 +2440,17 @@ class MiniPlayerManager private constructor(private val context: Context) :
             resetBackgroundOptimizationState()
             isActive = false
             playbackServiceRequested = false
+            cachedUiState = null
+            _sleepTimer.value?.let { setSleepTimer(it.player, null) }
+            // 详情页先销毁时会把播放器交给管理器，停播时需由管理器完成释放。
+            val transferredPlayer = _externalPlayer?.takeIf { it === transferredDetailPlayer?.get() }
+            if (transferredPlayer != null) transferredDetailPlayer = null
             _externalPlayer?.removeListener(playerListener)
             _externalPlayer = null
             releaseMediaSession()
+            transferredPlayer?.let(::releaseDetachedPlayer)
+            clearDetachedAudioTrackParameters()
+            clearAudioModeTrackParameters()
             clearPlaybackNotificationArtifacts()
             Logger.d(TAG, "🔧 标记 isActive=false，清除外部播放器引用")
         }
@@ -2561,6 +2795,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
 
     private fun dismiss(taskRemoved: Boolean) {
+        _sleepTimer.value?.let { setSleepTimer(it.player, null) }
         PlayerBackgroundPlaybackSessions.clear(_externalPlayer)
         PlayerBackgroundPlaybackSessions.clear(_player)
         remoteBackgroundOverride = null
@@ -2590,23 +2825,19 @@ class MiniPlayerManager private constructor(private val context: Context) :
             Logger.d(TAG, "🔇 Stopped internal player")
         }
         
-        // A retained page still owns its player. A disposed page has transferred it to us.
-        val playerToRelease = _externalPlayer
-        if (playerToRelease != null && !pageOwnership.isRetained(playerToRelease)) {
-            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                if (!pageOwnership.isRetained(playerToRelease) && !isPlayerManaged(playerToRelease)) {
-                    playerToRelease.release()
-                }
-            }
-        }
-        
         isMiniMode = false
         forcedMiniMode = false
         isActive = false
         playbackServiceRequested = false
         lastForegroundStartAtMs = 0L
         isPlaying = false  //  [修复] 同步播放状态
+        val playerToRelease = _externalPlayer
         _externalPlayer = null
+        clearDetachedAudioTrackParameters()
+        clearAudioModeTrackParameters()
+        if (playerToRelease != null && !pageOwnership.isRetained(playerToRelease)) {
+            releaseDetachedPlayer(playerToRelease)
+        }
         currentBvid = null
         cachedUiState = null  //  [修复] 清除缓存的 UI 状态
         isLiveMode = false  // 📺 清除直播模式
@@ -2659,6 +2890,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
         if (player !== incomingPlayer) resetBackgroundOptimizationState()
         val previousPlayer = _externalPlayer
         if (previousPlayer != null && previousPlayer !== incomingPlayer) {
+            clearDetachedAudioTrackParameters(previousPlayer)
+            clearAudioModeTrackParameters(previousPlayer)
+            setSleepTimer(previousPlayer, null)
             previousPlayer.removeListener(playerListener)
             previousPlayer.pause()
             // Switching sessions must not invalidate a parent detail still on the back stack.
@@ -2922,6 +3156,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         rollbackIndex: Int
     ): Boolean {
         val currentPlayer = player ?: return false
+        val timerVersionAtLoadStart = PlayerBackgroundPlaybackSessions.timerPauseVersion(currentPlayer)
         backgroundSkipJob?.cancel()
         backgroundSkipJob = scope.launch {
             backgroundPlaybackUseCase.attachPlayer(currentPlayer)
@@ -2957,6 +3192,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 )
             ) {
                 is VideoLoadResult.Success -> {
+                    expireSleepCountdown(currentPlayer)
+                    cancelSleepAfterCurrentForSwitch(currentPlayer, loadResult.info.bvid, loadResult.info.cid)
+                    val startPlayback =
+                        timerVersionAtLoadStart == PlayerBackgroundPlaybackSessions.timerPauseVersion(currentPlayer)
                     // Queue navigation can outlive every detail ViewModel. Bind before preparing
                     // the next source so its real playback is recorded under its own identity.
                     PlayerHistorySessions.forPlayer(currentPlayer).bindMedia(
@@ -2968,13 +3207,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
                             videoUrl = loadResult.playUrl,
                             audioUrl = loadResult.audioUrl,
                             seekTo = 0L,
-                            playWhenReady = true
+                            playWhenReady = startPlayback
                         )
                     } else {
                         backgroundPlaybackUseCase.playVideo(
                             url = loadResult.playUrl,
                             seekTo = 0L,
-                            playWhenReady = true
+                            playWhenReady = startPlayback
                         )
                     }
                     currentBvid = loadResult.info.bvid
@@ -2993,7 +3232,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     currentLiveUname = ""
                     liveRestoreFullscreen = false
                     duration = loadResult.duration.coerceAtLeast(0L)
-                    isPlaying = true
+                    isPlaying = startPlayback
                     updateMediaMetadata(currentTitle, currentOwner, currentCover)
                     Logger.d(TAG, "🎵 direct background skip: ${currentTitle}")
                 }
@@ -3255,6 +3494,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             if (remoteAudio.active) return
             if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
                 onBackgroundPlayWhenReadyChanged(playWhenReady)
+                if (!playWhenReady) releasePausedDetachedDetailBuffers()
             }
         }
 
@@ -3290,6 +3530,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     Logger.d(TAG, "Player ready, duration=$duration")
                 }
                 Player.STATE_ENDED -> {
+                    player?.takeUnless(pageOwnership::isRetained)?.let { target ->
+                        finishSleepAfterCurrent(target, currentBvid, currentCid)
+                    }
                     Logger.d(TAG, "Playback ended")
                     playbackServiceRequested = false
                     clearPlaybackNotificationArtifacts()

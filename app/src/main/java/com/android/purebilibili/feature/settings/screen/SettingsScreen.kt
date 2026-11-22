@@ -83,7 +83,6 @@ fun SettingsScreen(
     onOpenSourceLicensesClick: () -> Unit,
     onAppearanceClick: () -> Unit = {},
     onHomeClick: () -> Unit = {},
-    onAnimationClick: () -> Unit = {},
     onPlaybackClick: () -> Unit = {},
     onPermissionClick: () -> Unit = {},
     onSpacePrivacyClick: () -> Unit = {},
@@ -95,6 +94,7 @@ fun SettingsScreen(
     onNavigateToBottomBarSettings: () -> Unit = {},
     onTipsClick: () -> Unit = {},
     onKeyboardShortcutsClick: () -> Unit = {},
+    onProcessMemoryClick: () -> Unit = {},
     onPerformanceHistoryClick: () -> Unit = {},
     onReplayOnboardingClick: () -> Unit = {},
     onCategoryClick: (SettingsRootCategory) -> Unit = {},
@@ -783,7 +783,6 @@ fun SettingsScreen(
                     onSearchOpen = onSearchOpen,
                     onAppearanceClick = onAppearanceClick,
                     onHomeClick = onHomeClick,
-                    onAnimationClick = onAnimationClick,
                     onPlaybackClick = onPlaybackClick,
                     onPermissionClick = onPermissionClick,
                     onSpacePrivacyClick = onSpacePrivacyClick,
@@ -792,6 +791,7 @@ fun SettingsScreen(
                     onNavigateToBottomBarSettings = onNavigateToBottomBarSettings,
                     onTipsClick = onTipsClick,
                     onKeyboardShortcutsClick = onKeyboardShortcutsClick,
+                    onProcessMemoryClick = onProcessMemoryClick,
                     onPerformanceHistoryClick = onPerformanceHistoryClick,
                     onPluginsClick = onPluginsClick,
                     onExportLogsClick = onExportLogsAction,
@@ -980,7 +980,6 @@ private fun MobileSettingsNavLayout(
     onSearchOpen: () -> Unit,
     onAppearanceClick: () -> Unit,
     onHomeClick: () -> Unit,
-    onAnimationClick: () -> Unit,
     onPlaybackClick: () -> Unit,
     onPermissionClick: () -> Unit,
     onSpacePrivacyClick: () -> Unit,
@@ -989,6 +988,7 @@ private fun MobileSettingsNavLayout(
     onNavigateToBottomBarSettings: () -> Unit,
     onTipsClick: () -> Unit,
     onKeyboardShortcutsClick: () -> Unit,
+    onProcessMemoryClick: () -> Unit,
     onPerformanceHistoryClick: () -> Unit,
     onPluginsClick: () -> Unit,
     onExportLogsClick: () -> Unit,
@@ -1090,7 +1090,6 @@ private fun MobileSettingsNavLayout(
     val rootCategoryActions = SettingsRootCategoryActions(
         onAppearanceClick = onAppearanceClick,
         onHomeClick = onHomeClick,
-        onAnimationClick = onAnimationClick,
         onPlaybackClick = onPlaybackClick,
         onBottomBarClick = onNavigateToBottomBarSettings,
         onPermissionClick = onPermissionClick,
@@ -1124,6 +1123,7 @@ private fun MobileSettingsNavLayout(
         onReplayOnboardingClick = onReplayOnboardingClick,
         onTipsClick = onTipsClick,
         onKeyboardShortcutsClick = onKeyboardShortcutsClick,
+        onProcessMemoryClick = onProcessMemoryClick,
         onPerformanceHistoryClick = onPerformanceHistoryClick,
         onOpenLinksClick = onOpenLinksClick,
         onPrivacyModeChange = onPrivacyModeChange,
@@ -1185,12 +1185,17 @@ private fun MobileSettingsNavLayout(
         dynamicTabOrder = dynamicTabOrder,
     )
 
+    val pinGlassSearch = destination == SettingsNavDestination.Home && useSettingsSearchContentBackdrop()
+
     @Composable
-    fun SettingsRootContent(onAboutHeaderAppearanceClick: () -> Unit) {
+    fun SettingsRootContent(
+        onAboutHeaderAppearanceClick: () -> Unit,
+        onAboutHeroHeightChanged: (Int) -> Unit,
+    ) {
         when (destination) {
             SettingsNavDestination.Home -> {
                 Column {
-                    SettingsHomeSearchEntry(onClick = onSearchOpen)
+                    if (!pinGlassSearch) SettingsHomeSearchEntry(onClick = onSearchOpen)
                     Box(modifier = Modifier.padding(top = 8.dp).entrance()) {
                         SettingsRootCategoryListSection(
                             categories = sectionOrder,
@@ -1212,6 +1217,7 @@ private fun MobileSettingsNavLayout(
                         actions = rootCategoryActions,
                         state = rootCategoryState,
                         onAboutHeaderAppearanceClick = onAboutHeaderAppearanceClick,
+                        onAboutHeroHeightChanged = onAboutHeroHeightChanged,
                     )
                 }
             }
@@ -1224,6 +1230,7 @@ private fun MobileSettingsNavLayout(
     fun SettingsPage(
         pageBackgroundModifier: Modifier? = null,
         onAboutHeaderAppearanceClick: () -> Unit = {},
+        onAboutHeroHeightChanged: (Int) -> Unit = {},
     ) {
         com.android.purebilibili.feature.settings.ui.SettingsPageScaffold(
             title = screenTitle,
@@ -1232,6 +1239,9 @@ private fun MobileSettingsNavLayout(
             onBack = onBack,
             backContentDescription = backLabel,
             bottomContentPadding = bottomInset,
+            glassSearchHeader = if (pinGlassSearch) {
+                { backdrop -> SettingsHomeSearchEntry(onClick = onSearchOpen, contentBackdrop = backdrop) }
+            } else null,
             topBarStyle = when {
                 destination == SettingsNavDestination.Home &&
                     com.android.purebilibili.core.ui.isMiuixNonGlassEnabled() -> {
@@ -1247,10 +1257,10 @@ private fun MobileSettingsNavLayout(
         ) {
             if (rootEntranceEnabled) {
                 EntranceGroup(startWhen = rootEntranceStartWhen) {
-                    SettingsRootContent(onAboutHeaderAppearanceClick)
+                    SettingsRootContent(onAboutHeaderAppearanceClick, onAboutHeroHeightChanged)
                 }
             } else {
-                SettingsRootContent(onAboutHeaderAppearanceClick)
+                SettingsRootContent(onAboutHeaderAppearanceClick, onAboutHeroHeightChanged)
             }
         }
     }
@@ -1259,16 +1269,27 @@ private fun MobileSettingsNavLayout(
         destination is SettingsNavDestination.Category &&
         canonicalSettingsRootCategory(destination.category) == SettingsRootCategory.SYSTEM_ABOUT
     if (miuixAbout) {
-        MiuixAboutAppearanceHost { backgroundSettings, onCustomizeBackground ->
+        var aboutHeroHeightPx by remember { mutableIntStateOf(0) }
+        MiuixAboutAppearanceHost { backgroundSettings, editorVisible, onCustomizeBackground ->
             SettingsPage(
                 pageBackgroundModifier = miuixAboutBackground(
                     settings = backgroundSettings,
                     fieldHeight = miuixAboutHeroHeight() + 368.dp,
+                    motionAllowed = !editorVisible,
                     scrollOffset = {
                         aboutListState.firstVisibleItemScrollOffset.toFloat()
                     },
+                    scrollProgress = {
+                        when {
+                            aboutListState.firstVisibleItemIndex > 0 -> 1f
+                            aboutHeroHeightPx == 0 -> 0f
+                            else -> (aboutListState.firstVisibleItemScrollOffset.toFloat() / aboutHeroHeightPx)
+                                .coerceIn(0f, 1f)
+                        }
+                    },
                 ),
                 onAboutHeaderAppearanceClick = onCustomizeBackground,
+                onAboutHeroHeightChanged = { aboutHeroHeightPx = it },
             )
         }
     } else if (

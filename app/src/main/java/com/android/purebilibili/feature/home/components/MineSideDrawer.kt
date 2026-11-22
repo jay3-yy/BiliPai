@@ -13,7 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -77,7 +77,7 @@ fun MineSideDrawer(
     onWatchLaterClick: () -> Unit,
     onInboxClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onProfileClick: () -> Unit,
+    onProfileClick: (Dp) -> Unit,
     onAccountSwitchClick: (() -> Unit)? = null,
     hazeState: HazeState? = null, // 毛玻璃效果状态
     isBlurEnabled: Boolean = true, // [新增] 模糊开关状态
@@ -279,7 +279,7 @@ fun MineSideDrawer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = layoutPolicy.sectionHorizontalPaddingDp.dp)
-                    .clickable { closeAndRun(onProfileClick) }
+                    .clickable { closeAndRun { onProfileClick(layoutPolicy.profileAvatarSizeDp.dp) } }
             ) {
                 Row(
                     modifier = Modifier

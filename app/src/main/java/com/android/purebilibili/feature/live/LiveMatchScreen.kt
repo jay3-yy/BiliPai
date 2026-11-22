@@ -5,12 +5,14 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
@@ -35,14 +37,21 @@ import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.data.model.response.LiveMatchContest
 import com.android.purebilibili.data.model.response.LiveMatchTeam
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import top.yukonga.miuix.kmp.basic.ButtonDefaults as MiuixButtonDefaults
 import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 
 @Composable
@@ -245,6 +254,7 @@ private fun LiveMatchContent(
                             onVideoClick = onVideoClick,
                             onSeasonClick = { selectedSeasonId = it },
                             onGradesClick = { selectedGradeContest = it },
+                            systemWindowTransitions = true,
                         )
                     }
                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -271,6 +281,8 @@ internal fun LiveMatchCard(
     onVideoClick: (String) -> Unit,
     onSeasonClick: ((Long) -> Unit)? = null,
     onGradesClick: ((Long) -> Unit)? = null,
+    // 赛季弹层点播后立即关闭，只有留在原页的赛程卡能承接返回。
+    systemWindowTransitions: Boolean = false,
 ) {
     val title = listOfNotNull(contest.season?.title?.takeIf { it.isNotBlank() }, contest.stage.takeIf { it.isNotBlank() }).joinToString(" · ")
     val playbackBvid = liveMatchPlaybackBvid(contest.playback)
@@ -295,17 +307,46 @@ internal fun LiveMatchCard(
                 }
                 LiveMatchTeamContent(contest.away, Modifier.weight(1f))
             }
-            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                AppText(
-                    if (contest.startTime > 0) Instant.ofEpochSecond(contest.startTime).atZone(ZoneId.systemDefault())
-                        .format(DateTimeFormatter.ofPattern("HH:mm")) else "时间待定",
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                    color = AppContentColors.secondaryText(),
-                )
-                if (onGradesClick != null && contest.status in 2..3) AppTextButton(onClick = { onGradesClick(contest.id) }) { AppText("评分") }
-                if (playbackBvid != null) AppTextButton(onClick = { onVideoClick(playbackBvid) }) { AppText("看回放") }
-                if (contest.liveRoom > 0) AppTextButton(onClick = { onLiveClick(contest.liveRoom, title, "") }) {
-                    AppText(if (contest.status == 2) "观看直播" else "直播间")
+            NavigationControlMotionGroup {
+                val sourceShape = if (LocalAppUiStyle.current == AppUiStyle.MIUIX) {
+                    RoundedCornerShape(MiuixButtonDefaults.CornerRadius)
+                } else {
+                    ButtonDefaults.textShape
+                }
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    AppText(
+                        if (contest.startTime > 0) Instant.ofEpochSecond(contest.startTime).atZone(ZoneId.systemDefault())
+                            .format(DateTimeFormatter.ofPattern("HH:mm")) else "时间待定",
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                        color = AppContentColors.secondaryText(),
+                    )
+                    if (onGradesClick != null && contest.status in 2..3) {
+                        AppTextButton(
+                            onClick = { onGradesClick(contest.id) },
+                            modifier = if (systemWindowTransitions) rememberSystemWindowControlNeighborModifier() else Modifier,
+                        ) { AppText("评分") }
+                    }
+                    if (playbackBvid != null) {
+                        val replay = rememberSystemWindowNavigationControl(
+                            BiliPaiNavKey.VideoDetail(bvid = playbackBvid).takeIf { systemWindowTransitions },
+                            sourceShape,
+                        ) { onVideoClick(playbackBvid) }
+                        AppTextButton(onClick = replay.onClick, modifier = replay.modifier) { AppText("看回放") }
+                    }
+                    if (contest.liveRoom > 0) {
+                        val target = BiliPaiNavKey.Live(roomId = contest.liveRoom.toString(), title = title)
+                        val live = rememberSystemWindowNavigationControl(
+                            target.takeIf { systemWindowTransitions },
+                            sourceShape,
+                        ) { onLiveClick(contest.liveRoom, title, "") }
+                        AppTextButton(onClick = live.onClick, modifier = live.modifier) {
+                            AppText(if (contest.status == 2) "观看直播" else "直播间")
+                        }
+                    }
                 }
             }
         }

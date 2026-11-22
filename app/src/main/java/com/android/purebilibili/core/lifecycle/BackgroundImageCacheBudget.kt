@@ -6,8 +6,8 @@ import coil3.memory.MemoryCache
 internal class BackgroundImageCacheBudget(private val cache: MemoryCache) {
     private val foregroundMaxBytes = cache.maxSize
 
-    fun background(elapsedMs: Long) {
-        cache.maxSize = resolveBackgroundImageCacheTrimTargetBytes(foregroundMaxBytes, elapsedMs)
+    fun background() {
+        cache.maxSize = minOf(foregroundMaxBytes, BACKGROUND_IMAGE_CACHE_MAX_BYTES)
         cache.trimToSize(cache.maxSize)
     }
 

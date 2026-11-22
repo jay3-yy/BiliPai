@@ -43,7 +43,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -90,7 +89,6 @@ import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgress
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarDividerTopOffset
 import com.android.purebilibili.feature.dynamic.resolveDynamicSidebarReturnHeaderHeightDp
-import com.android.purebilibili.feature.dynamic.shouldShowDynamicUserLiveBadge
 import com.android.purebilibili.feature.dynamic.SidebarUser
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
@@ -174,7 +172,10 @@ fun DynamicSidebar(
     selfUid: Long = 0L,
     isExpanded: Boolean,
     userListState: androidx.compose.foundation.lazy.LazyListState,
+    showLiveUsers: Boolean?,
+    onToggleLiveUsers: () -> Unit,
     onUserClick: (Long?) -> Unit,
+    onLiveClick: (Long, String, String) -> Unit,
     showHiddenUsers: Boolean,
     hiddenCount: Int,
     uplistUpdateMids: Set<Long> = emptySet(),
@@ -235,10 +236,9 @@ fun DynamicSidebar(
     val restUsers = remember(users, selfUid) {
         users.filter { !it.isLive && !isDynamicUpPanelShortcut(it.uid, selfUid) }
     }
-    var showLiveUsers by remember { mutableStateOf(true) }
     val visibleUsers = remember(liveUsers, shortcutUsers, restUsers, showLiveUsers) {
         buildList {
-            if (showLiveUsers) addAll(liveUsers)
+            if (showLiveUsers == true) addAll(liveUsers)
             addAll(shortcutUsers)
             addAll(restUsers)
         }
@@ -349,6 +349,7 @@ fun DynamicSidebar(
                             showLabel = isExpanded,
                             allowManageMenu = false,
                             onClick = { onUserClick(allUser.uid) },
+                            onLiveClick = onLiveClick,
                             onTogglePin = { onTogglePin(allUser.uid) },
                             onToggleHidden = { onToggleHidden(allUser.uid) }
                         )
@@ -386,10 +387,10 @@ fun DynamicSidebar(
                     }
                 }
 
-                if (liveUsers.isNotEmpty()) {
+                if (liveUsers.isNotEmpty() && showLiveUsers != null) {
                     item(key = "live_fold") {
                         AppTextButton(
-                            onClick = { showLiveUsers = !showLiveUsers },
+                            onClick = onToggleLiveUsers,
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = PaddingValues(
                                 horizontal = AppSpacingTokens.None,
@@ -429,9 +430,11 @@ fun DynamicSidebar(
                         hasScrolled = hasScrolled,
                         initialEntranceActive = initialEntranceActive
                     )
+                    // 挂 animateItem：Live 折叠展开/收起时头像淡入淡出，其余条目随位移过渡。
                     CascadeSidebarItem(
                         index = index,
                         enabled = shouldAnimate,
+                        itemModifier = Modifier.animateItem(),
                         content = {
                             val isShortcut = isDynamicUpPanelShortcut(user.uid, selfUid)
                             SidebarUserItem(
@@ -442,6 +445,7 @@ fun DynamicSidebar(
                                 showUnreadBadge = user.uid in uplistUpdateMids,
                                 allowManageMenu = !isShortcut,
                                 onClick = appActionWithFeedback { onUserClick(user.uid) },
+                                onLiveClick = onLiveClick,
                                 onTogglePin = { onTogglePin(user.uid) },
                                 onToggleHidden = { onToggleHidden(user.uid) }
                             )
@@ -521,10 +525,13 @@ fun DynamicSidebar(
 private fun CascadeSidebarItem(
     index: Int,
     enabled: Boolean = true,
+    itemModifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     if (!enabled) {
-        content()
+        Box(modifier = itemModifier) {
+            content()
+        }
         return
     }
 
@@ -536,23 +543,23 @@ private fun CascadeSidebarItem(
         visible = true
     }
 
-    val offsetY by animateFloatAsState(
+    val offsetYState = animateFloatAsState(
         targetValue = if (visible) 0f else 20f,
         animationSpec = AppMotionTokens.emphasizedSpec(),
         label = "cascadeOffsetY"
     )
 
-    val alpha by animateFloatAsState(
+    val alphaState = animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = AppMotionTokens.standardSpec(),
         label = "cascadeAlpha"
     )
 
     Box(
-        modifier = Modifier
+        modifier = itemModifier
             .graphicsLayer {
-                translationY = offsetY
-                this.alpha = alpha
+                translationY = offsetYState.value
+                this.alpha = alphaState.value
             }
     ) {
         content()
@@ -654,6 +661,7 @@ fun SidebarUserItem(
     showUnreadBadge: Boolean = false,
     allowManageMenu: Boolean = true,
     onClick: () -> Unit,
+    onLiveClick: (Long, String, String) -> Unit,
     onTogglePin: () -> Unit,
     onToggleHidden: () -> Unit
 ) {
@@ -666,7 +674,7 @@ fun SidebarUserItem(
         ?: AppContentColors.selectionAccent(LocalAppThemeConfig.current.liquidGlassEnabled)
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
 
-    com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { showMenu = true }, enabled = allowManageMenu) {
+    DynamicUserMenuAnchor(user, enabled = allowManageMenu, onOpen = { showMenu = true }) { avatarModifier, menuSource ->
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -686,7 +694,24 @@ fun SidebarUserItem(
                 .padding(vertical = AppSpacingTokens.Small) // 内部间距
                 .alpha(if (user.isHidden) 0.5f else 1f)
         ) {
-            Box {
+            DynamicUserAvatarWithLiveBadge(
+                user = user,
+                onLiveClick = onLiveClick,
+                avatarModifier = avatarModifier,
+                name = if (showLabel) {
+                    {
+                        AppText(
+                            text = displayName,
+                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isSelected) accentColor else AppContentColors.primaryText(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = AppSpacingTokens.Micro)
+                        )
+                    }
+                } else null,
+            ) {
                 // 头像
                 Box(
                     modifier = Modifier
@@ -697,6 +722,7 @@ fun SidebarUserItem(
                                     navigationColors?.selectedContainer ?: accentColor.copy(alpha = 0.12f),
                                     CircleShape
                                 )
+                                user.isLive -> Modifier.border(1.5.dp, AppContentColors.accent(), CircleShape)
                                 isSelected -> Modifier.border(AppSpacingTokens.Micro / 2, accentColor, CircleShape)
                                 else -> Modifier.border(AppSpacingTokens.Micro / 2, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
                             }
@@ -734,28 +760,12 @@ fun SidebarUserItem(
                     )
                 }
             }
-
-            if (shouldShowDynamicUserLiveBadge(user.isLive)) {
-                DynamicUserLiveBadge(modifier = Modifier.padding(top = AppSpacingTokens.Micro))
-            }
-
-            if (showLabel) {
-                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
-                AppText(
-                    text = displayName,
-                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) accentColor else AppContentColors.primaryText(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = AppSpacingTokens.Micro)
-                )
-            }
         }
 
         AppDropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
+            glassSource = menuSource,
             modifier = if (com.android.purebilibili.core.ui.components.appGlassMenuAvailable()) Modifier
                 else Modifier.background(MaterialTheme.colorScheme.surfaceContainer) // 自适应菜单背景
         ) {

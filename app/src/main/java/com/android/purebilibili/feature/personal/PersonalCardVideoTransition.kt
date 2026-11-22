@@ -58,12 +58,17 @@ internal class PersonalCardVideoTransition(
         stacked: Boolean,
         sourceCornerDp: Int,
         chrome: VideoCardSourceChromeSnapshot,
+        onClick: () -> Unit,
     ) {
         if (CardPositionManager.isVideoNavigationDebounceActive()) {
             // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
+            onClick()
             return
         }
-        val cardBounds = bounds.cardBounds ?: return
+        val cardBounds = bounds.cardBounds ?: run {
+            onClick()
+            return
+        }
         val sourceCoverBounds = bounds.coverBounds
         CardPositionManager.recordVideoCardPosition(
             bvid = bvid,
@@ -80,7 +85,7 @@ internal class PersonalCardVideoTransition(
             },
             sourceChromeSnapshot = chrome.withMeasuredCoverDecodeSize(sourceCoverBounds),
         )
-        nativeCardSnapshot.capture()
+        nativeCardSnapshot.captureThen(onClick)
     }
 }
 
@@ -94,6 +99,7 @@ internal fun rememberPersonalCardVideoTransition(
     bvid: String,
     transitionEnabled: Boolean,
     clipShape: Shape,
+    stacked: Boolean,
 ): PersonalCardVideoTransition {
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
@@ -121,7 +127,16 @@ internal fun rememberPersonalCardVideoTransition(
     )
     val boundsHolder = remember(bvid) { PersonalCardBoundsHolder() }
     val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(bvid)
-    val shellModifier = Modifier.videoCardSourceAnchor(bvid, clipShape, landingStyle = NavigationReturnLandingStyle.VIDEO_CARD)
+    val shellModifier = Modifier.videoCardSourceAnchor(
+        bvid,
+        clipShape,
+        landingStyle = NavigationReturnLandingStyle.VIDEO_CARD,
+        sourceLayout = if (stacked) {
+            VideoCardSourceLayout.STACKED
+        } else {
+            VideoCardSourceLayout.SIDE_BY_SIDE
+        },
+    )
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     // 每次组合重建轻量包装：shellModifier 随 motionSpec 重建，避免持有过期 modifier。

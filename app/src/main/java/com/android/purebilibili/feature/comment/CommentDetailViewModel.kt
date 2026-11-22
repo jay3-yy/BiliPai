@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.data.repository.CommentFraudRepository
+import com.android.purebilibili.data.model.response.ReplyControl
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.repository.CommentRepository
 import com.android.purebilibili.feature.video.viewmodel.CommentComposerDraft
@@ -326,6 +327,7 @@ class CommentDetailViewModel : ViewModel() {
                                 )
                                 next = current.copy(
                                     visible = true, rootReply = root,
+                                    upMid = last.data.upper?.mid?.takeIf { it > 0L } ?: current.upMid,
                                     targetReplyId = pages.first().data.resolvedTargetReplyId.takeIf { it > 0L } ?: target.takeIf { it != threadRootId } ?: 0L,
                                     items = items.toImmutableList(), baseItems = items.toImmutableList(),
                                     totalCount = total, page = last.request.page, basePage = last.request.page,
@@ -640,5 +642,69 @@ class CommentDetailViewModel : ViewModel() {
 
     fun startDissolve(rpid: Long) {
         _subReplyState.update { it.copy(dissolvingIds = (it.dissolvingIds + rpid).toPersistentSet()) }
+    }
+
+    fun reportComment(
+        rpid: Long,
+        reason: Int,
+        onResult: (Boolean, String) -> Unit = { _, _ -> },
+    ) {
+        val oid = currentOid
+        val type = currentType
+        if (oid <= 0L || rpid <= 0L) {
+            onResult(false, "无法确定评论参数")
+            return
+        }
+        viewModelScope.launch {
+            CommentRepository.reportCommentForSubject(
+                oid = oid,
+                type = type,
+                rpid = rpid,
+                reason = reason,
+            ).fold(
+                onSuccess = { onResult(true, "举报成功") },
+                onFailure = { onResult(false, it.message ?: "举报失败") },
+            )
+        }
+    }
+
+    fun toggleTopComment(
+        reply: ReplyItem,
+        onResult: (Boolean, String) -> Unit = { _, _ -> },
+    ) {
+        val oid = currentOid
+        val type = currentType
+        if (oid <= 0L || reply.rpid <= 0L) {
+            onResult(false, "无法确定评论参数")
+            return
+        }
+        val isCurrentlyTop = reply.replyControl?.isUpTop == true
+        val session = threadSession
+        val account = currentAccount
+        viewModelScope.launch {
+            CommentRepository.setCommentTopForSubject(
+                oid = oid,
+                type = type,
+                rpid = reply.rpid,
+                isCurrentlyTop = isCurrentlyTop,
+            ).fold(
+                onSuccess = {
+                    if (session == threadSession && currentOid == oid && currentType == type &&
+                        accountIdentity.value == account
+                    ) {
+                        _subReplyState.update { state ->
+                            if (state.rootReply?.rpid == reply.rpid) {
+                                val updatedControl = (state.rootReply.replyControl ?: ReplyControl()).copy(
+                                    isUpTop = !isCurrentlyTop
+                                )
+                                state.copy(rootReply = state.rootReply.copy(replyControl = updatedControl))
+                            } else state
+                        }
+                    }
+                    onResult(true, if (isCurrentlyTop) "已取消置顶" else "已置顶")
+                },
+                onFailure = { onResult(false, it.message ?: "置顶操作失败") },
+            )
+        }
     }
 }

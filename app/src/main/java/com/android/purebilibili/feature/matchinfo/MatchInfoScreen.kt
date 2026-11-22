@@ -77,15 +77,23 @@ fun MatchInfoScreen(
         }
     }
     if (showComments) {
-        VideoCommentSheetHost(
-            mainSheetVisible = true,
-            onDismiss = { showComments = false },
-            commentViewModel = commentViewModel,
-            aid = cid,
-            onUserClick = onUserClick,
-            onOpenBilibiliLink = onOpenLink,
-            handleFraudEvents = false,
-        )
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.android.purebilibili.feature.share.LocalReplyShareContext provides
+                com.android.purebilibili.feature.share.matchReplyShareContext(
+                    cid = cid,
+                    title = state.contest?.season?.title?.ifBlank { null } ?: "比赛详情",
+                ),
+        ) {
+            VideoCommentSheetHost(
+                mainSheetVisible = true,
+                onDismiss = { showComments = false },
+                commentViewModel = commentViewModel,
+                aid = cid,
+                commentType = MATCH_COMMENT_TYPE,
+                onUserClick = onUserClick,
+                onOpenBilibiliLink = onOpenLink,
+            )
+        }
     }
 
     ImmersiveAppScaffold(

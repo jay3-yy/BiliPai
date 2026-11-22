@@ -896,7 +896,7 @@ private fun FavoriteFolderPickerDialog(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                            com.android.purebilibili.core.ui.components.AppCircularProgressIndicator(modifier = Modifier.size(32.dp))
                         }
                     }
                     error != null -> item(key = "favorite_error") {

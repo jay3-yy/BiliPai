@@ -5,8 +5,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import top.yukonga.miuix.kmp.nav.core.NAV_TRANSITION_METADATA_KEY
 import top.yukonga.miuix.kmp.nav.core.NavEntry
 import top.yukonga.miuix.kmp.nav.core.NavKey
+import top.yukonga.miuix.kmp.nav.core.entryProvider
+import top.yukonga.miuix.kmp.nav.transition.NavTransition
 
 class NavPresentationTest {
     private data class Route(val id: String, val title: String = id) : NavKey
@@ -27,6 +30,30 @@ class NavPresentationTest {
         assertEquals(2, presentation.presented.size)
         assertSame(root, presentation.presented.first())
         assertEquals("updated", root.key.title)
+    }
+
+    @Test
+    fun sameTypeEntriesKeepTheirOwnTransitionThroughPushAndPop() {
+        val first = Route("videoA")
+        val related = Route("videoB")
+        val sharedTransition = NavTransition { this }
+        val pageTransition = NavTransition { this }
+        val sharedTransitions = mapOf(first to sharedTransition)
+        val provider = entryProvider {
+            entry<Route>(transition = pageTransition, transitionForKey = sharedTransitions::get) {}
+        }
+        val presentation = NavPresentation(0f)
+        presentation.reconcile(listOf(provider(first)), NavChange.None)
+
+        presentation.reconcile(listOf(provider(first), provider(related)), NavChange.Push)
+        assertSame(sharedTransition, presentation.presented.first().metadata[NAV_TRANSITION_METADATA_KEY])
+        assertSame(pageTransition, presentation.presented.last().metadata[NAV_TRANSITION_METADATA_KEY])
+
+        presentation.reconcile(listOf(provider(first)), NavChange.Pop)
+        val leaving = presentation.presented.last()
+        assertTrue(leaving.presentation.isRemoving)
+        assertSame(pageTransition, leaving.metadata[NAV_TRANSITION_METADATA_KEY])
+        assertSame(sharedTransition, presentation.presented.first().metadata[NAV_TRANSITION_METADATA_KEY])
     }
 
     @Test

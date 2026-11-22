@@ -308,6 +308,64 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun detachedAudioDisablesVideoImmediatelyWithoutTouchingMiniPipOrLiveSessions() {
+        assertTrue(
+            shouldOptimizeDetachedAudioImmediatelyOnBackground(
+                isPageRetained = false,
+                isAudioNowPlayingActive = true,
+                isMiniMode = false,
+                isPipActiveOrPending = false,
+                isLiveMode = false,
+            )
+        )
+        assertFalse(
+            shouldOptimizeDetachedAudioImmediatelyOnBackground(
+                isPageRetained = true,
+                isAudioNowPlayingActive = true,
+                isMiniMode = false,
+                isPipActiveOrPending = false,
+                isLiveMode = false,
+            )
+        )
+        assertFalse(
+            shouldOptimizeDetachedAudioImmediatelyOnBackground(
+                isPageRetained = false,
+                isAudioNowPlayingActive = false,
+                isMiniMode = false,
+                isPipActiveOrPending = false,
+                isLiveMode = false,
+            )
+        )
+        assertFalse(
+            shouldOptimizeDetachedAudioImmediatelyOnBackground(
+                isPageRetained = false,
+                isAudioNowPlayingActive = true,
+                isMiniMode = true,
+                isPipActiveOrPending = false,
+                isLiveMode = false,
+            )
+        )
+        assertFalse(
+            shouldOptimizeDetachedAudioImmediatelyOnBackground(
+                isPageRetained = false,
+                isAudioNowPlayingActive = true,
+                isMiniMode = false,
+                isPipActiveOrPending = true,
+                isLiveMode = false,
+            )
+        )
+        assertFalse(
+            shouldOptimizeDetachedAudioImmediatelyOnBackground(
+                isPageRetained = false,
+                isAudioNowPlayingActive = true,
+                isMiniMode = false,
+                isPipActiveOrPending = false,
+                isLiveMode = true,
+            )
+        )
+    }
+
+    @Test
     fun shortBackgroundLightMode_keepsVideoTrackUntilThreshold() {
         assertFalse(
             shouldApplyHeavyBackgroundVideoOptimization(

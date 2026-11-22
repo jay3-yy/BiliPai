@@ -124,10 +124,7 @@ fun DynamicTopBarWithTabs(
     val isProgressiveFadeActive = appThemeConfig.progressiveTopFadeEnabled && !headerBlurEnabled
     val collapseArrowRotation = animateFloatAsState(
         targetValue = if (actionDockCollapsed) 0f else 180f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = com.android.purebilibili.core.ui.motion.softLandingSpring(),
         label = "dynamicActionsChevronRotation",
     )
 
@@ -217,16 +214,13 @@ fun DynamicTopBarWithTabs(
             visible = !actionDockCollapsed,
             enter = expandVertically(
                 expandFrom = Alignment.Top,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium,
-                ),
+                animationSpec = com.android.purebilibili.core.ui.motion.softLandingSpring(),
             ) + fadeIn(),
             exit = shrinkVertically(
                 shrinkTowards = Alignment.Top,
                 animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium,
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
                 ),
             ) + fadeOut(),
         ) {

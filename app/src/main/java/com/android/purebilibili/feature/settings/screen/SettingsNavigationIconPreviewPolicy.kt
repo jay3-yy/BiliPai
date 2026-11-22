@@ -5,6 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.vectorResource
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppSemanticIconFamily
+import com.android.purebilibili.feature.home.components.BottomNavItem
+import com.android.purebilibili.feature.home.components.resolveMiuixBottomNavigationIcon
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.*
 
@@ -61,7 +63,14 @@ internal fun resolveSettingsNavigationPreviewIcon(
     tabId: String,
     iconFamily: AppSemanticIconFamily,
     selected: Boolean = false,
+    bottomBar: Boolean = false,
 ): ImageVector {
+    if (bottomBar && iconFamily == AppSemanticIconFamily.MIUIX) {
+        resolveSettingsBottomNavItem(tabId)?.let { item ->
+            return resolveMiuixBottomNavigationIcon(item, selected)
+        }
+    }
+
     val role = when (tabId.trim().uppercase()) {
         "HOME", "RECOMMEND" -> SettingsNavigationIconRole.HOME
         "DYNAMIC" -> SettingsNavigationIconRole.DYNAMIC
@@ -112,3 +121,19 @@ internal fun resolveSettingsNavigationPreviewIcon(
         )
     }
 }
+
+private fun resolveSettingsBottomNavItem(tabId: String): BottomNavItem? =
+    when (tabId.trim().uppercase()) {
+        "HOME", "RECOMMEND" -> BottomNavItem.HOME
+        "DYNAMIC" -> BottomNavItem.DYNAMIC
+        "STORY" -> BottomNavItem.STORY
+        "HISTORY" -> BottomNavItem.HISTORY
+        "LISTEN_VIDEO" -> BottomNavItem.LISTEN_VIDEO
+        "PROFILE" -> BottomNavItem.PROFILE
+        "FAVORITE" -> BottomNavItem.FAVORITE
+        "LIVE" -> BottomNavItem.LIVE
+        "WATCHLATER", "WATCH_LATER" -> BottomNavItem.WATCHLATER
+        "SETTINGS" -> BottomNavItem.SETTINGS
+        "PLUGINS" -> BottomNavItem.PLUGINS
+        else -> null
+    }

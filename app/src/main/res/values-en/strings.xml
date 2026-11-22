@@ -2,6 +2,7 @@
     <string name="dynamic_live_photo_badge">Live Photo</string>
     <string name="link_preview_card_label">Link preview</string>
     <string name="video_link_part_unavailable">Couldn’t open the video part specified in the link</string>
+    <string name="external_link_unavailable">Couldn’t open this link</string>
     <string name="history_activity_stats">Reading and Viewing Stats</string>
     <string name="app_name">BiliPai</string>
 
@@ -51,9 +52,8 @@
     <string name="common_refresh">Refresh</string>
 
     <string name="settings_title">Settings</string>
-    <string name="appearance_settings_title">Appearance Settings</string>
     <string name="playback_settings_title">Playback Settings</string>
-    <string name="animation_effects_title">Animation &amp; Haptics</string>
+    <string name="animation_effects_title">Motion &amp; Feedback</string>
     <string name="icon_settings_title">App Icon</string>
     <string name="bottom_bar_management_title">Navigation</string>
     <string name="permission_management_title">Permissions</string>
@@ -251,8 +251,9 @@
     <string name="user_agreement_crash_tracking_subtitle">Send crash reports to help fix stability issues</string>
     <string name="user_agreement_analytics_title">Anonymous Usage Statistics</string>
     <string name="user_agreement_analytics_subtitle">Share anonymous activity and feature usage without personal identifiers</string>
-    <string name="settings_category_appearance_title">Appearance &amp; Animation</string>
-    <string name="settings_category_appearance_summary">Themes, text size, icons, motion, and vibration</string>
+    <string name="settings_category_appearance_title">Appearance</string>
+    <string name="settings_category_appearance_summary">Interface style, themes, text size, and icons</string>
+    <string name="settings_category_animation_summary">Page animations, haptic feedback, and Liquid Glass</string>
     <string name="settings_category_playback_title">Playback</string>
     <string name="settings_category_playback_summary">Video quality, speed, subtitles, autoplay, PiP, and background playback</string>
     <string name="settings_category_home_title">Home &amp; Feed</string>
@@ -368,16 +369,27 @@
     <string name="animation_section_maid">Blue Snow Maid</string>
     <string name="animation_maid_summary">Hides maid animations and static images when turned off</string>
     <string name="animation_card_entrance_summary">Fade cards in one at a time when opening Home</string>
-    <string name="animation_card_transition_summary">Use system animation to expand details and return to the source card; fall back to regular page transitions when unsupported</string>
+    <string name="animation_card_transition_summary">Open and return to the source card or button with a continuous transition.</string>
     <string name="animation_card_removal_dissolve_title">Card removal effect</string>
     <string name="animation_card_removal_dissolve_summary">Applies to Not interested on Home and single-item removal in Watch Later. Fast dissolves in about 0.7 seconds. Off updates the list immediately.</string>
     <string name="animation_card_removal_dissolve_off">Off</string>
-    <string name="animation_card_transition_source_official">Expand from visible cards or buttons and return to their original position. Use regular navigation when system transitions are unavailable.</string>
-    <string name="animation_card_transition_source_fallback">This device does not support system one-take animation; regular page transitions are used</string>
+    <string name="animation_card_transition_method_title">One-take transition interface</string>
+    <string name="animation_card_transition_method_auto">Auto</string>
+    <string name="animation_card_transition_method_official">Official SharedView</string>
+    <string name="animation_card_transition_method_oplus">OPPO legacy</string>
+    <string name="animation_card_transition_method_vivo">vivo OneShot</string>
+    <string name="animation_card_transition_method_xiaomi">Xiaomi legacy 103</string>
+    <string name="animation_card_transition_method_standard">Standard transition</string>
+    <string name="animation_card_transition_method_auto_summary">Prefer official SharedView, then try compatible system interfaces</string>
+    <string name="animation_card_transition_method_xiaomi_summary">The system shrinks the background, which can expose a light border</string>
+    <string name="animation_card_transition_method_disabled">One-take transitions are off</string>
+    <string name="animation_card_transition_method_current">Matched interface: %1$s</string>
+    <string name="animation_card_transition_method_status">%1$s\nLast playback entry: %2$s</string>
+    <string name="animation_card_transition_source_fallback">The selected interface is unavailable. Pages use standard transitions.</string>
     <string name="animation_card_transition_source_reduced_motion">Reduced motion is enabled in system settings; card transitions are currently inactive</string>
-    <string name="animation_transition_blur_official_supported">Control background blur for the system one-take animation</string>
-    <string name="animation_transition_blur_official_system">The system manages transition blur; this switch does not affect the system effect</string>
-    <string name="animation_transition_blur_summary">System one-take animation is unsupported; this switch does not affect regular page transitions</string>
+    <string name="animation_transition_blur_official_supported">Control background blur for system card transitions and Settings container transitions</string>
+    <string name="animation_transition_blur_official_system">Control Settings container blur. System card transition blur is managed by Android.</string>
+    <string name="animation_transition_blur_summary">Control background blur for Settings container transitions</string>
     <string name="animation_predictive_back_title">Predictive back gestures</string>
     <string name="animation_predictive_back_summary">Control back previews across pages, cards, images, comments and dialogs. Turning this off keeps normal back navigation and your page transition choice.</string>
     <string name="animation_back_title">Page transition animation</string>
@@ -402,7 +414,7 @@
     <string name="animation_glass_section_title">Liquid Glass and blur</string>
     <string name="animation_glass_unavailable">Glass effects are not supported on this device, so these settings have no effect</string>
     <string name="animation_glass_disabled">Enable Liquid Glass in Appearance settings to use these options</string>
-    <string name="animation_glass_share_text">BiliPai Liquid Glass settings. Import them from Animation &amp; Haptics &gt; Liquid Glass and blur.</string>
+    <string name="animation_glass_share_text">BiliPai Liquid Glass settings. Import them from %1$s &gt; %2$s.</string>
     <string name="animation_glass_share_title">Share Liquid Glass settings</string>
     <string name="animation_glass_share_failed">Could not open the system share sheet</string>
     <string name="animation_glass_export_failed">Could not export Liquid Glass settings</string>
@@ -537,8 +549,6 @@
     <string name="settings_search_history_clear_all">Clear all</string>
     <string name="settings_search_history_empty">No search history yet. Search for a setting to see it here.</string>
     <string name="settings_search_history_delete">Delete search history: %1$s</string>
-    <string name="settings_search_legacy_001_title">Appearance and animation</string>
-    <string name="settings_search_legacy_001_summary">Theme, text size, icons, animation, and vibration</string>
     <string name="settings_search_legacy_002_title">Home and recommendations</string>
     <string name="settings_search_legacy_002_summary">Home cards, recommendations, dynamic posts, and release schedules</string>
     <string name="settings_search_legacy_003_title">Navigation layout</string>
@@ -703,7 +713,6 @@
     <string name="appearance_settings_icon_glyphs_original">Original</string>
     <string name="appearance_single_choice_title">Single-choice menu style</string>
     <string name="appearance_single_choice_summary">Open beside the setting or in a centered dialog.</string>
-    <string name="appearance_animation_glass_title">Motion, haptics, and glass effects</string>
 <string name="appearance_md3_color_source_wallpaper_summary">Follow the system color scheme, or choose a style and specification for wallpaper-derived colors.</string>
     <string name="appearance_md3_color_source_fallback_summary">Wallpaper colors require Android 12 or later. A preset is used as a fallback, or you can choose a custom color.</string>
     <string name="appearance_custom_theme_color_title">Custom theme color</string>
@@ -881,9 +890,11 @@
     <string name="appearance_home_online_on">Show “xx watching” on video cards; video pages are controlled separately</string>
     <string name="appearance_home_online_off">Hide viewer counts on cards; video pages are controlled separately</string>
 
-    <string name="appearance_home_wallpaper_section">Home wallpaper</string>
-    <string name="appearance_home_wallpaper_choose">Choose home wallpaper</string>
-    <string name="appearance_home_wallpaper_dedicated">A separate home wallpaper is set</string>
+    <string name="appearance_home_wallpaper_section">Page wallpaper</string>
+    <string name="appearance_home_wallpaper_choose">Choose page wallpaper</string>
+    <string name="appearance_wallpaper_alpine_daylight">Alpine Daylight</string>
+    <string name="appearance_home_wallpaper_apply">Set as page wallpaper</string>
+    <string name="appearance_home_wallpaper_dedicated">A separate page wallpaper is set</string>
     <string name="appearance_home_wallpaper_follows_splash">No separate wallpaper; following the splash screen wallpaper</string>
     <string name="appearance_home_wallpaper_source">Choose from the official wallpaper library or your gallery</string>
     <string name="appearance_home_wallpaper_transform">Adjust position and scale</string>
@@ -893,12 +904,16 @@
     <string name="appearance_wallpaper_effect_strong_summary">Blur more to retain color while reducing background distraction</string>
     <string name="appearance_wallpaper_effect_original_summary">Show the original image with a subtle text backdrop</string>
     <string name="appearance_wallpaper_scope_home_summary">Use this wallpaper effect on Home only</string>
-    <string name="appearance_wallpaper_scope_global_summary">Use the same wallpaper on Home, Feed, profile, settings, messages, and more</string>
-    <string name="appearance_wallpaper_motion_summary">Use animated wallpaper on Home, chats, and some lists</string>
+    <string name="appearance_wallpaper_scope_global_summary">Keep the same wallpaper across Home, posts, articles, categories, creator profiles, settings, and messages</string>
+    <string name="appearance_wallpaper_motion_summary">Keep animated wallpaper playing across supported pages</string>
     <string name="appearance_wallpaper_card_blur_on">Blur wallpaper behind card text; also applies to season lists when using global wallpaper</string>
-    <string name="appearance_wallpaper_card_blur_off">Do not blur cards in real time</string>
-    <string name="appearance_wallpaper_card_tint_on">Tint card details to match the wallpaper or cover</string>
-    <string name="appearance_wallpaper_card_tint_off">Keep card details independent of wallpaper and cover colors</string>
+    <string name="appearance_wallpaper_card_blur_off">Turn off the separate wallpaper blur for cards</string>
+    <string name="appearance_card_background_off">Off</string>
+    <string name="appearance_card_background_follow">Match background colors</string>
+    <string name="appearance_card_background_fixed">Fixed Gaussian blur</string>
+    <string name="appearance_card_background_fixed_summary">Blur the static wallpaper, or the cover when it is unavailable, with a neutral tint</string>
+    <string name="appearance_wallpaper_card_tint_on">Frost the wallpaper behind card details, or use a blurred cover when there is no wallpaper</string>
+    <string name="appearance_wallpaper_card_tint_off">Turn off wallpaper and cover color effects for card details</string>
     <string name="appearance_content_feed_section">Content and recommendations</string>
     <string name="appearance_feed_carousel_on">Show an official-aspect-ratio video carousel at the top of Recommendations</string>
     <string name="appearance_feed_carousel_off">Show a standard video feed on Recommendations</string>
@@ -962,7 +977,6 @@
     <string name="appearance_home_card_ratio_bilipai_label">16:10</string>
     <string name="animation_indicator_wobble_title">Liquid glass indicator recoil</string>
     <string name="animation_indicator_wobble_summary">Add squash and rebound when selecting a tab or releasing a drag. Applies only to liquid glass indicators; turning it off keeps normal movement and press feedback.</string>
-    <string name="animation_settings_container_blur_summary">Blur the settings page behind container transitions in real time; requires Android 12 or later</string>
     <string name="home_settings_grid_customization_summary">Turn off to restore automatic layouts while keeping your choices. Single-column video mode is unchanged.</string>
     <string name="home_settings_grid_share_summary">Share and save the last column count across supported lists, or adjust each page independently. Narrow, wide portrait and wide landscape windows keep separate values.</string>
     <string name="home_settings_grid_default_summary">Automatic uses the page layout. Fixed counts are limited by the content width. Shared pinch changes update this value.</string>
@@ -1082,4 +1096,8 @@
     <string name="hot_danmaku_send_error">Could not send. Try again.</string>
     <string name="message_select_conversation">Select a conversation</string>
     <string name="message_close_conversation">Close conversation</string>
+    <string name="sub_reply_style_title">Reply thread style</string>
+    <string name="sub_reply_style_summary">Tree view groups replies with indentation and connectors. Branches can be expanded or collapsed.</string>
+    <string name="sub_reply_style_tree">YouTube tree</string>
+    <string name="sub_reply_style_classic">Bilibili classic</string>
 </resources>

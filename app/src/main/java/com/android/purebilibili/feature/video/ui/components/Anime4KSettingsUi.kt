@@ -2,7 +2,7 @@ package com.android.purebilibili.feature.video.ui.components
 
 import com.android.purebilibili.core.ui.AppContentColors
 
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row

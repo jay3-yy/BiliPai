@@ -601,10 +601,7 @@ fun PartitionContent(
     var sideRailVideoPushTargetPx by remember { mutableFloatStateOf(0f) }
     val sideRailVideoPushPx = animateFloatAsState(
         targetValue = sideRailVideoPushTargetPx,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
+        animationSpec = com.android.purebilibili.core.ui.motion.softLandingSpring(),
         label = "partitionVideoListPush"
     )
 
@@ -1605,7 +1602,8 @@ private fun PartitionVideoList(
         else -> {
             LazyColumn(
                 state = listState,
-                modifier = modifier.fillMaxHeight(),
+                modifier = modifier
+                    .fillMaxHeight(),
                 contentPadding = contentPadding,
                 // 剧集卡片带完整背景，需要独立卡片间距；普通透明视频行保留紧凑间距。
                 // 这是内容类型差异，玻璃、MD3、Miuix 共用，不修改各材质的卡片内部尺寸。

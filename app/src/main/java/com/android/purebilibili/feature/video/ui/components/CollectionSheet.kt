@@ -8,7 +8,7 @@ import com.android.purebilibili.core.ui.AppContentColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -202,7 +202,6 @@ fun CollectionSheet(
                         currentBvid = currentBvid,
                         currentCid = currentCid
                     ),
-                    fontSize = MaterialTheme.typography.labelMedium.fontSize
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 EpisodeListNavigationActions(

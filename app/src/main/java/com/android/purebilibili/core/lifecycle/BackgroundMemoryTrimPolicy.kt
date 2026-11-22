@@ -2,9 +2,7 @@ package com.android.purebilibili.core.lifecycle
 
 import android.content.ComponentCallbacks2
 
-/** 短暂切换保留热图片；持续后台在缓存进程可能冻结前释放页面像素并收紧预算。 */
-internal const val BACKGROUND_IMAGE_TRIM_DELAY_MS = 5_000L
-internal const val BACKGROUND_IMAGE_CACHE_LIGHT_MAX_BYTES = 64L * 1024 * 1024
+/** 后台仍留少量热图片，较小的前台预算继续沿用。 */
 internal const val BACKGROUND_IMAGE_CACHE_MAX_BYTES = 32L * 1024 * 1024
 
 /**
@@ -13,25 +11,6 @@ internal const val BACKGROUND_IMAGE_CACHE_MAX_BYTES = 32L * 1024 * 1024
  * 因此即使真实内存压力下也只收敛到这个上限。
  */
 internal const val BACKGROUND_COVER_COLOR_CACHE_MAX_ENTRIES = 64
-
-internal fun resolveBackgroundImageCacheTrimTargetBytes(
-    cacheSizeBytes: Long,
-    backgroundElapsedMs: Long,
-): Long {
-    val budget = if (backgroundElapsedMs >= BACKGROUND_IMAGE_TRIM_DELAY_MS) {
-        BACKGROUND_IMAGE_CACHE_MAX_BYTES
-    } else {
-        BACKGROUND_IMAGE_CACHE_LIGHT_MAX_BYTES
-    }
-    return cacheSizeBytes.coerceIn(0L, budget)
-}
-
-internal fun shouldTrimImageCacheAfterBackgroundDelay(
-    isInBackground: Boolean,
-    isPipActiveOrPending: Boolean,
-    backgroundElapsedMs: Long,
-): Boolean = isInBackground && !isPipActiveOrPending &&
-    backgroundElapsedMs >= BACKGROUND_IMAGE_TRIM_DELAY_MS
 
 /**
  * 应用级后台内存编排计划。

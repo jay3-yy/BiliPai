@@ -72,7 +72,7 @@ internal data class MusicLyricCandidateUi(
     val sourceLabel: String
 )
 
-@Immutable
+@androidx.compose.runtime.Stable
 internal data class MusicPlayerUiState(
     val title: String = "未知歌曲",
     val artist: String = "",

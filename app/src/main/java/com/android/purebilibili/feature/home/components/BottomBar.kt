@@ -117,6 +117,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer  //  晃动动画
@@ -194,33 +195,22 @@ import kotlin.math.sign
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 import top.yukonga.miuix.kmp.blur.blur as miuixBlur
 import top.yukonga.miuix.kmp.blur.drawBackdrop as miuixDrawBackdrop
-import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
-import top.yukonga.miuix.kmp.blur.highlight.Highlight as MiuixHighlight
-import top.yukonga.miuix.kmp.blur.highlight.LightPosition
-import top.yukonga.miuix.kmp.blur.highlight.LightSource
+import top.yukonga.miuix.kmp.material.EdgeLightSource
+import top.yukonga.miuix.kmp.material.EdgePeak
+import top.yukonga.miuix.kmp.material.EdgeStroke
+import top.yukonga.miuix.kmp.material.drawEdgeStroke
 import top.yukonga.miuix.kmp.blur.layerBackdrop as miuixLayerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop as rememberMiuixLayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Search
 import top.yukonga.miuix.kmp.basic.NavigationBarDefaults as MiuixNavigationBarDefaults
-private val iosIndicatorSpecular: MiuixHighlight = MiuixHighlight(
+private val iosIndicatorSpecular = EdgeStroke(
     width = AppSpacingTokens.Micro / 2,
-    alpha = 1f,
-    style = BloomStroke(
-        color = OpticalContrastPalette.Highlight.copy(alpha = 0.12f),
-        innerBlurRadius = AppSpacingTokens.Micro,
-        primaryLight = LightSource(
-            position = LightPosition(0.5f, -0.3f, -0.05f),
-            color = OpticalContrastPalette.Highlight,
-            intensity = 1f
-        ),
-        secondaryLight = LightSource(
-            position = LightPosition(0.5f, 0.8f, -0.5f),
-            color = OpticalContrastPalette.Highlight,
-            intensity = 0.4f
-        ),
-        dualPeak = true
-    )
+    bevel = AppSpacingTokens.Micro,
+    color = OpticalContrastPalette.Highlight.copy(alpha = 0.12f),
+    primary = EdgeLightSource(0.5f, -0.3f, -0.05f, OpticalContrastPalette.Highlight),
+    secondary = EdgeLightSource(0.5f, 0.8f, -0.5f, OpticalContrastPalette.Highlight, intensity = 0.4f),
+    peak = EdgePeak.Dual,
 )
 
 /**
@@ -627,7 +617,7 @@ internal fun resolveBiliPaiBottomBarDockHeight(
 ): Dp {
     // 联动宿主与内层原生导航共用此行高，避免父级仍按旧胶囊高度约束图文。
     return if (nativeMiuixNavigation && !hasUiSkinDecoration) {
-        MiuixNavigationBarDefaults.ItemHeight
+        52.dp
     } else if (hasUiSkinDecoration) {
         // Search width changes must not compress the skin's icon/label stack.
         resolveBottomBarSkinDockHeight()
@@ -1129,18 +1119,17 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
         }
         block
     }
-    val backdropHighlight = remember(
-        baseHighlight, renderGlassEffects, materialSpec.highlightWidthScale, effectiveShellLensIntensity,
+    val drawBackdropRim = remember(
+        baseHighlight, renderGlassEffects, materialSpec.highlightWidthScale, effectiveShellLensIntensity, backdropShape,
     ) {
-        val block: top.yukonga.miuix.kmp.blur.BackdropEffectScope.() -> MiuixHighlight? = {
-            baseHighlight?.value?.copy(
-                alpha = if (renderGlassEffects) {
-                    0.75f * materialSpec.highlightWidthScale *
-                        effectiveShellLensIntensity
-                } else {
-                    0f
-                }
-            )
+        val block: DrawScope.() -> Unit = {
+            if (renderGlassEffects && baseHighlight != null) {
+                drawEdgeStroke(
+                    backdropShape(),
+                    baseHighlight.value,
+                    0.75f * materialSpec.highlightWidthScale * effectiveShellLensIntensity,
+                )
+            }
         }
         block
     }
@@ -1213,7 +1202,7 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
                         backdrop = samplingBackdrop,
                         shape = backdropShape,
                         effects = backdropEffects,
-                        highlight = backdropHighlight,
+                        onDrawFront = drawBackdropRim,
                         layerBlock = backdropLayer,
                         onDrawSurface = backdropSurface
                     )
@@ -2849,16 +2838,19 @@ private fun OfficialMd3FloatingToolbarContent(
                     // 官方 M3 点按动画：指示底色在选中槽位原地 40%→100% 生长（fastSpatial 弹簧），
                     // 透明度与内容色交叉淡化（defaultEffects），不做跨槽位滑动。
                     showIcon -> {
-                        val indicatorProgress by animateFloatAsState(
+                        val indicatorProgressState = animateFloatAsState(
                             targetValue = if (selected) 1f else 0f,
                             animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
                             label = "md3FloatingSelectionIndicatorProgress",
                         )
-                        val indicatorAlpha by animateFloatAsState(
+                        val indicatorAlphaState = animateFloatAsState(
                             targetValue = if (selected) 1f else 0f,
                             animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
                             label = "md3FloatingSelectionIndicatorAlpha",
                         )
+                        val showIndicator by remember(indicatorProgressState) {
+                            derivedStateOf { indicatorProgressState.value > 0f }
+                        }
                         val selectionContentColor by animateColorAsState(
                             targetValue = if (selected) {
                                 selectionColors.contentColor
@@ -2874,15 +2866,15 @@ private fun OfficialMd3FloatingToolbarContent(
                                 colors = IconButtonDefaults.iconButtonColors(contentColor = selectionContentColor),
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    if (indicatorProgress > 0f) {
+                                    if (showIndicator) {
                                         Box(
                                             modifier = Modifier
                                                 .size(40.dp)
                                                 .graphicsLayer {
-                                                    val scale = 0.4f + 0.6f * indicatorProgress
+                                                    val scale = 0.4f + 0.6f * indicatorProgressState.value
                                                     scaleX = scale
                                                     scaleY = scale
-                                                    alpha = indicatorAlpha
+                                                    alpha = indicatorAlphaState.value
                                                 }
                                                 .clip(CircleShape)
                                                 .background(selectionColors.backgroundColor),
@@ -3872,7 +3864,7 @@ private fun BiliPaiFloatingBottomBarChrome(
         themedMd3Selection -> nativeSelectionColors.contentColor
         else -> AppContentColors.selectionAccent(effectiveGlassEnabled)
     }
-    val baseUnselectedColor = if (!effectiveGlassEnabled && (themedMiuixSelection || iconStyle == SharedFloatingBottomBarIconStyle.MATERIAL)) {
+    val baseUnselectedColor = if (!effectiveGlassEnabled && !themedMiuixSelection && iconStyle == SharedFloatingBottomBarIconStyle.MATERIAL) {
         AppContentColors.secondaryText()
     } else {
         AppContentColors.primaryText()
@@ -4217,71 +4209,7 @@ private fun BiliPaiFloatingBottomBarChrome(
                                 }
                             }
                         }
-                        if (useNativeMiuixNavigation) {
-                            val indicatorColor = AppInteractionColors.miuixNavigationBarIndicatorColor()
-                            val indicator = if (isValidSelection) {
-                                rememberMiuixBottomBarSelection(
-                                    selectedIndex = selectedIndex,
-                                    itemCount = visibleItems.size,
-                                    onSelected = { index -> handleBottomBarItemClick(index, visibleItems[index]) },
-                                )
-                            } else null
-                            val nativeShape = resolveSharedBottomBarCapsuleShape()
-                            val nativeSurfaceColor = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.surfaceContainer
-                            val useNativeBlur = blurEnabled && (miuixBackdrop != null || hazeState != null)
-                            AppPlatformNavigationBar(
-                                modifier = dockModifier
-                                    .clip(nativeShape)
-                                    .then(
-                                        if (useNativeBlur) {
-                                            // 原生悬浮导航保留自身布局，磨砂由壳层绘制；内部底色必须透明。
-                                            // 此分支仅用于关闭液态玻璃后的 Miuix，不改变 MD3 或玻璃材质。
-                                            Modifier.biliPaiMiuixFloatingDockSurface(
-                                                shape = nativeShape,
-                                                backdrop = miuixBackdrop,
-                                                containerColor = nativeSurfaceColor,
-                                                blurEnabled = true,
-                                                glassEnabled = false,
-                                                blurRadius = tuning.shellBlurRadiusDp.dp,
-                                                hazeState = hazeState,
-                                                motionTier = motionTier,
-                                                isTransitionRunning = isTransitionRunning,
-                                                forceLowBlurBudget = forceLowBlurBudget,
-                                            )
-                                        } else {
-                                            Modifier
-                                        }
-                                    ),
-                                color = if (useNativeBlur) Color.Transparent else nativeSurfaceColor,
-                                showDivider = false,
-                                defaultWindowInsetsPadding = false,
-                                mode = resolveMd3BottomBarDisplayMode(labelMode).toAppPlatformNavigationDisplayMode(),
-                            ) {
-                                visibleItems.forEachIndexed { index, item ->
-                                    val badgeText = formatBottomBarDynamicReminderBadge(
-                                        if (shouldShowBottomBarDynamicReminderBadge(item, dynamicUnreadCount)) dynamicUnreadCount else 0,
-                                    )
-                                    AppPlatformNavigationBarItem(
-                                        selected = currentItem == item,
-                                        onClick = { handleBottomBarItemClick(index, item) },
-                                        icon = resolveSharedBottomBarIcon(item, currentItem == item, iconStyle),
-                                        label = resolveBottomNavItemLabel(item, itemLabels),
-                                        modifier = indicator?.itemModifier(index, indicatorColor) ?: Modifier,
-                                        badge = badgeText?.let { text ->
-                                            { BottomBarReminderBadge(badgeText = text) }
-                                        },
-                                    )
-                                }
-                                if (isTablet && onToggleSidebar != null) {
-                                    AppPlatformNavigationBarItem(
-                                        selected = false,
-                                        onClick = ::handleBottomBarSidebarClick,
-                                        icon = resolveSharedBottomBarSidebarIcon(iconStyle),
-                                        label = stringResource(R.string.sidebar_toggle),
-                                    )
-                                }
-                            }
-                        } else if (usePlainMiuixFloatingBar) {
+                        if (usePlainMiuixFloatingBar) {
                             PlainMiuixFloatingBottomBar(
                                 selectedIndex = selectedIndexForBar,
                                 onSelected = floatingOnSelected,
@@ -4797,9 +4725,9 @@ internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(
                         vertical = swapMotionAxes,
                         // 仅玻璃材质取消缝隙遮罩，原生路径保留共享默认行为。
                         gapOnlyDispersion = !glassEnabled,
-                        highlightProvider = {
-                            if (glassEnabled) pillHighlight?.value?.copy(alpha = effectivePressProgress)
-                            else if (isDragging) pillHighlight?.value?.copy(alpha = opticalProgress) else null
+                        highlightProvider = { pillHighlight?.value },
+                        highlightAlphaProvider = {
+                            if (glassEnabled) effectivePressProgress else if (isDragging) opticalProgress else 0f
                         },
                         idleColor = indicatorIdleSurfaceColor,
                     )

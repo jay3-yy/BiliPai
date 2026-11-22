@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.animation.core.animateFloatAsState
@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.runtime.Composable
@@ -51,6 +51,9 @@ import androidx.compose.ui.semantics.collectionInfo
 import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorProducer
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +78,7 @@ import top.yukonga.miuix.kmp.basic.TabRowDefaults
 import top.yukonga.miuix.kmp.squircle.squircleClip
 import top.yukonga.miuix.kmp.squircle.squircleBorder
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.abs
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.semantics.Role
@@ -404,6 +408,7 @@ private fun <T> AppMiuixNonGlassTabs(
     } else {
         Dp.Infinity
     }
+    val itemSquirclePath = remember { Path() }
     TabRow(
         tabs = labels,
         selectedTabIndex = selectedIndex,
@@ -414,14 +419,14 @@ private fun <T> AppMiuixNonGlassTabs(
             .squircleClip(geometry.cornerRadius)
             .drawBehind {
                 if (opaqueItems) clipRect {
+                    val cornerPx = geometry.cornerRadius.toPx()
                     listState.layoutInfo.visibleItemsInfo.forEach { item ->
                         val left = if (layoutDirection == LayoutDirection.Rtl) {
                             size.width - item.offset - item.size
                         } else item.offset.toFloat()
-                        val path = Path().apply {
-                            addSquircleRect(item.size.toFloat(), size.height, geometry.cornerRadius.toPx())
-                        }
-                        translate(left = left) { drawPath(path, itemBackground) }
+                        itemSquirclePath.rewind()
+                        itemSquirclePath.addSquircleRect(item.size.toFloat(), size.height, cornerPx)
+                        translate(left = left) { drawPath(itemSquirclePath, itemBackground) }
                     }
                 }
             }
@@ -591,6 +596,9 @@ private fun <T> AppMiuixSizedTabs(
     val nativeStyle = isMiuixNonGlassEnabled()
     val scheme = MiuixTheme.colorScheme
     val itemClip = Modifier.squircleClip(cornerRadius)
+    val itemBorder = Modifier.squircleBorder(width = 1.dp, color = scheme.outline, cornerRadius = cornerRadius)
+    // Only native Miuix tabs with continuous pager motion follow the indicator's color progress.
+    val pagerPositionProvider = if (nativeStyle) indicatorPositionProvider else null
     val density = LocalDensity.current
     val scrollState = rememberScrollState()
     val motionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
@@ -709,12 +717,15 @@ private fun <T> AppMiuixSizedTabs(
             ) {
                 options.forEachIndexed { index, option ->
                     val selected = index == selectedIndex
+                    val selectionProgress = pagerPositionProvider?.let { position ->
+                        { (1f - abs(position() - index)).coerceIn(0f, 1f) }
+                    }
                     Box(
                         modifier = Modifier
                             .width(widths[index])
                             .height(height)
                             .then(if (nativeStyle) Modifier else itemClip)
-                            .then(if (nativeStyle && !selected) Modifier.squircleBorder(width = 1.dp, color = scheme.outline, cornerRadius = cornerRadius) else Modifier)
+                            .then(if (nativeStyle && selectionProgress == null && !selected) itemBorder else Modifier)
                             .selectable(
                                 selected = selected,
                                 enabled = enabled,
@@ -723,13 +734,29 @@ private fun <T> AppMiuixSizedTabs(
                                 indication = indication,
                                 onClick = { onSelectionChange(option.value) },
                             )
-                            .semantics { collectionItemInfo = CollectionItemInfo(0, 1, index, 1) }
-                            .padding(horizontal = 12.dp),
+                            .semantics { collectionItemInfo = CollectionItemInfo(0, 1, index, 1) },
                         contentAlignment = Alignment.Center,
                     ) {
+                        if (selectionProgress != null) {
+                            Box(
+                                Modifier
+                                    .matchParentSize()
+                                    .graphicsLayer { alpha = 1f - selectionProgress() }
+                                    .then(itemBorder),
+                            )
+                        }
                         AppText(
                             text = option.label,
-                            color = if (selected) tabColors.selectedContentColor else tabColors.contentColor,
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            color = ColorProducer {
+                                if (selectionProgress != null) {
+                                    lerp(
+                                        tabColors.contentColor,
+                                        tabColors.selectedContentColor,
+                                        selectionProgress(),
+                                    )
+                                } else if (selected) tabColors.selectedContentColor else tabColors.contentColor
+                            },
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                             style = labelStyle,
                             maxLines = 1,

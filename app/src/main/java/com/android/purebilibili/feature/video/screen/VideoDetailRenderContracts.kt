@@ -1,13 +1,14 @@
 package com.android.purebilibili.feature.video.screen
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.Stable
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.video.note.VideoNoteEditorDocument
 import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 
-@Immutable
+@Stable
 internal data class VideoDetailPlaybackActions(
     val resolveNextWatch: () -> com.android.purebilibili.feature.video.playback.next.NextWatchSuggestion? = { null },
     val playNextWatch: (com.android.purebilibili.feature.video.playback.next.NextWatchSuggestion) -> Boolean = { false },

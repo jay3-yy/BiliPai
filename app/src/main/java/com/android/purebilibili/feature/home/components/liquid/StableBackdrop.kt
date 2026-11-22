@@ -27,7 +27,7 @@ internal class StableBackdrop(private val source: State<Backdrop>) : Backdrop {
         density: Density,
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
-        downscaleFactor: Int,
+        downscaleFactor: Float,
     ) {
         with(source.value) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
     }

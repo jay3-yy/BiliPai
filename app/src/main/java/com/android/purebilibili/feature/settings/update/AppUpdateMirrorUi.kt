@@ -70,7 +70,7 @@ internal fun AppUpdateCustomMirrorDialog(
                 supportingText = {
                     AppText(
                         "GHFast 前缀示例 ${AppUpdateMirror.GHFAST.prefix.orEmpty()}\n" +
-                            "下载时会在此前缀后拼接原始 GitHub APK 链接",
+                            "请求时会在此前缀后拼接原始 GitHub 资源链接",
                     )
                 },
                 isError = prefix.isNotBlank() && normalizedPrefix == null,
@@ -119,18 +119,20 @@ internal fun AppUpdateDownloadChannels(state: AppUpdateDialogState, actions: App
                     AppUpdateReleaseLink.TEST -> actions.onOpenTestRelease
                 },
             )
-            AppUpdateDownloadChannelButton(
-                modifier = Modifier.weight(1f),
-                choices = AppUpdateMirror.entries,
-                selected = state.mirrorSource,
-                label = AppUpdateMirror::label,
-                actionTitle = "镜像下载",
-                actionSubtitle = state.mirrorSource.label,
-                menuLabel = "选择下载镜像",
-                enabled = state.hasAsset && !state.downloadState.isActiveDownload(),
-                onSelect = actions.onMirrorSelect,
-                onClick = actions.onMirrorAction,
-            )
+            if (state.mirrorEnabled) {
+                AppUpdateDownloadChannelButton(
+                    modifier = Modifier.weight(1f),
+                    choices = AppUpdateMirror.entries,
+                    selected = state.mirrorSource,
+                    label = AppUpdateMirror::label,
+                    actionTitle = "镜像下载",
+                    actionSubtitle = state.mirrorSource.label,
+                    menuLabel = "选择下载镜像",
+                    enabled = state.hasAsset && !state.downloadState.isActiveDownload(),
+                    onSelect = actions.onMirrorSelect,
+                    onClick = actions.onMirrorAction,
+                )
+            }
         }
     }
 }

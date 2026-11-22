@@ -19,7 +19,7 @@ class TvSearchInputTest {
 
     @Test fun keyboardEnterSubmitsTheQuery() {
         var submitted = ""
-        compose.setContent { TvTheme { TvSearchInput(TvUiState(), FocusRequester()) { submitted = it } } }
+        compose.setContent { TvTheme { TvSearchInput(TvUiState(), FocusRequester(), onSearch = { submitted = it }) } }
         compose.onNodeWithTag("tv-search-input").assertIsFocused().performTextInput("BiliPai")
         compose.onNodeWithTag("tv-search-input").performKeyInput { pressKey(Key.Enter) }
         compose.runOnIdle { assertEquals("BiliPai", submitted) }
@@ -27,7 +27,7 @@ class TvSearchInputTest {
 
     @Test fun downMovesToSearchAndConfirmationSubmits() {
         var submitted = ""
-        compose.setContent { TvTheme { TvSearchInput(TvUiState(), FocusRequester()) { submitted = it } } }
+        compose.setContent { TvTheme { TvSearchInput(TvUiState(), FocusRequester(), onSearch = { submitted = it }) } }
         compose.onNodeWithTag("tv-search-input").performTextInput("BiliPai")
         compose.onNodeWithTag("tv-search-input").performKeyInput { pressKey(Key.DirectionDown) }
         compose.onNodeWithText("搜索").assertIsFocused().performKeyInput { pressKey(Key.DirectionCenter) }

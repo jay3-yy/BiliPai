@@ -9,7 +9,11 @@ import com.android.purebilibili.navigation3.VideoCardTransitionSession
 import kotlin.math.roundToInt
 
 /** 复用整卡像素，但播放器只能读取封面区域；标题与信息面仅属于窗口转场。 */
-internal data class VideoDetailOpeningSeed(val bitmap: Bitmap, val coverPixels: IntRect)
+internal data class VideoDetailOpeningSeed(
+    val bvid: String,
+    val bitmap: Bitmap,
+    val coverPixels: IntRect,
+)
 
 internal val LocalVideoDetailOpeningSeed = staticCompositionLocalOf<VideoDetailOpeningSeed?> { null }
 
@@ -18,7 +22,7 @@ internal fun videoDetailOpeningSeed(
     source: VideoCardTransitionSession,
 ): VideoDetailOpeningSeed? = resolveVideoDetailOpeningSeedCrop(
     source.cardBounds, source.coverBounds, source.sourceLayout, bitmap.width, bitmap.height,
-)?.let { VideoDetailOpeningSeed(bitmap, it) }
+)?.let { VideoDetailOpeningSeed(source.bvid, bitmap, it) }
 
 /** 卡片和封面使用同一套根坐标；先取相对位置，再映射到实际截图像素。 */
 internal fun resolveVideoDetailOpeningSeedCrop(

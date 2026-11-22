@@ -53,6 +53,7 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         BiliPaiNavKey.Settings -> ScreenRoutes.Settings.route
         is BiliPaiNavKey.SettingsCategory -> "settings_category/${category.name}"
         BiliPaiNavKey.SettingsSearch -> "settings_search"
+        BiliPaiNavKey.ProcessMemory -> "process_memory"
         BiliPaiNavKey.PerformanceHistory -> "performance_history"
         BiliPaiNavKey.OpenSourceLicenses -> ScreenRoutes.OpenSourceLicenses.route
         BiliPaiNavKey.AppearanceSettings -> ScreenRoutes.AppearanceSettings.route
@@ -207,6 +208,7 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
             BiliPaiNavKey.SettingsCategory(category = category)
         }
         normalized == "settings_search" -> BiliPaiNavKey.SettingsSearch
+        normalized == "process_memory" -> BiliPaiNavKey.ProcessMemory
         normalized == "performance_history" -> BiliPaiNavKey.PerformanceHistory
         normalized == ScreenRoutes.OpenSourceLicenses.route -> BiliPaiNavKey.OpenSourceLicenses
         normalized == ScreenRoutes.AppearanceSettings.route -> BiliPaiNavKey.AppearanceSettings

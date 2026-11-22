@@ -19,8 +19,8 @@ fun PortraitCommentSheet(
     expectedReplyCount: Int = 0,
     emoteMap: Map<String, String> = emptyMap(),
     maxTimestampMs: Long? = null,
-    onRootCommentClick: () -> Unit = {},
-    onReplyClick: (ReplyItem) -> Unit = {},
+    onRootCommentClick: (() -> Unit)? = null,
+    onReplyClick: ((ReplyItem) -> Unit)? = null,
     onUserClick: (Long) -> Unit,
     onOpenBilibiliLink: ((String) -> Unit)? = null,
 ) {
@@ -51,5 +51,6 @@ fun PortraitCommentSheet(
         onReplyClick = onReplyClick,
         onUserClick = onUserClick,
         onOpenBilibiliLink = onOpenBilibiliLink,
+        pullToRefreshFromTopOnly = true,
     )
 }

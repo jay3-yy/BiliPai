@@ -68,7 +68,10 @@ internal fun AppTimedSlideSheet(
         val opening = visible && !closing
         progress.animateTo(
             if (opening) 1f else 0f,
-            tween(if (reduced) { if (opening) 120 else 90 } else { if (opening) 250 else 200 }, easing = FastOutSlowInEasing),
+            tween(
+                if (reduced) { if (opening) 120 else 90 } else { if (opening) 250 else 200 },
+                easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.M1Standard,
+            ),
         )
         if (!opening) latestFinished()
     }
@@ -88,7 +91,14 @@ internal fun AppTimedSlideSheet(
                 requestDismiss()
             } else {
                 settleJob = scope.launch {
-                    animate(dragOffset, 0f, animationSpec = tween(if (reduced) 0 else 150, easing = FastOutSlowInEasing)) { value, _ ->
+                    animate(
+                        dragOffset,
+                        0f,
+                        animationSpec = tween(
+                            if (reduced) 0 else 150,
+                            easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.M1Standard,
+                        ),
+                    ) { value, _ ->
                         dragOffset = value
                     }
                 }

@@ -48,9 +48,6 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.data.model.response.SearchType
 import com.android.purebilibili.feature.search.defaultSearchFilterTabOrder
 import com.android.purebilibili.feature.search.resolveSearchFilterTabs
-import com.android.purebilibili.core.theme.BottomBarColors  //  统一底栏颜色配置
-import com.android.purebilibili.core.theme.BottomBarColorPalette  //  调色板
-import com.android.purebilibili.core.theme.BottomBarColorNames  //  颜色名称
 import com.android.purebilibili.core.theme.LocalSettingsLiquidGlassEnabled
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
@@ -90,7 +87,12 @@ data class TopTabConfig(
 internal fun resolveBottomBarTabIcon(
     id: String,
     iconFamily: AppSemanticIconFamily = AppSemanticIconFamily.MATERIAL,
-): ImageVector = resolveSettingsNavigationPreviewIcon(id, iconFamily, selected = false)
+): ImageVector = resolveSettingsNavigationPreviewIcon(
+    tabId = id,
+    iconFamily = iconFamily,
+    selected = false,
+    bottomBar = true,
+)
 
 @Composable
 internal fun resolveTopTabIcon(
@@ -274,8 +276,6 @@ fun BottomBarSettingsContent(
         }
     }
 
-    //  [新增] 读取项目颜色配置
-    val itemColors = navigationConfiguration.bottomBarItemColors
     val itemLabels = navigationConfiguration.bottomBarItemLabels
 
     val visibilityMode = navigationConfiguration.savedBottomBarVisibilityMode
@@ -323,13 +323,6 @@ fun BottomBarSettingsContent(
         mutable.add(to, item)
         localSearchFilterTabOrder = mutable
         saveSearchFilterTabOrder()
-    }
-
-    //  [新增] 保存颜色配置
-    fun saveItemColor(itemId: String, colorIndex: Int) {
-        scope.launch {
-            SettingsManager.setBottomBarItemColor(context, itemId, colorIndex)
-        }
     }
 
     EntranceGroup {
@@ -449,7 +442,7 @@ fun BottomBarSettingsContent(
                                 AppSwitchPreference(
                                     icon = rememberSettingsSemanticIcon(SettingsIconRole.LIST_SCOPED_SEARCH),
                                     title = settingItemTitle("navigation.list_scoped_search_enabled"),
-                                    subtitle = "收藏、历史和稍后再看改用底栏搜索当前页",
+                                    subtitle = "浏览底栏中的收藏、历史或稍后再看时，底栏提交的关键词用于筛选当前列表",
                                     checked = listScopedSearchEnabled,
                                     onCheckedChange = { enabled ->
                                         scope.launch {
@@ -941,7 +934,6 @@ fun BottomBarSettingsContent(
                                 tab = tab,
                                 customLabel = itemLabels[tab.id].orEmpty(),
                                 isVisible = tab.id in localVisibleTabs,
-                                colorIndex = itemColors[tab.id] ?: BottomBarColors.getDefaultColorIndex(tab.id),
                                 canToggle = if (tab.id in localVisibleTabs) {
                                     // 已显示的项目：至少保留 2 个可见
                                     localVisibleTabs.size > 2
@@ -960,9 +952,6 @@ fun BottomBarSettingsContent(
                                         localOrder = localOrder + tab.id
                                     }
                                     saveConfig()
-                                },
-                                onColorChange = { newColorIndex ->
-                                    saveItemColor(tab.id, newColorIndex)
                                 },
                                 onLabelChange = { label ->
                                     scope.launch {
@@ -1172,30 +1161,11 @@ private fun BottomBarTabItem(
     tab: BottomBarTabConfig,
     customLabel: String,
     isVisible: Boolean,
-    colorIndex: Int,
     canToggle: Boolean,
     onToggle: (Boolean) -> Unit,
-    onColorChange: (Int) -> Unit,
     onLabelChange: (String) -> Unit,
 ) {
-    //  MD3(MATERIAL3)主题下可用项目图标跟随主题色,不再使用多彩色板;
-    //  颜色选择弹窗仅对保留多彩色的预设开放。
-    val uiStyle = LocalAppUiStyle.current
-    val isMaterial3 = uiStyle == AppUiStyle.MATERIAL3
-    val itemColor = if (isMaterial3) {
-        AppContentColors.accent()
-    } else {
-        BottomBarColors.getColorByIndex(colorIndex)
-    }
-    val itemContainerColor = if (isMaterial3) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        itemColor
-    }
-    val iconContentColor = rememberAdaptivePreferenceIconContentColor(itemContainerColor)
-
-    //  颜色选择弹窗状态
-    var showColorPicker by remember { mutableStateOf(false) }
+    //  名称编辑弹窗状态
     var showLabelEditor by remember { mutableStateOf(false) }
     var labelDraft by remember(customLabel) { mutableStateOf(customLabel) }
     val displayLabel = customLabel.ifBlank { tab.label }
@@ -1206,34 +1176,15 @@ private fun BottomBarTabItem(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 图标 -  点击可更换颜色(仅多彩色预设开放)
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .appDesktopFocusableItemVisuals(enabled = !isMaterial3)
-                .clickable(
-                    enabled = !isMaterial3,
-                    role = Role.Button,
-                ) { showColorPicker = true },
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(AppShapes.container(ContainerLevel.Field))
-                    .background(itemContainerColor),
-                contentAlignment = Alignment.Center,
-            ) {
-                AppIcon(
-                    imageVector = tab.icon,
-                    contentDescription = null,
-                    tint = iconContentColor,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
+        // 图标 - 与其他设置条目一致,跟随主题样式
+        AppIcon(
+            imageVector = tab.icon,
+            contentDescription = null,
+            tint = AppContentColors.secondaryText(),
+            modifier = Modifier.size(24.dp)
+        )
 
-        Spacer(modifier = Modifier.width(14.dp))
+        Spacer(modifier = Modifier.width(16.dp))
 
         // 名称
         Column(
@@ -1252,7 +1203,7 @@ private fun BottomBarTabItem(
             )
             AppText(
                 text = if (customLabel.isBlank()) {
-                    "点击名称自定义文字；点击图标更换颜色"
+                    "点击名称自定义文字"
                 } else {
                     "默认：${tab.label}；点击名称修改"
                 },
@@ -1305,63 +1256,6 @@ private fun BottomBarTabItem(
                     AppText("恢复默认")
                 }
             },
-        )
-    }
-
-    //  颜色选择弹窗
-    if (showColorPicker) {
-        com.android.purebilibili.core.ui.AppAlertDialog(
-            onDismissRequest = { showColorPicker = false },
-            title = { AppText("选择${tab.label}颜色") },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    BottomBarColorPalette.forEachIndexed { index, color ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(AppShapes.container(ContainerLevel.Field))
-                                .clickable {
-                                    onColorChange(index)
-                                    showColorPicker = false
-                                }
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(AppShapes.container(ContainerLevel.Chip))
-                                    .background(color)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            AppText(
-                                text = BottomBarColorNames[index],
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = AppContentColors.primaryText()
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                            if (index == colorIndex) {
-                                AppIcon(
-                                    rememberSettingsVector(R.drawable.ph_check_24, R.drawable.ms_check_24),
-                                    contentDescription = null,
-                                    tint = AppContentColors.accent(),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                com.android.purebilibili.core.ui.AppDialogAction(
-                    onClick = { showColorPicker = false }
-                ) {
-                    AppText("取消", color = AppContentColors.link())
-                }
-            }
         )
     }
 }

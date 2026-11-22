@@ -4,6 +4,10 @@ import com.android.purebilibili.navigation3.NavigationControlMotionGroup
 import androidx.compose.foundation.border
 
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.resolveGlobalWallpaperProtectiveColor
+import com.android.purebilibili.core.ui.wallpaper.sharedGlobalWallpaperBackground
 import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 
 import android.app.Application
@@ -11,7 +15,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
@@ -19,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
 import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -390,7 +395,8 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
                 areaEntries = areaEntries,
                 page = page,
                 hasMore = snapshot.hasMore,
-                isLoading = !append && !complete,
+                // 刷新指示器随推荐内容就绪结束；关注补取结果由 complete 阶段单独落地，不拖住转圈。
+                isLoading = false,
                 initialLoadComplete = true,
                 contentLoadComplete = true,
                 isLoadingMore = false,
@@ -534,7 +540,7 @@ private fun com.android.purebilibili.data.model.response.LiveRoom.toLiveRoomItem
     )
 
 @Composable
-fun LiveListScreen(
+internal fun LiveListScreen(
     onBack: () -> Unit,
     onLiveClick: (Long, String, String) -> Unit,
     onSearchClick: () -> Unit,
@@ -542,6 +548,7 @@ fun LiveListScreen(
     onFollowingClick: () -> Unit,
     onAreaDetailClick: (Int, Int, String) -> Unit,
     onMatchClick: () -> Unit,
+    matchTarget: BiliPaiNavKey.Web?,
     onUserClick: (Long) -> Unit = {},
     /** 底栏主入口时隐藏返回，更接近 BiliPai 主 tab 形态。 */
     showNavigationBack: Boolean = true,
@@ -703,6 +710,7 @@ fun LiveListScreen(
                 onToggleFirstFrame = viewModel::toggleShowFirstFrame,
                 onAreaListClick = onAreaListClick,
                 onMatchClick = onMatchClick,
+                matchTarget = matchTarget,
                 onSortTagSelected = { sort ->
                     if (!state.isLoading) {
                         viewModel.selectSortTag(sort)
@@ -717,9 +725,20 @@ fun LiveListScreen(
             )
         }
     }
+    val wallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
+    val wallpaperScrim = resolveGlobalWallpaperProtectiveColor(
+        baseColor = AppSurfaceTokens.chromeBackground(),
+        lightAlpha = 0.47f,
+        darkAlpha = 0.56f,
+    )
+    val pageBackground = if (wallpaperVisible) {
+        Modifier
+            .sharedGlobalWallpaperBackground(Color.Transparent)
+            .background(wallpaperScrim)
+    } else Modifier.background(palette.backgroundBrush())
     if (embeddedInHome) {
-        // 首页负责顶栏及背景采样，嵌入页只提供内容内边距，不再缩短滚动视口。
-        Box(Modifier.fillMaxSize().background(palette.backgroundBrush())) {
+        // 首页负责顶栏，直播内容与独立入口共用同一张壁纸。
+        Box(Modifier.fillMaxSize().then(pageBackground)) {
             liveContent(contentTopPadding)
         }
     } else {
@@ -729,8 +748,9 @@ fun LiveListScreen(
         } else null
         ImmersiveAppScaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = palette.backgroundTop,
-            topBarSurfaceColor = palette.backgroundTop,
+            containerColor = if (wallpaperVisible) Color.Transparent else palette.backgroundTop,
+            topBarSurfaceColor = if (wallpaperVisible) wallpaperScrim.copy(alpha = 0.24f) else palette.backgroundTop,
+            wallpaperChrome = wallpaperVisible,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             blurContentReady = state.initialLoadComplete && state.contentLoadComplete,
             chromeBackdropSource = searchBackdrop,
@@ -756,7 +776,7 @@ fun LiveListScreen(
             Box(
                 Modifier.fillMaxSize()
                     .then(searchBackdrop?.modifier ?: Modifier)
-                    .background(palette.backgroundBrush())
+                    .then(pageBackground)
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
             ) {
                 liveContent(padding.calculateTopPadding())
@@ -811,6 +831,7 @@ internal fun LiveHomeContent(
     onToggleFirstFrame: () -> Unit,
     onAreaListClick: () -> Unit,
     onMatchClick: () -> Unit,
+    matchTarget: BiliPaiNavKey.Web? = null,
     onSortTagSelected: (String?) -> Unit,
     onLoadMore: () -> Unit,
     onAreaDetailClick: (Int, Int, String) -> Unit,
@@ -893,6 +914,7 @@ internal fun LiveHomeContent(
                         onToggleFirstFrame = onToggleFirstFrame,
                         onAreaListClick = onAreaListClick,
                         onMatchClick = onMatchClick,
+                        matchTarget = matchTarget,
                     )
                     if (selectedParentAreaId > 0 && sortTags.isNotEmpty()) {
                         LiveSortTagChipRow(
@@ -907,10 +929,18 @@ internal fun LiveHomeContent(
                 isLoading && contentItems.isEmpty() -> {
                     liveRoomSkeletonItems(skeletonLayout.cardCount, metrics, skeletonColor)
                 }
-                error != null && contentItems.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                error != null && contentItems.isEmpty() -> item(
+                    key = "live_error_state",
+                    contentType = "live_error_state",
+                    span = { GridItemSpan(maxLineSpan) },
+                ) {
                     LiveListErrorState(error, onRetry)
                 }
-                contentItems.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                contentItems.isEmpty() -> item(
+                    key = "live_empty_state",
+                    contentType = "live_empty_state",
+                    span = { GridItemSpan(maxLineSpan) },
+                ) {
                     EmptyState(
                         message = if (isLiveHomeFollowedTab(selectedAreaIndex)) {
                             "关注的主播暂时都未开播"
@@ -921,8 +951,14 @@ internal fun LiveHomeContent(
                     )
                 }
                 else -> {
-                    items(contentItems, key = { it.roomId }) { item ->
-                        val model = item.toLiveRoomCardUiModel(showFirstFrame)
+                    items(
+                        items = contentItems,
+                        key = { it.roomId },
+                        contentType = { "live_room_card" },
+                    ) { item ->
+                        val model = remember(item, showFirstFrame) {
+                            item.toLiveRoomCardUiModel(showFirstFrame)
+                        }
                         LiveRoomCard(
                             model = model,
                             enableSharedCoverTransition = true,
@@ -934,7 +970,11 @@ internal fun LiveHomeContent(
                 }
             }
             if (hasMore && !isLoading && error == null) {
-                item(key = LIVE_GRID_LOAD_MORE_KEY, span = { GridItemSpan(maxLineSpan) }) {
+                item(
+                    key = LIVE_GRID_LOAD_MORE_KEY,
+                    contentType = "live_load_more",
+                    span = { GridItemSpan(maxLineSpan) },
+                ) {
                     LiveHomeLoadMoreFooter(
                         isLoadingMore = isLoadingMore,
                         contentCount = contentItems.size,
@@ -962,6 +1002,9 @@ private fun LiveListHeader(
 ) = NavigationControlMotionGroup {
     val palette = rememberLiveChromePalette()
     val compactChrome = rememberAppTopChromePolicy().compactChromeSpec
+    val searchField = if (LocalGlobalWallpaperBackdropVisible.current) {
+        resolveGlobalWallpaperProtectiveColor(palette.searchField, lightAlpha = 0.64f, darkAlpha = 0.72f)
+    } else palette.searchField
     val searchShape = AppShapes.container(ContainerLevel.Pill)
     val search = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveSearch, searchShape, onSearchClick)
     val areas = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveArea, CircleShape, onAreaListClick)
@@ -1026,7 +1069,7 @@ private fun LiveListHeader(
                     // 玻璃外壳拥有材质；关闭时保留原生 Surface 的颜色、形状与点击行为。
                     AppSurface(
                         onClick = search.onClick,
-                        color = if (liquidChromeActive) Color.Transparent else palette.searchField,
+                        color = if (liquidChromeActive) Color.Transparent else searchField,
                         shape = searchShape,
                         modifier = Modifier.fillMaxWidth().height(compactChrome.primaryHeightDp.dp).then(search.modifier),
                     ) {
@@ -1080,8 +1123,11 @@ private fun LiveFollowHeader(
     livingCount: Int?,
     onActionClick: () -> Unit,
     modifier: Modifier = Modifier,
-) {
+) = NavigationControlMotionGroup {
     val palette = rememberLiveChromePalette()
+    val following = rememberSystemWindowNavigationControl(
+        BiliPaiNavKey.LiveFollowing, AppShapes.container(ContainerLevel.Card), onActionClick,
+    )
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
@@ -1096,12 +1142,12 @@ private fun LiveFollowHeader(
                 append(" 人正在直播")
                 pop()
             },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).then(rememberSystemWindowControlNeighborModifier()),
             color = palette.primaryText,
             style = MaterialTheme.typography.bodyMedium,
         )
         Row(
-            modifier = Modifier.clickable(onClick = onActionClick),
+            modifier = following.modifier.clickable(onClick = following.onClick),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AppText(
@@ -1129,7 +1175,7 @@ private fun LiveFollowAvatarRow(
     onUserClick: (Long) -> Unit,
     onFollowingClick: () -> Unit,
     showMore: Boolean,
-) {
+) = NavigationControlMotionGroup {
     val palette = rememberLiveChromePalette()
     LazyRow(state = listState) {
         items(items, key = { it.roomId }) { item ->
@@ -1199,7 +1245,8 @@ private fun LiveFollowAvatarRow(
         }
         if (showMore) {
             item(key = "more_following") {
-                AppIconButton(onClick = onFollowingClick, modifier = Modifier.size(48.dp)) {
+                val following = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveFollowing, CircleShape, onFollowingClick)
+                AppIconButton(onClick = following.onClick, modifier = Modifier.size(48.dp).then(following.modifier)) {
                     AppText(">", modifier = Modifier.semantics { contentDescription = "更多关注直播" })
                 }
             }
@@ -1216,7 +1263,8 @@ private fun LiveAreaHomeChipRow(
     onToggleFirstFrame: () -> Unit,
     onAreaListClick: () -> Unit,
     onMatchClick: () -> Unit,
-) {
+    matchTarget: BiliPaiNavKey.Web?,
+) = NavigationControlMotionGroup {
     val categoryOptions = remember(areaEntries) {
         buildList {
             add(AppSegmentOption(LIVE_HOME_RECOMMEND_INDEX, "推荐"))
@@ -1231,6 +1279,8 @@ private fun LiveAreaHomeChipRow(
         }
     }
     val selectedCategory = selectedAreaIndex
+    val allAreas = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveArea, CircleShape, onAreaListClick)
+    val matches = rememberSystemWindowNavigationControl(matchTarget, CircleShape, onMatchClick)
     val quickActionColors = AppIconButtonDefaults.colors(
         containerColor = com.android.purebilibili.core.ui.AppSurfaceTokens.secondaryContainer(),
         contentColor = com.android.purebilibili.core.ui.AppSurfaceTokens.onSecondaryContainer(),
@@ -1273,7 +1323,7 @@ private fun LiveAreaHomeChipRow(
         }
         AppFilledIconButton(
             onClick = onToggleFirstFrame,
-            modifier = Modifier.size(26.dp),
+            modifier = Modifier.size(26.dp).then(rememberSystemWindowControlNeighborModifier()),
             colors = quickActionColors,
         ) {
             AppIcon(
@@ -1288,8 +1338,8 @@ private fun LiveAreaHomeChipRow(
         }
         Spacer(Modifier.width(8.dp))
         AppFilledIconButton(
-            onClick = onMatchClick,
-            modifier = Modifier.size(26.dp),
+            onClick = matches.onClick,
+            modifier = Modifier.size(26.dp).then(matches.modifier),
             colors = quickActionColors,
         ) {
             AppIcon(
@@ -1300,8 +1350,8 @@ private fun LiveAreaHomeChipRow(
         }
         Spacer(Modifier.width(8.dp))
         AppFilledIconButton(
-            onClick = onAreaListClick,
-            modifier = Modifier.size(26.dp),
+            onClick = allAreas.onClick,
+            modifier = Modifier.size(26.dp).then(allAreas.modifier),
             colors = quickActionColors,
         ) {
             AppIcon(

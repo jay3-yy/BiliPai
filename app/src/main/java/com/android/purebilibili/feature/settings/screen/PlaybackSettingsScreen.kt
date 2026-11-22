@@ -1335,8 +1335,6 @@ private fun PlaybackInteractionSettingsSection(
         .collectAsStateWithLifecycle(initialValue = true)
     val hideInteractiveCommandDanmaku by remember(context) { com.android.purebilibili.core.store.SettingsManager.getDanmakuHideInteractiveCommands(context) }
         .collectAsStateWithLifecycle(initialValue = false)
-    val danmakuCloudSyncEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getDanmakuCloudSyncEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = true)
     //  [新增] 自动播放下一个
     val autoPlayEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getAutoPlay(context) }.collectAsStateWithLifecycle(initialValue = true)
     val nextWatchHintEnabled by remember(context) { SettingsManager.getNextWatchHintEnabled(context) }
@@ -1655,23 +1653,6 @@ SettingsItemAnchor("playback.subtitle_auto_preference") {
             )
 }
         AppPreferenceDivider()
-        SettingsItemAnchor("playback.danmaku_cloud_sync_enabled") {
-            AppSwitchPreference(
-                icon = rememberSettingsSemanticIcon(SettingsIconRole.DANMAKU_CLOUD_SYNC),
-                title = playbackSettingTitle("playback.danmaku_cloud_sync_enabled"),
-                subtitle = com.android.purebilibili.feature.video.danmaku
-                    .resolveDanmakuCloudSyncToggleSubtitle(danmakuCloudSyncEnabled),
-                checked = danmakuCloudSyncEnabled,
-                onCheckedChange = {
-                    scope.launch {
-                        com.android.purebilibili.core.store.SettingsManager
-                            .setDanmakuCloudSyncEnabled(context, it)
-                    }
-                },
-                iconTint = AppContentColors.secondaryText()
-            )
-        }
-        AppPreferenceDivider()
         SettingsItemAnchor("playback.video_info_default_expanded") {
             AppSwitchPreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_DESCRIPTION),
@@ -1905,14 +1886,18 @@ SettingsItemAnchor("playback.comment_collapsed_reply_preview_limit") {
         )
 }
         AppPreferenceDivider()
-        SettingsItemAnchor("playback.sub_reply_threaded_enabled") {
-            AppSwitchPreference(
+        SettingsItemAnchor(SUB_REPLY_STYLE_SETTING_ID) {
+            SettingsSingleChoicePreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.SUB_REPLY_THREADED),
-                title = playbackSettingTitle("playback.sub_reply_threaded_enabled"),
-                subtitle = "按回复关系缩进并连线，支持原地展开或收起分支",
-                checked = subReplyThreadedEnabled,
-                onCheckedChange = { enabled ->
-                    scope.launch { SettingsManager.setSubReplyThreadedEnabled(context, enabled) }
+                title = stringResource(R.string.sub_reply_style_title),
+                subtitle = stringResource(R.string.sub_reply_style_summary),
+                options = listOf(
+                    AppSegmentOption(true, stringResource(R.string.sub_reply_style_tree)),
+                    AppSegmentOption(false, stringResource(R.string.sub_reply_style_classic)),
+                ),
+                selectedValue = subReplyThreadedEnabled,
+                onSelectionChange = { threaded ->
+                    scope.launch { SettingsManager.setSubReplyThreadedEnabled(context, threaded) }
                 },
                 iconTint = AppContentColors.secondaryText(),
             )

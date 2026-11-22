@@ -25,13 +25,13 @@ class ContinuousBackdropUiTest {
         override val isCoordinatesDependent = false
         override var offsetResidualX = 0f
         var phase = 0f
-        val factors = mutableListOf<Int>()
+        val factors = mutableListOf<Float>()
 
         override fun DrawScope.drawBackdrop(
             density: Density,
             coordinates: LayoutCoordinates?,
             layerBlock: (GraphicsLayerScope.() -> Unit)?,
-            downscaleFactor: Int,
+            downscaleFactor: Float,
         ) {
             factors += downscaleFactor
             val offset = phase - origin
@@ -54,30 +54,30 @@ class ContinuousBackdropUiTest {
         for (phase in listOf(1.9f, 2.1f, 2.9f, 3.1f, 1.9f)) {
             first.phase = phase
             second.phase = phase
-            val pixels = render(combined, 2).toPixelMap()
+            val pixels = render(combined, 2f).toPixelMap()
             for (x in 0 until pixels.width) {
                 assertEquals("phase=$phase, x=$x", pixels[x, 3].red, pixels[x, 11].green, 0.02f)
             }
             assertEquals(0f, combined.offsetResidualX)
         }
-        assertEquals(setOf(1), first.factors.toSet())
-        assertEquals(setOf(1), second.factors.toSet())
+        assertEquals(setOf(1f), first.factors.toSet())
+        assertEquals(setOf(1f), second.factors.toSet())
     }
 
     @Test
     fun singleSourceKeepsContinuousCoordinatesAtEveryRequestedScale() {
         val source = GridSource(1f, 0f, Color.Red)
         val continuous = ContinuousBackdrop(source)
-        for (scale in listOf(1, 2, 4)) {
+        for (scale in listOf(1f, 2.5f, 4f)) {
             source.phase = 2.1f
             render(continuous, scale)
             assertEquals(0f, continuous.offsetResidualX)
             assertEquals(0f, source.offsetResidualX)
         }
-        assertEquals(listOf(1, 1, 1), source.factors)
+        assertEquals(listOf(1f, 1f, 1f), source.factors)
     }
 
-    private fun render(backdrop: Backdrop, factor: Int): ImageBitmap {
+    private fun render(backdrop: Backdrop, factor: Float): ImageBitmap {
         val bitmap = ImageBitmap(32, 16)
         CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(32f, 16f)) {
             with(backdrop) { drawBackdrop(this@draw, null, null, factor) }

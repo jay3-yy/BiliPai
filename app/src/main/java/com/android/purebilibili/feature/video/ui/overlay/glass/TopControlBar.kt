@@ -24,7 +24,7 @@ import androidx.compose.animation.core.snap
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -313,7 +313,12 @@ fun TopControlBar(
             )
             .padding(
                 horizontal = layoutPolicy.horizontalPaddingDp.dp,
-                vertical = layoutPolicy.verticalPaddingDp.dp
+                // 竖屏全屏顶栏贴近挖孔，避免控件下压遮挡视频画面。
+                vertical = if (isFullscreen && configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
+                    4.dp
+                } else {
+                    layoutPolicy.verticalPaddingDp.dp
+                }
             )
     ) {
         Row(
@@ -419,6 +424,7 @@ fun TopControlBar(
                         modifier = Modifier.weight(1f),
                     )
                 } else {
+                    val titleMarqueeGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
                     // 标题与右侧图标保持同一行
                     AppText(
                         text = title,
@@ -429,7 +435,8 @@ fun TopControlBar(
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier
                             .weight(1f)
-                            .basicMarquee()
+                            .then(titleMarqueeGate.modifier)
+                            .then(if (titleMarqueeGate.active) Modifier.basicMarquee() else Modifier)
                     )
                 }
             }
@@ -814,7 +821,7 @@ private fun PlayerTitleInfoDock(
     modifier: Modifier = Modifier,
     alignedGlassHeight: Dp? = null,
 ) {
-    val motionEnabled = LocalComponentMotionEnabled.current
+    val titleMarqueeGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
     PlayerControlGlassDock(
         enabled = true,
         modifier = modifier,
@@ -844,8 +851,10 @@ private fun PlayerTitleInfoDock(
                 maxLines = 1,
                 softWrap = false,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                // 长标题在胶囊宽度内滚动；关闭动效后回到单行省略号，保持原有静止行为。
-                modifier = if (motionEnabled) Modifier.basicMarquee() else Modifier,
+                // 长标题在胶囊宽度内滚动；不可见/失焦/关闭动效后回到单行省略号。
+                modifier = titleMarqueeGate.modifier.then(
+                    if (titleMarqueeGate.active) Modifier.basicMarquee() else Modifier
+                ),
             )
             if (shouldShowLandscapeMetaRow(statusInfo.isVisible, onlineCount)) {
                 Row(

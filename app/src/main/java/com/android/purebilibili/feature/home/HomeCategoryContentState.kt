@@ -24,7 +24,10 @@ private fun HomeUiState.projectCurrentHomeContent(): HomeUiState {
 }
 
 internal fun HomeUiState.selectHomeCategory(category: HomeCategory): HomeUiState {
-    val selected = copy(currentCategory = category)
+    val selected = copy(
+        currentCategory = category,
+        displayedTabEntry = HomeTopTabEntry.Category(category),
+    )
     return if (category == HomeCategory.POPULAR) {
         selected.selectHomePopularSubCategory(popularSubCategory)
     } else selected.projectCurrentHomeContent()

@@ -6,6 +6,14 @@ import androidx.compose.animation.core.Easing
 object AppMotionEasing {
     /** Apple/SwiftUI easeInOut unit curve for reversible on-screen morphs. */
     val IosEaseInOut: Easing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+    /** CSS/Web standard ease (0.25, 0.1, 0.25, 1.0) — shared by tab indicators & popups. */
+    val StandardEase: Easing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
+    /** CSS/Web ease-out (0.0, 0.0, 0.58, 1.0) — shared by dialogs & media previews. */
+    val StandardEaseOut: Easing = CubicBezierEasing(0f, 0f, 0.58f, 1f)
+    /** CSS/Web ease-in (0.42, 0.0, 1.0, 1.0). */
+    val StandardEaseIn: Easing = CubicBezierEasing(0.42f, 0f, 1f, 1f)
+    /** Quintic ease-out (0.23, 1.0, 0.32, 1.0) — smooth deceleration. */
+    val EaseOutQuint: Easing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
     val EmphasizedEnter: Easing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
     val EmphasizedExit: Easing = CubicBezierEasing(0.32f, 0f, 0.67f, 0f)
     val Continuity: Easing = CubicBezierEasing(0.20f, 0.90f, 0.22f, 1.00f)

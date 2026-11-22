@@ -2,7 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -137,11 +137,12 @@ internal fun JsonRuleSourceEditorScreen(
             ) { AppText(if (saving) "保存中…" else if (installedId == null) "安装" else "保存") }
         },
     ) {
+        val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .imePadding()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(settingsScrollContentPadding(extraHorizontal = 16.dp, extraVertical = 16.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

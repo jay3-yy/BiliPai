@@ -1,7 +1,15 @@
 package com.android.purebilibili.feature.dynamic
 
 import androidx.lifecycle.ViewModelStore
+import com.android.purebilibili.data.model.response.DrawItem
+import com.android.purebilibili.data.model.response.DrawMajor
+import com.android.purebilibili.data.model.response.DynamicContentModule
 import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.data.model.response.DynamicMajor
+import com.android.purebilibili.data.model.response.DynamicModules
+import com.android.purebilibili.data.model.response.OpusContentBlock
+import com.android.purebilibili.data.model.response.OpusMajor
+import com.android.purebilibili.data.model.response.OpusPic
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -67,10 +75,50 @@ class DynamicDetailViewModelTest {
         runCurrent()
         model.load(item.id_str, "failed")
         runCurrent()
-        assertEquals(DynamicDetailUiState.Success(item), model.uiState.value)
+        assertEquals(DynamicDetailUiState.Success(item, isPreview = true), model.uiState.value)
         assertEquals(1, requests)
         response.complete(Result.success(item))
         runCurrent()
+        assertEquals(DynamicDetailUiState.Success(item), model.uiState.value)
+    }
+
+    @Test
+    fun `image dynamic shows the resolved paragraphs and images as its first detail content`() = runTest(dispatcher) {
+        val imageUrl = "https://i0.hdslb.com/bfs/new_dyn/photo.jpg"
+        val preview = DynamicItem(
+            id_str = "image-dynamic",
+            type = "DYNAMIC_TYPE_DRAW",
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(draw = DrawMajor(items = listOf(DrawItem(src = imageUrl)))),
+                ),
+            ),
+        )
+        val detail = preview.copy(
+            modules = DynamicModules(
+                module_dynamic = DynamicContentModule(
+                    major = DynamicMajor(
+                        opus = OpusMajor(
+                            contentBlocks = listOf(
+                                OpusContentBlock.Text("完整正文"),
+                                OpusContentBlock.Image(OpusPic(url = imageUrl, width = 1200, height = 800)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val response = CompletableDeferred<Result<DynamicItem>>()
+        val model = DynamicDetailViewModel(loadDetail = { response.await() }, readSeed = { preview })
+        store.put("detail", model)
+
+        model.load(preview.id_str, "failed")
+        runCurrent()
+        assertEquals(DynamicDetailUiState.Loading, model.uiState.value)
+
+        response.complete(Result.success(detail))
+        runCurrent()
+        assertEquals(DynamicDetailUiState.Success(detail), model.uiState.value)
     }
 
     @Test

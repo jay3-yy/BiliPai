@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.android.purebilibili.miuixnavigation"
-    compileSdk { version = release(37) { minorApiLevel = 0 } }
+    compileSdk { version = release(37) { minorApiLevel = 2 } }
     defaultConfig { minSdk = 26 }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
@@ -25,7 +25,7 @@ dependencies {
     api("androidx.compose.animation:animation")
     api("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     api("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
-    api("androidx.navigationevent:navigationevent-compose:1.1.2")
+    api(libs.androidx.navigationevent.compose)
     implementation("androidx.savedstate:savedstate-compose:1.4.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation(libs.miuix.squircle)

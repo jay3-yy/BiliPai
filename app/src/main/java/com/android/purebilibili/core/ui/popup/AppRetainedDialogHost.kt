@@ -75,7 +75,7 @@ internal fun AppRetainedDialogHost(content: @Composable () -> Unit) {
                     if (entry.closing) {
                         if (reduced) progress.snapTo(1f)
                         else progress.animateTo(1f, tween(AppGlassPopupMotionSpec.UnanchoredExitMillis,
-                            easing = CubicBezierEasing(0f, 0f, 0.58f, 1f)))
+                            easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.StandardEaseOut))
                         registry.finish(entry)
                     }
                 }

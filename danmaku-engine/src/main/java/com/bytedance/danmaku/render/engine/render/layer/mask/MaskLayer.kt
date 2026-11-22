@@ -103,6 +103,8 @@ class MaskLayer: IRenderLayer {
         return mPreDrawItemList
     }
 
+    private val mReusableDrawPath = android.graphics.Path()
+
     /**
      * Scale the original svg path according to the screen size
      */
@@ -117,8 +119,15 @@ class MaskLayer: IRenderLayer {
             } else {
                 mMatrix.postScale(scaleY, scaleY, 0F, 0F)
             }
-            item.drawPath = data.path?.let { source -> android.graphics.Path(source) }
-                ?.apply { transform(mMatrix) }
+            val source = data.path
+            if (source != null) {
+                mReusableDrawPath.rewind()
+                mReusableDrawPath.set(source)
+                mReusableDrawPath.transform(mMatrix)
+                item.drawPath = mReusableDrawPath
+            } else {
+                item.drawPath = null
+            }
         }
     }
 

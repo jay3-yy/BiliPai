@@ -41,8 +41,16 @@ class SettingsItemSearchPolicyTest {
         assertEquals("animation.global_text_tap_copy_enabled", result.settingId)
         assertEquals(SettingsSearchTarget.APPEARANCE, result.target)
         assertEquals("appearance_text_size", result.focusId)
-        assertEquals("设置 / 外观与动画 / 文字与大小", result.path)
+        assertEquals("设置 / 界面外观 / 文字与大小", result.path)
         assertEquals(BiliPaiNavKey.AppearanceSettings, resolveSettingsSearchNavigation(result))
+    }
+
+    @Test
+    fun liquidGlassSearchOpensTheIndependentAnimationPage() {
+        val result = resolveSettingsSearchResults("液态玻璃").first()
+        assertEquals("appearance.effective_liquid_glass_enabled", result.settingId)
+        assertEquals("设置 / 动效与反馈 / 液态玻璃与磨砂", result.path)
+        assertEquals(BiliPaiNavKey.AnimationSettings, resolveSettingsSearchNavigation(result))
     }
 
     @Test

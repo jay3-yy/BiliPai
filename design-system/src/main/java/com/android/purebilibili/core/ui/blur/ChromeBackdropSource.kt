@@ -15,10 +15,15 @@ import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.CompletableDeferred
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+
+private val EmptyBackdropLayerSize = IntSize(1, 1)
 
 /** A source and its recording modifier; attach [modifier] to exactly one content container. */
 @Stable
@@ -72,9 +77,12 @@ fun rememberChromeBackdropSource(
     // record fresh content; this is not a frozen backdrop cache.
     val recordingBackgroundState = rememberUpdatedState(recordingBackground)
     val recordingEnabledState = rememberUpdatedState(recordingEnabled)
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
     val recorded = remember(contentLayer) { mutableStateOf(false) }
-    val firstRecording = remember(contentLayer) { CompletableDeferred<Unit>() }
+    val firstRecording = remember(contentLayer, recordingEnabled) { CompletableDeferred<Unit>() }
     LaunchedEffect(firstRecording) {
+        recorded.value = false
         firstRecording.await()
         recorded.value = true
     }
@@ -83,6 +91,14 @@ fun rememberChromeBackdropSource(
         // Publish once, after the source has actually recorded; never guess using a delay.
         firstRecording.complete(Unit)
     })
+    LaunchedEffect(recordingEnabled, contentLayer, backdrop, density, layoutDirection) {
+        if (!recordingEnabled) {
+            // Retained pages leave composition alive but stop publishing. Keep the stable
+            // backdrop identity while releasing its full-viewport render targets.
+            contentLayer.record(density, layoutDirection, EmptyBackdropLayerSize) {}
+            backdrop.graphicsLayer.record(density, layoutDirection, EmptyBackdropLayerSize) {}
+        }
+    }
     return remember(backdrop, contentLayer, drawContentToScreen, isolateContentDrawing) {
         ChromeBackdropSource(
             backdrop = ContinuousBackdrop(backdrop),

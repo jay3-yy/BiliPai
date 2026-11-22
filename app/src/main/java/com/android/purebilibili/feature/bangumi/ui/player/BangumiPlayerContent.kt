@@ -35,7 +35,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
@@ -58,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.feature.video.ui.components.replyMenuCallbacks
 import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.util.FormatUtils
@@ -78,6 +79,7 @@ import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import com.android.purebilibili.feature.video.viewmodel.commentComposerDraftKey
 import androidx.compose.ui.geometry.Rect
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewPageMotion
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -136,9 +138,10 @@ fun BangumiPlayerContent(
 ) {
     androidx.compose.runtime.CompositionLocalProvider(
         com.android.purebilibili.feature.share.LocalReplyShareContext provides
-            com.android.purebilibili.feature.share.ReplyShareContext(
-                url = "https://www.bilibili.com/bangumi/play/ep${currentEpisode.id}",
-                title = detail.title, cover = currentEpisode.cover,
+            com.android.purebilibili.feature.share.bangumiReplyShareContext(
+                episodeId = currentEpisode.id,
+                title = detail.title,
+                cover = currentEpisode.cover,
             ),
     ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -206,6 +209,8 @@ fun BangumiPlayerContent(
     var previewImages by remember(currentEpisode.id) { mutableStateOf<List<String>>(emptyList()) }
     var previewIndex by remember(currentEpisode.id) { mutableIntStateOf(0) }
     var previewSourceRect by remember(currentEpisode.id) { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
+    var previewPageMotion by remember(currentEpisode.id) { mutableStateOf<ImagePreviewPageMotion?>(null) }
+    val threadPreviewPageMotion = remember { ImagePreviewPageMotion() }
     var previewTextContent by remember(currentEpisode.id) { mutableStateOf<ImagePreviewTextContent?>(null) }
 
     LaunchedEffect(
@@ -989,6 +994,7 @@ fun BangumiPlayerContent(
                                     previewImages = images
                                     previewIndex = index
                                     previewSourceRect = rect
+                                    previewPageMotion = null
                                     previewTextContent = textContent
                                 },
                             )
@@ -1070,6 +1076,7 @@ fun BangumiPlayerContent(
 
     if (ownsCommentUi) SubReplySheet(
         state = subReplyState,
+        sheetSurfaceModifier = threadPreviewPageMotion.backdropModifier,
         emoteMap = emptyMap(),
         onDismiss = commentViewModel::closeSubReply,
         onCoveredBlurProgressChange = { subReplyCoveredBlurProgress.floatValue = it },
@@ -1083,6 +1090,8 @@ fun BangumiPlayerContent(
         onDissolveStart = commentViewModel::startDissolve,
         showIdentityDecorations = showIdentityDecorations,
         onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUserClick?.invoke(it) } },
+        pinnedReplyIds = commentState.pinnedReplyIds,
+        menuCallbacks = commentViewModel.replyMenuCallbacks(),
         likedComments = commentState.likedComments,
         currentMid = commentState.currentMid,
         showUpFlag = commentState.showUpFlag,
@@ -1096,6 +1105,7 @@ fun BangumiPlayerContent(
             previewImages = images
             previewIndex = index
             previewSourceRect = rect
+            previewPageMotion = threadPreviewPageMotion
             previewTextContent = textContent
         }
     )
@@ -1116,6 +1126,8 @@ fun BangumiPlayerContent(
             initialIndex = previewIndex,
             sourceRect = previewSourceRect?.rect,
             sourceRects = previewSourceRect?.galleryRects.orEmpty(),
+            sourceKey = previewSourceRect?.sourceKey,
+            sourcePageMotion = previewPageMotion,
             sourceCornerRadiusDp = previewSourceRect?.cornerRadiusDp
                 ?: AppShapes.containerCornerDp(ContainerLevel.Field).value,
             textContent = previewTextContent,

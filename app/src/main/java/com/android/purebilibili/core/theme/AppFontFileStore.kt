@@ -14,10 +14,12 @@ import androidx.compose.ui.text.font.FontWeight
 import kotlin.math.roundToInt
 import java.io.File
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 private const val APP_FONT_DIR_NAME = "app_fonts"
 private const val APP_FONT_FILE_PREFIX = "custom_app_font"
 private val APP_FONT_ALLOWED_EXTENSIONS = setOf("ttf", "otf", "ttc")
+private val storedAppFontFamilyCache = ConcurrentHashMap<String, FontFamily>()
 
 data class ImportedAppFontFile(
     val fileName: String,
@@ -68,8 +70,17 @@ fun resolveStoredAppFontFile(context: Context, fileName: String): File? {
         .takeIf { it.exists() && it.isFile }
 }
 
+fun cachedStoredAppFontFamily(fileName: String): FontFamily? {
+    val normalizedName = fileName.substringAfterLast('/').trim()
+    if (normalizedName.isBlank()) return null
+    return storedAppFontFamilyCache[normalizedName]
+}
+
 fun loadStoredAppFontFamily(context: Context, fileName: String): FontFamily? {
-    val fontFile = resolveStoredAppFontFile(context, fileName) ?: return null
+    val normalizedName = fileName.substringAfterLast('/').trim()
+    if (normalizedName.isBlank()) return null
+    storedAppFontFamilyCache[normalizedName]?.let { return it }
+    val fontFile = resolveStoredAppFontFile(context, normalizedName) ?: return null
     return runCatching {
         val typeface = Typeface.createFromFile(fontFile)
         val style = if (typeface.isItalic) FontStyle.Italic else FontStyle.Normal
@@ -94,7 +105,9 @@ fun loadStoredAppFontFamily(context: Context, fileName: String): FontFamily? {
             FontFamily(Font(file = fontFile, weight = FontWeight(weight), style = style,
                 variationSettings = FontVariation.Settings()))
         }
-    }.getOrNull()
+    }.getOrNull()?.also { family ->
+        storedAppFontFamilyCache[normalizedName] = family
+    }
 }
 
 fun importAppFontFromUri(
@@ -114,6 +127,7 @@ fun importAppFontFromUri(
 
         // 先加载一次，避免把非字体文件保存为全局字体后导致后续启动回退。
         val typeface = Typeface.createFromFile(targetFile)
+        storedAppFontFamilyCache.remove(storedFileName)
         val coversCjk = runCatching { glyphProbe.coversCjk(typeface) }.getOrDefault(true)
         ImportedAppFontFile(
             fileName = storedFileName,
@@ -124,6 +138,10 @@ fun importAppFontFromUri(
 }
 
 fun deleteStoredAppFont(context: Context, fileName: String) {
+    val normalizedName = fileName.substringAfterLast('/').trim()
+    if (normalizedName.isNotBlank()) {
+        storedAppFontFamilyCache.remove(normalizedName)
+    }
     resolveStoredAppFontFile(context, fileName)?.delete()
 }
 

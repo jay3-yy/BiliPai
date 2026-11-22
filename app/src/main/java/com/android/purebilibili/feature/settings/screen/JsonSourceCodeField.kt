@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.settings
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField

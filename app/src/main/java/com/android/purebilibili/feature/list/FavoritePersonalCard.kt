@@ -90,6 +90,7 @@ internal fun FavoritePersonalCard(
         bvid = item.bvid,
         transitionEnabled = transitionEnabled,
         clipShape = cardShape,
+        stacked = stacked,
     )
     val progressState = remember(item.progress, item.duration, item.view_at) {
         resolveVideoDisplayProgressState(
@@ -135,10 +136,12 @@ internal fun FavoritePersonalCard(
                     ),
                     coverUrl = stationaryCoverUrl,
                     coverCacheKey = stationaryCoverUrl,
-                )
+                ),
+                onClick = onClick,
             )
+        } else {
+            onClick()
         }
-        onClick()
     }
 
     PersonalMediaCardFrame(

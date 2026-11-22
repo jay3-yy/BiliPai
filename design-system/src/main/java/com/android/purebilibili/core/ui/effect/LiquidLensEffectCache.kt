@@ -10,17 +10,12 @@ import top.yukonga.miuix.kmp.blur.effect
  * 只缓存效果参数，不缓存背景像素。不同降采样档位分别保存，避免交叉混合时来回重建。
  */
 private val lensEffectCaches = ThreadLocal.withInitial {
-    WeakHashMap<BackdropEffectScope, Array<BackdropRenderEffectCache?>>()
+    WeakHashMap<BackdropEffectScope, MutableMap<Float, BackdropRenderEffectCache>>()
 }
 
 internal fun BackdropEffectScope.liquidLensEffectCache(): BackdropRenderEffectCache {
-    val levels = lensEffectCaches.get().getOrPut(this) { arrayOfNulls(6) }
-    val factor = downscaleFactor.coerceAtLeast(1)
-    // 常用 1/2/4/8/16 各有一个槽；其他比例共用末槽，仍按完整参数校验。
-    val index = if (factor <= 16 && (factor and (factor - 1)) == 0) {
-        factor.countTrailingZeroBits()
-    } else 5
-    return levels[index] ?: BackdropRenderEffectCache(15).also { levels[index] = it }
+    val levels = lensEffectCaches.get().getOrPut(this) { mutableMapOf() }
+    return levels.getOrPut(downscaleFactor) { BackdropRenderEffectCache(15) }
 }
 
 /** 缓存单个参数化效果及其上游合成链，不缓存画面；由各效果所有者独立持有。 */

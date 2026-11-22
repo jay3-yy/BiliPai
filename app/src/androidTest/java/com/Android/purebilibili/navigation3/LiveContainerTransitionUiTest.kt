@@ -54,7 +54,6 @@ class LiveContainerTransitionUiTest {
                         Color.Black, 0f, 0f,
                     ),
                     pageColor = { Color.Black },
-                    isolateContentDrawing = true,
                 )
             }
             val modifier = with(transition) { Modifier.transformEntry(scope) }

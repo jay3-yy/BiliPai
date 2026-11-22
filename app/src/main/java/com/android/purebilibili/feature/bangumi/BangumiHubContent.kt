@@ -46,7 +46,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.PagerState
 import com.android.purebilibili.core.ui.components.AppHorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -56,7 +56,7 @@ import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVe
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -191,7 +191,7 @@ internal fun BangumiHubContent(
     onUnfollowSingle: (Long) -> Unit,
     onSearchCategorySelected: (BangumiIndexCategory) -> Unit,
     onLoadMoreSearch: () -> Unit,
-    onHomeScrollChanged: (firstVisibleIndex: Int, scrollOffset: Int) -> Unit = { _, _ -> },
+    onHomeScrollChanged: ((firstVisibleIndex: Int, scrollOffset: Int) -> Unit)? = null,
     scrollToTopRequestId: Int = 0,
     listBottomPadding: Dp = 24.dp,
     listTopPadding: Dp = 0.dp,
@@ -221,13 +221,14 @@ internal fun BangumiHubContent(
     val searchGridState = rememberLazyGridState()
     var handledScrollToTopRequestId by rememberSaveable { mutableIntStateOf(0) }
     val activeHomeGrid = homeGridStates.getOrPut(state.channel.name) { LazyGridState() }
-    LaunchedEffect(activeHomeGrid, state.page, state.channel, pageWorkActive) {
-        if (!pageWorkActive) return@LaunchedEffect
-        if (state.page != BangumiHubPage.HOME) return@LaunchedEffect
-        snapshotFlow {
-            activeHomeGrid.firstVisibleItemIndex to activeHomeGrid.firstVisibleItemScrollOffset
-        }.collect { (index, offset) ->
-            onHomeScrollChanged(index, offset)
+    if (onHomeScrollChanged != null && pageWorkActive && state.page == BangumiHubPage.HOME) {
+        val latestOnHomeScrollChanged by rememberUpdatedState(onHomeScrollChanged)
+        LaunchedEffect(activeHomeGrid) {
+            snapshotFlow {
+                activeHomeGrid.firstVisibleItemIndex to activeHomeGrid.firstVisibleItemScrollOffset
+            }.collect { (index, offset) ->
+                latestOnHomeScrollChanged(index, offset)
+            }
         }
     }
     LaunchedEffect(scrollToTopRequestId, state.page, state.channel, state.followStatus, state.indexCategory, pageWorkActive) {

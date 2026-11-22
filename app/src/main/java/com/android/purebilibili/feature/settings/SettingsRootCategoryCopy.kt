@@ -6,6 +6,7 @@ import com.android.purebilibili.R
 @StringRes
 internal fun SettingsRootCategory.titleResource(): Int = when (canonicalSettingsRootCategory(this)) {
     SettingsRootCategory.APPEARANCE_THEME -> R.string.settings_category_appearance_title
+    SettingsRootCategory.ANIMATION_HAPTICS -> R.string.animation_effects_title
     SettingsRootCategory.PLAYBACK_QUALITY -> R.string.settings_category_playback_title
     SettingsRootCategory.HOME_RECOMMENDATION -> R.string.settings_category_home_title
     SettingsRootCategory.NAVIGATION_INTERACTION -> R.string.settings_category_navigation_title
@@ -19,6 +20,7 @@ internal fun SettingsRootCategory.titleResource(): Int = when (canonicalSettings
 @StringRes
 internal fun SettingsRootCategory.subtitleResource(): Int = when (canonicalSettingsRootCategory(this)) {
     SettingsRootCategory.APPEARANCE_THEME -> R.string.settings_category_appearance_summary
+    SettingsRootCategory.ANIMATION_HAPTICS -> R.string.settings_category_animation_summary
     SettingsRootCategory.PLAYBACK_QUALITY -> R.string.settings_category_playback_summary
     SettingsRootCategory.HOME_RECOMMENDATION -> R.string.settings_category_home_summary
     SettingsRootCategory.NAVIGATION_INTERACTION -> R.string.settings_category_navigation_summary

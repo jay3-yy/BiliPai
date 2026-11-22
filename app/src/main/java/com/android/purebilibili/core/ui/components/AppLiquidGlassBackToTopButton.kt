@@ -112,12 +112,12 @@ fun AppLiquidGlassBackToTopButton(
     val minOffsetY = -(screenHeightPx * 0.72f)
     val maxOffsetY = with(density) { 24.dp.toPx() }
 
-    val dragScale by animateFloatAsState(
+    val dragScaleState = animateFloatAsState(
         targetValue = if (isDragging) 1.15f else 1.0f,
         animationSpec = AppMotionTokens.standardSpec(),
         label = "back_to_top_drag_scale",
     )
-    val dragAlpha by animateFloatAsState(
+    val dragAlphaState = animateFloatAsState(
         targetValue = if (isDragging) 0.88f else 1.0f,
         label = "back_to_top_drag_alpha",
     )
@@ -139,9 +139,10 @@ fun AppLiquidGlassBackToTopButton(
                     )
                 }
                 .graphicsLayer {
-                    scaleX = dragScale
-                    scaleY = dragScale
-                    alpha = dragAlpha
+                    val scale = dragScaleState.value
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = dragAlphaState.value
                 }
                 .size(48.dp),
             contentAlignment = Alignment.Center,

@@ -2,9 +2,11 @@ package com.android.purebilibili.feature.home.components.cards
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.net.Uri
 import android.util.LruCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
@@ -34,6 +36,7 @@ internal data class WallpaperPaletteRequest(
     val viewport: IntSize,
     val transform: WallpaperTransform,
     val baseColor: Color,
+    val includeBlurredViewport: Boolean = false,
 )
 
 internal data class WallpaperPaletteResult(val request: WallpaperPaletteRequest, val palette: WallpaperPalette?)
@@ -46,6 +49,7 @@ object WallpaperPaletteStore {
         val viewport: IntSize,
         val transform: WallpaperTransform,
         val baseColor: Int,
+        val includeBlurredViewport: Boolean,
     )
     private val cache = LruCache<CacheKey, WallpaperPalette>(8)
 
@@ -53,6 +57,7 @@ object WallpaperPaletteStore {
         if (request.uri.isBlank() || request.viewport.width <= 0 || request.viewport.height <= 0) return null
         return try {
             val file = when {
+                request.uri.startsWith("file:///android_asset/") -> null
                 request.uri.startsWith("file:") -> Uri.parse(request.uri).path?.let(::File)
                 request.uri.startsWith("/") -> File(request.uri)
                 else -> null
@@ -60,8 +65,14 @@ object WallpaperPaletteStore {
             val revision = withContext(Dispatchers.IO) {
                 file?.let { "${it.lastModified()}:${it.length()}" }.orEmpty()
             }
-            val key = CacheKey(request.uri, revision, request.viewport,
-                sanitizeWallpaperTransform(request.transform), request.baseColor.toArgb())
+            val key = CacheKey(
+                uri = request.uri,
+                revision = revision,
+                viewport = request.viewport,
+                transform = sanitizeWallpaperTransform(request.transform),
+                baseColor = request.baseColor.toArgb(),
+                includeBlurredViewport = request.includeBlurredViewport,
+            )
             synchronized(cache) { cache.get(key) }?.let { return it }
             val bitmap = withContext(Dispatchers.IO) {
                 val image = ImageRequest.Builder(context)
@@ -124,9 +135,50 @@ object WallpaperPaletteStore {
                 high = luminances[((luminances.lastIndex) * 0.9f).toInt()],
             )
         }
+        val blurredViewport = if (request.includeBlurredViewport) {
+            currentCoroutineContext().ensureActive()
+            // 整窗裁切和上面的分带取色使用同一可见区域，直接缩绘到小位图。
+            val viewportTop = floor(visible.top).toInt().coerceIn(0, bitmap.height - 1)
+            val viewportBottom = ceil(visible.bottom).toInt().coerceIn(viewportTop + 1, bitmap.height)
+            val blurred = createBlurredCardImage(
+                image = bitmap,
+                longEdge = 96,
+                sourceRegion = Rect(left, viewportTop, right, viewportBottom),
+                background = request.baseColor.toArgb(),
+            )
+            WallpaperBlurSample(blurred.asImageBitmap(), request.viewport, blurred.colorBounds())
+        } else null
         return WallpaperPalette(
             topColor = colors.first(), bottomColor = colors.last(), dominantColor = colors[2],
             stops = colors, readability = WallpaperReadabilityProfile(bands),
+            blurredViewport = blurredViewport,
+        )
+    }
+
+    // 分别约束 RGB 通道。遮罩合成后，实际像素的亮度也会落在这两个颜色之间。
+    private fun Bitmap.colorBounds(): WallpaperBackdropColorBounds {
+        val pixels = IntArray(width * height)
+        getPixels(pixels, 0, width, 0, 0, width, height)
+        var minRed = 255
+        var minGreen = 255
+        var minBlue = 255
+        var maxRed = 0
+        var maxGreen = 0
+        var maxBlue = 0
+        for (pixel in pixels) {
+            val red = android.graphics.Color.red(pixel)
+            val green = android.graphics.Color.green(pixel)
+            val blue = android.graphics.Color.blue(pixel)
+            minRed = minOf(minRed, red)
+            minGreen = minOf(minGreen, green)
+            minBlue = minOf(minBlue, blue)
+            maxRed = maxOf(maxRed, red)
+            maxGreen = maxOf(maxGreen, green)
+            maxBlue = maxOf(maxBlue, blue)
+        }
+        return WallpaperBackdropColorBounds(
+            lower = Color(minRed, minGreen, minBlue),
+            upper = Color(maxRed, maxGreen, maxBlue),
         )
     }
 

@@ -11,9 +11,14 @@ import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.feature.cast.hasRawLocalNetworkAccess
 import com.google.android.gms.cast.CastMediaControlIntent
 import com.google.android.gms.cast.framework.CastContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 internal object GoogleCastRouteManager {
     private const val TAG = "GoogleCastRouteManager"
@@ -108,12 +113,22 @@ internal object GoogleCastRouteManager {
     }
 
     private fun ensureCastContext(context: Context) {
-        runCatching {
-            CastContext.getSharedInstance(context.applicationContext)
-        }.onFailure { error ->
-            Logger.w(TAG, "CastContext init failed (GMS missing or unavailable): ${error.message}")
-        }
+        CastContext.getSharedInstance(context.applicationContext, Dispatchers.IO.asExecutor())
+            .addOnFailureListener { error ->
+                Logger.w(TAG, "CastContext init failed (GMS missing or unavailable): ${error.message}")
+            }
     }
+
+    suspend fun awaitCastContext(context: Context): CastContext =
+        suspendCancellableCoroutine { continuation ->
+            CastContext.getSharedInstance(context.applicationContext, Dispatchers.IO.asExecutor())
+                .addOnSuccessListener { castContext ->
+                    if (continuation.isActive) continuation.resume(castContext)
+                }
+                .addOnFailureListener { error ->
+                    if (continuation.isActive) continuation.resumeWithException(error)
+                }
+        }
 
     private fun updateRoutes(router: MediaRouter) {
         val castRoutes = router.routes.mapNotNull { route ->

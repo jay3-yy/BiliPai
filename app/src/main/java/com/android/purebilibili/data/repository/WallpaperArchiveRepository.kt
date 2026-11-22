@@ -33,6 +33,7 @@ internal object WallpaperArchiveRepository {
         .client(
             OkHttpClient.Builder()
                 .dns(buildAppDns())
+                .addInterceptor(com.android.purebilibili.core.network.GithubMirrorInterceptor())
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(25, TimeUnit.SECONDS)
                 .callTimeout(35, TimeUnit.SECONDS)

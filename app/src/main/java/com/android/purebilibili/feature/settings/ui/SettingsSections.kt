@@ -14,7 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -130,7 +130,6 @@ internal data class SettingsDetailEntry(
 internal data class SettingsRootCategoryActions(
     val onAppearanceClick: () -> Unit,
     val onHomeClick: () -> Unit,
-    val onAnimationClick: () -> Unit,
     val onPlaybackClick: () -> Unit,
     val onBottomBarClick: () -> Unit,
     val onPermissionClick: () -> Unit,
@@ -164,6 +163,7 @@ internal data class SettingsRootCategoryActions(
     val onReplayOnboardingClick: () -> Unit,
     val onTipsClick: () -> Unit,
     val onKeyboardShortcutsClick: () -> Unit,
+    val onProcessMemoryClick: () -> Unit,
     val onPerformanceHistoryClick: () -> Unit,
     val onOpenLinksClick: () -> Unit,
     val onPrivacyModeChange: (Boolean) -> Unit,
@@ -417,6 +417,7 @@ internal fun SettingsRootCategoryContent(
     actions: SettingsRootCategoryActions,
     state: SettingsRootCategoryState,
     onAboutHeaderAppearanceClick: () -> Unit = {},
+    onAboutHeroHeightChanged: (Int) -> Unit = {},
 ) {
     val nearbyHandoff = com.android.purebilibili.feature.nearby.LocalNearbyHandoff.current
     val resolvedCategory = canonicalSettingsRootCategory(category)
@@ -426,7 +427,8 @@ internal fun SettingsRootCategoryContent(
             SettingsRootCategory.COMMENTS_CONTENT,
             SettingsRootCategory.MESSAGE_NOTIFICATION,
             SettingsRootCategory.VIDEO_DECODER,
-            SettingsRootCategory.GLASS_ADVANCED -> Unit
+            SettingsRootCategory.GLASS_ADVANCED,
+            SettingsRootCategory.ANIMATION_HAPTICS -> Unit
             SettingsRootCategory.PLAYER_DIAGNOSTICS -> {
                 SettingsDetailGroup(title = "应用日志") {
                     DiagnosticsSection(
@@ -443,7 +445,7 @@ internal fun SettingsRootCategoryContent(
             }
             SettingsRootCategory.APPEARANCE_THEME -> {
                 SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "外观与主题") {
+                    SettingsDetailGroup(title = "显示样式") {
                         SettingsDetailEntrySection(
                             entries = listOf(
                                 SettingsDetailEntry(
@@ -519,24 +521,6 @@ internal fun SettingsRootCategoryContent(
                         )
                     }
                 }
-                SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "交互与动效") {
-                        SettingsDetailEntrySection(
-                            entries = listOf(
-                                SettingsDetailEntry(
-                                    target = SettingsSearchTarget.ANIMATION,
-                                    title = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
-                                    value = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).summary,
-                                    openFocus = SettingsSceneDetailFocus(
-                                        SettingsSearchTarget.ANIMATION,
-                                        SettingsSearchFocusIds.ANIMATION_START,
-                                    ),
-                                    onClick = actions.onAnimationClick,
-                                ),
-                            ),
-                        )
-                    }
-                }
             }
             SettingsRootCategory.PRIVACY_PERMISSION -> {
                 SettingsRootCategoryEntranceSection {
@@ -603,24 +587,6 @@ internal fun SettingsRootCategoryContent(
                                         SettingsSearchFocusIds.APPEARANCE_THEME,
                                     ),
                                     onClick = actions.onAppearanceClick
-                                )
-                            )
-                        )
-                    }
-                }
-                SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "动效") {
-                        SettingsDetailEntrySection(
-                            entries = listOf(
-                                SettingsDetailEntry(
-                                    target = SettingsSearchTarget.ANIMATION,
-                                    title = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
-                                    value = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).summary,
-                                    openFocus = SettingsSceneDetailFocus(
-                                        SettingsSearchTarget.ANIMATION,
-                                        SettingsSearchFocusIds.ANIMATION_START,
-                                    ),
-                                    onClick = actions.onAnimationClick
                                 )
                             )
                         )
@@ -787,6 +753,7 @@ internal fun SettingsRootCategoryContent(
                     actions = actions,
                     state = state,
                     onHeaderAppearanceClick = onAboutHeaderAppearanceClick,
+                    onHeroHeightChanged = onAboutHeroHeightChanged,
                 )
             }
         }
@@ -798,11 +765,15 @@ private fun SettingsAboutCategoryContent(
     actions: SettingsRootCategoryActions,
     state: SettingsRootCategoryState,
     onHeaderAppearanceClick: () -> Unit,
+    onHeroHeightChanged: (Int) -> Unit,
 ) {
     val performance: @Composable () -> Unit = {
         SettingsRootCategoryEntranceSection {
             SettingsDetailGroup(title = com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SECTION_TITLE) {
-                PerformanceCaptureSection(onOpenHistory = actions.onPerformanceHistoryClick)
+                PerformanceCaptureSection(
+                    onOpenMemory = actions.onProcessMemoryClick,
+                    onOpenHistory = actions.onPerformanceHistoryClick,
+                )
             }
         }
     }
@@ -877,6 +848,7 @@ private fun SettingsAboutCategoryContent(
             buildFingerprintSubtitle = state.buildFingerprintSubtitle,
             versionClickCount = state.versionClickCount,
             versionClickThreshold = state.versionClickThreshold,
+            onMiuixHeroHeightChanged = onHeroHeightChanged,
             afterOverview = {
                 AboutCommunitySection(
                     onTelegramClick = actions.onTelegramClick,
@@ -1969,6 +1941,7 @@ fun AboutSection(
     buildFingerprintSubtitle: String = "尚未读取安装包 SHA-256",
     versionClickCount: Int = 0,
     versionClickThreshold: Int = EasterEggs.VERSION_EASTER_EGG_THRESHOLD,
+    onMiuixHeroHeightChanged: (Int) -> Unit = {},
     afterOverview: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -1988,7 +1961,7 @@ fun AboutSection(
     }
     var detailDialogContent by remember { mutableStateOf<AppBuildInfoDialogContent?>(null) }
     val easterEggTint = rememberSettingsEntryTint(AppSemanticAccentRole.TERTIARY, AppContentColors.warning())
-    val updateSiblingTints = rememberSettingsSiblingIconTints(6, paletteOffset = 3)
+    val updateSiblingTints = rememberSettingsSiblingIconTints(8, paletteOffset = 3)
     val licensesVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_LICENSES)
     val openSourceHomeVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_SOURCE_HOME)
     val checkUpdateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.CHECK_UPDATE)
@@ -2062,6 +2035,7 @@ fun AboutSection(
             versionHint = versionHint,
             onVersionClick = onVersionClick,
             modifier = Modifier.fillMaxWidth(),
+            onHeroHeightChanged = onMiuixHeroHeightChanged,
         )
     } else {
         MaterialAboutOverview(
@@ -2204,7 +2178,11 @@ fun AboutSection(
             onSelectionChange = onAppUpdateChannelChange
         )
         SettingsAdaptiveDivider()
-        AppUpdateMirrorPreferences(iconTint = updateSiblingTints[5])
+        AppUpdateMirrorPreferences(
+            switchIconTint = updateSiblingTints[5],
+            sourceIconTint = updateSiblingTints[6],
+            addressIconTint = updateSiblingTints[7],
+        )
     }
     Spacer(modifier = Modifier.height(12.dp))
 
@@ -2233,35 +2211,55 @@ fun AboutSection(
 }
 
 @Composable
-private fun AppUpdateMirrorPreferences(iconTint: Color) {
+private fun AppUpdateMirrorPreferences(
+    switchIconTint: Color,
+    sourceIconTint: Color,
+    addressIconTint: Color,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val preference = rememberAppUpdateMirrorPreference()
     var editCustomMirror by rememberSaveable { mutableStateOf(false) }
-    SettingsSingleChoicePreference(
-        title = "下载镜像源",
-        options = AppUpdateMirror.entries.map { mirror ->
-            com.android.purebilibili.core.ui.components.AppSegmentOption(value = mirror, label = mirror.label)
-        },
-        selectedValue = preference.source,
-        icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR),
-        iconTint = iconTint,
-        onSelectionChange = { mirror ->
-            if (mirror == AppUpdateMirror.CUSTOM && preference.customPrefix.isEmpty()) {
-                editCustomMirror = true
-            } else {
-                scope.launch { SettingsManager.setAppUpdateMirror(context, mirror) }
-            }
-        },
-    )
-    if (preference.source == AppUpdateMirror.CUSTOM) {
-        SettingsAdaptiveDivider()
-        SettingClickableItem(
-            icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR_ADDRESS),
-            title = "自定义源地址",
-            subtitle = preference.customPrefix.takeIf(String::isNotEmpty),
-            onClick = { editCustomMirror = true },
+    SettingsItemAnchor("help.github_mirror_enabled") {
+        SettingSwitchItem(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR_ENABLED),
+            title = settingItemTitle("help.github_mirror_enabled"),
+            subtitle = resolveGithubMirrorEnabledSubtitle(preference.enabled),
+            checked = preference.enabled,
+            onCheckedChange = { enabled ->
+                scope.launch { SettingsManager.setAppUpdateMirrorEnabled(context, enabled) }
+            },
+            iconTint = switchIconTint,
         )
+    }
+    if (preference.enabled) {
+        SettingsAdaptiveDivider()
+        SettingsSingleChoicePreference(
+            title = "镜像源",
+            options = AppUpdateMirror.entries.map { mirror ->
+                com.android.purebilibili.core.ui.components.AppSegmentOption(value = mirror, label = mirror.label)
+            },
+            selectedValue = preference.source,
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR),
+            iconTint = sourceIconTint,
+            onSelectionChange = { mirror ->
+                if (mirror == AppUpdateMirror.CUSTOM && preference.customPrefix.isEmpty()) {
+                    editCustomMirror = true
+                } else {
+                    scope.launch { SettingsManager.setAppUpdateMirror(context, mirror) }
+                }
+            },
+        )
+        if (preference.source == AppUpdateMirror.CUSTOM) {
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR_ADDRESS),
+                title = "自定义源地址",
+                subtitle = preference.customPrefix.takeIf(String::isNotEmpty) ?: "点击填写 HTTPS 镜像前缀",
+                iconTint = addressIconTint,
+                onClick = { editCustomMirror = true },
+            )
+        }
     }
     if (editCustomMirror) {
         AppUpdateCustomMirrorDialog(

@@ -16,6 +16,19 @@ internal val dynamicUpListVisiblePreferencesKey = booleanPreferencesKey("dynamic
 
 object DynamicSettingsStore {
 
+    private val sidebarLiveUsersVisibleKey = booleanPreferencesKey("dynamic_sidebar_live_users_visible")
+
+    fun observeSidebarLiveUsersVisible(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { it[sidebarLiveUsersVisibleKey] ?: true }
+            .distinctUntilChanged()
+
+    suspend fun toggleSidebarLiveUsersVisible(context: Context) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[sidebarLiveUsersVisibleKey] = !(preferences[sidebarLiveUsersVisibleKey] ?: true)
+        }
+    }
+
     fun observeUpListVisible(context: Context): Flow<Boolean> =
         context.settingsDataStore.data.map { it[dynamicUpListVisiblePreferencesKey] ?: true }.distinctUntilChanged()
 

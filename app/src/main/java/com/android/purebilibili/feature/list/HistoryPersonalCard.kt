@@ -181,6 +181,7 @@ internal fun HistoryPersonalCard(
         bvid = video.bvid,
         transitionEnabled = transitionEnabled && usesVideoTransition,
         clipShape = coverShape,
+        stacked = stacked,
     )
     val progressState = remember(item.progress, video.duration, video.view_at) {
         resolveVideoDisplayProgressState(
@@ -228,9 +229,11 @@ internal fun HistoryPersonalCard(
                     coverUrl = stationaryCoverUrl,
                     coverCacheKey = stationaryCoverUrl,
                 ),
+                onClick = onClick,
             )
+        } else {
+            onClick()
         }
-        onClick()
     }
 
     val contentContainer = containerTarget?.let {

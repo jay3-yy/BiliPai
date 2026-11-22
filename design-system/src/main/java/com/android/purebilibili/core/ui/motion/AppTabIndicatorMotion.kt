@@ -3,10 +3,10 @@ package com.android.purebilibili.core.ui.motion
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 
-/** Flutter TabController's ease combined with TabBar's elastic edge interpolation. */
+/** Tab indicator elastic edge interpolation built on the shared StandardEase token. */
 object AppTabIndicatorMotion {
     const val DurationMillis = 300
-    val ease = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
+    val ease: Easing = AppMotionEasing.StandardEase
     val decelerate = Easing { fraction ->
         kotlin.math.sin(ease.transform(fraction) * Math.PI.toFloat() / 2f)
     }

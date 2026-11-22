@@ -19,15 +19,18 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.motion.interactiveSnapSpring
+import com.android.purebilibili.core.ui.motion.scrollCompactExpansionSpring
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -39,7 +42,9 @@ internal fun profileAvatarExpandDuration(from: Float, to: Float, velocity: Float
     return (abs(to - from) * 250f / durationFactor).toInt().coerceAtLeast(1)
 }
 
-/** UI-only state, reset for each account/photo and window mode. No retained scope. */
+internal enum class ProfileAvatarPhotoLoadStatus { Loading, Ready, Failed }
+
+/** UI-only state scoped to the account and window mode. No retained scope. */
 @Stable
 internal class ProfileAvatarExpansionState {
     var offsetPx by mutableFloatStateOf(0f)
@@ -48,18 +53,40 @@ internal class ProfileAvatarExpansionState {
         private set
     val visualOffsetPx: Float get() = (offsetPx + overPullPx).coerceAtLeast(0f)
     var viewportWidthPx by mutableIntStateOf(0)
-    var photoReady by mutableStateOf(false)
+    private var photoLoadResult by mutableStateOf<Pair<String, ProfileAvatarPhotoLoadStatus>?>(null)
+
+    fun photoLoadStatus(url: String): ProfileAvatarPhotoLoadStatus =
+        photoLoadResult?.takeIf { it.first == url }?.second ?: ProfileAvatarPhotoLoadStatus.Loading
+
+    fun reportPhotoLoad(url: String, status: ProfileAvatarPhotoLoadStatus) {
+        photoLoadResult = url to status
+    }
+    var entranceSourceSize by mutableStateOf<Dp?>(null)
+        private set
     var isPulledDown by mutableStateOf(false)
         private set
     private var animation: Job? = null
 
     fun fraction(range: Float): Float = if (range > 0f) (offsetPx / range).coerceIn(0f, 1f) else 0f
 
+    private fun stopAnimation() {
+        val running = animation
+        animation = null
+        running?.cancel()
+        entranceSourceSize = null
+    }
+
     fun reset() {
-        animation?.cancel()
+        stopAnimation()
         offsetPx = 0f
         overPullPx = 0f
         isPulledDown = false
+    }
+
+    fun updateExpandedRange(range: Float) {
+        if (!isPulledDown || animation != null) return
+        offsetPx = range
+        overPullPx = 0f
     }
 
     /** 完全展开前，拖动距离按一半阻尼换算。 */
@@ -82,19 +109,34 @@ internal class ProfileAvatarExpansionState {
         return (offsetPx - previous) / damping
     }
 
-    suspend fun settle(expanded: Boolean, range: Float, velocity: Float, density: Float, motion: Boolean) {
+    suspend fun settle(
+        expanded: Boolean,
+        range: Float,
+        velocity: Float,
+        density: Float,
+        motion: Boolean,
+        entranceSourceSize: Dp? = null,
+    ) {
         animation?.cancel()
+        this.entranceSourceSize = entranceSourceSize
         isPulledDown = expanded && range > 0f
         val target = if (isPulledDown) range else 0f
         if (!motion || offsetPx == target && overPullPx == 0f) {
             offsetPx = target
             overPullPx = 0f
+            this.entranceSourceSize = null
             return
         }
         val duration = profileAvatarExpandDuration(fraction(range), if (isPulledDown) 1f else 0f, velocity, density)
         coroutineScope {
             val job = launch(start = CoroutineStart.UNDISPATCHED) {
-                coroutineScope {
+                if (entranceSourceSize != null) {
+                    animate(offsetPx, target, animationSpec = scrollCompactExpansionSpring()) { value, _ ->
+                        offsetPx = value.coerceIn(0f, target)
+                        // The photo already fills the width at 1. Extra travel stretches the header vertically.
+                        overPullPx = (value - target).coerceAtLeast(0f)
+                    }
+                } else coroutineScope {
                     launch {
                         animate(offsetPx, target, animationSpec = tween(duration, easing = ProfileAvatarExpandEasing)) { value, _ ->
                             offsetPx = value
@@ -108,7 +150,18 @@ internal class ProfileAvatarExpansionState {
                 }
             }
             animation = job
-            try { job.join() } finally { if (animation === job) animation = null }
+            try {
+                job.join()
+            } finally {
+                if (animation === job) {
+                    animation = null
+                    if (entranceSourceSize != null && !isActive) {
+                        offsetPx = target
+                        overPullPx = 0f
+                    }
+                    this@ProfileAvatarExpansionState.entranceSourceSize = null
+                }
+            }
         }
     }
 }
@@ -119,9 +172,11 @@ internal fun rememberProfileAvatarExpansionConnection(
     listState: LazyListState,
     enabled: Boolean,
     rangeProvider: () -> Float,
+    photoUrl: String,
 ): NestedScrollConnection {
     val scope = rememberCoroutineScope()
     val latestRange = rememberUpdatedState(rangeProvider)
+    val latestPhotoUrl = rememberUpdatedState(photoUrl)
     val density = LocalDensity.current.density
     val view = LocalView.current
     val haptics = LocalAppThemeConfig.current.let { it.hapticFeedbackEnabled && it.hapticSettings.isEnabled(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION) }
@@ -146,7 +201,7 @@ internal fun rememberProfileAvatarExpansionConnection(
             }
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (!enabled || !state.photoReady || source != NestedScrollSource.UserInput || available.y <= 0f ||
+                if (!enabled || state.photoLoadStatus(latestPhotoUrl.value) != ProfileAvatarPhotoLoadStatus.Ready || source != NestedScrollSource.UserInput || available.y <= 0f ||
                     listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0 || latestRange.value() <= 0f
                 ) return Offset.Zero
                 state.dragBy(available.y, latestRange.value())

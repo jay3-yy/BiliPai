@@ -28,6 +28,7 @@ import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 import com.android.purebilibili.feature.profile.ProfileAvatarFusionView
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 
 // The phases overlap so velocity stays continuous while the photograph becomes a droplet.
 private fun spaceBannerSmoothProgress(progress: Float): Float {
@@ -118,7 +119,8 @@ internal fun SpaceBannerFusionEffect(
                     setContent {
                         val clip = remember { Path() }
                         Box(
-                            Modifier.scrollable(latestScrollState.value, Orientation.Vertical, reverseDirection = true)
+                            Modifier.appScrollBoundaryHaptics(latestScrollState.value)
+                                .scrollable(latestScrollState.value, Orientation.Vertical, reverseDirection = true)
                                 .drawWithContent {
                                     val progress = if (latestEnabled.value) latestProgress.value().coerceIn(0f, 1f) else 0f
                                     val cutout = host[0]?.notchInfo

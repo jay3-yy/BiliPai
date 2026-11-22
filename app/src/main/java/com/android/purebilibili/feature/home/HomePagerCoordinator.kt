@@ -17,11 +17,13 @@ internal class HomePagerCoordinator(
     retainedEntryState: MutableState<HomeTopTabEntry?>,
     syncedState: MutableState<Boolean>,
     drivenCategoryState: MutableState<HomeCategory?>,
+    drivenEntryState: MutableState<HomeTopTabEntry?>,
     private val switchesInFlight: MutableIntState,
 ) {
     var retainedEntry by retainedEntryState
     var hasSynced by syncedState
     var lastDrivenCategory by drivenCategoryState
+    var lastDrivenEntry by drivenEntryState
     val isSwitching by derivedStateOf { switchesInFlight.intValue > 0 }
 
     /** 点击时同步占有切页状态，不等待协程调度才阻止反向同步。 */
@@ -63,6 +65,7 @@ internal fun rememberHomePagerCoordinator(
     topTabEntries: List<HomeTopTabEntry>,
     currentCategory: HomeCategory,
     initialPage: Int,
+    displayedTabEntry: HomeTopTabEntry? = null,
 ): HomePagerCoordinator {
     // 标签重排只重置对齐会话，不把保留的标签身份解释成旧页码。
     val retainedEntry = remember(pagerState) {
@@ -72,13 +75,29 @@ internal fun rememberHomePagerCoordinator(
         mutableStateOf(shouldTreatInitialHomePagerPageAsSyncedWithState(
             initialEntry = resolveHomeTopTabEntryOrNull(topTabEntries, pagerState.currentPage),
             currentCategory = currentCategory,
+            displayedTabEntry = displayedTabEntry,
         ))
     }
     val lastDrivenCategory = remember(pagerState, topTabEntries) {
         mutableStateOf(if (synced.value) currentCategory else null)
     }
+    val lastDrivenEntry = remember(pagerState, topTabEntries) {
+        mutableStateOf(
+            if (synced.value) {
+                displayedTabEntry ?: resolveHomeTopTabEntryOrNull(topTabEntries, pagerState.currentPage)
+            } else null
+        )
+    }
     val switchesInFlight = remember(pagerState) { mutableIntStateOf(0) }
-    return remember(pagerState, topTabEntries, retainedEntry, synced, lastDrivenCategory, switchesInFlight) {
-        HomePagerCoordinator(pagerState, topTabEntries, retainedEntry, synced, lastDrivenCategory, switchesInFlight)
+    return remember(pagerState, topTabEntries, retainedEntry, synced, lastDrivenCategory, lastDrivenEntry, switchesInFlight) {
+        HomePagerCoordinator(
+            pagerState,
+            topTabEntries,
+            retainedEntry,
+            synced,
+            lastDrivenCategory,
+            lastDrivenEntry,
+            switchesInFlight,
+        )
     }
 }

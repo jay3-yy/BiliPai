@@ -42,18 +42,6 @@ class AudioNowPlayingBarStructureTest {
     }
 
     @Test
-    fun linkedDockAlignsAudioBarLengthAndHeightWithBottomBar() {
-        val source = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/home/components/LinkedBottomDock.kt"
-        )
-        // 展开态小横条与底栏整簇同宽同起点；槽高与导航行同为 barHeight。
-        assertTrue(source.contains("expandedAudioWidth = bottomBarClusterWidth"))
-        assertTrue(source.contains("expandedAudioX = navigationX"))
-        assertTrue(source.contains("Constraints.fixed(geometry.audioWidth, barHeight)"))
-        assertTrue(source.contains("navRowY - verticalGap - barHeight"))
-    }
-
-    @Test
     fun appNavigationHostsNowPlayingBarBesideBottomBarBackdrop() {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt"

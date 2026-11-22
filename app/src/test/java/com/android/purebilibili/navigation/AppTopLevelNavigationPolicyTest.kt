@@ -237,6 +237,62 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun bottomBarInitialPage_bindsSystemWindowEntryToItsVisibleTab() {
+        val visibleItems = listOf(
+            BottomNavItem.HOME,
+            BottomNavItem.DYNAMIC,
+            BottomNavItem.HISTORY,
+            BottomNavItem.PROFILE
+        )
+
+        // 头像入口的系统卡片窗口以“我的”作为初始内容，底栏选中项必须落在“我的”。
+        assertEquals(
+            3,
+            resolveBottomBarInitialPage(
+                recoveredBottomRoute = null,
+                windowInitialRoute = ScreenRoutes.Profile.route,
+                visibleItems = visibleItems
+            )
+        )
+        // 非底栏目的地的窗口入口与主窗口一样回到默认首页。
+        assertEquals(
+            0,
+            resolveBottomBarInitialPage(
+                recoveredBottomRoute = null,
+                windowInitialRoute = ScreenRoutes.Search.route,
+                visibleItems = visibleItems
+            )
+        )
+        assertEquals(
+            0,
+            resolveBottomBarInitialPage(
+                recoveredBottomRoute = null,
+                windowInitialRoute = null,
+                visibleItems = visibleItems
+            )
+        )
+    }
+
+    @Test
+    fun bottomBarInitialPage_prefersRecoveredBottomRouteOverWindowEntry() {
+        val visibleItems = listOf(
+            BottomNavItem.HOME,
+            BottomNavItem.DYNAMIC,
+            BottomNavItem.HISTORY,
+            BottomNavItem.PROFILE
+        )
+
+        assertEquals(
+            2,
+            resolveBottomBarInitialPage(
+                recoveredBottomRoute = ScreenRoutes.History.route,
+                windowInitialRoute = ScreenRoutes.Profile.route,
+                visibleItems = visibleItems
+            )
+        )
+    }
+
+    @Test
     fun bottomPagerSwitch_restoresNavigation3MainHostFromSecondaryDestination() {
         assertTrue(
             shouldResetNavigation3BackStackForBottomPager(
@@ -558,6 +614,108 @@ class AppTopLevelNavigationPolicyTest {
                 useSideNavigation = false,
                 shouldHideBottomBarOnTablet = false,
                 shouldDeferReveal = true
+            )
+        )
+        assertFalse(
+            shouldShowBottomBarForNavigation(
+                activeRoute = ScreenRoutes.Profile.route,
+                visibleBottomBarRoutes = defaultRoutes,
+                useSideNavigation = false,
+                shouldHideBottomBarOnTablet = false,
+                shouldDeferReveal = false,
+                isChildWindow = true
+            )
+        )
+        assertFalse(
+            shouldShowBottomBarForNavigation(
+                activeRoute = ScreenRoutes.Home.route,
+                visibleBottomBarRoutes = defaultRoutes,
+                useSideNavigation = false,
+                shouldHideBottomBarOnTablet = false,
+                shouldDeferReveal = false,
+                isChildWindow = true
+            )
+        )
+    }
+
+    @Test
+    fun inAppBottomPagerTakesPrecedenceOverSystemCardWindowOnlyWhenHostedInMainWindow() {
+        val defaultItems = listOf(
+            BottomNavItem.HOME,
+            BottomNavItem.DYNAMIC,
+            BottomNavItem.HISTORY,
+            BottomNavItem.PROFILE,
+        )
+        assertTrue(
+            shouldPreferInAppBottomPagerOverSystemCardWindow(
+                targetRoute = ScreenRoutes.Profile.route,
+                visibleBottomBarItems = defaultItems,
+                isChildWindow = false,
+                bottomBarAlwaysHidden = false,
+                useSideNavigation = false,
+            )
+        )
+        assertTrue(
+            shouldPreferInAppBottomPagerOverSystemCardWindow(
+                targetRoute = ScreenRoutes.Settings.route,
+                visibleBottomBarItems = defaultItems + BottomNavItem.SETTINGS,
+                isChildWindow = false,
+                bottomBarAlwaysHidden = false,
+                useSideNavigation = false,
+            )
+        )
+        assertFalse(
+            shouldPreferInAppBottomPagerOverSystemCardWindow(
+                targetRoute = ScreenRoutes.Search.route,
+                visibleBottomBarItems = defaultItems,
+                isChildWindow = false,
+                bottomBarAlwaysHidden = false,
+                useSideNavigation = false,
+            )
+        )
+        assertFalse(
+            shouldPreferInAppBottomPagerOverSystemCardWindow(
+                targetRoute = ScreenRoutes.Settings.route,
+                visibleBottomBarItems = defaultItems,
+                isChildWindow = false,
+                bottomBarAlwaysHidden = false,
+                useSideNavigation = false,
+            )
+        )
+        assertFalse(
+            shouldPreferInAppBottomPagerOverSystemCardWindow(
+                targetRoute = ScreenRoutes.Profile.route,
+                visibleBottomBarItems = listOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY),
+                isChildWindow = false,
+                bottomBarAlwaysHidden = false,
+                useSideNavigation = false,
+            )
+        )
+        assertFalse(
+            shouldPreferInAppBottomPagerOverSystemCardWindow(
+                targetRoute = ScreenRoutes.Profile.route,
+                visibleBottomBarItems = defaultItems,
+                isChildWindow = false,
+                bottomBarAlwaysHidden = true,
+                useSideNavigation = false,
+            )
+        )
+        assertTrue(
+            shouldPreferInAppBottomPagerOverSystemCardWindow(
+                targetRoute = ScreenRoutes.Profile.route,
+                visibleBottomBarItems = defaultItems,
+                isChildWindow = false,
+                bottomBarAlwaysHidden = true,
+                useSideNavigation = true,
+            )
+        )
+        assertFalse(
+            shouldPreferInAppBottomPagerOverSystemCardWindow(
+                targetRoute = ScreenRoutes.Profile.route,
+                visibleBottomBarItems = defaultItems,
+                isChildWindow = true,
+                bottomBarAlwaysHidden = false,
+                useSideNavigation = false,
             )
         )
     }

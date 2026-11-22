@@ -2,6 +2,8 @@ package com.android.purebilibili.feature.profile
 
 import com.android.purebilibili.data.model.response.SplashItem
 
+internal const val ALPINE_PAGE_WALLPAPER_URI = "file:///android_asset/wallpapers/alpine_daylight.jpg"
+
 enum class WallpaperPickerTarget {
     SPLASH,
     HOME,
@@ -22,7 +24,8 @@ internal fun normalizeSplashWallpaperUrl(url: String?): String {
 internal fun isUserSelectedSplashWallpaperUri(uri: String?): Boolean {
     if (uri.isNullOrBlank()) return false
     val normalized = uri.trim()
-    return normalized.startsWith("content://") || normalized.startsWith("file://")
+    return normalized.startsWith("content://") ||
+        (normalized.startsWith("file://") && !normalized.startsWith("file:///android_asset/"))
 }
 
 internal fun resolveVisibleSplashWallpaperPool(items: List<SplashItem>): List<String> {

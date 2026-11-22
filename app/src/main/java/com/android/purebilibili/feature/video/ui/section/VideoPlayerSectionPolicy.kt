@@ -6,12 +6,9 @@ import android.os.Build
 import android.view.SurfaceView
 import android.view.TextureView
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppTopTabPresentation
-import com.android.purebilibili.core.ui.transition.VideoSharedTransitionPlaybackIntent
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
@@ -1122,15 +1119,11 @@ internal fun shouldForceCoverDuringReturnAnimation(
  * CoverFirst 与返回则继续由封面承担最上层交互/共享 morph。
  */
 internal fun resolveVideoPlayerCoverLayerZIndex(
-    playbackIntent: VideoSharedTransitionPlaybackIntent,
     forceCoverDuringReturnAnimation: Boolean,
     shouldKeepCoverForManualStart: Boolean,
 ): Float {
-    return if (
-        forceCoverDuringReturnAnimation ||
-        shouldKeepCoverForManualStart ||
-        playbackIntent == VideoSharedTransitionPlaybackIntent.CoverFirst
-    ) {
+    // Once playback is requested, the video surface fades in above the same cover.
+    return if (forceCoverDuringReturnAnimation || shouldKeepCoverForManualStart) {
         100f
     } else {
         -1f
@@ -1178,31 +1171,6 @@ internal fun shouldFinishVideoPlayerSurfaceReveal(
     surfaceAlpha: Float,
 ): Boolean = hasStartedSmoothReveal && isPlayerSurfaceReady &&
     surfaceAlpha == 1f
-
-/** 揭开叠化起点（progress=0）封面的降饱和程度；1.0 为完全不动。 */
-private const val VIDEO_PLAYER_COVER_REVEAL_MIN_SATURATION = 0.90f
-
-/**
- * 封面在揭开叠化窗口内的饱和度。
- *
- * 只降饱和、不动亮度：两层相似画面叠化时色彩会轻微叠加强化，把垫底封面
- * 略微去色可以让混合窗口读作「同一画面」，视频接管后色彩自然「活过来」；
- * 若动亮度会重新引入叠加期的亮度凹陷。
- *
- * [progress] 0 = 揭开刚提交，1 = 已落定（返回 null 即不加 colorFilter）。
- */
-internal fun resolveVideoPlayerCoverRevealSaturation(progress: Float): Float {
-    return VIDEO_PLAYER_COVER_REVEAL_MIN_SATURATION +
-        (1f - VIDEO_PLAYER_COVER_REVEAL_MIN_SATURATION) * progress.coerceIn(0f, 1f)
-}
-
-internal fun resolveVideoPlayerCoverRevealColorFilter(progress: Float): ColorFilter? {
-    if (progress >= 0.999f) return null
-    val matrix = ColorMatrix().apply {
-        setToSaturation(resolveVideoPlayerCoverRevealSaturation(progress))
-    }
-    return ColorFilter.colorMatrix(matrix)
-}
 
 internal data class VideoPlayerCoverBootstrapState(
     val isFirstFrameRendered: Boolean,
@@ -1429,30 +1397,10 @@ internal fun shouldShowInlinePlayerView(
     return !isPortraitFullscreen && !forceCoverDuringReturnAnimation
 }
 
-internal fun shouldEnableCoverImageCrossfade(
-    forceCoverDuringReturnAnimation: Boolean,
-    holdEntryCoverUnderlay: Boolean = false,
-): Boolean {
-    return !forceCoverDuringReturnAnimation && !holdEntryCoverUnderlay
-}
-
 internal fun resolvePreferredVideoCoverUrl(
     entryCoverUrl: String,
     detailCoverUrl: String,
-    preferDetailCoverUrl: Boolean = false
-): String {
-    val normalizedDetailCoverUrl = detailCoverUrl.trim()
-    if (preferDetailCoverUrl && normalizedDetailCoverUrl.isNotEmpty()) {
-        return normalizedDetailCoverUrl
-    }
-
-    val normalizedEntryCoverUrl = entryCoverUrl.trim()
-    if (normalizedEntryCoverUrl.isNotEmpty()) return normalizedEntryCoverUrl
-
-    if (normalizedDetailCoverUrl.isNotEmpty()) return normalizedDetailCoverUrl
-
-    return ""
-}
+): String = entryCoverUrl.trim().ifEmpty { detailCoverUrl.trim() }
 
 internal fun shouldEnableCoverOverlaySharedBounds(
     useCoverOverlaySharedBounds: Boolean,
