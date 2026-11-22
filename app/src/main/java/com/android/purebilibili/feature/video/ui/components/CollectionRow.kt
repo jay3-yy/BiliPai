@@ -35,15 +35,7 @@ fun CollectionRow(
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val collectionSubscriptionId = remember(ugcSeason) { resolveCollectionSubscriptionId(ugcSeason) }
     val allEpisodes = remember(ugcSeason.sections) { ugcSeason.sections.flatMap { it.episodes } }
-    val currentAid = remember(allEpisodes, currentBvid, currentCid) {
-        resolveCurrentUgcEpisodeAid(
-            episodes = allEpisodes,
-            currentBvid = currentBvid,
-            currentCid = currentCid
-        )
-    }
     // 计算当前视频在合集中的位置
     val currentIndex = resolveCurrentUgcEpisodeIndex(
         episodes = allEpisodes,
@@ -115,14 +107,6 @@ fun CollectionRow(
 
 
             Spacer(modifier = Modifier.width(6.dp))
-
-            //  订阅按钮（保留行内直达入口）
-            CollectionSubscriptionButton(
-                collectionId = collectionSubscriptionId,
-                currentBvid = currentBvid,
-                currentAid = currentAid,
-                immersive = immersive,
-            )
 
             //  右侧箭头
             AppIcon(

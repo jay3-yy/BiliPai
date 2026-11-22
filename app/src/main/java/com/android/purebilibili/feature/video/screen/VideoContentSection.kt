@@ -1288,7 +1288,8 @@ internal fun VideoContentSection(
             onCreateNoteDraft = {
                 showAiSummarySheet = false
                 onCreateNoteDraftFromAiSummary()
-            }
+            },
+            inlinePanel = true,
         )
 
         VideoNoteListSheet(

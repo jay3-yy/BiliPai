@@ -545,6 +545,7 @@ internal fun resolveSubReplyOpenTargetId(rootReplyId: Long, clickedReplyId: Long
 
 private val REPLY_BANGUMI_EP_REGEX = Regex("/bangumi/play/ep(\\d+)")
 private val REPLY_PAGE_PARAM_REGEX = Regex("[?&]p=\\d+")
+private val REPLY_PREFIX_PATTERN = Regex("^回复 (@.+?)(\\s*[:：])")
 
 internal fun resolveReplyCommentShareUrl(
     item: ReplyItem,
@@ -881,8 +882,7 @@ internal fun buildRichCommentAnnotatedString(
             }
         }
 
-        val replyPattern = "^回复 (@.+?)(\\s*[:：])".toRegex()
-        val replyMatch = replyPattern.find(text)
+        val replyMatch = REPLY_PREFIX_PATTERN.find(text)
         var startIndex = 0
         if (replyMatch != null) {
             val mention = replyMatch.groupValues[1]

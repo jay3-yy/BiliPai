@@ -12,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Rect
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.CommentWindowNavigation
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -89,6 +91,7 @@ fun SubReplySheet(
             }
         }
         val panelColor = rememberVideoCommentAppearance().panelColor
+        val useMiuixSheet = LocalAppUiStyle.current == AppUiStyle.MIUIX
         com.android.purebilibili.core.ui.AppModalBottomSheet(
             onDismissRequest = onDismiss,
             dismissOnBackPress = false,
@@ -96,10 +99,13 @@ fun SubReplySheet(
             containerColor = panelColor,
             // 底部安全区由评论面板统一绘制，保留共享弹层与原生材质默认行为。
             windowInsets = WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
+            // Miuix WindowBottomSheet 内部按 wrapContentHeight + heightIn(max = windowHeight - topInset) 贴底排版；
+            // 若在外层 modifier 施加 fillMaxHeight，会把受限面板在全屏高度内垂直居中，导致顶部侵占状态栏且底部露出半个状态栏高度。
             sheetSurfaceModifier = sheetSurfaceModifier
+                .then(if (useMiuixSheet) Modifier.fillMaxHeight(maxHeightFraction) else Modifier)
                 .background(panelColor)
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)),
-            modifier = Modifier.fillMaxHeight(maxHeightFraction)
+            modifier = (if (useMiuixSheet) Modifier else Modifier.fillMaxHeight(maxHeightFraction))
                 .then(threadDrag.containerModifier)
                 .graphicsLayer {
                     translationY = threadDrag.offsetPx.value +

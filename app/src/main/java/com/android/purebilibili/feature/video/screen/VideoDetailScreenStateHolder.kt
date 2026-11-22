@@ -605,7 +605,7 @@ internal fun VideoDetailScreenStateHolder(
     val autoPlayOnOpenEnabled by remember(context) {
         com.android.purebilibili.core.store.SettingsManager.getClickToPlay(context)
     }.collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(context)
+            initialValue = remember(context) { com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(context) }
         )
     val videoSharedPlaybackIntent = remember(autoPlayOnOpenEnabled, startAudioFromRoute) {
         resolveVideoSharedTransitionPlaybackIntent(
@@ -1321,7 +1321,7 @@ internal fun VideoDetailScreenStateHolder(
     val commentDefaultSortMode by remember(context) {
         com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortMode(context)
     }.collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context),
+            initialValue = remember(context) { com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context) },
             lifecycle = lifecycleOwner.lifecycle
         )
     val commentMemberDecorationsEnabled by remember(context) {

@@ -883,12 +883,6 @@ fun VideoTitleWithDesc(
                         text = badge,
                     )
                 }
-                honorChips.forEach { (_, text, jumpUrl) ->
-                    VideoHonorChip(
-                        text = text,
-                        onClick = { onDescriptionUrlClick?.invoke(jumpUrl) },
-                    )
-                }
                 if (showDeclarationRows) {
                     if (argueMsg.isNotBlank()) {
                         VideoArgueMsgRow(argueMsg = argueMsg, modifier = Modifier.align(Alignment.CenterVertically))
@@ -899,6 +893,12 @@ fun VideoTitleWithDesc(
                             modifier = Modifier.align(Alignment.CenterVertically),
                         )
                     }
+                }
+                honorChips.forEach { (_, text, jumpUrl) ->
+                    VideoHonorChip(
+                        text = text,
+                        onClick = { onDescriptionUrlClick?.invoke(jumpUrl) },
+                    )
                 }
             }
         }
