@@ -929,10 +929,18 @@ internal fun LiveHomeContent(
                 isLoading && contentItems.isEmpty() -> {
                     liveRoomSkeletonItems(skeletonLayout.cardCount, metrics, skeletonColor)
                 }
-                error != null && contentItems.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                error != null && contentItems.isEmpty() -> item(
+                    key = "live_error_state",
+                    contentType = "live_error_state",
+                    span = { GridItemSpan(maxLineSpan) },
+                ) {
                     LiveListErrorState(error, onRetry)
                 }
-                contentItems.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                contentItems.isEmpty() -> item(
+                    key = "live_empty_state",
+                    contentType = "live_empty_state",
+                    span = { GridItemSpan(maxLineSpan) },
+                ) {
                     EmptyState(
                         message = if (isLiveHomeFollowedTab(selectedAreaIndex)) {
                             "关注的主播暂时都未开播"
@@ -943,8 +951,14 @@ internal fun LiveHomeContent(
                     )
                 }
                 else -> {
-                    items(contentItems, key = { it.roomId }) { item ->
-                        val model = item.toLiveRoomCardUiModel(showFirstFrame)
+                    items(
+                        items = contentItems,
+                        key = { it.roomId },
+                        contentType = { "live_room_card" },
+                    ) { item ->
+                        val model = remember(item, showFirstFrame) {
+                            item.toLiveRoomCardUiModel(showFirstFrame)
+                        }
                         LiveRoomCard(
                             model = model,
                             enableSharedCoverTransition = true,
@@ -956,7 +970,11 @@ internal fun LiveHomeContent(
                 }
             }
             if (hasMore && !isLoading && error == null) {
-                item(key = LIVE_GRID_LOAD_MORE_KEY, span = { GridItemSpan(maxLineSpan) }) {
+                item(
+                    key = LIVE_GRID_LOAD_MORE_KEY,
+                    contentType = "live_load_more",
+                    span = { GridItemSpan(maxLineSpan) },
+                ) {
                     LiveHomeLoadMoreFooter(
                         isLoadingMore = isLoadingMore,
                         contentCount = contentItems.size,

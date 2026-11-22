@@ -424,6 +424,7 @@ fun TopControlBar(
                         modifier = Modifier.weight(1f),
                     )
                 } else {
+                    val titleMarqueeGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
                     // 标题与右侧图标保持同一行
                     AppText(
                         text = title,
@@ -434,7 +435,8 @@ fun TopControlBar(
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         modifier = Modifier
                             .weight(1f)
-                            .basicMarquee()
+                            .then(titleMarqueeGate.modifier)
+                            .then(if (titleMarqueeGate.active) Modifier.basicMarquee() else Modifier)
                     )
                 }
             }
@@ -819,7 +821,7 @@ private fun PlayerTitleInfoDock(
     modifier: Modifier = Modifier,
     alignedGlassHeight: Dp? = null,
 ) {
-    val motionEnabled = LocalComponentMotionEnabled.current
+    val titleMarqueeGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
     PlayerControlGlassDock(
         enabled = true,
         modifier = modifier,
@@ -849,8 +851,10 @@ private fun PlayerTitleInfoDock(
                 maxLines = 1,
                 softWrap = false,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                // 长标题在胶囊宽度内滚动；关闭动效后回到单行省略号，保持原有静止行为。
-                modifier = if (motionEnabled) Modifier.basicMarquee() else Modifier,
+                // 长标题在胶囊宽度内滚动；不可见/失焦/关闭动效后回到单行省略号。
+                modifier = titleMarqueeGate.modifier.then(
+                    if (titleMarqueeGate.active) Modifier.basicMarquee() else Modifier
+                ),
             )
             if (shouldShowLandscapeMetaRow(statusInfo.isVisible, onlineCount)) {
                 Row(

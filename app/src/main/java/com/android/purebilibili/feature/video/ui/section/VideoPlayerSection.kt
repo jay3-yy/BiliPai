@@ -5212,7 +5212,17 @@ private fun VideoPlayerSectionContent(
             val renderVideoPlayerOverlay: @Composable () -> Unit = {
                 // Read diagnostics in this restart scope so updates do not invalidate the
                 // surface, cover, subtitles, and gesture setup in the parent player.
-                val debugInfo by playerState.debugInfo.collectAsStateWithLifecycle()
+                // 仅在开启播放洞察模式时订阅高频 debugInfo，避免带宽估算/丢帧回调导致整个播放浮层持续重组。
+                val debugInfoFlow = remember(playerState, playerInsightMode) {
+                    if (playerInsightMode != com.android.purebilibili.core.store.player.PlayerSettingsStore.PlayerInsightMode.OFF) {
+                        playerState.debugInfo
+                    } else {
+                        kotlinx.coroutines.flow.emptyFlow()
+                    }
+                }
+                val debugInfo by debugInfoFlow.collectAsStateWithLifecycle(
+                    initialValue = com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo(),
+                )
                 val diagnosticEvents by playerState.diagnosticEvents.collectAsStateWithLifecycle()
                 val pendingUserAction by playerState.pendingUserAction.collectAsStateWithLifecycle()
                 val playerDiagnosticLoggingEnabled by remember(context) {

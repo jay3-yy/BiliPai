@@ -395,12 +395,16 @@ internal val MusicArtworkScrimColors = listOf(
     Color.Black.copy(alpha = 0.50f),
 )
 
+private val LocalMusicPlaybackPositionState =
+    staticCompositionLocalOf<androidx.compose.runtime.State<Long>?> { null }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun MusicPlayerContent(
     sourceState: MusicPlayerUiState,
     playbackPositionSource: Player? = null,
     playbackPositionIdentity: String? = null,
+    positionMsFlow: kotlinx.coroutines.flow.StateFlow<Long>? = null,
     customizeMoreMenu: Boolean = false,
     onBack: () -> Unit,
     onPlayPause: () -> Unit,
@@ -471,14 +475,18 @@ internal fun MusicPlayerContent(
             )
         }
     }
-    val livePositionMs by com.android.purebilibili.core.player.rememberPlaybackPosition(
-        player = playbackPositionSource,
-        identity = playbackPositionIdentity ?: sourceState.title,
-        enabled = playerSurfaceActive,
-        timeline = lyricTimeline,
-    )
-    val state = if (playbackPositionSource == null) sourceState
-        else sourceState.copy(positionMs = livePositionMs)
+    val livePositionState: androidx.compose.runtime.State<Long>? = when {
+        positionMsFlow != null -> positionMsFlow.collectAsStateWithLifecycle()
+        playbackPositionSource != null -> com.android.purebilibili.core.player.rememberPlaybackPosition(
+            player = playbackPositionSource,
+            identity = playbackPositionIdentity ?: sourceState.title,
+            enabled = playerSurfaceActive,
+            timeline = lyricTimeline,
+        )
+        else -> null
+    }
+    // 不在 4,900 行根组合体内读取 livePositionState.value；仅进度条与歌词叶子组件通过 CompositionLocal 订阅。
+    val state = sourceState
     val context = LocalContext.current
     // 播放器使用沉浸式浅色前景，封面未就绪时也保持统一的暗色底。
     val themeSurfaceColor = com.android.purebilibili.feature.audio.lyrics.halcyon.PlayerPalette.Default.middle
@@ -572,9 +580,9 @@ internal fun MusicPlayerContent(
     // The source and all liquid overlays are siblings in this draw tree, so the content layer is
     // recorded before the overlays sample it. Mount the glass chrome on the first composition.
     val musicBackdrop = musicBackdropSource.backdrop
-    val homeSettings by SettingsManager
-        .getHomeSettings(context)
-        .collectAsStateWithLifecycle(initialValue = HomeSettings())
+    val homeSettings by remember(context) {
+        SettingsManager.getHomeSettings(context)
+    }.collectAsStateWithLifecycle(initialValue = HomeSettings())
     val settingsScope = rememberCoroutineScope()
     val storedLyricsUiStyle by remember(context) { SettingsManager.getMusicLyricsUiStyle(context) }
         .collectAsStateWithLifecycle<SettingsManager.MusicLyricsUiStyle?>(initialValue = null)
@@ -661,6 +669,7 @@ internal fun MusicPlayerContent(
     CompositionLocalProvider(
         com.android.purebilibili.feature.audio.lyrics.halcyon.LocalPlayerSurfaceActive provides playerSurfaceActive,
         LocalMusicPlayerMaterial provides musicMaterial,
+        LocalMusicPlaybackPositionState provides livePositionState,
         com.android.purebilibili.core.ui.LocalAppButtonSlotColorCorrectionEnabled provides false,
     ) {
     BoxWithConstraints(
@@ -2565,11 +2574,13 @@ private fun PlayerPage(
                 }
                 if (showLyricsPreview) {
                     Spacer(Modifier.height(14.dp))
-                    val lyricsUiStyle by SettingsManager
-                        .getMusicLyricsUiStyle(LocalContext.current)
-                        .collectAsStateWithLifecycle(
-                            initialValue = SettingsManager.MusicLyricsUiStyle.CLASSIC
-                        )
+                    val previewContext = LocalContext.current
+                    val lyricsUiStyle by remember(previewContext) {
+                        SettingsManager.getMusicLyricsUiStyle(previewContext)
+                    }.collectAsStateWithLifecycle(
+                        initialValue = SettingsManager.MusicLyricsUiStyle.CLASSIC
+                    )
+                    val previewPositionMs = LocalMusicPlaybackPositionState.current?.value ?: state.positionMs
                     if (lyricsUiStyle == SettingsManager.MusicLyricsUiStyle.IMMERSIVE &&
                         state.lyrics != null
                     ) {
@@ -2577,9 +2588,9 @@ private fun PlayerPage(
                         val halcyonLines = remember(state.lyrics) {
                             mapToHalcyonLyrics(state.lyrics!!.lines)
                         }
-                        val miniIndex = remember(halcyonLines, state.positionMs) {
+                        val miniIndex = remember(halcyonLines, previewPositionMs) {
                             currentLyricIndexAt(
-                                positionMs = state.positionMs - (state.lyrics?.offsetMs ?: 0L),
+                                positionMs = previewPositionMs - (state.lyrics?.offsetMs ?: 0L),
                                 lyrics = halcyonLines,
                                 suppressLeadingZero = true,
                             ).index.coerceIn(0, (halcyonLines.size - 1).coerceAtLeast(0))
@@ -2587,7 +2598,7 @@ private fun PlayerPage(
                         com.android.purebilibili.feature.audio.lyrics.halcyon.PlayerMiniLyrics(
                             lines = halcyonLines,
                             activeIndex = miniIndex,
-                            positionMs = state.positionMs - (state.lyrics?.offsetMs ?: 0L),
+                            positionMs = previewPositionMs - (state.lyrics?.offsetMs ?: 0L),
                             contentColor = MusicContentColor,
                             showTranslation = true,
                             onOpenLyrics = onOpenLyrics,
@@ -2595,7 +2606,7 @@ private fun PlayerPage(
                     } else {
                         PlayerLyricsPreview(
                             lyrics = state.lyrics,
-                            positionMs = state.positionMs,
+                            positionMs = previewPositionMs,
                             onOpenLyrics = onOpenLyrics
                         )
                     }
@@ -3033,8 +3044,9 @@ private fun MusicProgress(
     modifier: Modifier = Modifier
 ) {
     val duration = state.durationMs.coerceAtLeast(1L)
+    val currentPositionMs = LocalMusicPlaybackPositionState.current?.value ?: state.positionMs
     var draggedPosition by remember { mutableStateOf<Float?>(null) }
-    val sliderValue = draggedPosition ?: state.positionMs.coerceIn(0L, duration).toFloat()
+    val sliderValue = draggedPosition ?: currentPositionMs.coerceIn(0L, duration).toFloat()
     val onSliderChange: (Float) -> Unit = { draggedPosition = it }
     val onSliderChangeFinished = {
         draggedPosition?.let { onSeek(it.toLong()) }
@@ -3067,7 +3079,7 @@ private fun MusicProgress(
             )
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            val displayedPositionMs = draggedPosition?.toLong() ?: state.positionMs
+            val displayedPositionMs = draggedPosition?.toLong() ?: currentPositionMs
             AppText(
                 formatMusicTime(displayedPositionMs),
                 color = MusicContentColor.copy(alpha = 0.85f),
@@ -3417,19 +3429,20 @@ private fun LyricsPage(
         com.android.purebilibili.feature.audio.lyrics.halcyon.LocalPlayerSurfaceActive.current &&
         com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val document = state.lyrics
+    val currentPositionMs = LocalMusicPlaybackPositionState.current?.value ?: state.positionMs
     val immersiveLyrics = lyricsUiStyle == SettingsManager.MusicLyricsUiStyle.IMMERSIVE
     var stableCurrentIndex by remember(document) {
         mutableIntStateOf(
             document?.let {
-                resolveLastStartedLyricIndex(it.lines, state.positionMs - it.offsetMs)
+                resolveLastStartedLyricIndex(it.lines, currentPositionMs - it.offsetMs)
             } ?: -1
         )
     }
-    LaunchedEffect(state.positionMs, document) {
+    LaunchedEffect(currentPositionMs, document) {
         if (document == null) return@LaunchedEffect
         stableCurrentIndex = resolveStableLyricIndex(
             lines = document.lines,
-            positionMs = state.positionMs - document.offsetMs,
+            positionMs = currentPositionMs - document.offsetMs,
             previousIndex = stableCurrentIndex,
         )
     }
@@ -3528,7 +3541,7 @@ private fun LyricsPage(
             val halcyonLines = remember(document) {
                 mapToHalcyonLyrics(document.lines)
             }
-            val lyricMs = state.positionMs - document.offsetMs
+            val lyricMs = currentPositionMs - document.offsetMs
             val halcyonIndex = remember(halcyonLines, lyricMs) {
                 currentLyricIndexAt(
                     positionMs = lyricMs,
@@ -3615,7 +3628,7 @@ private fun LyricsPage(
                     LyricLineContent(
                         line = line,
                         isCurrent = index == currentIndex,
-                        positionMs = state.positionMs - document.offsetMs,
+                        positionMs = currentPositionMs - document.offsetMs,
                         showTranslations = showTranslations,
                         focusStyle = resolveMusicLyricFocusStyle(index, currentIndex, blurEnabled),
                         reduceMotion = reduceMotion,
@@ -3997,8 +4010,12 @@ private fun LyricsImmersiveProgress(
     modifier: Modifier = Modifier
 ) {
     val duration = state.durationMs.coerceAtLeast(1L)
+    val positionState = LocalMusicPlaybackPositionState.current
     AppLinearProgressIndicator(
-        progress = { state.positionMs.coerceIn(0L, duration).toFloat() / duration.toFloat() },
+        progress = {
+            val pos = positionState?.value ?: state.positionMs
+            pos.coerceIn(0L, duration).toFloat() / duration.toFloat()
+        },
         modifier = modifier
             .fillMaxWidth()
             .height(2.dp),

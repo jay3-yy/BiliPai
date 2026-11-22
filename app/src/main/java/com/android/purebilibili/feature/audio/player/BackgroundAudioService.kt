@@ -148,7 +148,7 @@ class BackgroundAudioService : MediaLibraryService() {
                 }
             }
         }
-        scope.launch {
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             TokenManager.observeServiceSession(this@BackgroundAudioService) {
                 val current = snapshot
                 if (current != null && current.accountMid != TokenManager.midCache) {

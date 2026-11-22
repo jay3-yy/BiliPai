@@ -675,9 +675,10 @@ internal fun VideoDetailScreenStateHolder(
     // engagement and composer updates cannot invalidate the transition setup and effects.
     val engagementStateHandle = engagementViewModel.uiState.collectAsStateWithLifecycle()
     val favoriteFolderSaveEventState = viewModel.favoriteFolderSaveEvent.collectAsStateWithLifecycle()
-    val favoriteQuickSaveDefaultFolder by com.android.purebilibili.core.store.FavoriteInteractionSettingsStore
-        .getQuickSaveDefaultFolder(context)
-        .collectAsStateWithLifecycle(initialValue = false)
+    val favoriteQuickSaveDefaultFolder by remember(context) {
+        com.android.purebilibili.core.store.FavoriteInteractionSettingsStore
+            .getQuickSaveDefaultFolder(context)
+    }.collectAsStateWithLifecycle(initialValue = false)
     val latestFavoriteQuickSaveDefaultFolder = rememberUpdatedState(favoriteQuickSaveDefaultFolder)
     DisposableEffect(viewModel, presentationState) {
         viewModel.setPageIdentityCommitListener(presentationState::syncPlaybackIdentity)

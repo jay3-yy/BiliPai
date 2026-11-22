@@ -709,8 +709,7 @@ private fun MiniPlayerSessionOverlay(
             )
         }
     }
-    val animatedOffsetX = offsetXAnimatable.value
-    val animatedOffsetY by animateFloatAsState(
+    val animatedOffsetYState = animateFloatAsState(
         targetValue = targetOffsetY,
         animationSpec = if (isDraggingPosition || isResizing || reduceMotion) {
             snap()
@@ -720,22 +719,26 @@ private fun MiniPlayerSessionOverlay(
         label = "offsetY"
     )
 
-    // 回报小窗屏幕边界，供 PIP sourceRectHint 做无缝过渡。
+    // 回报小窗屏幕边界，供 PIP sourceRectHint 做无缝过渡；使用 snapshotFlow 避免每帧重启协程与重组。
     LaunchedEffect(
-        animatedOffsetX,
-        animatedOffsetY,
+        offsetXAnimatable,
+        animatedOffsetYState,
         miniPlayerWidthPx,
         miniPlayerHeightPx,
         suppressContentForPip
     ) {
-        miniPlayerManager.miniPlayerSourceBoundsPx = if (suppressContentForPip) {
-            null
-        } else {
-            android.graphics.Rect(
-                animatedOffsetX.roundToInt(),
-                animatedOffsetY.roundToInt(),
-                (animatedOffsetX + miniPlayerWidthPx).roundToInt(),
-                (animatedOffsetY + miniPlayerHeightPx).roundToInt(),
+        if (suppressContentForPip) {
+            miniPlayerManager.miniPlayerSourceBoundsPx = null
+            return@LaunchedEffect
+        }
+        snapshotFlow {
+            offsetXAnimatable.value.roundToInt() to animatedOffsetYState.value.roundToInt()
+        }.collect { (x, y) ->
+            miniPlayerManager.miniPlayerSourceBoundsPx = android.graphics.Rect(
+                x,
+                y,
+                (x + miniPlayerWidthPx).roundToInt(),
+                (y + miniPlayerHeightPx).roundToInt(),
             )
         }
     }
@@ -817,7 +820,7 @@ private fun MiniPlayerSessionOverlay(
             // [新增] 贴边隐藏的小胶囊视图
             StashedMiniPlayerView(
                 modifier = Modifier
-                    .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
+                    .offset { IntOffset(offsetXAnimatable.value.roundToInt(), animatedOffsetYState.value.roundToInt()) }
                     .zIndex(101f)
                     .graphicsLayer { alpha = ((stashProgress.value - 0.35f) / 0.65f).coerceIn(0f, 1f) },
                 layoutPolicy = layoutPolicy,
@@ -856,7 +859,7 @@ private fun MiniPlayerSessionOverlay(
             AppCard(
                 modifier = Modifier
                     .then(autoHide.focusModifier)
-                    .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
+                    .offset { IntOffset(offsetXAnimatable.value.roundToInt(), animatedOffsetYState.value.roundToInt()) }
                     .width(miniPlayerWidth)
                     .height(miniPlayerHeight)
                     .onVisibilityChanged(minFractionVisible = 0f) { miniPlayerInViewport = it }

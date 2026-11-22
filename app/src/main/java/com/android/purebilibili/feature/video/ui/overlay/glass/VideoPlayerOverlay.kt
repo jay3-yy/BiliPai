@@ -1034,30 +1034,24 @@ private fun VideoPlayerOverlayContent(
             delay(1000)
         }
     }
-    val showFullscreenLockButton by SettingsManager
-        .getShowFullscreenLockButton(context)
-        .collectAsStateWithLifecycle(initialValue = true
-        )
-    val showFullscreenScreenshotButton by SettingsManager
-        .getShowFullscreenScreenshotButton(context)
-        .collectAsStateWithLifecycle(initialValue = true
-        )
-    val showFullscreenBatteryLevel by SettingsManager
-        .getShowFullscreenBatteryLevel(context)
-        .collectAsStateWithLifecycle(initialValue = true
-        )
-    val showFullscreenTime by SettingsManager
-        .getShowFullscreenTime(context)
-        .collectAsStateWithLifecycle(initialValue = true
-        )
-    val showFullscreenActionItems by SettingsManager
-        .getShowFullscreenActionItems(context)
-        .collectAsStateWithLifecycle(initialValue = true
-        )
-    val showOnlineCount by SettingsManager
-        .getShowOnlineCount(context)
-        .collectAsStateWithLifecycle(initialValue = false
-        )
+    val showFullscreenLockButton by remember(context) {
+        SettingsManager.getShowFullscreenLockButton(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val showFullscreenScreenshotButton by remember(context) {
+        SettingsManager.getShowFullscreenScreenshotButton(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val showFullscreenBatteryLevel by remember(context) {
+        SettingsManager.getShowFullscreenBatteryLevel(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val showFullscreenTime by remember(context) {
+        SettingsManager.getShowFullscreenTime(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val showFullscreenActionItems by remember(context) {
+        SettingsManager.getShowFullscreenActionItems(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val showOnlineCount by remember(context) {
+        SettingsManager.getShowOnlineCount(context)
+    }.collectAsStateWithLifecycle(initialValue = false)
     val chapterDisplayMode by remember(context) { SettingsManager.getChapterDisplayMode(context) }
         .collectAsStateWithLifecycle(initialValue = ChapterDisplayMode.WITH_CONTROLS)
     val showViewPointMarkers = chapterDisplayMode != ChapterDisplayMode.HIDDEN
@@ -3342,10 +3336,9 @@ private fun TripleLikeInteractionButton(
     val likeFilledIcon = rememberAppLikeFilledIcon()
 
     var isLongPressing by remember { mutableStateOf(false) }
-    var longPressProgress by remember { mutableFloatStateOf(0f) }
     val progressDuration = 1500
 
-    val animatedProgress by animateFloatAsState(
+    val animatedProgressState = animateFloatAsState(
         targetValue = if (isLongPressing) 1f else 0f,
         animationSpec = if (isLongPressing) {
             androidx.compose.animation.core.tween(durationMillis = progressDuration, easing = LinearEasing)
@@ -3361,10 +3354,7 @@ private fun TripleLikeInteractionButton(
             }
         }
     )
-
-    LaunchedEffect(animatedProgress) {
-        longPressProgress = animatedProgress
-    }
+    val longPressProgress = animatedProgressState.value
 
     LaunchedEffect(isLongPressing) {
         if (isLongPressing) {

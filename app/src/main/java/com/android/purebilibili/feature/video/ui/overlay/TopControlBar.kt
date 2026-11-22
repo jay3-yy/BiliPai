@@ -340,15 +340,23 @@ fun TopControlBar(
                                         .padding(bottom = 6.dp),
                                 )
                             }
+                            val titleMarqueeGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
                             AppText(
                                 text = title, color = Color.White,
                                 fontSize = if (showPortraitAuthor) 13.sp else policy.titleFontSp.sp,
                                 lineHeight = if (showPortraitAuthor) 17.sp else 19.sp,
                                 maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
-                                modifier = if (motionEnabled && !simplifiedPortrait) Modifier.basicMarquee(
-                                    iterations = Int.MAX_VALUE, spacing = androidx.compose.foundation.MarqueeSpacing(30.dp),
-                                    velocity = 30.dp,
-                                ) else Modifier,
+                                modifier = titleMarqueeGate.modifier.then(
+                                    if (motionEnabled && !simplifiedPortrait && titleMarqueeGate.active) {
+                                        Modifier.basicMarquee(
+                                            iterations = Int.MAX_VALUE,
+                                            spacing = androidx.compose.foundation.MarqueeSpacing(30.dp),
+                                            velocity = 30.dp,
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                ),
                                 tapToCopyEnabled = false,
                             )
                             if (!simplifiedPortrait && onlineCount.isNotBlank()) {

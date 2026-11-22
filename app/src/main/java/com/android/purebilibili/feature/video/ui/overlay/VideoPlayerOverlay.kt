@@ -3505,10 +3505,9 @@ private fun TripleLikeInteractionButton(
     val likeFilledIcon = rememberAppLikeFilledIcon()
 
     var isLongPressing by remember { mutableStateOf(false) }
-    var longPressProgress by remember { mutableFloatStateOf(0f) }
     val progressDuration = 1500
 
-    val animatedProgress by animateFloatAsState(
+    val animatedProgressState = animateFloatAsState(
         targetValue = if (isLongPressing) 1f else 0f,
         animationSpec = if (isLongPressing) {
             androidx.compose.animation.core.tween(durationMillis = progressDuration, easing = LinearEasing)
@@ -3524,10 +3523,7 @@ private fun TripleLikeInteractionButton(
             }
         }
     )
-
-    LaunchedEffect(animatedProgress) {
-        longPressProgress = animatedProgress
-    }
+    val longPressProgress = animatedProgressState.value
 
     LaunchedEffect(isLongPressing) {
         if (isLongPressing) {

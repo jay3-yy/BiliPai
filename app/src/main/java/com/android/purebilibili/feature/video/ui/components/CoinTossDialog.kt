@@ -168,7 +168,7 @@ internal fun CoinTossDialog(
             if (!paying && !closing && page in 0 until pager.pageCount) {
                 scope.launch {
                     if (latestActive) pager.animateScrollToPage(
-                        page, animationSpec = tween(200, easing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)),
+                        page, animationSpec = tween(200, easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.StandardEase),
                     ) else pager.scrollToPage(page)
                 }
             }

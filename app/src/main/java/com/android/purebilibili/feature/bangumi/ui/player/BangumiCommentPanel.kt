@@ -95,13 +95,14 @@ internal fun BangumiCommentPanel(
     val fullSearchReplies by viewModel.fullSearchReplies.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val backdrop = rememberLayerBackdrop()
-    val hazeState = remember { HazeState() }
     val themeConfig = LocalAppThemeConfig.current
     val liquidGlassEnabled = themeConfig.liquidGlassEnabled
     val progressiveHeaderEnabled = themeConfig.progressiveTopBlurEnabled && !themeConfig.headerBlurEnabled
     val solidHeaderEnabled = themeConfig.progressiveTopFadeEnabled && !themeConfig.headerBlurEnabled
     val floatingHeader = liquidGlassEnabled || progressiveHeaderEnabled || solidHeaderEnabled
+    val backdrop = if (liquidGlassEnabled || progressiveHeaderEnabled) rememberLayerBackdrop() else null
+    val needsHaze = !liquidGlassEnabled && (themeConfig.headerBlurEnabled || themeConfig.bottomBarBlurEnabled)
+    val hazeState = if (needsHaze) remember { HazeState() } else null
     val density = LocalDensity.current
     val commentHeaderHeightPx = remember(density, liquidGlassEnabled) {
         mutableFloatStateOf(with(density) { 46.dp.toPx() })
@@ -109,8 +110,9 @@ internal fun BangumiCommentPanel(
     val commentHeaderHeightProvider = remember(commentHeaderHeightPx) {
         { commentHeaderHeightPx.floatValue }
     }
-    val hideSortDock by SettingsManager.getVideoDetailChromeScrollHideEnabled(context)
-        .collectAsStateWithLifecycle(initialValue = false)
+    val hideSortDock by remember(context) {
+        SettingsManager.getVideoDetailChromeScrollHideEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = false)
     val headerCollapsePx = remember(listState) { mutableFloatStateOf(0f) }
     val headerScroll = rememberVideoCommentHeaderScrollConnection(
         listState = listState,
@@ -173,8 +175,8 @@ internal fun BangumiCommentPanel(
                 listState = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .layerBackdrop(backdrop)
-                    .hazeSourceCompat(hazeState)
+                    .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
+                    .then(if (hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier)
                     .background(MaterialTheme.colorScheme.surface)
                     .nestedScroll(headerScroll),
                 upMid = state.upMid,

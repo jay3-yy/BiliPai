@@ -493,19 +493,6 @@ private fun LiveRoomScreen(
     val pipNoDanmaku by remember(context) {
         SettingsManager.getPipNoDanmakuEnabled(context)
     }.collectAsStateWithLifecycle(initialValue = false)
-    val liveClock by produceState(System.currentTimeMillis(), roomInfo.roomId, roomInfo.liveStartTime) {
-        while (true) { value = System.currentTimeMillis(); delay(30_000L) }
-    }
-    val liveSubtitle = remember(roomInfo, liveClock) {
-        listOf(
-            roomInfo.watchedText,
-            formatLiveDuration(roomInfo.liveStartTime, liveClock)
-        ).filter { it.isNotBlank() }.joinToString(" · ")
-    }
-
-    val fullscreenSubtitle = listOf(anchorInfo.uname.ifBlank { uname }, roomInfo.watchedText,
-        roomInfo.onlineRankText, formatLiveDuration(roomInfo.liveStartTime, liveClock))
-        .filter { it.isNotBlank() }.joinToString("  ")
 
     // 先请求目标方向，布局按真实窗口方向提交；竖向直播与窗口内全屏保持各自策略。
     fun toggleFullscreen() {
@@ -1289,6 +1276,35 @@ private fun LiveRoomScreen(
                 com.android.purebilibili.feature.video.ui.overlay.LocalPlayerPageBackdrop provides
                     livePlayerBackdrop.backdrop.takeIf { captureLivePlayerPage && livePlayerBackdrop.video.isReady },
             ) {
+                val controlsStats by viewModel.liveRoomStats.collectAsStateWithLifecycle()
+                val controlsClock by produceState(System.currentTimeMillis(), roomInfo.roomId, roomInfo.liveStartTime) {
+                    while (true) { value = System.currentTimeMillis(); delay(30_000L) }
+                }
+                val watchedDisplay = controlsStats.watchedText.ifBlank { roomInfo.watchedText }
+                val onlineRankDisplay = controlsStats.onlineRankText.ifBlank { roomInfo.onlineRankText }
+                val controlsSubtitle = remember(
+                    isFullscreen,
+                    anchorInfo.uname,
+                    uname,
+                    watchedDisplay,
+                    onlineRankDisplay,
+                    roomInfo.liveStartTime,
+                    controlsClock,
+                ) {
+                    if (isFullscreen) {
+                        listOf(
+                            anchorInfo.uname.ifBlank { uname },
+                            watchedDisplay,
+                            onlineRankDisplay,
+                            formatLiveDuration(roomInfo.liveStartTime, controlsClock),
+                        ).filter { it.isNotBlank() }.joinToString("  ")
+                    } else {
+                        listOf(
+                            watchedDisplay,
+                            formatLiveDuration(roomInfo.liveStartTime, controlsClock),
+                        ).filter { it.isNotBlank() }.joinToString(" · ")
+                    }
+                }
                 LivePlayerControls(
                     glassEnabled = livePageGlassSupported,
                     onBackdropRequiredChange = { liveBackdropRequired = it },
@@ -1304,7 +1320,7 @@ private fun LiveRoomScreen(
                         isFullscreen = isFullscreen
                     ),
                     title = liveRoomTitle,
-                    subtitle = if (isFullscreen) fullscreenSubtitle else liveSubtitle,
+                    subtitle = controlsSubtitle,
                     onOpenRank = { showContributionRankSheet = true },
                     onShareRoom = if (isFullscreen) ::shareLiveUrl else null,
                     onPlayPause = {
@@ -1571,10 +1587,22 @@ private fun LiveRoomScreen(
     }
 
     val roomAppBar: @Composable () -> Unit = {
+        val barStats by viewModel.liveRoomStats.collectAsStateWithLifecycle()
+        val barClock by produceState(System.currentTimeMillis(), roomInfo.roomId, roomInfo.liveStartTime) {
+            while (true) { value = System.currentTimeMillis(); delay(30_000L) }
+        }
+        val watchedDisplay = barStats.watchedText.ifBlank { roomInfo.watchedText }
+        val onlineRankDisplay = barStats.onlineRankText.ifBlank { roomInfo.onlineRankText }
+        val barSubtitle = remember(watchedDisplay, roomInfo.liveStartTime, barClock) {
+            listOf(
+                watchedDisplay,
+                formatLiveDuration(roomInfo.liveStartTime, barClock),
+            ).filter { it.isNotBlank() }.joinToString(" · ")
+        }
         LivePortraitOverlayAppBar(
             roomTitle = liveRoomTitle,
             anchorInfo = anchorInfo,
-            subtitle = liveSubtitle,
+            subtitle = barSubtitle,
             onBack = { exitLiveRoom() },
             onUserClick = onUserClick,
             onOpenFansPanel = if (siteId == "bilibili" && canInteractWithRoom &&
@@ -1593,7 +1621,7 @@ private fun LiveRoomScreen(
             onShare = { shareLiveUrl() },
             onShareToMessage = { shareLiveToMessage() },
             onOpenBrowser = { openLiveUrl() },
-            onlineRankText = roomInfo.onlineRankText,
+            onlineRankText = onlineRankDisplay,
             onOpenRank = { showContributionRankSheet = true },
 
         )

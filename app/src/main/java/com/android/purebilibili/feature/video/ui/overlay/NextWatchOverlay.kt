@@ -56,14 +56,19 @@ internal fun BoxScope.NextWatchOverlay(
     if (!hintEnabled) return
     val activity = LocalActivity.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    val reduceMotion = rememberSystemReduceMotion()
+    val reduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
+    val visualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val latestResolve by rememberUpdatedState(resolve)
     val latestPlay by rememberUpdatedState(play)
     var suggestion by remember(mediaKey) { mutableStateOf<NextWatchSuggestion?>(null) }
     var dismissed by remember(mediaKey) { mutableStateOf(false) }
     var visible by remember(mediaKey) { mutableStateOf(false) }
     var remainingSeconds by remember(mediaKey) { mutableIntStateOf(5) }
-    LaunchedEffect(player, mediaKey, eligible, lifecycle, activity) {
+    LaunchedEffect(player, mediaKey, eligible, visualWorkActive, lifecycle, activity) {
+        if (!eligible || !visualWorkActive) {
+            visible = false
+            return@LaunchedEffect
+        }
         while (true) {
             val duration = player.duration
             val position = player.currentPosition

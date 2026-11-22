@@ -433,9 +433,10 @@ fun BangumiPlayerScreen(
             cid = currentCidForDebug
         )
     }
-    //  空降助手：定期检查播放位置
-    LaunchedEffect(sponsorBlockEnabled, uiState) {
-        if (sponsorBlockEnabled && uiState is BangumiPlayerState.Success) {
+    //  空降助手：定期检查播放位置（仅在前台活跃时轮询）
+    val bangumiSkipVisualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    LaunchedEffect(sponsorBlockEnabled, uiState is BangumiPlayerState.Success, bangumiSkipVisualWorkActive) {
+        if (sponsorBlockEnabled && uiState is BangumiPlayerState.Success && bangumiSkipVisualWorkActive) {
             while (true) {
                 kotlinx.coroutines.delay(500)
                 viewModel.checkAndSkipSponsor(context)
@@ -445,9 +446,10 @@ fun BangumiPlayerScreen(
     LaunchedEffect(
         autoSkipOpEd,
         successState?.currentEpisode?.id,
-        successState?.currentEpisode?.skip
+        successState?.currentEpisode?.skip,
+        bangumiSkipVisualWorkActive,
     ) {
-        if (autoSkipOpEd && successState?.currentEpisode?.skip != null) {
+        if (autoSkipOpEd && successState?.currentEpisode?.skip != null && bangumiSkipVisualWorkActive) {
             while (true) {
                 kotlinx.coroutines.delay(250)
                 viewModel.checkAndSkipEpisodeOpEd()

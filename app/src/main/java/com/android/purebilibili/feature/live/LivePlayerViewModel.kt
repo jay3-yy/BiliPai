@@ -133,6 +133,12 @@ data class RoomInfo(
     val tags: String = ""
 )
 
+/** 高频在线/看过人数统计，与顶层 LivePlayerState 解耦，避免 WebSocket 推送引发整个直播间和播放器重组。 */
+data class LiveRoomDynamicStats(
+    val watchedText: String = "",
+    val onlineRankText: String = "",
+)
+
 /**
  * 直播播放器 UI 状态
  */
@@ -179,6 +185,8 @@ class LivePlayerViewModel : ViewModel() {
     
     private val _uiState = MutableStateFlow<LivePlayerState>(LivePlayerState.Loading)
     val uiState = _uiState.asStateFlow()
+    private val _liveRoomStats = MutableStateFlow(LiveRoomDynamicStats())
+    val liveRoomStats = _liveRoomStats.asStateFlow()
     private val _switchingAudioOnly = MutableStateFlow(false)
     val switchingAudioOnly = _switchingAudioOnly.asStateFlow()
     
@@ -585,6 +593,11 @@ class LivePlayerViewModel : ViewModel() {
                 com.android.purebilibili.core.util.Logger.d(
                     "LiveStartup", "room=$realRoomId stage=details_ready elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAtMs}"
                 )
+                if (roomInfo.watchedText.isNotBlank()) {
+                    _liveRoomStats.update { stats ->
+                        if (stats.watchedText.isBlank()) stats.copy(watchedText = roomInfo.watchedText) else stats
+                    }
+                }
                 // 保留等待期间发生的线路、画质和播放意图变化；补齐详情不触发 prepare。
                 _uiState.update { current ->
                     if (current is LivePlayerState.Success && current.roomInfo.roomId == realRoomId) {
@@ -1585,6 +1598,7 @@ class LivePlayerViewModel : ViewModel() {
     private fun clearChatHistory() {
         recentChatMessages.clear()
         nextChatSequence = 0L
+        _liveRoomStats.value = LiveRoomDynamicStats()
         publishChatHistory()
     }
 
@@ -1596,18 +1610,12 @@ class LivePlayerViewModel : ViewModel() {
 
     private fun updateRoomWatchedText(text: String) {
         if (text.isBlank()) return
-        val current = _uiState.value as? LivePlayerState.Success ?: return
-        _uiState.value = current.copy(
-            roomInfo = current.roomInfo.copy(watchedText = text)
-        )
+        _liveRoomStats.update { it.copy(watchedText = text) }
     }
 
     private fun updateRoomOnlineRank(count: Long) {
         if (count < 0L) return
-        val current = _uiState.value as? LivePlayerState.Success ?: return
-        _uiState.value = current.copy(
-            roomInfo = current.roomInfo.copy(onlineRankText = "高能观众(${formatLiveCompactCount(count)})")
-        )
+        _liveRoomStats.update { it.copy(onlineRankText = "高能观众(${formatLiveCompactCount(count)})") }
     }
 
     private fun updateRoomTitle(title: String) {

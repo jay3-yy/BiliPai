@@ -1439,7 +1439,8 @@ private fun CinemaCommentsPane(
             onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUpClick) ?: Unit }
         )
     } else {
-        val commentChromeBackdrop = rememberLayerBackdrop()
+        val commentGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+        val commentChromeBackdrop = if (commentGlassEnabled) rememberLayerBackdrop() else null
         var showCommentSearchSheet by remember { mutableStateOf(false) }
         Column(modifier = Modifier.fillMaxSize()) {
             CommentSortHeader(
@@ -1464,7 +1465,10 @@ private fun CinemaCommentsPane(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .layerBackdrop(commentChromeBackdrop),
+                        .then(
+                            if (commentChromeBackdrop != null) Modifier.layerBackdrop(commentChromeBackdrop)
+                            else Modifier
+                        ),
                     contentPadding = PaddingValues(bottom = 112.dp)
                 ) {
             commentSectionNotice(commentState.pageControl)

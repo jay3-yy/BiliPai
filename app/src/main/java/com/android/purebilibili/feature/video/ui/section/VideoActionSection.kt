@@ -530,11 +530,11 @@ private fun TripleLikeActionButton(
 
     // 长按进度状态
     var isLongPressing by remember { mutableStateOf(false) }
-    var longPressProgress by remember { mutableFloatStateOf(0f) }
     val progressDuration = 1500 // 1.5 秒
+    val latestOnProgressChange by rememberUpdatedState(onProgressChange)
 
     // 进度动画
-    val animatedProgress by animateFloatAsState(
+    val animatedProgressState = animateFloatAsState(
         targetValue = if (isLongPressing) 1f else 0f,
         animationSpec = if (isLongPressing) {
             tween(durationMillis = progressDuration, easing = LinearEasing)
@@ -551,10 +551,13 @@ private fun TripleLikeActionButton(
         }
     )
 
-    LaunchedEffect(animatedProgress) {
-        longPressProgress = animatedProgress
-        onProgressChange(animatedProgress)
+    LaunchedEffect(animatedProgressState) {
+        snapshotFlow { animatedProgressState.value }.collect { progress ->
+            latestOnProgressChange(progress)
+        }
     }
+
+    val longPressProgress = animatedProgressState.value
 
     LaunchedEffect(isLongPressing) {
         if (isLongPressing) {
@@ -726,20 +729,24 @@ internal fun BiliActionButton(
     val feedbackClick = appActionWithFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS, onClick)
     val interactionSource = remember { MutableInteractionSource() }
 
-    // Active state pulse animation
-    var shouldPulse by remember { mutableStateOf(false) }
-    val pulseScale by animateFloatAsState(
-        targetValue = if (enableActivePulse && shouldPulse) 1.2f else 1f,
-        animationSpec = spring(
-            dampingRatio = 0.4f,
-            stiffness = 400f
-        ),
-        label = "pulseScale",
-        finishedListener = { shouldPulse = false }
-    )
-
+    // Active state pulse animation: impulse-driven single spring cycle (no mid-air pause)
+    val pulseScale = remember { androidx.compose.animation.core.Animatable(1f) }
+    var wasActive by remember { mutableStateOf(isActive) }
     LaunchedEffect(isActive, enableActivePulse) {
-        if (enableActivePulse && isActive) shouldPulse = true
+        val activated = isActive && !wasActive
+        wasActive = isActive
+        if (!enableActivePulse) {
+            pulseScale.snapTo(1f)
+        } else if (activated) {
+            pulseScale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = 0.55f,
+                    stiffness = 700f,
+                ),
+                initialVelocity = 4.2f,
+            )
+        }
     }
 
     val inactiveTint = AppContentColors.secondaryText()
@@ -762,8 +769,8 @@ internal fun BiliActionButton(
             .heightIn(min = 48.dp)
             .appElasticPress(enabled = enabled, dragEnabled = onLongClick == null)
             .graphicsLayer {
-                scaleX = pulseScale
-                scaleY = pulseScale
+                scaleX = pulseScale.value
+                scaleY = pulseScale.value
             }
             .appCombinedClickable(
                 longPressScene = com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS,
@@ -819,22 +826,21 @@ fun ActionButton(
 
     val interactionSource = remember { MutableInteractionSource() }
 
-    // Heartbeat pulse animation - triggered when isActive becomes true
-    var shouldPulse by remember { mutableStateOf(false) }
-    val pulseScale by animateFloatAsState(
-        targetValue = if (shouldPulse) 1.3f else 1f,
-        animationSpec = spring(
-            dampingRatio = 0.35f,
-            stiffness = 300f
-        ),
-        label = "pulseScale",
-        finishedListener = { shouldPulse = false }
-    )
-
-    // Listen for isActive changes
+    // Heartbeat pulse animation - triggered only when transitioning from inactive to active
+    val pulseScale = remember { androidx.compose.animation.core.Animatable(1f) }
+    var wasActive by remember { mutableStateOf(isActive) }
     LaunchedEffect(isActive) {
-        if (isActive) {
-            shouldPulse = true
+        val activated = isActive && !wasActive
+        wasActive = isActive
+        if (activated) {
+            pulseScale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = 0.52f,
+                    stiffness = 650f,
+                ),
+                initialVelocity = 5.4f,
+            )
         }
     }
 
@@ -854,8 +860,8 @@ fun ActionButton(
             modifier = Modifier
                 .size(38.dp)
                 .graphicsLayer {
-                    scaleX = pulseScale
-                    scaleY = pulseScale
+                    scaleX = pulseScale.value
+                    scaleY = pulseScale.value
                 }
                 .clip(CircleShape)
                 .background(resolvedIconColor.copy(alpha = if (isDark) 0.15f else 0.1f)),

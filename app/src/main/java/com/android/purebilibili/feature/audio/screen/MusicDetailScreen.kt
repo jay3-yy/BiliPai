@@ -67,7 +67,9 @@ private fun MusicDetailContent(
     viewModel: MusicViewModel
 ) {
     val context = LocalContext.current
-    val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(
+    val homeSettings by androidx.compose.runtime.remember(context) {
+        SettingsManager.getHomeSettings(context)
+    }.collectAsStateWithLifecycle(
         initialValue = HomeSettings(),
         context = kotlin.coroutines.EmptyCoroutineContext
     )
@@ -77,12 +79,21 @@ private fun MusicDetailContent(
         ?: state.musicArtist.orEmpty()
     val cover = state.songInfo?.cover ?: state.musicCover.orEmpty()
     val stableId = state.source?.stableId ?: "loading"
-    val item = MusicQueueItemUi(
-        stableId = stableId,
-        title = title,
-        artist = artist,
-        coverUrl = cover
-    )
+    val queue = androidx.compose.runtime.remember(stableId, title, artist, cover) {
+        listOf(
+            MusicQueueItemUi(
+                stableId = stableId,
+                title = title,
+                artist = artist,
+                coverUrl = cover
+            )
+        )
+    }
+    val lyricCandidates = androidx.compose.runtime.remember(state.lyricCandidates) {
+        state.lyricCandidates.map {
+            MusicLyricCandidateUi(it.title, it.artist, it.source.name)
+        }
+    }
 
     MusicPlayerContent(
         sourceState = MusicPlayerUiState(
@@ -93,17 +104,16 @@ private fun MusicDetailContent(
             error = state.error,
             isPlaying = state.isPlaying,
             isBuffering = state.isBuffering,
-            positionMs = state.currentPositionMs,
+            positionMs = 0L,
             durationMs = state.durationMs,
             lyrics = state.lyricsDocument,
             lyricsError = state.lyricsError,
-            lyricCandidates = state.lyricCandidates.map {
-                MusicLyricCandidateUi(it.title, it.artist, it.source.name)
-            },
+            lyricCandidates = lyricCandidates,
             isLyricsSearching = state.isLyricsSearching,
-            queue = listOf(item),
+            queue = queue,
             currentQueueIndex = 0
         ),
+        positionMsFlow = viewModel.positionMs,
         onBack = onBack,
         onPlayPause = viewModel::togglePlayPause,
         onSeek = viewModel::seekTo,

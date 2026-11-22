@@ -31,7 +31,7 @@ import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
 import com.android.purebilibili.feature.video.viewmodel.commentComposerDraftKey
 import kotlinx.coroutines.launch
 
-@Immutable
+@androidx.compose.runtime.Stable
 internal data class VideoDetailInputOverlayLayoutInfo(
     val screenHeightPx: Int,
     val topReservedPx: State<Int>,

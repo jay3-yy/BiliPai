@@ -543,12 +543,15 @@ internal fun resolveSubReplyOpenTargetId(rootReplyId: Long, clickedReplyId: Long
     return clickedReplyId.takeIf { it > 0L && it != rootReplyId } ?: 0L
 }
 
+private val REPLY_BANGUMI_EP_REGEX = Regex("/bangumi/play/ep(\\d+)")
+private val REPLY_PAGE_PARAM_REGEX = Regex("[?&]p=\\d+")
+
 internal fun resolveReplyCommentShareUrl(
     item: ReplyItem,
     context: com.android.purebilibili.feature.share.ReplyShareContext? = null,
 ): String {
     val rootId = if (item.root > 0L) item.root else item.rpid
-    val episodeId = context?.url?.let { Regex("/bangumi/play/ep(\\d+)").find(it)?.groupValues?.get(1) }
+    val episodeId = context?.url?.let { REPLY_BANGUMI_EP_REGEX.find(it)?.groupValues?.get(1) }
     if (item.replyType != 1 || episodeId != null) {
         val enterUri = if (episodeId != null) "bilibili://pgc/season/ep/$episodeId" else
             context?.url?.takeIf { it.isNotBlank() } ?: when (item.replyType) {
@@ -572,7 +575,7 @@ internal fun resolveReplyCommentShareUrl(
         append(if ('?' in base) '&' else '?')
         append("comment_on=1&comment_root_id=$rootId")
         if (item.root > 0L && item.rpid > 0L) append("&comment_secondary_id=${item.rpid}")
-        if (context != null && context.page > 1 && !Regex("[?&]p=\\d+").containsMatchIn(base)) append("&p=${context.page}")
+        if (context != null && context.page > 1 && !REPLY_PAGE_PARAM_REGEX.containsMatchIn(base)) append("&p=${context.page}")
     }
 }
 
@@ -1577,10 +1580,8 @@ fun ReplyItemView(
         LocalAppThemeConfig.current.uiEntranceAnimationEnabled &&
             LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current
         )
-    val bodyCollapseSpring: SpringSpec<androidx.compose.ui.unit.IntSize> = spring(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessMedium
-    )
+    val bodyCollapseSpring: SpringSpec<androidx.compose.ui.unit.IntSize> =
+        com.android.purebilibili.core.ui.motion.softLandingSpring()
     val displayMessage = remember(translatedMessage, item.content.message) {
         translatedMessage ?: item.content.message
     }
@@ -3130,11 +3131,15 @@ private fun FansMedalTag(detail: ReplyFansDetail) {
 
 @Composable
 private fun NameplateTag(imageUrl: String) {
-    AsyncImage(
-        model = ImageRequest.Builder(LocalContext.current)
+    val context = LocalContext.current
+    val request = remember(context, imageUrl) {
+        ImageRequest.Builder(context)
             .data(FormatUtils.fixImageUrl(imageUrl))
             .crossfade(true)
-            .build(),
+            .build()
+    }
+    AsyncImage(
+        model = request,
         contentDescription = "Nameplate",
         modifier = Modifier
             .size(width = 20.dp, height = 12.dp)
@@ -3150,23 +3155,35 @@ internal fun ReplyMemberAvatar(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     val pendantImageUrl = remember(member) { resolveReplyMemberPendantImage(member) }
     val displayFace = member.avatar
     val hasPendant = !pendantImageUrl.isNullOrBlank()
     val faceFraction = resolveReplyAvatarFaceFraction(hasPendant)
+    val faceRequest = remember(context, displayFace) {
+        ImageRequest.Builder(context)
+            .data(FormatUtils.fixImageUrl(displayFace))
+            //  [防闪烁] crossfade 不能随 lightweightMode 翻转：改请求构造会让
+            //  Coil 视为新请求重新执行，切回评论页瞬间全部头像重载闪一下。
+            //  内存缓存命中本身不播淡入，恒定开启不损失滚动性能。
+            .crossfade(true)
+            .build()
+    }
+    val pendantRequest = remember(context, pendantImageUrl) {
+        pendantImageUrl?.takeIf { it.isNotBlank() }?.let { url ->
+            ImageRequest.Builder(context)
+                .data(url)
+                .crossfade(true)
+                .build()
+        }
+    }
     Box(
         modifier = modifier.appActionClickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         // Face first (under), slightly smaller when a frame is present.
         AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(FormatUtils.fixImageUrl(displayFace))
-                //  [防闪烁] crossfade 不能随 lightweightMode 翻转：改请求构造会让
-                //  Coil 视为新请求重新执行，切回评论页瞬间全部头像重载闪一下。
-                //  内存缓存命中本身不播淡入，恒定开启不损失滚动性能。
-                .crossfade(true)
-                .build(),
+            model = faceRequest,
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
@@ -3175,12 +3192,9 @@ internal fun ReplyMemberAvatar(
                 .background(placeholderColor)
         )
         // Frame/pendant on top so the ring sits around the face.
-        if (hasPendant) {
+        if (pendantRequest != null) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(pendantImageUrl)
-                    .crossfade(true)
-                    .build(),
+                model = pendantRequest,
                 contentDescription = "Avatar pendant",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize()
@@ -3202,25 +3216,30 @@ internal fun FanGroupDecorationBadge(
     visual: FanGroupTagVisual,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val layoutPolicy = remember { resolveReplyItemLayoutPolicy() }
     val primaryImageUrl = resolveDecorationImageUrl(visual.cardBgImageUrl)
 
     val fanNumberText = remember(visual.fanNumber) { resolveFanGroupNumberText(visual.fanNumber) }
     if (fanNumberText.isBlank() && primaryImageUrl.isBlank()) return
+    val decorationRequest = remember(context, primaryImageUrl) {
+        if (primaryImageUrl.isBlank()) null
+        else ImageRequest.Builder(context)
+            .data(primaryImageUrl)
+            // 身份装扮只在小尺寸区域显示；限制解码大小，避免异常原图在 Canvas 绘制时崩溃。
+            .size(COMMENT_DECORATION_DECODE_MAX_PX, COMMENT_DECORATION_DECODE_MAX_PX)
+            .transformations(TransparentBoundsCropTransformation)
+            .crossfade(true)
+            .build()
+    }
     Row(
         modifier = modifier.widthIn(min = layoutPolicy.decorationMinWidthDp.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (primaryImageUrl.isNotBlank()) {
+        if (decorationRequest != null) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(primaryImageUrl)
-                    // 身份装扮只在小尺寸区域显示；限制解码大小，避免异常原图在 Canvas 绘制时崩溃。
-                    .size(COMMENT_DECORATION_DECODE_MAX_PX, COMMENT_DECORATION_DECODE_MAX_PX)
-                    .transformations(TransparentBoundsCropTransformation)
-                    .crossfade(true)
-                    .build(),
+                model = decorationRequest,
                 contentDescription = "Fan group decoration",
                 // cardbg 是包含编号与角色图案的透明整图，裁剪会截掉官方素材边缘。
                 contentScale = ContentScale.Fit,
