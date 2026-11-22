@@ -96,10 +96,14 @@ abstract class DrawItem<T: DanmakuData> {
      */
     fun draw(canvas: Canvas, config: DanmakuConfig) {
         if (!isVisible) return
-        canvas.save()
-        canvas.rotate(rotate, x, y)
-        onDraw(canvas, config)
-        canvas.restore()
+        if (rotate != 0F) {
+            canvas.save()
+            canvas.rotate(rotate, x, y)
+            onDraw(canvas, config)
+            canvas.restore()
+        } else {
+            onDraw(canvas, config)
+        }
     }
 
     fun drawBounds(canvas: Canvas) {

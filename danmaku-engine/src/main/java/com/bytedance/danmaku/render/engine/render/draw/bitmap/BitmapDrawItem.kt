@@ -27,6 +27,8 @@ open class BitmapDrawItem: DrawItem<BitmapData>() {
 
     private val mBitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     private val mRectF = RectF()
+    private var mCachedTint: Int? = null
+    private var mCachedColorFilter: PorterDuffColorFilter? = null
 
     override fun getDrawType(): Int {
         return DRAW_TYPE_BITMAP
@@ -55,13 +57,19 @@ open class BitmapDrawItem: DrawItem<BitmapData>() {
             if (bitmap.isRecycled) return@let
             mRectF.set(x, y, x + width, y + height)
             val tint = data?.tintColor
-            mBitmapPaint.colorFilter = if (tint == null) null else PorterDuffColorFilter(tint, PorterDuff.Mode.SRC_IN)
+            if (tint != mCachedTint) {
+                mCachedTint = tint
+                mCachedColorFilter = tint?.let { PorterDuffColorFilter(it, PorterDuff.Mode.SRC_IN) }
+            }
+            mBitmapPaint.colorFilter = mCachedColorFilter
             canvas.drawBitmap(bitmap, null, mRectF, mBitmapPaint)
         }
     }
 
     override fun recycle() {
         super.recycle()
+        mCachedTint = null
+        mCachedColorFilter = null
         mBitmapPaint.reset()
         mRectF.set(0F, 0F, 0F, 0F)
     }

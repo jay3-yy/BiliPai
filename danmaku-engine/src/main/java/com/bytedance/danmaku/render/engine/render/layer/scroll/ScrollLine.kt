@@ -53,16 +53,13 @@ class ScrollLine(controller: DanmakuController,
      */
     override fun typesetting(playTime: Long, isPlaying: Boolean, configChanged: Boolean): Int {
         if (isPlaying) {
-            // move drawing items if is playing
-            mDrawingItems.forEach { item ->
-                val elapsedMs = itemElapsedTimeMs(item)
-                item.x -= getItemSpeed(item) * elapsedMs
-                item.showDuration += elapsedMs
-            }
-            // remove items that already out of screen
+            // Single pass: advance drawing items and evict offscreen items without a second traversal/iterator.
             val iterator = mDrawingItems.iterator()
             while (iterator.hasNext()) {
                 val item = iterator.next()
+                val elapsedMs = itemElapsedTimeMs(item)
+                item.x -= getItemSpeed(item) * elapsedMs
+                item.showDuration += elapsedMs
                 if (item.x + item.width <= 0) {
                     mLayer.releaseItem(item)
                     iterator.remove()

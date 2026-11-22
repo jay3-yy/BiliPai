@@ -46,6 +46,10 @@ open class TextDrawItem: DrawItem<TextData>() {
 
     // UP 徽章随文字缩放；宽度计入 measure，避免弹幕轨道排布时与后续弹幕重叠。
     private var upBadgeAdvance = 0f
+    private var upBadgeTextWidth = 0f
+    private var upBadgeWidth = 0f
+    private var upBadgeBaselineOffset = 0f
+    private val mUpBadgeFontMetrics = Paint.FontMetrics()
     private var textWidth = 0f
 
     private val gradientMatrix = Matrix()
@@ -115,8 +119,11 @@ open class TextDrawItem: DrawItem<TextData>() {
         val badgeTextSize = badgeHeight * UP_BADGE_TEXT_RATIO
         mUpBadgePaint.textSize = badgeTextSize
         mUpBadgePaint.typeface = Typeface.DEFAULT_BOLD
-        val badgeTextWidth = mUpBadgePaint.measureText(UP_BADGE_TEXT)
-        return badgeTextWidth + badgeHeight + UP_BADGE_TEXT_GAP_RATIO * textHeight
+        upBadgeTextWidth = mUpBadgePaint.measureText(UP_BADGE_TEXT)
+        upBadgeWidth = upBadgeTextWidth + badgeHeight * UP_BADGE_H_PADDING_RATIO * 2f
+        mUpBadgePaint.getFontMetrics(mUpBadgeFontMetrics)
+        upBadgeBaselineOffset = (badgeHeight - mUpBadgeFontMetrics.bottom - mUpBadgeFontMetrics.top) / 2f
+        return upBadgeTextWidth + badgeHeight + UP_BADGE_TEXT_GAP_RATIO * textHeight
     }
 
     private fun drawUpBadge(canvas: Canvas) {
@@ -126,18 +133,14 @@ open class TextDrawItem: DrawItem<TextData>() {
         val badgeTextSize = badgeHeight * UP_BADGE_TEXT_RATIO
         mUpBadgePaint.textSize = badgeTextSize
         mUpBadgePaint.typeface = Typeface.DEFAULT_BOLD
-        val badgeTextWidth = mUpBadgePaint.measureText(UP_BADGE_TEXT)
-        val badgeWidth = badgeTextWidth + badgeHeight * UP_BADGE_H_PADDING_RATIO * 2f
         mUpBadgePaint.color = UP_BADGE_COLOR
-        mUpBadgeRect.set(x, badgeTop, x + badgeWidth, badgeTop + badgeHeight)
+        mUpBadgeRect.set(x, badgeTop, x + upBadgeWidth, badgeTop + badgeHeight)
         canvas.drawRoundRect(mUpBadgeRect, badgeHeight * 0.22f, badgeHeight * 0.22f, mUpBadgePaint)
         mUpBadgePaint.color = UP_BADGE_TEXT_COLOR
-        val metrics = mUpBadgePaint.fontMetrics
-        val badgeBaseline = badgeTop + (badgeHeight - metrics.bottom - metrics.top) / 2f
         canvas.drawText(
             UP_BADGE_TEXT,
-            x + (badgeWidth - badgeTextWidth) / 2f,
-            badgeBaseline,
+            x + (upBadgeWidth - upBadgeTextWidth) / 2f,
+            badgeTop + upBadgeBaselineOffset,
             mUpBadgePaint,
         )
     }
@@ -149,6 +152,9 @@ open class TextDrawItem: DrawItem<TextData>() {
         vipGradient = null
         vipGradientWidth = 0f
         upBadgeAdvance = 0f
+        upBadgeTextWidth = 0f
+        upBadgeWidth = 0f
+        upBadgeBaselineOffset = 0f
         textWidth = 0f
         gradientMatrix.reset()
         mTextPaint.reset()
@@ -165,6 +171,7 @@ open class TextDrawItem: DrawItem<TextData>() {
             val textX = x + upBadgeAdvance
             // 描边保持单色，复用的画笔不能带上上一条弹幕的渐变。
             paint.shader = null
+            val includeFontPadding = data?.includeFontPadding ?: config.text.includeFontPadding
             // draw stroke
             (data?.textStrokeWidth ?: config.text.strokeWidth).takeIf { it > 0 }?.let { width ->
                 paint.style = Paint.Style.STROKE
@@ -172,7 +179,7 @@ open class TextDrawItem: DrawItem<TextData>() {
                 paint.typeface = data?.typeface ?: config.text.typeface
                 paint.textSize = data?.textSize ?: config.text.size
                 paint.strokeWidth = width
-                val baseline = getBaseline(data?.includeFontPadding ?: true, y, paint)
+                val baseline = getBaseline(includeFontPadding, y, paint)
                 canvas.drawText(text, textX, baseline, paint)
             }
             // draw drawText
@@ -181,7 +188,6 @@ open class TextDrawItem: DrawItem<TextData>() {
             paint.typeface = data?.typeface ?: config.text.typeface
             paint.textSize = data?.textSize ?: config.text.size
             paint.strokeWidth = 0f
-            val includeFontPadding = data?.includeFontPadding ?: config.text.includeFontPadding
             val baseline = getBaseline(includeFontPadding, y, paint)
             if (data?.isVipGradualColor == true && textWidth > 0f) {
                 if (vipGradient == null || vipGradientWidth != textWidth) {
