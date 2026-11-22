@@ -1763,7 +1763,9 @@ fun AppNavigation(
                     latestPushNavigation3Key.value(key, prepareNavigation)
                 }
             }
+            // 首页顶部头像优先保留系统一镜到底卡片转场；其余顶栏入口若目标已在底栏承载则切应用内 Pager。
             if (
+                control != HomeHeaderControl.AVATAR &&
                 shouldPreferInAppBottomPagerOverSystemCardWindow(
                     targetRoute = route,
                     visibleBottomBarItems = visibleBottomBarItems,

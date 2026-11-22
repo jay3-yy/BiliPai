@@ -209,7 +209,9 @@ fun BottomBarSettingsContent(
     )
     val homeConfiguration = rememberSettingsHomeConfiguration()
     val navigationConfiguration = rememberSettingsNavigationConfiguration()
-    val allBottomBarTabs = resolveAllBottomBarTabs(iconFamily)
+    // 与首页 MiuixBottomBar 保持一致：Miuix 主题下底栏预览与项目列表统一使用 Miuix 官方图标。
+    val bottomBarIconFamily = if (isMiuix) AppSemanticIconFamily.MIUIX else iconFamily
+    val allBottomBarTabs = resolveAllBottomBarTabs(bottomBarIconFamily)
     val allTopTabs = resolveAllTopTabs(iconFamily)
 
 

@@ -29,12 +29,13 @@ class SystemCardWindowNavigationStructureTest {
     }
 
     @Test
-    fun homeTopActionPrefersInAppBottomPagerOverSystemCardWindowWhenTabIsHosted() {
+    fun homeTopActionPrefersInAppBottomPagerOverSystemCardWindowExceptAvatarCardTransition() {
         val body = appNavigationSource()
             .substringAfter("fun openHomeTopActionImpl(")
             .substringBefore("val latestOpenHomeTopAction")
 
         val gateToLaunch = body.substringBefore("navigateToSystemCardWindowOrPushImpl(")
+        assertTrue(gateToLaunch.contains("control != HomeHeaderControl.AVATAR"))
         assertTrue(gateToLaunch.contains("shouldPreferInAppBottomPagerOverSystemCardWindow("))
         assertTrue(gateToLaunch.contains("openInApp()"))
     }

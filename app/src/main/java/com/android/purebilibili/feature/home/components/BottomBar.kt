@@ -3083,12 +3083,8 @@ private fun MiuixBottomBar(
     val normalizedLabelMode = normalizeBottomBarLabelMode(labelMode)
     val showIcon = shouldShowBottomBarIcon(normalizedLabelMode)
     val showText = shouldShowBottomBarText(normalizedLabelMode)
-    val resolvedIconStyle = rememberResolvedAppIconStyle()
-    val sharedBarIconStyle = if (resolvedIconStyle == AppIconStyle.MD3_STANDARD) {
-        SharedFloatingBottomBarIconStyle.MATERIAL
-    } else {
-        SharedFloatingBottomBarIconStyle.MIUIX
-    }
+    // Miuix 主题底栏固定跟随 Miuix 官方图标，不因全局单色线性（MD3）图标选项回退到 Material 字形。
+    val sharedBarIconStyle = SharedFloatingBottomBarIconStyle.MIUIX
     val bottomBarVisibleItems = remember(
         visibleItems,
         homeSettings.isBottomBarSearchEnabled,
@@ -5330,7 +5326,7 @@ internal fun resolveMaterialBottomBarIcon(
     BottomNavItem.LISTEN_VIDEO -> if (selected) Icons.Filled.LibraryMusic else Icons.Outlined.LibraryMusic
     BottomNavItem.PROFILE -> if (selected) Icons.Filled.Person else Icons.Outlined.Person
     BottomNavItem.FAVORITE -> if (selected) Icons.Filled.CollectionsBookmark else Icons.Outlined.CollectionsBookmark
-    BottomNavItem.LIVE -> if (selected) Icons.Filled.LiveTv else Icons.Outlined.LiveTv
+    BottomNavItem.LIVE -> if (selected) BottomBarLiveIconFilled else BottomBarLiveIconOutlined
     BottomNavItem.WATCHLATER -> if (selected) Icons.Filled.WatchLater else Icons.Outlined.WatchLater
     BottomNavItem.SETTINGS -> if (selected) Icons.Filled.Settings else Icons.Outlined.Settings
     BottomNavItem.PLUGINS -> if (selected) Icons.Filled.Extension else Icons.Outlined.Extension

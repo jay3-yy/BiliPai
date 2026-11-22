@@ -1106,26 +1106,32 @@ internal fun HomeScreen(
         (homeWallpaperBackdropSource ?: globalWallpaperBackdrop)?.takeIf { it.isReady }?.backdrop
 
     if (!view.isInEditMode && shouldApplyHomeSystemBars(isTopLevelActive)) {
-        SideEffect {
-            val window = (context as? android.app.Activity)?.window ?: return@SideEffect
+        LaunchedEffect(view, isTopLevelActive, useDarkStatusBarIcons, isLightBackground) {
+            val window = (context as? android.app.Activity)?.window ?: return@LaunchedEffect
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, view)
             //  根据背景亮度设置状态栏/导航栏图标颜色。
             //  [关键] 图标明暗必须在系统栏隐藏时也照常写入：从沉浸播放页返回的瞬间
             //  系统栏尚未恢复可见，若因此跳过，insets 恢复不会触发重组，图标会停留
             //  在上一页的明暗（浅色模式下白色图标压白底不可见）。隐藏时写入不可见，
             //  且沉浸页面的 effect 会在自己的重组中重新 assert，无竞争副作用。
-            insetsController.isAppearanceLightStatusBars = useDarkStatusBarIcons
-            insetsController.isAppearanceLightNavigationBars = isLightBackground
+            if (insetsController.isAppearanceLightStatusBars != useDarkStatusBarIcons) {
+                insetsController.isAppearanceLightStatusBars = useDarkStatusBarIcons
+            }
+            if (insetsController.isAppearanceLightNavigationBars != isLightBackground) {
+                insetsController.isAppearanceLightNavigationBars = isLightBackground
+            }
             //  沉浸式播放覆盖层（小窗全屏播放等）隐藏系统栏期间，首页不得抢权恢复
             //  系统栏可见性/滑出行为，否则会打断播放器的沉浸；覆盖层退出时会通过
             //  快照自行还原。仅 show() 与 behavior 需要这层守卫。
             val systemBarsVisible = androidx.core.view.ViewCompat.getRootWindowInsets(view)
                 ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.systemBars()) ?: true
-            if (!systemBarsVisible) return@SideEffect
+            if (!systemBarsVisible) return@LaunchedEffect
             //  [修复] 从直播/番剧等沉浸页面返回时导航栏可能仍被隐藏，系统栏整体恢复，
             //  并重置滑出行为，避免上一页面遗留 BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            insetsController.systemBarsBehavior =
-                androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+            if (insetsController.systemBarsBehavior != androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_DEFAULT) {
+                insetsController.systemBarsBehavior =
+                    androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+            }
             insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             com.android.purebilibili.core.ui.setWindowStatusBarColor(window, android.graphics.Color.TRANSPARENT)
             //  [修复] 导航栏也设为透明，确保底栏隐藏时手势区域沉浸
@@ -1137,8 +1143,6 @@ internal fun HomeScreen(
     // 首页在沉浸播放页下仍保留状态栏占位，返回时顶栏、列表和卡片落点不随可见性跳动。
     val statusBarHeight = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val homeStartupElapsedAt = remember { SystemClock.elapsedRealtime() }
-
-    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
 
     //  当前选中的导航项
     var currentNavItem by remember { mutableStateOf(BottomNavItem.HOME) }
