@@ -54,7 +54,7 @@ internal val CacheClearChartColors = listOf(
     Color(0xFF39B94A), Color(0xFFEDAB16), Color(0xFF397BF0),
     Color(0xFF9360DE), Color(0xFFF28B3C), Color(0xFF2BA6A4)
 )
-private val CacheDonutEasing = CubicBezierEasing(.23f, 1f, .32f, 1f)
+private val CacheDonutEasing = com.android.purebilibili.core.ui.motion.AppMotionEasing.EaseOutQuint
 
 @Composable
 internal fun CacheClearUsageDonut(

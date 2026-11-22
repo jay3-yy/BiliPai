@@ -87,7 +87,12 @@ data class TopTabConfig(
 internal fun resolveBottomBarTabIcon(
     id: String,
     iconFamily: AppSemanticIconFamily = AppSemanticIconFamily.MATERIAL,
-): ImageVector = resolveSettingsNavigationPreviewIcon(id, iconFamily, selected = false)
+): ImageVector = resolveSettingsNavigationPreviewIcon(
+    tabId = id,
+    iconFamily = iconFamily,
+    selected = false,
+    bottomBar = true,
+)
 
 @Composable
 internal fun resolveTopTabIcon(

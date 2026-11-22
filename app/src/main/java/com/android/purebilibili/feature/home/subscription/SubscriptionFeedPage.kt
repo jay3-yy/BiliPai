@@ -378,7 +378,8 @@ fun SubscriptionFeedPage(
         val transition = rememberTransition(transitionState, label = "subscription-article")
         transition.AnimatedContent(
             transitionSpec = {
-                fadeIn(tween(360, easing = LinearEasing)) togetherWith fadeOut(tween(360, easing = LinearEasing))
+                fadeIn(tween(360, easing = AppMotionEasing.M1Standard)) togetherWith
+                    fadeOut(tween(360, easing = AppMotionEasing.M1Standard))
             },
             contentKey = { it?.let { "${it.sourceId}:${it.id}" } ?: "grid" },
             modifier = Modifier.fillMaxSize(),
@@ -717,7 +718,7 @@ private fun SubscriptionFeedCard(
                 .sharedBounds(
                     sharedContentState = rememberSharedContentState(subscriptionSharedKey(item)),
                     animatedVisibilityScope = animatedVisibilityScope,
-                    boundsTransform = { _, _ -> tween(360, easing = LinearEasing) },
+                    boundsTransform = { _, _ -> tween(360, easing = AppMotionEasing.Continuity) },
                     clipInOverlayDuringTransition = OverlayClip(AppShapes.container(ContainerLevel.Card)),
                 )
                 .clip(AppShapes.container(ContainerLevel.Card))
@@ -1220,7 +1221,7 @@ private fun SubscriptionArticleScreen(
                 .sharedBounds(
                     sharedContentState = rememberSharedContentState(subscriptionSharedKey(item)),
                     animatedVisibilityScope = animatedVisibilityScope,
-                    boundsTransform = { _, _ -> tween(360, easing = LinearEasing) },
+                    boundsTransform = { _, _ -> tween(360, easing = AppMotionEasing.Continuity) },
                     clipInOverlayDuringTransition = OverlayClip(AppShapes.container(ContainerLevel.Card)),
                 )
         },

@@ -204,14 +204,24 @@ fun PlainMiuixFloatingBottomBar(
     val selectedIndexLatest = rememberUpdatedState(selectedIndex)
     val onSelectedLatest = rememberUpdatedState(onSelected)
     val onReselectedLatest = rememberUpdatedState(onReselected)
+    val indicatorHorizontalOverflow = 3.dp
+    val indicatorHorizontalOverflowPx = with(density) { indicatorHorizontalOverflow.toPx() }
+    val offsetAnimation = remember { Animatable(0f) }
+    val offsetJobHolder = remember { object { var job: Job? = null } }
+    val rubberBandPx = with(density) { 4.dp.toPx() }
     BoxWithConstraints(
         modifier = modifier
+            .graphicsLayer {
+                val widthPx = size.width.coerceAtLeast(1f)
+                val fraction = (offsetAnimation.value / widthPx).fastCoerceIn(-1f, 1f)
+                translationX = rubberBandPx * fraction.sign * EaseOut.transform(abs(fraction))
+            }
             .dropShadow(
                 shape = shape,
-                shadow = Shadow(radius = 10.dp, color = Color.Black, alpha = 0.12f),
+                shadow = Shadow(radius = 10.dp, color = Color.Black, alpha = 0.16f),
             )
             .background(colors.containerColor, shape)
-            .padding(4.dp),
+            .padding(horizontal = 6.dp, vertical = 3.dp),
     ) {
         val itemWidth = maxWidth / safeCount
         val itemWidthPx = with(density) { itemWidth.toPx() }
@@ -222,20 +232,30 @@ fun PlainMiuixFloatingBottomBar(
                 valueRange = 0f..maxIndex.toFloat(),
                 visibilityThreshold = 0.001f,
                 initialScale = 1f,
-                pressedScale = 1f,
+                pressedScale = 52f / 56f,
                 trackingMode = DampedDragTrackingMode.DIRECT,
-                onDragStarted = {},
+                onDragStarted = {
+                    offsetJobHolder.job?.cancel()
+                },
                 onDragStopped = {
                     val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, maxIndex)
                     animateToValue(targetIndex.toFloat(), animatePress = false)
                     if (targetIndex != selectedIndexLatest.value.coerceIn(0, maxIndex)) {
                         onSelectedLatest.value(targetIndex)
                     }
+                    offsetJobHolder.job?.cancel()
+                    offsetJobHolder.job = animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                        offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
+                    }
                 },
                 onDrag = { _, dragAmount ->
                     if (itemWidthPx > 0f) {
                         val direction = if (isLtr) 1f else -1f
                         updateValue(targetValue + dragAmount.x / itemWidthPx * direction)
+                        offsetJobHolder.job?.cancel()
+                        offsetJobHolder.job = animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                            offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
+                        }
                     }
                 },
             )
@@ -248,13 +268,20 @@ fun PlainMiuixFloatingBottomBar(
                 )
             }
         }
-        val indicatorPositionModifier = Modifier.graphicsLayer {
+        val indicatorVisualModifier = Modifier.graphicsLayer {
+            val direction = if (isLtr) 1f else -1f
+            translationX = (itemWidthPx * dragAnimation.value - indicatorHorizontalOverflowPx) * direction
+            val velocityStretch = (abs(dragAnimation.velocity) / 8f * 0.18f).coerceIn(0f, 0.18f)
+            scaleX = dragAnimation.scaleX * (1f + velocityStretch)
+            scaleY = dragAnimation.scaleY
+        }
+        val indicatorHitTargetModifier = Modifier.graphicsLayer {
             val direction = if (isLtr) 1f else -1f
             translationX = itemWidthPx * dragAnimation.value * direction
         }
         Box(
-            modifier = indicatorPositionModifier
-                .width(itemWidth)
+            modifier = indicatorVisualModifier
+                .width(itemWidth + indicatorHorizontalOverflow * 2)
                 .fillMaxHeight()
                 .clip(shape)
                 .background(indicatorContainerColor, shape),
@@ -271,7 +298,7 @@ fun PlainMiuixFloatingBottomBar(
             )
         }
         Box(
-            modifier = indicatorPositionModifier
+            modifier = indicatorHitTargetModifier
                 .then(if (safeCount > 1) dragAnimation.modifier else Modifier)
                 .clickable(
                     interactionSource = null,

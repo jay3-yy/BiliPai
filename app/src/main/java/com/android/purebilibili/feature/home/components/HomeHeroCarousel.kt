@@ -456,7 +456,7 @@ private fun HomeHeroCarouselCard(
             sourceInteraction, captureState, sourceEnabled && sourceInteractionAllowed, clickAction,
         )
     }
-    val pressProgress by animateFloatAsState(
+    val pressProgressState = animateFloatAsState(
         targetValue = if (isPressed) 1f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -519,7 +519,7 @@ private fun HomeHeroCarouselCard(
                 cameraDistance = transform.cameraDistanceMultiplier * density.density
                 translationX = transform.translationXFraction * size.width
                 rotationY = transform.rotationY
-                val pressMultiplier = 1f - pressProgress * 0.02f
+                val pressMultiplier = 1f - pressProgressState.value * 0.02f
                 scaleX = transform.scale * pressMultiplier
                 scaleY = transform.scale * pressMultiplier
                 alpha = transform.alpha

@@ -255,7 +255,7 @@ private fun Material3DownloadStatus(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    com.android.purebilibili.core.ui.components.AppLinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
             }
             if (state.status == AppUpdateDownloadStatus.COMPLETED) {

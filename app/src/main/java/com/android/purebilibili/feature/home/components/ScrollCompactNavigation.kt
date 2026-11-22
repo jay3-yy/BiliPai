@@ -68,6 +68,23 @@ internal fun ScrollCompactNavigation(
     val accent = com.android.purebilibili.core.ui.AppInteractionColors.nativeNavigation(
         com.android.purebilibili.core.ui.AppNavigationColorRole.BAR,
     )?.selectedContent ?: AppContentColors.selectionAccent(glassEnabled)
+    val morphClipShape = androidx.compose.runtime.remember(progress, expandedWidthPx, expandedHeightPx, buttonSizePx) {
+        object : androidx.compose.ui.graphics.Shape {
+            override fun createOutline(
+                size: androidx.compose.ui.geometry.Size,
+                layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                density: androidx.compose.ui.unit.Density,
+            ): androidx.compose.ui.graphics.Outline {
+                val amount = progress.value.coerceIn(0f, 1f)
+                val width = resolveScrollCompactExtent(expandedWidthPx, buttonSizePx, amount).toFloat()
+                val height = resolveScrollCompactExtent(expandedHeightPx, buttonSizePx, amount).toFloat()
+                val top = (expandedHeightPx - height) / 2f
+                return androidx.compose.ui.graphics.Outline.Rounded(
+                    RoundRect(Rect(0f, top, width, top + height), CornerRadius(height / 2f))
+                )
+            }
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         Box(
             Modifier.fillMaxSize()
@@ -81,15 +98,13 @@ internal fun ScrollCompactNavigation(
                 .graphicsLayer {
                     val amount = progress.value.coerceIn(0f, 1f)
                     alpha = 1f - amount
-                    shape = GenericShape { _, _ ->
-                        val width = resolveScrollCompactExtent(expandedWidthPx, buttonSizePx, amount).toFloat()
-                        val height = resolveScrollCompactExtent(expandedHeightPx, buttonSizePx, amount).toFloat()
-                        val top = (expandedHeightPx - height) / 2f
-                        addRoundRect(RoundRect(Rect(0f, top, width, top + height), CornerRadius(height / 2f)))
+                    val shouldClip = shouldClipScrollCompactNavigation(progress.value)
+                    if (shouldClip) {
+                        shape = morphClipShape
                     }
                     // Morphing needs a mask; the fully expanded dock must allow the original
                     // indicator and shell to bloom outside their resting bounds.
-                    clip = shouldClipScrollCompactNavigation(progress.value)
+                    clip = shouldClip
                     // The spring can grow past the expanded endpoint without stretching text.
                     val rebound = (-progress.value).coerceIn(0f, 0.03f)
                     scaleX = 1f + rebound * 0.55f

@@ -233,10 +233,16 @@ private fun MiuixDownloadStatus(
             fontWeight = FontWeight.Medium,
         )
         if (state.isActiveDownload()) {
-            LinearProgressIndicator(
-                progress = state.progress.takeIf { state.totalBytes > 0L },
-                modifier = Modifier.padding(top = 12.dp),
-            )
+            if (state.totalBytes > 0L) {
+                LinearProgressIndicator(
+                    progress = state.progress,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            } else {
+                com.android.purebilibili.core.ui.components.AppLinearProgressIndicator(
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
         }
         if (state.status == AppUpdateDownloadStatus.COMPLETED) {
             Text(

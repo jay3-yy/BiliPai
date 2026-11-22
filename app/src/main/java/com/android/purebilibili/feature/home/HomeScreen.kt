@@ -378,11 +378,14 @@ internal fun HomeScreen(
             visibleIds = homeTopTabSettings.visibleIds,
         )
     }
-    val localizedTopTabLabels = topTabEntries.map { entry ->
-        when (entry) {
-            is HomeTopTabEntry.Category -> stringResource(resolveHomeCategoryLabelRes(entry.category))
-            HomeTopTabEntry.Partition -> resolveHomeTopTabEntryLabel(entry)
-            HomeTopTabEntry.Subscriptions -> resolveHomeTopTabEntryLabel(entry)
+    val resources = context.resources
+    val localizedTopTabLabels = remember(topTabEntries, resources) {
+        topTabEntries.map { entry ->
+            when (entry) {
+                is HomeTopTabEntry.Category -> resources.getString(resolveHomeCategoryLabelRes(entry.category))
+                HomeTopTabEntry.Partition -> resolveHomeTopTabEntryLabel(entry)
+                HomeTopTabEntry.Subscriptions -> resolveHomeTopTabEntryLabel(entry)
+            }
         }
     }
     val topTabKeys = remember(topTabEntries) { topTabEntries.map(HomeTopTabEntry::id) }
