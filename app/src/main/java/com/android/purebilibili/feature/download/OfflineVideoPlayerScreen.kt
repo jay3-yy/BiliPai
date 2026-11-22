@@ -102,6 +102,9 @@ import com.android.purebilibili.feature.video.ui.gesture.resolveTwoFingerSpeedGe
 import com.android.purebilibili.feature.video.ui.overlay.FullscreenDoubleTapAction
 import com.android.purebilibili.feature.video.ui.overlay.nextFullscreenSeekFeedbackEvent
 import com.android.purebilibili.feature.video.ui.overlay.resolveFullscreenDoubleTapAction
+import com.android.purebilibili.feature.video.ui.section.FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP
+import com.android.purebilibili.feature.video.ui.section.INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP
+import com.android.purebilibili.feature.video.ui.section.INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP
 import com.android.purebilibili.feature.video.ui.section.PlayerLongPressSpeedHint
 import com.android.purebilibili.feature.video.ui.section.PlayerSeekFeedback
 import com.android.purebilibili.feature.video.ui.section.PlayerSpeedLockZones
@@ -109,7 +112,9 @@ import com.android.purebilibili.feature.video.ui.section.SwipeToFullscreenDragTh
 import com.android.purebilibili.feature.video.ui.section.resolveLongPressSpeedLockSensitivityPolicy
 import com.android.purebilibili.feature.video.ui.section.resolveSwipeToFullscreenHintFraction
 import com.android.purebilibili.feature.video.ui.section.resolveVerticalGestureMode
+import com.android.purebilibili.feature.video.ui.section.resolveVideoPlayerGestureVerticalExclusions
 import com.android.purebilibili.feature.video.ui.section.shouldAutoExitFullscreenOnPlaybackEnded
+import com.android.purebilibili.feature.video.ui.section.shouldIgnoreVideoPlayerDragStart
 import com.android.purebilibili.feature.video.ui.section.shouldLockLongPressSpeedInTargetZone
 import com.android.purebilibili.feature.video.ui.section.shouldTriggerFullscreenBySwipe
 import com.android.purebilibili.feature.video.ui.section.shouldUnlockLockedLongPressSpeedFromRightDownDrag
@@ -201,7 +206,7 @@ fun OfflineVideoPlayerScreen(
     val fullscreenMode: FullscreenMode? by remember(context) { SettingsManager.getFullscreenMode(context) }
         .collectAsStateWithLifecycle(initialValue = null)
     val completionBehavior by remember(context) { SettingsManager.getPlaybackCompletionBehavior(context) }
-        .collectAsStateWithLifecycle(initialValue = SettingsManager.getPlaybackCompletionBehaviorSync(context))
+        .collectAsStateWithLifecycle(initialValue = remember(context) { SettingsManager.getPlaybackCompletionBehaviorSync(context) })
     val uiLayoutPolicy = resolveVideoPlayerUiLayoutPolicy(
         widthDp = configuration.screenWidthDp,
         windowHeightDp = configuration.screenHeightDp,
@@ -848,10 +853,21 @@ fun OfflineVideoPlayerScreen(
                     detectDragGestures(
                         onDragStart = { offset ->
                             // 边缘防误触
-                            val density = context.resources.displayMetrics.density
-                            val safeZonePx = 48 * density
-                            val screenHeight = size.height
-                            val isEdgeGesture = offset.y < safeZonePx || offset.y > (screenHeight - safeZonePx)
+                            val gestureExclusions = resolveVideoPlayerGestureVerticalExclusions(
+                                containerHeightPx = size.height.toFloat(),
+                                isFullscreen = isFullscreen,
+                                controlsVisible = showControls,
+                                requestedBottomControlsExclusionPx = 0f,
+                                inlineTopExclusionPx = INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                inlineBottomExclusionPx = INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                fullscreenEdgeExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx(),
+                            )
+                            val isEdgeGesture = shouldIgnoreVideoPlayerDragStart(
+                                offsetY = offset.y,
+                                containerHeightPx = size.height.toFloat(),
+                                topGestureExclusionPx = gestureExclusions.topPx,
+                                bottomGestureExclusionPx = gestureExclusions.bottomPx,
+                            )
 
                             if (isEdgeGesture) {
                                 isGestureVisible = false

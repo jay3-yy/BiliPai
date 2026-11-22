@@ -753,7 +753,7 @@ private fun VideoPlayerSectionContent(
     val playerInsightMode by remember(context) {
         com.android.purebilibili.core.store.SettingsManager.getPlayerInsightMode(context)
     }.collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.SettingsManager.getPlayerInsightModeSync(context),
+            initialValue = remember(context) { com.android.purebilibili.core.store.SettingsManager.getPlayerInsightModeSync(context) },
             lifecycle = lifecycleOwner.lifecycle
         )
 
@@ -2315,9 +2315,9 @@ private fun VideoPlayerSectionContent(
                                 isFullscreen = isFullscreen,
                                 controlsVisible = showControls,
                                 requestedBottomControlsExclusionPx = requestedBottomGestureExclusionPx,
-                                inlineTopExclusionPx = with(localDensity) { 24.dp.toPx() },
-                                inlineBottomExclusionPx = with(localDensity) { 48.dp.toPx() },
-                                fullscreenEdgeExclusionPx = with(localDensity) { 48.dp.toPx() }
+                                inlineTopExclusionPx = with(localDensity) { INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP.dp.toPx() },
+                                inlineBottomExclusionPx = with(localDensity) { INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.dp.toPx() },
+                                fullscreenEdgeExclusionPx = with(localDensity) { FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx() }
                             )
                             val shouldIgnoreDragStart = shouldIgnoreVideoPlayerDragStart(
                                 offsetY = offset.y,
@@ -2328,7 +2328,7 @@ private fun VideoPlayerSectionContent(
                                 offsetX = offset.x,
                                 containerWidthPx = size.width.toFloat(),
                                 isFullscreen = isFullscreen,
-                                edgeGestureExclusionPx = with(localDensity) { 48.dp.toPx() },
+                                edgeGestureExclusionPx = with(localDensity) { FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx() },
                             )
 
                             if (shouldIgnoreDragStart) {
@@ -3502,7 +3502,9 @@ private fun VideoPlayerSectionContent(
         // 使用 isFirstFrameRendered + smooth reveal 确保只有在首帧稳定后才揭开封面，避免黑屏和硬切。
         val autoPlayOnOpenEnabled by remember(context) {
             SettingsManager.getClickToPlay(context)
-        }.collectAsStateWithLifecycle(initialValue = SettingsManager.getClickToPlaySync(context))
+        }.collectAsStateWithLifecycle(
+            initialValue = remember(context) { SettingsManager.getClickToPlaySync(context) }
+        )
         val currentMediaPrepared = playbackIdentityBvid == bvid &&
             (state.requestCid <= 0L || playbackIdentityCid == state.requestCid)
         var hasManualStartPlaybackIntent by remember(currentPlaybackIdentity, playerState.player) {

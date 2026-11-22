@@ -183,6 +183,10 @@ internal fun shouldIgnoreVideoPlayerHorizontalEdgeDragStart(
     return offsetX < exclusion || offsetX >= containerWidthPx - exclusion
 }
 
+internal const val INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP = 24
+internal const val INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP = 12
+internal const val FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP = 48
+
 internal data class VideoPlayerGestureVerticalExclusions(
     val topPx: Float,
     val bottomPx: Float

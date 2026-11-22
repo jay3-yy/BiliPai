@@ -221,19 +221,44 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
-    fun inlineGestureExclusions_keepHalfOfShortPlayerInteractive() {
-        val exclusions = resolveVideoPlayerGestureVerticalExclusions(
-            containerHeightPx = 120f,
+    fun inlineGestureExclusions_allowLowerVideoZoneWhileKeepingHalfOfShortPlayerInteractive() {
+        val defaultInlineExclusions = resolveVideoPlayerGestureVerticalExclusions(
+            containerHeightPx = 220f,
+            isFullscreen = false,
+            controlsVisible = false,
+            requestedBottomControlsExclusionPx = 0f,
+            inlineTopExclusionPx = INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP.toFloat(),
+            inlineBottomExclusionPx = INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.toFloat(),
+            fullscreenEdgeExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.toFloat()
+        )
+        assertFalse(
+            shouldIgnoreVideoPlayerDragStart(
+                offsetY = 200f,
+                containerHeightPx = 220f,
+                topGestureExclusionPx = defaultInlineExclusions.topPx,
+                bottomGestureExclusionPx = defaultInlineExclusions.bottomPx
+            )
+        )
+        assertTrue(
+            shouldIgnoreVideoPlayerDragStart(
+                offsetY = 212f,
+                containerHeightPx = 220f,
+                topGestureExclusionPx = defaultInlineExclusions.topPx,
+                bottomGestureExclusionPx = defaultInlineExclusions.bottomPx
+            )
+        )
+
+        val shortPlayerExclusions = resolveVideoPlayerGestureVerticalExclusions(
+            containerHeightPx = 60f,
             isFullscreen = false,
             controlsVisible = true,
             requestedBottomControlsExclusionPx = 100f,
-            inlineTopExclusionPx = 24f,
-            inlineBottomExclusionPx = 48f,
-            fullscreenEdgeExclusionPx = 48f
+            inlineTopExclusionPx = INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP.toFloat(),
+            inlineBottomExclusionPx = INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.toFloat(),
+            fullscreenEdgeExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.toFloat()
         )
-
-        assertEquals(20f, exclusions.topPx, 0.001f)
-        assertEquals(40f, exclusions.bottomPx, 0.001f)
+        assertEquals(20f, shortPlayerExclusions.topPx, 0.001f)
+        assertEquals(10f, shortPlayerExclusions.bottomPx, 0.001f)
     }
 
     @Test
