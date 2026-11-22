@@ -43,13 +43,16 @@ internal fun buildArticleSummaryDraft(
     )
 }
 
+private val ARTICLE_SUMMARY_WHITESPACE_REGEX = Regex("\\s+")
+private val ARTICLE_SUMMARY_SENTENCE_SPLIT_REGEX = Regex("(?<=[。！？!?；;])")
+
 internal fun extractArticleSummarySentences(
     plainText: String,
     maxChars: Int = 160
 ): List<String> {
-    val normalized = plainText.replace(Regex("\\s+"), " ").trim()
+    val normalized = plainText.replace(ARTICLE_SUMMARY_WHITESPACE_REGEX, " ").trim()
     if (normalized.isBlank()) return emptyList()
-    val sentences = normalized.split(Regex("(?<=[。！？!?；;])"))
+    val sentences = normalized.split(ARTICLE_SUMMARY_SENTENCE_SPLIT_REGEX)
     val picked = mutableListOf<String>()
     var length = 0
     sentences.forEach { sentence ->

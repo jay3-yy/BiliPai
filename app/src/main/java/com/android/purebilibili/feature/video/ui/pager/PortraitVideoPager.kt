@@ -466,8 +466,9 @@ fun PortraitVideoPager(
     }
     // 详情页内的竖屏播放器复用外层菜单；独立竖屏视频页在这里承载菜单。
     if (!useSharedPlayer) {
-        val blockRulesRaw by SettingsManager.getDanmakuBlockRulesRaw(context, danmakuScope)
-            .collectAsStateWithLifecycle(initialValue = "")
+        val blockRulesRaw by remember(context, danmakuScope) {
+            SettingsManager.getDanmakuBlockRulesRaw(context, danmakuScope)
+        }.collectAsStateWithLifecycle(initialValue = "")
         VideoDetailDanmakuContextMenu(
             context = context,
             viewModel = viewModel,
@@ -502,21 +503,32 @@ fun PortraitVideoPager(
     val danmakuAllowSpecial = danmakuSettings.allowSpecial
     val danmakuBlockRules = danmakuSettings.blockRules
     val danmakuSmartOcclusion = danmakuSettings.smartOcclusion
-    val autoPlayEnabled by SettingsManager
-        .getAutoPlay(context)
-        .collectAsStateWithLifecycle(initialValue = true
-        )
-    val externalPlaylistAutoContinueEnabled by SettingsManager
-        .getExternalPlaylistAutoContinue(context)
-        .collectAsStateWithLifecycle(initialValue = true
-        )
-    val playbackCompletionBehavior by SettingsManager
-        .getPlaybackCompletionBehavior(context)
-        .collectAsStateWithLifecycle(initialValue = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC
-        )
+    val autoPlayEnabled by remember(context) {
+        SettingsManager.getAutoPlay(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val externalPlaylistAutoContinueEnabled by remember(context) {
+        SettingsManager.getExternalPlaylistAutoContinue(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val playbackCompletionBehavior by remember(context) {
+        SettingsManager.getPlaybackCompletionBehavior(context)
+    }.collectAsStateWithLifecycle(initialValue = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC)
     val isExternalPlaylist by PlaylistManager.isExternalPlaylist.collectAsStateWithLifecycle()
-    val prefetchVideoEnabled by SettingsManager.getPrefetchVideo(context)
-        .collectAsStateWithLifecycle(initialValue = false)
+    val prefetchVideoEnabled by remember(context) {
+        SettingsManager.getPrefetchVideo(context)
+    }.collectAsStateWithLifecycle(initialValue = false)
+    val portraitPlayerSettings by remember(context) {
+        SettingsManager.getPortraitPlayerSettings(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = remember(context) {
+            SettingsManager.PortraitPlayerSettings(
+                longPressSpeedHintCloseEnabled = SettingsManager.getLongPressSpeedHintCloseEnabledSync(context),
+                longPressSpeedHintHidden = SettingsManager.getLongPressSpeedHintHiddenSync(context),
+                longPressSpeedHintScale = SettingsManager.getLongPressSpeedHintScaleSync(context),
+                longPressSpeedHintAlpha = SettingsManager.getLongPressSpeedHintAlphaSync(context),
+                letterboxAmbientHazeEnabled = SettingsManager.getPortraitLetterboxAmbientHazeSync(context),
+            )
+        },
+    )
     val portraitWifiAvailable by remember(context) { portraitWifiAvailability(context.applicationContext) }
         .collectAsStateWithLifecycle(initialValue = false)
     // Align portrait pager playurl qn with detail-page playable default (Wi‑Fi / VIP / auto-highest).
@@ -2125,6 +2137,7 @@ fun PortraitVideoPager(
                         portraitUpPreviewActive = active
                     }
                 },
+                portraitPlayerSettings = portraitPlayerSettings,
                 portraitOverlayVisible = portraitOverlayVisible,
                 portraitCleanScreen = portraitCleanScreen,
                 onPortraitCleanScreenChange = { clean ->
@@ -2323,6 +2336,7 @@ private fun VideoPageItem(
     onUpPreviewActiveChange: (Boolean) -> Unit,
     portraitOverlayVisible: Boolean,
     portraitCleanScreen: Boolean,
+    portraitPlayerSettings: SettingsManager.PortraitPlayerSettings,
     onPortraitCleanScreenChange: (Boolean) -> Unit,
     onPortraitOverlayVisibleChange: (Boolean) -> Unit,
     onRequestVideoChange: (String) -> Unit,
@@ -2370,49 +2384,22 @@ private fun VideoPageItem(
     val capturePortraitPage = portraitGlassSupported && portraitCaptureActive &&
         (portraitOverlayVisible || portraitGlassCaptureVisible)
 
-    val longPressSpeed by SettingsManager
-        .getLongPressSpeed(context)
-        .collectAsStateWithLifecycle(initialValue = 2.0f
-        )
-    val longPressSpeedHintCloseEnabled by SettingsManager
-        .getLongPressSpeedHintCloseEnabled(context)
-        .collectAsStateWithLifecycle(
-            initialValue = SettingsManager.getLongPressSpeedHintCloseEnabledSync(context)
-        )
-    val longPressSpeedHintHidden by SettingsManager
-        .getLongPressSpeedHintHidden(context)
-        .collectAsStateWithLifecycle(
-            initialValue = SettingsManager.getLongPressSpeedHintHiddenSync(context)
-        )
-    val longPressSpeedHintScale by SettingsManager
-        .getLongPressSpeedHintScale(context)
-        .collectAsStateWithLifecycle(
-            initialValue = SettingsManager.getLongPressSpeedHintScaleSync(context)
-        )
-    val longPressSpeedHintAlpha by SettingsManager
-        .getLongPressSpeedHintAlpha(context)
-        .collectAsStateWithLifecycle(
-            initialValue = SettingsManager.getLongPressSpeedHintAlphaSync(context)
-        )
-    val doubleTapSeekEnabled by SettingsManager
-        .getDoubleTapSeekEnabled(context)
-        .collectAsStateWithLifecycle(initialValue = false)
-    val seekForwardSeconds by SettingsManager
-        .getSeekForwardSeconds(context)
-        .collectAsStateWithLifecycle(initialValue = 10)
-    val seekBackwardSeconds by SettingsManager
-        .getSeekBackwardSeconds(context)
-        .collectAsStateWithLifecycle(initialValue = 10)
-    val playerInteractionSettings by SettingsManager
-        .getPlayerInteractionSettings(context)
-        .collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.PlayerInteractionSettings()
-        )
+    val longPressSpeed = portraitPlayerSettings.longPressSpeed
+    val longPressSpeedHintCloseEnabled = portraitPlayerSettings.longPressSpeedHintCloseEnabled
+    val longPressSpeedHintHidden = portraitPlayerSettings.longPressSpeedHintHidden
+    val longPressSpeedHintScale = portraitPlayerSettings.longPressSpeedHintScale
+    val longPressSpeedHintAlpha = portraitPlayerSettings.longPressSpeedHintAlpha
+    val doubleTapSeekEnabled = portraitPlayerSettings.doubleTapSeekEnabled
+    val seekForwardSeconds = portraitPlayerSettings.seekForwardSeconds
+    val seekBackwardSeconds = portraitPlayerSettings.seekBackwardSeconds
+    val playerInteractionSettings by remember(context) {
+        SettingsManager.getPlayerInteractionSettings(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.PlayerInteractionSettings()
+    )
     // 竖屏流此前没有小窗概念，弹幕会无条件跟随；进入 PiP 后与播放器共用同一套
     // 「小窗和画中画中不显示弹幕」设置，避免两条播放面在小窗里策略不一致。
-    val pipNoDanmakuEnabled by SettingsManager
-        .getPipNoDanmakuEnabled(context)
-        .collectAsStateWithLifecycle(initialValue = false)
+    val pipNoDanmakuEnabled = portraitPlayerSettings.pipNoDanmakuEnabled
     val pipDanmakuVisible = !(isInPipMode && pipNoDanmakuEnabled)
     val currentAudioQuality = requestedAudioQuality
     val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
@@ -2456,8 +2443,9 @@ private fun VideoPageItem(
     val portraitViewPoints by viewModel.viewPoints.collectAsStateWithLifecycle()
     val portraitPbpData by viewModel.pbpProgressData.collectAsStateWithLifecycle()
     val portraitDanmakuScope = DanmakuSettingsScope.LANDSCAPE
-    val portraitDanmakuSettings by SettingsManager.getDanmakuSettings(context, portraitDanmakuScope)
-        .collectAsStateWithLifecycle(initialValue = DanmakuSettings())
+    val portraitDanmakuSettings by remember(context, portraitDanmakuScope) {
+        SettingsManager.getDanmakuSettings(context, portraitDanmakuScope)
+    }.collectAsStateWithLifecycle(initialValue = DanmakuSettings())
     val portraitCodec by viewModel.videoCodecPreference.collectAsStateWithLifecycle()
     val portraitSecondCodec by viewModel.videoSecondCodecPreference.collectAsStateWithLifecycle()
     val portraitPlayMode by PlaylistManager.playMode.collectAsStateWithLifecycle()
@@ -2468,9 +2456,7 @@ private fun VideoPageItem(
             )
         }.orEmpty()
     }
-    val subtitleAutoPreference by SettingsManager
-        .getSubtitleAutoPreference(context)
-        .collectAsStateWithLifecycle(initialValue = SubtitleAutoPreference.OFF)
+    val subtitleAutoPreference = portraitPlayerSettings.subtitleAutoPreference
     var keepPortraitPagerAwake by remember(exoPlayer) {
         mutableStateOf(
             shouldKeepVideoPlaybackAwake(
@@ -2997,11 +2983,7 @@ private fun VideoPageItem(
     }
 
     // 横屏视频在竖屏页上下 letterbox 黑边：动态采样模糊（默认开，设置可关）
-    val letterboxAmbientHazeEnabled by SettingsManager
-        .getPortraitLetterboxAmbientHaze(context)
-        .collectAsStateWithLifecycle(
-            initialValue = SettingsManager.getPortraitLetterboxAmbientHazeSync(context),
-        )
+    val letterboxAmbientHazeEnabled = portraitPlayerSettings.letterboxAmbientHazeEnabled
     val letterboxViewportSize = remember(
         portraitPageWidthPx,
         portraitPageHeightPx,
@@ -3825,8 +3807,7 @@ private fun VideoPageItem(
         active = portraitSupplementActive,
         hasSharedState = hasMatchingPageState,
     )
-    val portraitHeatmapEnabled by SettingsManager.getProgressPeakDanmakuEnabled(context)
-        .collectAsStateWithLifecycle(initialValue = false)
+    val portraitHeatmapEnabled = portraitPlayerSettings.portraitHeatmapEnabled
     val portraitPagePbp by rememberPortraitPageHeatmap(
         bvid = bvid,
         cid = snapshotCid,
@@ -3967,8 +3948,7 @@ private fun VideoPageItem(
                 )
             }
         }
-        val diagnosticLoggingEnabled by SettingsManager.getPlayerDiagnosticLoggingEnabled(context)
-            .collectAsStateWithLifecycle(initialValue = true)
+        val diagnosticLoggingEnabled = portraitPlayerSettings.diagnosticLoggingEnabled
         val displayedCommentCount by remember(
             portraitCommentStateHandle, activeAid, bvid, portraitDetailInfo,
         ) {

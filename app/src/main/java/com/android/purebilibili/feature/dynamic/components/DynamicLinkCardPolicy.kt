@@ -261,10 +261,12 @@ internal fun resolveLiveReserveStartAtMillis(
     }.getOrNull()
 }
 
+private val LIVE_RESERVE_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("M月d日 HH:mm")
+
 internal fun resolveLiveReserveNotificationTime(
     startAtMillis: Long,
     zoneId: ZoneId = ZoneId.systemDefault(),
-): String = DateTimeFormatter.ofPattern("M月d日 HH:mm")
+): String = LIVE_RESERVE_TIME_FORMATTER
     .format(java.time.Instant.ofEpochMilli(startAtMillis).atZone(zoneId))
 
 /** 商品介绍与价格分行显示；其他卡片继续沿用原描述。 */

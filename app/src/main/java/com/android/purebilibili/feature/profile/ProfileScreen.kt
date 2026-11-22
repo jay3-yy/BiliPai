@@ -528,7 +528,7 @@ private fun ProfileScreenContent(
         }
     val isLoggedOut = state is ProfileUiState.LoggedOut
     val privacyModeEnabled by remember(context) { SettingsManager.getPrivacyModeEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = SettingsManager.isPrivacyModeEnabledSync(context))
+        .collectAsStateWithLifecycle(initialValue = remember(context) { SettingsManager.isPrivacyModeEnabledSync(context) })
     val profileActionScope = androidx.compose.runtime.rememberCoroutineScope()
     val togglePrivacyMode: () -> Unit = {
         // 固定本次切换目标，避免保存期间状态更新导致提示反转。

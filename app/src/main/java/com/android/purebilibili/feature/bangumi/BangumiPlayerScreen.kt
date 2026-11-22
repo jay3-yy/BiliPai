@@ -239,10 +239,11 @@ fun BangumiPlayerScreen(
         hideStatusBars = isFullscreen,
         immersiveStatusBarBackdropEnabled = true,
     ).dp
-    val immersiveStatusBarBackdropEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getHideVideoPageStatusBar(context).collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.SettingsManager.getHideVideoPageStatusBarSync(context)
-        )
+    val immersiveStatusBarBackdropEnabled by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getHideVideoPageStatusBar(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = remember(context) { com.android.purebilibili.core.store.SettingsManager.getHideVideoPageStatusBarSync(context) }
+    )
     val ambientPresentation = remember(seasonId) { AmbientPresentation() }
     val ambientController = remember(ambientPresentation) { AmbientFrameController(ambientPresentation) }
     val statusBarAmbientFrame = remember(ambientPresentation) {
@@ -590,11 +591,12 @@ fun BangumiPlayerScreen(
     // 获取当前剧集 cid
     val currentCid = (uiState as? BangumiPlayerState.Success)?.currentEpisode?.cid ?: 0L
     val currentAid = (uiState as? BangumiPlayerState.Success)?.currentEpisode?.aid ?: 0L
-    val defaultCommentSortMode by com.android.purebilibili.core.store.SettingsManager
-        .getCommentDefaultSortMode(context)
-        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context),
-            context = kotlin.coroutines.EmptyCoroutineContext
-        )
+    val defaultCommentSortMode by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortMode(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = remember(context) { com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context) },
+        context = kotlin.coroutines.EmptyCoroutineContext
+    )
     val preferredCommentSortMode = remember(defaultCommentSortMode) {
         CommentSortMode.fromApiMode(defaultCommentSortMode)
     }

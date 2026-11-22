@@ -1168,32 +1168,22 @@ private fun VideoPlayerOverlayContent(
             delay(1000)
         }
     }
-    val showFullscreenLockButton by remember(context) {
-        SettingsManager.getShowFullscreenLockButton(context)
-    }.collectAsStateWithLifecycle(initialValue = true
-        )
-    val showFullscreenScreenshotButton by remember(context) {
-        SettingsManager.getShowFullscreenScreenshotButton(context)
-    }.collectAsStateWithLifecycle(initialValue = true
-        )
-    val showFullscreenBatteryLevel by remember(context) {
-        SettingsManager.getShowFullscreenBatteryLevel(context)
-    }.collectAsStateWithLifecycle(initialValue = true
-        )
-    val showFullscreenTime by remember(context) {
-        SettingsManager.getShowFullscreenTime(context)
-    }.collectAsStateWithLifecycle(initialValue = true
-        )
-    val showFullscreenActionItems by remember(context) {
-        SettingsManager.getShowFullscreenActionItems(context)
-    }.collectAsStateWithLifecycle(initialValue = true
-        )
-    val showOnlineCount by remember(context) {
-        SettingsManager.getShowOnlineCount(context)
-    }.collectAsStateWithLifecycle(initialValue = false
-        )
-    val chapterDisplayMode by remember(context) { SettingsManager.getChapterDisplayMode(context) }
-        .collectAsStateWithLifecycle(initialValue = ChapterDisplayMode.WITH_CONTROLS)
+    val overlaySettings by remember(context) {
+        SettingsManager.getPlayerOverlaySettings(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = remember(context) {
+            SettingsManager.PlayerOverlaySettings(
+                immersiveVideoPageStatusBar = SettingsManager.getHideVideoPageStatusBarSync(context),
+            )
+        },
+    )
+    val showFullscreenLockButton = overlaySettings.showFullscreenLockButton
+    val showFullscreenScreenshotButton = overlaySettings.showFullscreenScreenshotButton
+    val showFullscreenBatteryLevel = overlaySettings.showFullscreenBatteryLevel
+    val showFullscreenTime = overlaySettings.showFullscreenTime
+    val showFullscreenActionItems = overlaySettings.showFullscreenActionItems
+    val showOnlineCount = overlaySettings.showOnlineCount
+    val chapterDisplayMode = overlaySettings.chapterDisplayMode
     val showViewPointMarkers = chapterDisplayMode != ChapterDisplayMode.HIDDEN
     val onChapterVisibilityChange: (Boolean) -> Unit = { visible ->
         scope.launch {
@@ -1205,15 +1195,8 @@ private fun VideoPlayerOverlayContent(
             )
         }
     }
-    val bottomProgressBehavior by remember(context) {
-        SettingsManager.getBottomProgressBehavior(context)
-    }.collectAsStateWithLifecycle(initialValue = BottomProgressBehavior.ALWAYS_HIDE
-        )
-    val playerControlVisibility by remember(context) {
-        SettingsManager.getPlayerControlVisibilitySettings(context)
-    }.collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.PlayerControlVisibilitySettings()
-        )
+    val bottomProgressBehavior = overlaySettings.bottomProgressBehavior
+    val playerControlVisibility = overlaySettings.playerControlVisibility
     val displayedOnlineCount = remember(onlineCount, showOnlineCount) {
         resolveDisplayedOnlineCount(
             onlineCount = onlineCount,
@@ -1234,10 +1217,7 @@ private fun VideoPlayerOverlayContent(
             hasExternalPlaylist = hasExternalPlaylist
         )
     }
-    val playbackCompletionBehavior by remember(context) {
-        SettingsManager.getPlaybackCompletionBehavior(context)
-    }.collectAsStateWithLifecycle(initialValue = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC
-        )
+    val playbackCompletionBehavior = overlaySettings.playbackCompletionBehavior
     val completionOptions = remember {
         listOf(PlaybackCompletionBehavior.STOP_AFTER_CURRENT, PlaybackCompletionBehavior.PLAY_IN_ORDER,
             PlaybackCompletionBehavior.REPEAT_ONE, PlaybackCompletionBehavior.LOOP_PLAYLIST,
@@ -1245,11 +1225,7 @@ private fun VideoPlayerOverlayContent(
     }
     val completionLabels = remember { completionOptions.map { it.label } }
     // The legacy preference key now enables the inline-player Haze status-bar backdrop.
-    val immersiveVideoPageStatusBar by remember(context) {
-        SettingsManager.getHideVideoPageStatusBar(context)
-    }.collectAsStateWithLifecycle(
-            initialValue = SettingsManager.getHideVideoPageStatusBarSync(context),
-        )
+    val immersiveVideoPageStatusBar = overlaySettings.immersiveVideoPageStatusBar
     val playerChromeStatusBarVisible = !resolveVideoDetailSystemBarsVisibilityPolicy(
         isFullscreenMode = isFullscreen,
         hideVideoPageStatusBar = immersiveVideoPageStatusBar,
@@ -1552,6 +1528,9 @@ private fun VideoPlayerOverlayContent(
         var subtitleChromeHeightPx by remember(subtitleChromeHeightSeed) {
             mutableIntStateOf(subtitleChromeHeightSeed)
         }
+        var bottomControlBarHeightPx by remember(subtitleChromeHeightSeed) {
+            mutableIntStateOf(subtitleChromeHeightSeed)
+        }
         var topChromeHeightPx by remember { mutableIntStateOf(0) }
         PiliExternalSubtitleOverlay(
             subtitleTools, isFullscreen,
@@ -1763,14 +1742,14 @@ private fun VideoPlayerOverlayContent(
                         .onSizeChanged { topChromeHeightPx = it.height },
                 )
                 // 横屏顶部快捷键开关不控制竖屏互动栏。
-                if (isFullscreen && simplifiedPortraitChrome && bvid.isNotBlank()) {
+                val showPortraitEngagementRail = isFullscreen && simplifiedPortraitChrome && bvid.isNotBlank()
+                if (showPortraitEngagementRail) {
                     Box(
                         modifier = Modifier.fillMaxSize().layout { measurable, constraints ->
-                            // 仅在测量阶段读取高度；互动栏底部贴近信息区，去掉额外 8dp 留白。
-                            // 玻璃与原生共用位置，仍按信息区实测高度避让标题、选集和播放控件。
+                            // 互动栏贴近底部播放控制栏上方，与左侧信息区左右并排，避免被整个简介区顶到画面上半部。
                             val gap = 8.dp.roundToPx()
                             val top = (topChromeHeightPx + gap).coerceAtMost(constraints.maxHeight)
-                            val availableHeight = (constraints.maxHeight - top - subtitleChromeHeightPx).coerceAtLeast(0)
+                            val availableHeight = (constraints.maxHeight - top - bottomControlBarHeightPx).coerceAtLeast(0)
                             val placeable = measurable.measure(constraints.copy(minHeight = availableHeight, maxHeight = availableHeight))
                             layout(constraints.maxWidth, constraints.maxHeight) {
                                 placeable.placeRelative(0, top)
@@ -1856,14 +1835,20 @@ private fun VideoPlayerOverlayContent(
                                 onOpenDetails = actions.onOpenVideoDetails,
                                 modifier = Modifier
                                     .windowInsetsPadding(playerControlHorizontalInsets(true, true))
-                                    .padding(horizontal = 16.dp)
+                                    .padding(
+                                        start = 16.dp,
+                                        end = if (showPortraitEngagementRail) 76.dp else 16.dp,
+                                    )
                                     .widthIn(max = 560.dp)
                                     .fillMaxWidth(),
                             )
                         }
                     }
-                    key(player, bvid, cid) {
-                        BottomControlBar(
+                    Box(
+                        modifier = Modifier.onSizeChanged { bottomControlBarHeightPx = it.height },
+                    ) {
+                        key(player, bvid, cid) {
+                            BottomControlBar(
                             showPlayPauseButton = hideCenterPlayback || portraitFullscreenChrome,
                             isPlaying = effectiveIsPlaying,
                             onPlayPauseClick = { togglePlayPause() },
@@ -1925,6 +1910,7 @@ private fun VideoPlayerOverlayContent(
                             onChapterClick = { showChapterList = true },
                             onFloatingPanelVisibilityChange = { bottomControlFloatingPanelVisible = it },
                         )
+                        }
                     }
                 }
             }

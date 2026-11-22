@@ -998,7 +998,7 @@ internal fun BiliPaiNavDisplayHost(
     val hasSharedWallpaperBacking = LocalGlobalWallpaperBackdropSource.current != null
     val clickToPlayEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getClickToPlay(context) }
         .collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(LocalContext.current)
+            initialValue = remember(context) { com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(context) }
         )
     val dynamicImagePreviewTextVisible by remember(context) { com.android.purebilibili.core.store.SettingsManager.getDynamicImagePreviewTextVisible(context) }
         .collectAsStateWithLifecycle(initialValue = true)

@@ -1034,26 +1034,22 @@ private fun VideoPlayerOverlayContent(
             delay(1000)
         }
     }
-    val showFullscreenLockButton by remember(context) {
-        SettingsManager.getShowFullscreenLockButton(context)
-    }.collectAsStateWithLifecycle(initialValue = true)
-    val showFullscreenScreenshotButton by remember(context) {
-        SettingsManager.getShowFullscreenScreenshotButton(context)
-    }.collectAsStateWithLifecycle(initialValue = true)
-    val showFullscreenBatteryLevel by remember(context) {
-        SettingsManager.getShowFullscreenBatteryLevel(context)
-    }.collectAsStateWithLifecycle(initialValue = true)
-    val showFullscreenTime by remember(context) {
-        SettingsManager.getShowFullscreenTime(context)
-    }.collectAsStateWithLifecycle(initialValue = true)
-    val showFullscreenActionItems by remember(context) {
-        SettingsManager.getShowFullscreenActionItems(context)
-    }.collectAsStateWithLifecycle(initialValue = true)
-    val showOnlineCount by remember(context) {
-        SettingsManager.getShowOnlineCount(context)
-    }.collectAsStateWithLifecycle(initialValue = false)
-    val chapterDisplayMode by remember(context) { SettingsManager.getChapterDisplayMode(context) }
-        .collectAsStateWithLifecycle(initialValue = ChapterDisplayMode.WITH_CONTROLS)
+    val overlaySettings by remember(context) {
+        SettingsManager.getPlayerOverlaySettings(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = remember(context) {
+            SettingsManager.PlayerOverlaySettings(
+                immersiveVideoPageStatusBar = SettingsManager.getHideVideoPageStatusBarSync(context),
+            )
+        },
+    )
+    val showFullscreenLockButton = overlaySettings.showFullscreenLockButton
+    val showFullscreenScreenshotButton = overlaySettings.showFullscreenScreenshotButton
+    val showFullscreenBatteryLevel = overlaySettings.showFullscreenBatteryLevel
+    val showFullscreenTime = overlaySettings.showFullscreenTime
+    val showFullscreenActionItems = overlaySettings.showFullscreenActionItems
+    val showOnlineCount = overlaySettings.showOnlineCount
+    val chapterDisplayMode = overlaySettings.chapterDisplayMode
     val showViewPointMarkers = chapterDisplayMode != ChapterDisplayMode.HIDDEN
     val onChapterVisibilityChange: (Boolean) -> Unit = { visible ->
         scope.launch {
@@ -1065,20 +1061,9 @@ private fun VideoPlayerOverlayContent(
             )
         }
     }
-    val bottomProgressBehavior by SettingsManager
-        .getBottomProgressBehavior(context)
-        .collectAsStateWithLifecycle(initialValue = BottomProgressBehavior.ALWAYS_HIDE
-        )
-    val playerControlVisibility by SettingsManager
-        .getPlayerControlVisibilitySettings(context)
-        .collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.PlayerControlVisibilitySettings()
-        )
-    val progressPlacement by SettingsManager
-        .getPlayerProgressPlacement(context)
-        .collectAsStateWithLifecycle(
-            initialValue = com.android.purebilibili.core.store.PlayerProgressPlacement.ABOVE_CONTROLS
-        )
+    val bottomProgressBehavior = overlaySettings.bottomProgressBehavior
+    val playerControlVisibility = overlaySettings.playerControlVisibility
+    val progressPlacement = overlaySettings.progressPlacement
     val displayedOnlineCount = remember(onlineCount, showOnlineCount) {
         resolveDisplayedOnlineCount(
             onlineCount = onlineCount,
@@ -1129,10 +1114,7 @@ private fun VideoPlayerOverlayContent(
         )
         sort == com.android.purebilibili.feature.video.ui.components.CollectionSortMode.DESCENDING
     } else collectionSession.isReversed
-    val playbackCompletionBehavior by SettingsManager
-        .getPlaybackCompletionBehavior(context)
-        .collectAsStateWithLifecycle(initialValue = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC
-        )
+    val playbackCompletionBehavior = overlaySettings.playbackCompletionBehavior
     val nextEpisodeTarget = resolvePiliEpisodeNavigation(
         pages = navigationPages,
         outer = navigationOuter,
@@ -1147,11 +1129,7 @@ private fun VideoPlayerOverlayContent(
         autoContinue = playbackCompletionBehavior == PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
     )
     // The legacy preference key now enables the inline-player Haze status-bar backdrop.
-    val immersiveVideoPageStatusBar by SettingsManager
-        .getHideVideoPageStatusBar(context)
-        .collectAsStateWithLifecycle(
-            initialValue = SettingsManager.getHideVideoPageStatusBarSync(context),
-        )
+    val immersiveVideoPageStatusBar = overlaySettings.immersiveVideoPageStatusBar
     val playerChromeStatusBarVisible = !resolveVideoDetailSystemBarsVisibilityPolicy(
         isFullscreenMode = isFullscreen,
         hideVideoPageStatusBar = immersiveVideoPageStatusBar,

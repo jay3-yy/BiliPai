@@ -138,17 +138,20 @@ private fun resolveHomeNotInterestedKeywords(
     }
 }
 
+private val HOME_FEEDBACK_STOP_WORDS = setOf("视频", "合集", "最新", "一个", "我们", "你们", "今天", "真的", "这个")
+private val HOME_FEEDBACK_ZH_TOKEN_REGEX = Regex("[\\u4e00-\\u9fa5]{2,6}")
+private val HOME_FEEDBACK_EN_TOKEN_REGEX = Regex("[a-z0-9]{3,}")
+
 internal fun extractHomeFeedbackKeywords(title: String): Set<String> {
     if (title.isBlank()) return emptySet()
     val normalized = title.lowercase()
-    val stopWords = setOf("视频", "合集", "最新", "一个", "我们", "你们", "今天", "真的", "这个")
-    val zhTokens = Regex("[\\u4e00-\\u9fa5]{2,6}")
+    val zhTokens = HOME_FEEDBACK_ZH_TOKEN_REGEX
         .findAll(normalized)
         .map { it.value }
-        .filter { it !in stopWords }
+        .filter { it !in HOME_FEEDBACK_STOP_WORDS }
         .take(6)
         .toList()
-    val enTokens = Regex("[a-z0-9]{3,}")
+    val enTokens = HOME_FEEDBACK_EN_TOKEN_REGEX
         .findAll(normalized)
         .map { it.value }
         .take(4)

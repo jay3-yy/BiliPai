@@ -185,13 +185,14 @@ internal data class DynamicRestoredRichText(
     val unlocatedItems: List<DynamicUnlocatedRichText> = emptyList(),
 )
 
+private val DYNAMIC_POSSIBLE_MENTION_REGEX = Regex("(?<![\\w@])@[^\\s@，。！？、：；,.!?;:]{1,30}")
+private val DYNAMIC_POSSIBLE_EMOTE_REGEX = Regex("\\[[^\\[\\]\\r\\n]{1,30}]")
+
 /** Map server nodes to the displayed text without guessing between repeated matches. */
 internal fun restoreDynamicEditTokens(text: String, nodes: List<RichTextNode>): DynamicRestoredRichText {
     if (nodes.isEmpty()) {
         // These patterns only signal that metadata may be missing; they do not create rich nodes.
-        val possibleMention = Regex("(?<![\\w@])@[^\\s@，。！？、：；,.!?;:]{1,30}")
-        val possibleEmote = Regex("\\[[^\\[\\]\\r\\n]{1,30}]")
-        val issues = (possibleMention.findAll(text) + possibleEmote.findAll(text))
+        val issues = (DYNAMIC_POSSIBLE_MENTION_REGEX.findAll(text) + DYNAMIC_POSSIBLE_EMOTE_REGEX.findAll(text))
             .map { DynamicRichTextIssue(it.range.first, it.range.last + 1) }.toList().distinct()
         return DynamicRestoredRichText(emptyList(), issues.isNotEmpty(), issues)
     }

@@ -19,6 +19,7 @@ import com.android.purebilibili.core.store.editSettingsAndCommitPrefs
 import com.android.purebilibili.core.store.settingsDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 const val DEFAULT_AUDIO_QUALITY_FOLLOW_LAST = -2
@@ -39,7 +40,7 @@ object PlayerSettingsStore {
     private val keyLastPlaybackSpeed = floatPreferencesKey("last_playback_speed")
     private val keyPreferredPlayerVolume = floatPreferencesKey("preferred_player_volume")
     private val keyPlayerInsightMode = stringPreferencesKey("player_insight_mode")
-    private val keyNativeMiuixPlayerPopups = booleanPreferencesKey("native_miuix_player_popups")
+    internal val keyNativeMiuixPlayerPopups = booleanPreferencesKey("native_miuix_player_popups")
     // 沿用已有存储键，保留用户显式选择；现用于所有播放器材质。
     private val keyHideGlassCenterPlayback = booleanPreferencesKey("hide_glass_center_playback")
     private const val playbackSpeedCachePrefs = "playback_speed_cache"
@@ -57,16 +58,18 @@ object PlayerSettingsStore {
     const val PLAYER_VOLUME_STEP = 0.02f
 
     fun getHideCenterPlayback(context: Context): Flow<Boolean> =
-        context.settingsDataStore.data.map { it[keyHideGlassCenterPlayback] ?: true }
+        context.settingsDataStore.data
+            .map { it[keyHideGlassCenterPlayback] ?: true }
+            .distinctUntilChanged()
 
     suspend fun setHideCenterPlayback(context: Context, hidden: Boolean) {
         context.settingsDataStore.edit { it[keyHideGlassCenterPlayback] = hidden }
     }
 
     fun getNativeMiuixPlayerPopups(context: Context): Flow<Boolean> =
-        context.settingsDataStore.data.map { preferences ->
-            preferences[keyNativeMiuixPlayerPopups] ?: true
-        }
+        context.settingsDataStore.data
+            .map { preferences -> preferences[keyNativeMiuixPlayerPopups] ?: true }
+            .distinctUntilChanged()
 
     suspend fun setNativeMiuixPlayerPopups(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->

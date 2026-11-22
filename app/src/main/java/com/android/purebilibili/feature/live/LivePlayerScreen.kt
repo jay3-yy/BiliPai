@@ -330,7 +330,7 @@ private fun LiveRoomScreen(
     var videoScale by rememberSaveable(roomId, siteId) { mutableFloatStateOf(1f) }
     var videoAspectRatio by remember { mutableStateOf(VideoAspectRatio.FIT) }
     val savedBackgroundPlaybackEnabled by remember(context) { SettingsManager.getBackgroundPlaybackEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = SettingsManager.getBackgroundPlaybackEnabledSync(context))
+        .collectAsStateWithLifecycle(initialValue = remember(context) { SettingsManager.getBackgroundPlaybackEnabledSync(context) })
     val autoEnterFullscreenEnabled by remember(context) {
         SettingsManager.getAutoEnterFullscreen(context)
     }.collectAsStateWithLifecycle(initialValue = false)

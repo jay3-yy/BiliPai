@@ -375,11 +375,12 @@ fun VideoCommentSheetHost(
     val uriHandler = LocalUriHandler.current
     val commentState by commentViewModel.commentState.collectAsStateWithLifecycle()
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
-    val defaultSortMode by com.android.purebilibili.core.store.SettingsManager
-        .getCommentDefaultSortMode(context)
-        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context),
-            context = kotlin.coroutines.EmptyCoroutineContext
-        )
+    val defaultSortMode by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortMode(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = remember(context) { com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context) },
+        context = kotlin.coroutines.EmptyCoroutineContext
+    )
     val commentMemberDecorationsEnabled by com.android.purebilibili.core.store.SettingsManager
         .getCommentMemberDecorationsEnabled(context)
         .collectAsStateWithLifecycle(initialValue = false

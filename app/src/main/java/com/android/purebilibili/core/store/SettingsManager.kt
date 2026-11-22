@@ -7019,9 +7019,204 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
+    data class CommentDisplaySettings(
+        val subReplyPreviewLikesEnabled: Boolean = true,
+        val commentIpLocationEnabled: Boolean = true,
+        val detailedCommentTimeEnabled: Boolean = false,
+        val commentReplyPreviewVisible: Boolean = true,
+    )
+
+    val DEFAULT_INITIAL_APP_THEME_CONFIG = com.android.purebilibili.core.ui.AppThemeConfig(
+        blurIntensity = BlurIntensity.THIN,
+        headerBlurEnabled = true,
+        bottomBarBlurEnabled = false,
+        progressiveTopBlurEnabled = true,
+        progressiveTopFadeEnabled = true,
+        hapticFeedbackEnabled = true,
+        hapticSettings = com.android.purebilibili.core.ui.AppHapticSettings(),
+        globalTextTapCopyEnabled = false,
+        uiEntranceAnimationEnabled = true,
+        globalDragFeedbackEnabled = true,
+        runtimeVisualGuardEnabled = true,
+        nativeMiuixPopupsEnabled = true,
+        liquidGlassEnabled = true,
+        playerGlassEnabled = true,
+        popupGlassEnabled = true,
+        nowPlayingGlassEnabled = true,
+        liquidControlsUseThemeColor = false,
+        liquidSwitchThumbMode = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME,
+    )
+
+    /** 单次映射主宿主全部视觉/交互运行时配置，避免 Activity 根部挂载十余个独立 DataStore 订阅。 */
+    fun getAppThemeConfig(context: Context): Flow<com.android.purebilibili.core.ui.AppThemeConfig> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                val liquidGlassMasterEnabled = preferences[KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED] ?: true
+                val liquidGlassScenes = com.android.purebilibili.core.ui.AppLiquidGlassSettings(
+                    preferences[KEY_LIQUID_GLASS_SCENES_DISABLED] ?: 0
+                )
+                val headerBlurMode = resolveHomeHeaderBlurModePreference(
+                    rawMode = preferences[KEY_HOME_HEADER_BLUR_MODE],
+                    legacyEnabled = preferences[KEY_HEADER_BLUR_ENABLED],
+                )
+                val blurIntensity = when (preferences[KEY_BLUR_INTENSITY]) {
+                    "THICK" -> BlurIntensity.THICK
+                    "APPLE_DOCK" -> BlurIntensity.APPLE_DOCK
+                    else -> BlurIntensity.THIN
+                }
+                val thumbMode = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.entries.firstOrNull {
+                    it.name == preferences[KEY_LIQUID_SWITCH_THUMB_MODE]
+                } ?: com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME
+                com.android.purebilibili.core.ui.AppThemeConfig(
+                    blurIntensity = blurIntensity,
+                    headerBlurEnabled = headerBlurMode != HomeHeaderBlurMode.ALWAYS_OFF,
+                    bottomBarBlurEnabled = preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] ?: false,
+                    progressiveTopBlurEnabled = preferences[KEY_PROGRESSIVE_TOP_BLUR_ENABLED] ?: false,
+                    progressiveTopFadeEnabled = preferences[KEY_PROGRESSIVE_TOP_FADE_ENABLED] ?: true,
+                    hapticFeedbackEnabled = preferences[KEY_HAPTIC_FEEDBACK_ENABLED] ?: true,
+                    hapticSettings = com.android.purebilibili.core.ui.AppHapticSettings(
+                        preferences[KEY_HAPTIC_SCENES_DISABLED] ?: 0
+                    ),
+                    globalTextTapCopyEnabled = preferences[KEY_GLOBAL_TEXT_TAP_COPY_ENABLED] ?: false,
+                    uiEntranceAnimationEnabled = preferences[KEY_UI_ENTRANCE_ANIMATION_ENABLED] ?: true,
+                    globalDragFeedbackEnabled = preferences[KEY_GLOBAL_DRAG_FEEDBACK_ENABLED] ?: true,
+                    runtimeVisualGuardEnabled = preferences[KEY_RUNTIME_VISUAL_GUARD_ENABLED] ?: true,
+                    nativeMiuixPopupsEnabled = preferences[
+                        com.android.purebilibili.core.store.player.PlayerSettingsStore.keyNativeMiuixPlayerPopups
+                    ] ?: true,
+                    liquidGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
+                        com.android.purebilibili.core.ui.AppLiquidGlassScene.OTHER_COMPONENTS
+                    ),
+                    playerGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
+                        com.android.purebilibili.core.ui.AppLiquidGlassScene.PLAYER_CONTROLS
+                    ),
+                    popupGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
+                        com.android.purebilibili.core.ui.AppLiquidGlassScene.MENUS_DIALOGS
+                    ),
+                    nowPlayingGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
+                        com.android.purebilibili.core.ui.AppLiquidGlassScene.NOW_PLAYING
+                    ),
+                    liquidControlsUseThemeColor = preferences[KEY_LIQUID_CONTROLS_USE_THEME_COLOR] ?: false,
+                    liquidSwitchThumbMode = thumbMode,
+                )
+            }
+            .distinctUntilChanged()
+
+    data class PlayerOverlaySettings(
+        val showFullscreenLockButton: Boolean = true,
+        val showFullscreenScreenshotButton: Boolean = true,
+        val showFullscreenBatteryLevel: Boolean = true,
+        val showFullscreenTime: Boolean = true,
+        val showFullscreenActionItems: Boolean = true,
+        val showOnlineCount: Boolean = false,
+        val chapterDisplayMode: ChapterDisplayMode = ChapterDisplayMode.WITH_CONTROLS,
+        val bottomProgressBehavior: BottomProgressBehavior = BottomProgressBehavior.ALWAYS_HIDE,
+        val playerControlVisibility: PlayerControlVisibilitySettings = PlayerControlVisibilitySettings(),
+        val progressPlacement: PlayerProgressPlacement = PlayerProgressPlacement.ABOVE_CONTROLS,
+        val playbackCompletionBehavior: PlaybackCompletionBehavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
+        val immersiveVideoPageStatusBar: Boolean = false,
+    )
+
+    /** 单次映射横屏/全屏播放控制层全部 UI 开关，避免 VideoPlayerOverlay 挂载十余个独立 DataStore 订阅。 */
+    fun getPlayerOverlaySettings(context: Context): Flow<PlayerOverlaySettings> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                PlayerOverlaySettings(
+                    showFullscreenLockButton = preferences[KEY_SHOW_FULLSCREEN_LOCK_BUTTON] ?: true,
+                    showFullscreenScreenshotButton = preferences[KEY_SHOW_FULLSCREEN_SCREENSHOT_BUTTON] ?: true,
+                    showFullscreenBatteryLevel = preferences[KEY_SHOW_FULLSCREEN_BATTERY_LEVEL] ?: true,
+                    showFullscreenTime = preferences[KEY_SHOW_FULLSCREEN_TIME] ?: true,
+                    showFullscreenActionItems = preferences[KEY_SHOW_FULLSCREEN_ACTION_ITEMS] ?: true,
+                    showOnlineCount = preferences[KEY_SHOW_ONLINE_COUNT] ?: false,
+                    chapterDisplayMode = ChapterDisplayMode.fromValue(
+                        preferences[KEY_CHAPTER_DISPLAY_MODE] ?: ChapterDisplayMode.WITH_CONTROLS.value
+                    ),
+                    bottomProgressBehavior = BottomProgressBehavior.fromValue(
+                        preferences[KEY_BOTTOM_PROGRESS_BEHAVIOR] ?: BottomProgressBehavior.ALWAYS_HIDE.value
+                    ),
+                    playerControlVisibility = PlayerControlVisibilitySettings(
+                        showCastButton = preferences[KEY_SHOW_PLAYER_CAST_BUTTON] ?: true,
+                        showFollowButton = preferences[KEY_SHOW_VIDEO_FOLLOW_BUTTON] ?: true,
+                        compactPlayerChrome = preferences[KEY_COMPACT_PLAYER_CHROME] ?: false,
+                    ),
+                    progressPlacement = PlayerProgressPlacement.fromValue(
+                        preferences[KEY_PLAYER_PROGRESS_PLACEMENT] ?: PlayerProgressPlacement.ABOVE_CONTROLS.value
+                    ),
+                    playbackCompletionBehavior = PlaybackCompletionBehavior.fromValue(
+                        preferences[KEY_PLAYBACK_COMPLETION_BEHAVIOR]
+                            ?: PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC.value
+                    ),
+                    immersiveVideoPageStatusBar = preferences[KEY_HIDE_VIDEO_PAGE_STATUS_BAR] ?: false,
+                )
+            }
+            .distinctUntilChanged()
+
+    data class PortraitPlayerSettings(
+        val longPressSpeed: Float = DEFAULT_LONG_PRESS_SPEED,
+        val longPressSpeedHintCloseEnabled: Boolean = false,
+        val longPressSpeedHintHidden: Boolean = false,
+        val longPressSpeedHintScale: Float = LONG_PRESS_SPEED_HINT_DEFAULT_SCALE,
+        val longPressSpeedHintAlpha: Float = LONG_PRESS_SPEED_HINT_DEFAULT_ALPHA,
+        val doubleTapSeekEnabled: Boolean = false,
+        val seekForwardSeconds: Int = 10,
+        val seekBackwardSeconds: Int = 10,
+        val pipNoDanmakuEnabled: Boolean = false,
+        val subtitleAutoPreference: SubtitleAutoPreference = SubtitleAutoPreference.OFF,
+        val letterboxAmbientHazeEnabled: Boolean = true,
+        val portraitHeatmapEnabled: Boolean = false,
+        val diagnosticLoggingEnabled: Boolean = DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED,
+    )
+
+    /** 单次映射竖屏播放流共享设置，由 PortraitVideoPager 顶层订阅一次后下发各页。 */
+    fun getPortraitPlayerSettings(context: Context): Flow<PortraitPlayerSettings> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                val rawSubtitle = preferences[KEY_SUBTITLE_AUTO_PREFERENCE] ?: SubtitleAutoPreference.OFF.ordinal
+                PortraitPlayerSettings(
+                    longPressSpeed = normalizeLongPressSpeed(
+                        preferences[com.android.purebilibili.core.store.player.longPressSpeedPreferenceKey]
+                            ?: DEFAULT_LONG_PRESS_SPEED
+                    ),
+                    longPressSpeedHintCloseEnabled = preferences[KEY_LONG_PRESS_SPEED_HINT_CLOSE_ENABLED] ?: false,
+                    longPressSpeedHintHidden = preferences[KEY_LONG_PRESS_SPEED_HINT_HIDDEN] ?: false,
+                    longPressSpeedHintScale = normalizeLongPressSpeedHintScale(
+                        preferences[KEY_LONG_PRESS_SPEED_HINT_SCALE] ?: LONG_PRESS_SPEED_HINT_DEFAULT_SCALE
+                    ),
+                    longPressSpeedHintAlpha = normalizeLongPressSpeedHintAlpha(
+                        preferences[KEY_LONG_PRESS_SPEED_HINT_ALPHA] ?: LONG_PRESS_SPEED_HINT_DEFAULT_ALPHA
+                    ),
+                    doubleTapSeekEnabled = preferences[KEY_DOUBLE_TAP_SEEK_ENABLED] ?: false,
+                    seekForwardSeconds = preferences[KEY_SEEK_FORWARD_SECONDS] ?: 10,
+                    seekBackwardSeconds = preferences[KEY_SEEK_BACKWARD_SECONDS] ?: 10,
+                    pipNoDanmakuEnabled = preferences[KEY_PIP_NO_DANMAKU] ?: false,
+                    subtitleAutoPreference = SubtitleAutoPreference.entries.getOrElse(rawSubtitle) {
+                        SubtitleAutoPreference.OFF
+                    },
+                    letterboxAmbientHazeEnabled = preferences[KEY_PORTRAIT_LETTERBOX_AMBIENT_HAZE] ?: true,
+                    portraitHeatmapEnabled = preferences[KEY_PROGRESS_PEAK_DANMAKU_ENABLED] ?: false,
+                    diagnosticLoggingEnabled = preferences[KEY_PLAYER_DIAGNOSTIC_LOGGING_ENABLED]
+                        ?: DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED,
+                )
+            }
+            .distinctUntilChanged()
+
+    /** 单次映射全局评论显示偏好，供 Activity 根组合消费。 */
+    fun getCommentDisplaySettings(context: Context): Flow<CommentDisplaySettings> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                CommentDisplaySettings(
+                    subReplyPreviewLikesEnabled = preferences[KEY_SUB_REPLY_PREVIEW_LIKES_ENABLED] ?: true,
+                    commentIpLocationEnabled = preferences[KEY_COMMENT_IP_LOCATION_ENABLED] ?: true,
+                    detailedCommentTimeEnabled = preferences[KEY_DETAILED_COMMENT_TIME_ENABLED] ?: false,
+                    commentReplyPreviewVisible = preferences[KEY_COMMENT_REPLY_PREVIEW_VISIBLE] ?: true,
+                )
+            }
+            .distinctUntilChanged()
+
     fun getSubReplyPreviewLikesEnabled(context: Context): Flow<Boolean> =
         context.settingsDataStore.data
             .map { preferences -> preferences[KEY_SUB_REPLY_PREVIEW_LIKES_ENABLED] ?: true }
+            .distinctUntilChanged()
 
     suspend fun setSubReplyPreviewLikesEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -7032,6 +7227,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getCommentIpLocationEnabled(context: Context): Flow<Boolean> =
         context.settingsDataStore.data
             .map { preferences -> preferences[KEY_COMMENT_IP_LOCATION_ENABLED] ?: true }
+            .distinctUntilChanged()
 
     suspend fun setCommentIpLocationEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -7042,11 +7238,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getDetailedCommentTimeEnabled(context: Context): Flow<Boolean> =
         context.settingsDataStore.data
             .map { preferences -> preferences[KEY_DETAILED_COMMENT_TIME_ENABLED] ?: false }
+            .distinctUntilChanged()
 
     /** 评论楼中楼预览是否显示；入口在评论右上角菜单，默认显示。 */
     fun getCommentReplyPreviewVisible(context: Context): Flow<Boolean> =
         context.settingsDataStore.data
             .map { preferences -> preferences[KEY_COMMENT_REPLY_PREVIEW_VISIBLE] ?: true }
+            .distinctUntilChanged()
 
     suspend fun setCommentReplyPreviewVisible(context: Context, visible: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -8204,11 +8402,14 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     fun getHideVideoPageStatusBar(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_HIDE_VIDEO_PAGE_STATUS_BAR] ?: false }
+        .distinctUntilChanged()
         .onEach { enabledFromDataStore ->
-            context.getSharedPreferences(VIDEO_PAGE_STATUS_BAR_CACHE_PREFS, Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean(CACHE_KEY_HIDE_VIDEO_PAGE_STATUS_BAR, enabledFromDataStore)
-                .apply()
+            val prefs = context.getSharedPreferences(VIDEO_PAGE_STATUS_BAR_CACHE_PREFS, Context.MODE_PRIVATE)
+            if (prefs.getBoolean(CACHE_KEY_HIDE_VIDEO_PAGE_STATUS_BAR, !enabledFromDataStore) != enabledFromDataStore) {
+                prefs.edit()
+                    .putBoolean(CACHE_KEY_HIDE_VIDEO_PAGE_STATUS_BAR, enabledFromDataStore)
+                    .apply()
+            }
         }
 
     suspend fun setHideVideoPageStatusBar(context: Context, enabled: Boolean) {
