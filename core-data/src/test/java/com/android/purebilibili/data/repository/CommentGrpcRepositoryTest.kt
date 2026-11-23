@@ -92,6 +92,7 @@ class CommentGrpcRepositoryTest {
         val member = ProtoWire.message(
             ProtoWire.int64(1, 42L),
             ProtoWire.string(2, "测试用户"),
+            ProtoWire.string(3, "男"),
             ProtoWire.string(4, "https://example.com/avatar.jpg"),
             ProtoWire.int64(5, 6L),
             ProtoWire.int64(6, 1L),
@@ -173,6 +174,7 @@ class CommentGrpcRepositoryTest {
         assertEquals(777L, first.rpid)
         assertEquals(1, first.action)
         assertEquals("测试用户", first.member.uname)
+        assertEquals("男", first.member.sex)
         assertEquals(6, first.member.levelInfo.currentLevel)
         assertEquals(1, first.member.officialVerify.type)
         assertEquals(1, first.member.vip?.vipStatus)

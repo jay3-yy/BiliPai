@@ -530,6 +530,7 @@ object CommentGrpcRepository {
     private fun parseMember(bytes: ByteArray): com.android.purebilibili.data.model.response.ReplyMember {
         var mid = 0L
         var name = ""
+        var sex = ""
         var face = ""
         var level = 0
         var vipType = 0
@@ -551,6 +552,7 @@ object CommentGrpcRepository {
             when (field.number) {
                 1 -> mid = field.varint
                 2 -> name = ProtoWire.stringValue(field)
+                3 -> sex = ProtoWire.stringValue(field)
                 4 -> face = ProtoWire.stringValue(field)
                 5 -> level = field.varint.toInt()
                 6 -> officialVerifyType = field.varint.toInt()
@@ -573,6 +575,7 @@ object CommentGrpcRepository {
         return com.android.purebilibili.data.model.response.ReplyMember(
             mid = mid.toString(),
             uname = name.ifBlank { "未知用户" },
+            sex = sex,
             avatar = face,
             isSeniorMember = isSeniorMember,
             levelInfo = ReplyLevelInfo(currentLevel = level),

@@ -297,6 +297,9 @@ data class ReplyMember(
     val mid: String = "0",
     @Serializable(with = FlexibleStringSerializer::class)
     val uname: String = "未知用户",
+    // "男" / "女" / "保密"；为空表示用户未公开
+    @Serializable(with = FlexibleStringSerializer::class)
+    val sex: String = "",
     @Serializable(with = FlexibleStringSerializer::class)
     val avatar: String = "",
     @Serializable(with = FlexibleIntSerializer::class)
