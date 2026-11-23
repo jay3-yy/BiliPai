@@ -92,8 +92,8 @@ data class PiliPlayerMenuSession(
     val onDownloadVideo: (() -> Unit)?,
     val sleepTimerMinutes: Int?,
     val onSleepTimerChange: (Int?) -> Unit,
-    val sleepWaitForVideoEnd: Boolean,
-    val onSleepWaitForVideoEndChange: (Boolean) -> Unit,
+    val sleepWaitForCurrentVideoEnd: Boolean,
+    val onSleepWaitForCurrentVideoEndChange: (Boolean) -> Unit,
     val sleepExitApp: Boolean,
     val onSleepExitAppChange: (Boolean) -> Unit,
     val cdnServiceLabels: List<String>,
@@ -145,8 +145,6 @@ fun rememberPiliPlayerMenuSession(
     val backgroundSession = com.android.purebilibili.feature.video.player.rememberPlayerBackgroundPlaybackSession(player, backgroundKey)
     val backgroundOverride by backgroundSession.selection.collectAsStateWithLifecycle()
     val backgroundEnabled = backgroundOverride ?: savedBackgroundEnabled
-    val waitForEnd by remember(context) { PiliPlayerMenuStore.sleepWaitForEnd(context) }
-        .collectAsStateWithLifecycle<Boolean?>(initialValue = null)
     val exitApp by remember(context) { PiliPlayerMenuStore.sleepExitApp(context) }
         .collectAsStateWithLifecycle<Boolean?>(initialValue = null)
     val currentIdentity by rememberUpdatedState(bvid to cid)
@@ -269,12 +267,14 @@ fun rememberPiliPlayerMenuSession(
     val timerMinutes by remember(sleepTimer) {
         sleepTimer?.minutes ?: kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
     }.collectAsStateWithLifecycle()
+    val waitForCurrentEnd by remember(sleepTimer) {
+        sleepTimer?.waitingForCurrentVideoEnd ?: kotlinx.coroutines.flow.MutableStateFlow(false)
+    }.collectAsStateWithLifecycle()
     val timerActivity = remember(context) { context.findPiliActivity() }
     LaunchedEffect(sleepTimer, timerActivity) {
         sleepTimer?.attachActivity(timerActivity)
     }
     SideEffect {
-        waitForEnd?.let { sleepTimer?.waitForEnd = it }
         exitApp?.let { sleepTimer?.exitApp = it }
     }
 
@@ -348,10 +348,22 @@ fun rememberPiliPlayerMenuSession(
             if (sleepTimer != null) sleepTimer.setTimer(minutes)
             else Toast.makeText(context, "尚无活动播放器", Toast.LENGTH_SHORT).show()
         },
-        sleepWaitForVideoEnd = waitForEnd ?: sleepTimer?.waitForEnd ?: false,
-        onSleepWaitForVideoEndChange = { value -> scope.launch { PiliPlayerMenuStore.setSleepWaitForEnd(context, value) } },
+        sleepWaitForCurrentVideoEnd = waitForCurrentEnd,
+        onSleepWaitForCurrentVideoEndChange = { enabled ->
+            if (sleepTimer == null) {
+                Toast.makeText(context, "尚无活动播放器", Toast.LENGTH_SHORT).show()
+            } else if (enabled) {
+                sleepTimer.exitApp = exitApp ?: false
+                sleepTimer.waitForCurrentVideoEnd()
+            } else {
+                sleepTimer.setTimer(null)
+            }
+        },
         sleepExitApp = exitApp ?: sleepTimer?.exitApp ?: false,
-        onSleepExitAppChange = { value -> scope.launch { PiliPlayerMenuStore.setSleepExitApp(context, value) } },
+        onSleepExitAppChange = { value ->
+            sleepTimer?.exitApp = value
+            scope.launch { PiliPlayerMenuStore.setSleepExitApp(context, value) }
+        },
         cdnServiceLabels = cdnLabels,
         currentCdnServiceIndex = cdnService.ordinal,
         onCdnServiceSelected = if (player != null || actions.onReplacePlaybackSources != null) ({ index ->
