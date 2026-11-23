@@ -287,6 +287,52 @@ class SpaceAggregatedModelMappingTest {
     }
 
     @Test
+    fun `resolveSpaceInitialSeedFromAggregate formats archive duration when length is blank`() {
+        val seed = resolveSpaceInitialSeedFromAggregate(
+            data = SpaceAggregateData(
+                card = SpaceAggregateCard(
+                    mid = "88",
+                    name = "duration-up",
+                    face = "https://i0.hdslb.com/bfs/face/duration.jpg",
+                    levelInfo = SpaceAggregateLevelInfo(currentLevel = 5)
+                ),
+                archive = SpaceAggregateArchive(
+                    count = 3,
+                    item = listOf(
+                        SpaceAggregateArchiveItem(
+                            aid = 1L,
+                            bvid = "BV1short",
+                            title = "短片",
+                            length = "",
+                            duration = 312
+                        ),
+                        SpaceAggregateArchiveItem(
+                            aid = 2L,
+                            bvid = "BV1long",
+                            title = "长片",
+                            length = " ",
+                            duration = 3665
+                        ),
+                        SpaceAggregateArchiveItem(
+                            aid = 3L,
+                            bvid = "BV1explicit",
+                            title = "自带时长",
+                            length = "08:20",
+                            duration = 999
+                        )
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("05:12", "01:01:05", "08:20"),
+            seed?.videos?.map { it.length }
+        )
+        assertEquals("", resolveSpaceAggregateVideoLength(SpaceAggregateArchiveItem(length = "", duration = 0)))
+    }
+
+    @Test
     fun `resolveSpaceInitialSeedFromAggregate returns null when card identity is missing`() {
         val seed = resolveSpaceInitialSeedFromAggregate(
             data = SpaceAggregateData(

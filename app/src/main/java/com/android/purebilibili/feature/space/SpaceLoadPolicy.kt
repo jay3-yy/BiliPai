@@ -869,6 +869,16 @@ internal fun shouldContinueSpaceBangumiPagination(
     return responsePage.coerceAtLeast(1) * pageSize.coerceAtLeast(1) < total
 }
 
+internal fun resolveSpaceAggregateVideoLength(item: SpaceAggregateArchiveItem): String {
+    val normalizedLength = item.length.trim()
+    if (normalizedLength.isNotBlank()) return normalizedLength
+    return if (item.duration > 0) {
+        com.android.purebilibili.core.util.FormatUtils.formatDuration(item.duration)
+    } else {
+        ""
+    }
+}
+
 private fun mapSpaceAggregateVideoItem(item: SpaceAggregateArchiveItem): SpaceVideoItem {
     return SpaceVideoItem(
         isCooperation = item.isCooperation,
@@ -882,7 +892,7 @@ private fun mapSpaceAggregateVideoItem(item: SpaceAggregateArchiveItem): SpaceVi
         pic = item.cover,
         play = item.play,
         comment = item.reply,
-        length = item.length,
+        length = resolveSpaceAggregateVideoLength(item),
         created = item.ctime,
         author = item.author,
         typename = item.tname

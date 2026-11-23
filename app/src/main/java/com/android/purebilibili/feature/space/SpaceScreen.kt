@@ -4863,6 +4863,9 @@ private fun SpaceAggregateMediaCard(
             .diskCacheKey(stationaryCoverUrl)
             .build()
     }
+    val durationText = remember(item.length, item.duration) {
+        resolveSpaceAggregateVideoLength(item)
+    }
     val coverShape = AppShapes.mediaCover()
     val cardCornerRadiusDp = AppShapes.containerCornerDp(ContainerLevel.Card).value.roundToInt()
     val coverModifier = Modifier.spaceVideoCoverSharedBounds(
@@ -4906,7 +4909,7 @@ private fun SpaceAggregateMediaCard(
                         ownerFaceUrl = "",
                         viewText = FormatUtils.formatStat(item.play.toLong()),
                         danmakuText = FormatUtils.formatStat(item.danmaku.toLong()),
-                        durationText = item.length,
+                        durationText = durationText,
                         infoPresentation = com.android.purebilibili.core.ui.transition
                             .resolveVideoCardSourceInfoPresentation(
                                 publishTimeText = "",
@@ -4940,9 +4943,9 @@ private fun SpaceAggregateMediaCard(
                 labels = item.statusLabels + listOfNotNull(sponsorStatusLabel),
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
             )
-            if (item.length.isNotBlank()) {
+            if (durationText.isNotBlank()) {
                 VideoCardCoverDurationText(
-                    text = item.length,
+                    text = durationText,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(8.dp),
