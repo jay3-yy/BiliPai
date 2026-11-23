@@ -153,6 +153,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.rounded.Close
 import com.android.purebilibili.core.util.FormatUtils
@@ -1237,10 +1238,9 @@ fun WatchLaterScreen(
                                     }
                                 ),
                             ) {
-                                AppText(
-                                    state.sortOrder.label,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                    tapToCopyEnabled = false,
+                                AppIcon(
+                                    imageVector = Icons.AutoMirrored.Outlined.Sort,
+                                    contentDescription = "排序：${state.sortOrder.label}",
                                 )
                             }
                         }
