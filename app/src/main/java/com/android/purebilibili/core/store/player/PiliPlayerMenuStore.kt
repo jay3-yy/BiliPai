@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.map
 /** Player amplification is independent of Android's music-stream volume. */
 object PiliPlayerMenuStore {
     private val amplificationKey = floatPreferencesKey("pili_player_amplification")
-    private val waitForEndKey = booleanPreferencesKey("pili_sleep_wait_for_end")
     private val exitAppKey = booleanPreferencesKey("pili_sleep_exit_app")
     // 与设置页共用同一个 key。原先播放界面单独存 "pili_player_cdn_service"，
     // 和设置页的 "playback_cdn_preference" 互不相通，表现为「设置里选了 ali，
@@ -60,10 +59,6 @@ object PiliPlayerMenuStore {
     }
     suspend fun setAmplification(context: Context, value: Float) {
         context.settingsDataStore.edit { it[amplificationKey] = value.coerceIn(1f, 3f) }
-    }
-    fun sleepWaitForEnd(context: Context): Flow<Boolean> = context.settingsDataStore.data.map { it[waitForEndKey] ?: false }
-    suspend fun setSleepWaitForEnd(context: Context, value: Boolean) {
-        context.settingsDataStore.edit { it[waitForEndKey] = value }
     }
     fun sleepExitApp(context: Context): Flow<Boolean> = context.settingsDataStore.data.map { it[exitAppKey] ?: false }
     suspend fun setSleepExitApp(context: Context, value: Boolean) {

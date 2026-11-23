@@ -338,8 +338,8 @@ internal fun VideoSettingsPanel(
     isBackgroundPlaybackEnabled: Boolean = false,
     onBackgroundPlaybackChange: ((Boolean) -> Unit)? = null,
     availableCodecIds: List<String> = emptyList(),
-    sleepWaitForVideoEnd: Boolean = false,
-    onSleepWaitForVideoEndChange: ((Boolean) -> Unit)? = null,
+    sleepWaitForCurrentVideoEnd: Boolean = false,
+    onSleepWaitForCurrentVideoEndChange: ((Boolean) -> Unit)? = null,
     sleepExitApp: Boolean = false,
     onSleepExitAppChange: ((Boolean) -> Unit)? = null,
     cdnServiceLabels: List<String> = emptyList(),
@@ -490,7 +490,11 @@ internal fun VideoSettingsPanel(
                 }
                 put(SAVE_COVER) { PlayerSettingsRow(SAVE_COVER.title) { dismissWithAction(onSaveCover) } }
                 put(SLEEP_TIMER) {
-                    PlayerSettingsRow(SLEEP_TIMER.title, formatPlayerMenuTimerValue(sleepTimerMinutes)) { page = "sleep" }
+                    PlayerSettingsRow(
+                        SLEEP_TIMER.title,
+                        if (sleepWaitForCurrentVideoEnd) "播完当前视频"
+                        else formatPlayerMenuTimerValue(sleepTimerMinutes),
+                    ) { page = "sleep" }
                 }
                 put(AB_LOOP) {
                     PlayerSettingsRow(
@@ -845,7 +849,7 @@ internal fun VideoSettingsPanel(
                         }
                         "sleep" -> PlayerSleepTimerSettings(
                             sleepTimerMinutes, onSleepTimerChange,
-                            sleepWaitForVideoEnd, onSleepWaitForVideoEndChange,
+                            sleepWaitForCurrentVideoEnd, onSleepWaitForCurrentVideoEndChange,
                             sleepExitApp, onSleepExitAppChange, onDismiss,
                         )
                         "quality" -> qualityLabels.forEachIndexed { index, label ->

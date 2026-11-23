@@ -5,6 +5,8 @@ import android.content.Context
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import com.android.purebilibili.feature.video.player.PlayerBackgroundPlaybackSessions
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
 import kotlinx.coroutines.CoroutineScope
@@ -23,20 +25,14 @@ internal class PiliPlayerSleepTimer private constructor(player: Player, context:
     private var activityRef = WeakReference<Activity>(null)
     private val selectedMinutes = MutableStateFlow<Int?>(null)
     val minutes = selectedMinutes.asStateFlow()
+    private val waitingForCurrentEnd = MutableStateFlow(false)
+    val waitingForCurrentVideoEnd = waitingForCurrentEnd.asStateFlow()
     private var job: Job? = null
     private var waiting = false
-    var waitForEnd: Boolean = false
-        set(value) {
-            field = value
-            if (!value && waiting) finish()
-        }
     var exitApp: Boolean = false
     private val endedListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
-            // 到点后暂停、空闲、错误或自然结束都不再无限等待。
-            if (waiting && !shouldWaitForSleepTimerEnd(
-                    waitForEnd = true,
-                    playWhenReady = player.playWhenReady,
+            if (waiting && shouldFinishWaitingForCurrentVideoEnd(
                     playbackState = player.playbackState,
                     hasError = player.playerError != null,
                 )) finish()
@@ -61,18 +57,25 @@ internal class PiliPlayerSleepTimer private constructor(player: Player, context:
         val deadline = SystemClock.elapsedRealtime() + duration * 60_000L
         job = scope.launch {
             delay((deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
-            val player = playerRef.get()
-            if (player == null) { cancel(); return@launch }
-            if (shouldWaitForSleepTimerEnd(
-                    waitForEnd = waitForEnd,
-                    playWhenReady = player.playWhenReady,
-                    playbackState = player.playbackState,
-                    hasError = player.playerError != null,
-                )) {
-                waiting = true
-                player.addListener(endedListener)
-            } else finish()
+            if (playerRef.get() == null) { cancel(); return@launch }
+            finish()
         }
+    }
+
+    /** 立即进入“播完当前视频”模式；不等待倒计时。 */
+    fun waitForCurrentVideoEnd() {
+        cancel()
+        val player = playerRef.get() ?: return
+        if (shouldFinishWaitingForCurrentVideoEnd(
+                playbackState = player.playbackState,
+                hasError = player.playerError != null,
+            )) {
+            finish()
+            return
+        }
+        waiting = true
+        waitingForCurrentEnd.value = true
+        player.addListener(endedListener)
     }
 
     private fun cancel() {
@@ -81,15 +84,18 @@ internal class PiliPlayerSleepTimer private constructor(player: Player, context:
         waiting = false
         playerRef.get()?.removeListener(endedListener)
         selectedMinutes.value = null
+        waitingForCurrentEnd.value = false
     }
 
     private fun finish() {
         // 先清理等待监听，再暂停，避免播放状态回调重入 finish。
         val player = playerRef.get()
         cancel()
-        player?.pause()
-        if (exitApp) activityRef.get()?.finishAffinity()
-        else Toast.makeText(appContext, "定时结束，已暂停播放", Toast.LENGTH_SHORT).show()
+        val exoPlayer = player as? ExoPlayer
+        if (exoPlayer != null) PlayerBackgroundPlaybackSessions.pauseForSleepTimer(exoPlayer)
+        else player?.pause()
+        if (exitApp) activityRef.get()?.finishAndRemoveTask()
+        else Toast.makeText(appContext, "已暂停播放", Toast.LENGTH_SHORT).show()
     }
 
     companion object {
@@ -100,11 +106,8 @@ internal class PiliPlayerSleepTimer private constructor(player: Player, context:
     }
 }
 
-/** 仅对仍请求播放且能够继续到结尾的会话等待本集结束。 */
-internal fun shouldWaitForSleepTimerEnd(
-    waitForEnd: Boolean,
-    playWhenReady: Boolean,
+/** 只有自然结束或播放错误才结束等待；用户暂停不触发退出。 */
+internal fun shouldFinishWaitingForCurrentVideoEnd(
     playbackState: Int,
     hasError: Boolean,
-): Boolean = waitForEnd && playWhenReady && !hasError &&
-    (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING)
+): Boolean = hasError || playbackState == Player.STATE_ENDED

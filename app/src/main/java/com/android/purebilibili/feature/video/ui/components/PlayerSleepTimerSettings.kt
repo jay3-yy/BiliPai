@@ -24,8 +24,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 internal fun PlayerSleepTimerSettings(
     minutes: Int?,
     onMinutesChange: (Int?) -> Unit,
-    waitForVideoEnd: Boolean,
-    onWaitForVideoEndChange: ((Boolean) -> Unit)?,
+    waitForCurrentVideoEnd: Boolean,
+    onWaitForCurrentVideoEndChange: ((Boolean) -> Unit)?,
     exitApp: Boolean,
     onExitAppChange: ((Boolean) -> Unit)?,
     onPresetSelected: () -> Unit,
@@ -43,14 +43,18 @@ internal fun PlayerSleepTimerSettings(
         )
     }
     PlayerSettingsRow("自定义") { custom = true }
-    onWaitForVideoEndChange?.let { change ->
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("额外等待视频播放完毕", Modifier.weight(1f), fontSize = 14.sp)
-            Switch(waitForVideoEnd, change)
-        }
+    onWaitForCurrentVideoEndChange?.let { change ->
+        ListItem(
+            headlineContent = { Text("播放完当前视频", fontSize = 14.sp) },
+            supportingContent = { Text("开启后无需倒计时；播完当前视频再执行下方操作", style = MaterialTheme.typography.bodySmall) },
+            trailingContent = { Switch(waitForCurrentVideoEnd, change) },
+        )
     }
     onExitAppChange?.let { change ->
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             FilterChip(!exitApp, { change(false) }, label = { Text("暂停视频") })
             FilterChip(exitApp, { change(true) }, label = { Text("退出APP") })
         }
