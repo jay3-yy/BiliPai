@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.dynamic.components
 
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
+import com.android.purebilibili.core.ui.adaptive.adaptiveExternalTextDragSource
+import com.android.purebilibili.core.ui.adaptive.buildDynamicDragShareText
 import com.android.purebilibili.core.ui.AppContentColors
 
 import coil3.network.NetworkHeaders
@@ -44,6 +46,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.MaterialTheme
@@ -559,6 +562,26 @@ fun DynamicCardV2(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = resolveDynamicCardOuterPadding())
+            .then(
+                if (!isDetail) {
+                    Modifier.adaptiveExternalTextDragSource(
+                            label = "BiliPai Dynamic",
+                            textProvider = {
+                                buildDynamicDragShareText(
+                                    dynamicId = item.id_str,
+                                    summary = visibleDynamicDesc?.text.orEmpty(),
+                                )
+                            },
+                            previewTitleProvider = {
+                                visibleDynamicDesc?.text?.takeIf { it.isNotBlank() }
+                                    ?: author?.name?.takeIf { it.isNotBlank() }?.let { "${it}的动态" }
+                                    ?: "动态 ${item.id_str}"
+                            },
+                        )
+                } else {
+                    Modifier
+                }
+            )
             .then(wallpaperSurface)
     ) {
         Column(
@@ -704,6 +727,7 @@ fun DynamicCardV2(
                     remember(item) { resolveDynamicFullText(item) }
                 } else ""
                 val copyFullText = if (fullText.isNotBlank()) rememberClipboardCopyHandler() else null
+                val offerTranslation = remember(fullText) { shouldOfferDynamicTranslation(fullText) }
                 AppWindowActionMenu(
                     groups = listOf(
                         buildList {
@@ -732,6 +756,23 @@ fun DynamicCardV2(
                                         label = "复制全文",
                                         icon = Icons.Outlined.ContentCopy,
                                         onClick = { copyFullText(fullText, "动态全文") },
+                                    )
+                                )
+                            }
+                            if (offerTranslation) {
+                                add(
+                                    AppWindowAction(
+                                        label = "翻译正文",
+                                        icon = Icons.Outlined.Translate,
+                                        onClick = {
+                                            if (!launchSystemTextTranslation(context, fullText)) {
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "未找到系统翻译应用",
+                                                    android.widget.Toast.LENGTH_SHORT,
+                                                ).show()
+                                            }
+                                        },
                                     )
                                 )
                             }

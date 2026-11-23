@@ -345,6 +345,7 @@ fun DynamicSidebar(
                         SidebarUserItem(
                             user = allUser,
                             selfUid = selfUid,
+                            selectedUserId = selectedUserId,
                             isSelected = selectedUserId == null,
                             showLabel = isExpanded,
                             allowManageMenu = false,
@@ -440,6 +441,7 @@ fun DynamicSidebar(
                             SidebarUserItem(
                                 user = user,
                                 selfUid = selfUid,
+                                selectedUserId = selectedUserId,
                                 isSelected = isDynamicUpPanelItemSelected(selectedUserId, user.uid),
                                 showLabel = isExpanded,
                                 showUnreadBadge = user.uid in uplistUpdateMids,
@@ -658,6 +660,7 @@ fun SidebarUserItem(
     selfUid: Long,
     isSelected: Boolean,
     showLabel: Boolean,
+    selectedUserId: Long? = null,
     showUnreadBadge: Boolean = false,
     allowManageMenu: Boolean = true,
     onClick: () -> Unit,
@@ -673,6 +676,16 @@ fun SidebarUserItem(
     val accentColor = navigationColors?.selectedContent
         ?: AppContentColors.selectionAccent(LocalAppThemeConfig.current.liquidGlassEnabled)
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
+    val targetAlpha = com.android.purebilibili.feature.dynamic.resolveDynamicUpPanelItemAlpha(
+        selectedUserId = selectedUserId,
+        itemUid = user.uid,
+        isLive = user.isLive,
+        isHidden = user.isHidden,
+    )
+    val animatedAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = targetAlpha,
+        label = "sidebarUserFocusAlpha",
+    )
 
     DynamicUserMenuAnchor(user, enabled = allowManageMenu, onOpen = { showMenu = true }) { avatarModifier, menuSource ->
         Column(
@@ -692,7 +705,7 @@ fun SidebarUserItem(
                     onLongClick = if (glassMenuAvailable) null else ({ if (allowManageMenu) showMenu = true })
                 )
                 .padding(vertical = AppSpacingTokens.Small) // 内部间距
-                .alpha(if (user.isHidden) 0.5f else 1f)
+                .graphicsLayer { alpha = animatedAlpha }
         ) {
             DynamicUserAvatarWithLiveBadge(
                 user = user,
@@ -703,9 +716,10 @@ fun SidebarUserItem(
                         AppText(
                             text = displayName,
                             fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (isSelected) accentColor else AppContentColors.primaryText(),
-                            maxLines = 1,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) accentColor else AppContentColors.secondaryText(),
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(horizontal = AppSpacingTokens.Micro)
                         )
@@ -722,8 +736,8 @@ fun SidebarUserItem(
                                     navigationColors?.selectedContainer ?: accentColor.copy(alpha = 0.12f),
                                     CircleShape
                                 )
+                                isSelected -> Modifier.border(2.dp, accentColor, CircleShape)
                                 user.isLive -> Modifier.border(1.5.dp, AppContentColors.accent(), CircleShape)
-                                isSelected -> Modifier.border(AppSpacingTokens.Micro / 2, accentColor, CircleShape)
                                 else -> Modifier.border(AppSpacingTokens.Micro / 2, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
                             }
                         )

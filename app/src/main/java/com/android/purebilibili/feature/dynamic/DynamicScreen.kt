@@ -71,6 +71,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.Offset
@@ -248,6 +249,81 @@ fun DynamicScreen(
     val selfUser by viewModel.selfUser.collectAsStateWithLifecycle()
     val selfUid = accountIdentity.mid ?: 0L
     var showAuthorSearch by rememberSaveable(selfUid) { mutableStateOf(false) }
+    var showFilterSheet by remember(selfUid) { mutableStateOf(false) }
+    val persistedFeedTypeFilters by remember(context) {
+        com.android.purebilibili.core.store.home.DynamicSettingsStore.observeFeedTypeFilters(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.home.DynamicFeedTypeFilterPreferences()
+    )
+    var selectedFollowGroupTagId by remember(selfUid) { mutableStateOf<Long?>(null) }
+    val feedFilterState = remember(selectedFollowGroupTagId, persistedFeedTypeFilters) {
+        DynamicFeedFilterState(
+            selectedFollowGroupTagId = selectedFollowGroupTagId,
+            hideForward = persistedFeedTypeFilters.hideForward,
+            hideLottery = persistedFeedTypeFilters.hideLottery,
+            hideGoods = persistedFeedTypeFilters.hideGoods,
+            hideReserve = persistedFeedTypeFilters.hideReserve,
+            hideArticle = persistedFeedTypeFilters.hideArticle,
+            hideLiveRcmd = persistedFeedTypeFilters.hideLiveRcmd,
+        )
+    }
+    var followGroups by remember(selfUid) { mutableStateOf<List<com.android.purebilibili.data.model.response.RelationTagItem>>(emptyList()) }
+    var followGroupMembersCache by remember(selfUid) { mutableStateOf<Map<Long, Set<Long>>>(emptyMap()) }
+    var loadingGroupTagIds by remember(selfUid) { mutableStateOf<Set<Long>>(emptySet()) }
+    val selectedFollowGroupMembers = feedFilterState.selectedFollowGroupTagId?.let { followGroupMembersCache[it] }
+    val isLoadingSelectedGroupMembers = feedFilterState.selectedFollowGroupTagId?.let { it in loadingGroupTagIds } == true
+    val openFilterSheet: () -> Unit = {
+        showFilterSheet = true
+        if (followGroups.isEmpty() && selfUid > 0L) {
+            val requestUid = selfUid
+            dynamicMenuScope.launch {
+                com.android.purebilibili.data.repository.ActionRepository.getFollowGroupTags().onSuccess { tags ->
+                    if (TokenManager.accountIdentity.value.mid == requestUid) {
+                        followGroups = tags
+                            .filter { it.tagid != 0L }
+                            .sortedBy { it.tagid != -10L }
+                    }
+                }
+            }
+        }
+    }
+    val selectFollowGroup: (Long?) -> Unit = { tagId ->
+        selectedFollowGroupTagId = tagId
+        if (tagId != null && !followGroupMembersCache.containsKey(tagId) && tagId !in loadingGroupTagIds) {
+            val requestUid = selfUid
+            loadingGroupTagIds = loadingGroupTagIds + tagId
+            dynamicMenuScope.launch {
+                try {
+                    com.android.purebilibili.data.repository.ActionRepository.getFollowGroupMemberMids(tagId)
+                        .onSuccess { mids ->
+                            if (TokenManager.accountIdentity.value.mid == requestUid) {
+                                followGroupMembersCache = followGroupMembersCache + (tagId to mids)
+                            }
+                        }
+                } finally {
+                    if (TokenManager.accountIdentity.value.mid == requestUid) {
+                        loadingGroupTagIds = loadingGroupTagIds - tagId
+                    }
+                }
+            }
+        }
+    }
+    val updateFeedTypeFilter: (DynamicFeedFilterState) -> Unit = { next ->
+        selectedFollowGroupTagId = next.selectedFollowGroupTagId
+        dynamicMenuScope.launch {
+            com.android.purebilibili.core.store.home.DynamicSettingsStore.setFeedTypeFilters(
+                context = context,
+                filters = com.android.purebilibili.core.store.home.DynamicFeedTypeFilterPreferences(
+                    hideForward = next.hideForward,
+                    hideLottery = next.hideLottery,
+                    hideGoods = next.hideGoods,
+                    hideReserve = next.hideReserve,
+                    hideArticle = next.hideArticle,
+                    hideLiveRcmd = next.hideLiveRcmd,
+                ),
+            )
+        }
+    }
     val authorSearchSource = com.android.purebilibili.core.ui.components.rememberAppGlassMenuSource()
     var authorFeedTabEnabled by rememberSaveable(selfUid) { mutableStateOf(false) }
     val authorSearchLoading by viewModel.authorSearchLoading.collectAsStateWithLifecycle()
@@ -294,6 +370,12 @@ fun DynamicScreen(
         mutableStateOf(com.android.purebilibili.data.model.response.DynamicPublishDraft(text = ""))
     }
     var pendingReport by remember { mutableStateOf<com.android.purebilibili.feature.dynamic.components.DynamicManageAction.Report?>(null) }
+    var pendingQuickFilterFeedback by remember(selfUid) {
+        mutableStateOf<com.android.purebilibili.feature.plugin.QuickContentFilterTarget?>(null)
+    }
+    var editingQuickFilterTarget by remember(selfUid) {
+        mutableStateOf<com.android.purebilibili.feature.plugin.QuickContentFilterTarget?>(null)
+    }
     val manageActionCallback: (com.android.purebilibili.feature.dynamic.components.DynamicManageAction) -> Unit = { action ->
         com.android.purebilibili.feature.dynamic.components.dispatchDynamicManageAction(
             action = action,
@@ -305,9 +387,16 @@ fun DynamicScreen(
                 editingDraft = it.initialDraft
                 showPublishDialog = true
             },
-            onNotInterested = {
-                viewModel.handleManageAction(it) { _, message ->
-                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            onNotInterested = { notInterested ->
+                val matchedItem = (state.items + state.userItems + state.timelinePages.values.flatMap { it.items })
+                    .firstOrNull { it.id_str == notInterested.dynamicId }
+                viewModel.handleManageAction(notInterested) { success, message ->
+                    if (success && matchedItem != null) {
+                        pendingQuickFilterFeedback =
+                            com.android.purebilibili.feature.plugin.QuickContentFilterTarget.fromDynamic(matchedItem)
+                    } else {
+                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 }
             },
             onOther = {
@@ -874,7 +963,18 @@ fun DynamicScreen(
                                     .verticalPriorityHorizontalPagerSwipe(pagerState),
                                 key = { page -> resolveDynamicPagerTabKey(visibleTabs, page) }
                             ) { page ->
-                                val tab = visibleTabs.getOrNull(page) ?: return@HorizontalPager
+                                val pageScrollBarAllowed = remember(pagerState, page) {
+                                    derivedStateOf {
+                                        pagerState.settledPage == page && !pagerState.isScrollInProgress
+                                    }
+                                }
+                                CompositionLocalProvider(
+                                    com.android.purebilibili.core.ui.components.LocalScrollBarAllowed provides (
+                                        com.android.purebilibili.core.ui.components.LocalScrollBarAllowed.current &&
+                                            pageScrollBarAllowed.value
+                                    )
+                                ) {
+                                val tab = visibleTabs.getOrNull(page) ?: return@CompositionLocalProvider
                                 val pageListState = requireNotNull(listStates[tab.logicalIndex])
                                 val pagePresentation = remember(
                                     state,
@@ -883,12 +983,28 @@ fun DynamicScreen(
                                 ) {
                                     resolveDynamicPagePresentation(state, tab.logicalIndex, selectedUserId)
                                 }
-                                val pageDividerIndex = remember(pagePresentation) {
+                                val pageFilteredItems = remember(
+                                    pagePresentation.items,
+                                    feedFilterState,
+                                    selectedFollowGroupMembers,
+                                ) {
+                                    filterDynamicFeedItems(
+                                        items = pagePresentation.items,
+                                        filter = feedFilterState,
+                                        selectedGroupMemberMids = selectedFollowGroupMembers,
+                                    )
+                                }
+                                LaunchedEffect(pagePresentation.items, feedFilterState) {
+                                    if (feedFilterState.hasTypeFilter) {
+                                        recordFilteredDynamicFeedTypeHits(pagePresentation.items, feedFilterState)
+                                    }
+                                }
+                                val pageDividerIndex = remember(pagePresentation, pageFilteredItems) {
                                     if (pagePresentation.isSelectedUserFeed) {
                                         -1
                                     } else {
                                         resolveOldContentDividerIndex(
-                                            displayKeys = pagePresentation.items.map(::dynamicFeedItemKey),
+                                            displayKeys = pageFilteredItems.map(::dynamicFeedItemKey),
                                             boundaryKey = pagePresentation.incrementalRefreshBoundaryKey,
                                             showDivider = pagePresentation.incrementalPrependedCount > 0
                                         )
@@ -927,7 +1043,7 @@ fun DynamicScreen(
                                         onOpenSelectedUser = {
                                             selectedUserId?.takeIf { it > 0L }?.let(onUserClick)
                                         },
-                                        filteredItems = pagePresentation.items,
+                                        filteredItems = pageFilteredItems,
                                         listState = pageListState,
                                         statusBarHeight = statusBarHeight,
                                         topPaddingExtra = pageListTopExtra,
@@ -977,6 +1093,7 @@ fun DynamicScreen(
                                         modifier = Modifier.nestedScroll(bottomBarScrollConnection)
                                     )
                                 }
+                                }
                             }
                             }
 
@@ -994,6 +1111,8 @@ fun DynamicScreen(
                                     displayMode = displayMode,
                                     onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                     authorSearchSource = authorSearchSource,
+                                    onFilterClick = openFilterSheet,
+                                    isFilterActive = feedFilterState.isActive,
                                     onAuthorSearchClick = {
                                         showAuthorSearch = true
                                         viewModel.prepareAuthorSearch()
@@ -1079,7 +1198,18 @@ fun DynamicScreen(
                                 .verticalPriorityHorizontalPagerSwipe(pagerState),
                             key = { page -> resolveDynamicPagerTabKey(visibleTabs, page) }
                         ) { page ->
-                            val tab = visibleTabs.getOrNull(page) ?: return@HorizontalPager
+                            val pageScrollBarAllowed = remember(pagerState, page) {
+                                derivedStateOf {
+                                    pagerState.settledPage == page && !pagerState.isScrollInProgress
+                                }
+                            }
+                            CompositionLocalProvider(
+                                com.android.purebilibili.core.ui.components.LocalScrollBarAllowed provides (
+                                    com.android.purebilibili.core.ui.components.LocalScrollBarAllowed.current &&
+                                        pageScrollBarAllowed.value
+                                )
+                            ) {
+                            val tab = visibleTabs.getOrNull(page) ?: return@CompositionLocalProvider
                             val pageListState = requireNotNull(listStates[tab.logicalIndex])
                             val pagePresentation = remember(
                                 state,
@@ -1088,12 +1218,28 @@ fun DynamicScreen(
                             ) {
                                 resolveDynamicPagePresentation(state, tab.logicalIndex, selectedUserId)
                             }
-                            val pageDividerIndex = remember(pagePresentation) {
+                            val pageFilteredItems = remember(
+                                pagePresentation.items,
+                                feedFilterState,
+                                selectedFollowGroupMembers,
+                            ) {
+                                filterDynamicFeedItems(
+                                    items = pagePresentation.items,
+                                    filter = feedFilterState,
+                                    selectedGroupMemberMids = selectedFollowGroupMembers,
+                                )
+                            }
+                            LaunchedEffect(pagePresentation.items, feedFilterState) {
+                                if (feedFilterState.hasTypeFilter) {
+                                    recordFilteredDynamicFeedTypeHits(pagePresentation.items, feedFilterState)
+                                }
+                            }
+                            val pageDividerIndex = remember(pagePresentation, pageFilteredItems) {
                                 if (pagePresentation.isSelectedUserFeed) {
                                     -1
                                 } else {
                                     resolveOldContentDividerIndex(
-                                        displayKeys = pagePresentation.items.map(::dynamicFeedItemKey),
+                                        displayKeys = pageFilteredItems.map(::dynamicFeedItemKey),
                                         boundaryKey = pagePresentation.incrementalRefreshBoundaryKey,
                                         showDivider = pagePresentation.incrementalPrependedCount > 0
                                     )
@@ -1132,7 +1278,7 @@ fun DynamicScreen(
                                     onOpenSelectedUser = {
                                         selectedUserId?.takeIf { it > 0L }?.let(onUserClick)
                                     },
-                                    filteredItems = pagePresentation.items,
+                                    filteredItems = pageFilteredItems,
                                     listState = pageListState,
                                     statusBarHeight = statusBarHeight,
                                     topPaddingExtra = pageListTopExtra,
@@ -1185,6 +1331,7 @@ fun DynamicScreen(
                                     modifier = Modifier.nestedScroll(bottomBarScrollConnection)
                                 )
                             }
+                            }
                         }
                         }
 
@@ -1208,6 +1355,8 @@ fun DynamicScreen(
                                     displayMode = displayMode,
                                     onDisplayModeChange = { viewModel.setDisplayMode(it) },
                                     authorSearchSource = authorSearchSource,
+                                    onFilterClick = openFilterSheet,
+                                    isFilterActive = feedFilterState.isActive,
                                     onAuthorSearchClick = {
                                         showAuthorSearch = true
                                         viewModel.prepareAuthorSearch()
@@ -1289,6 +1438,14 @@ fun DynamicScreen(
                     .align(Alignment.BottomEnd)
                     .padding(end = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall, bottom = dynamicListBottomPadding + AppSpacingTokens.Medium),
             )
+            com.android.purebilibili.feature.plugin.QuickContentFilterHost(
+                pendingFeedback = pendingQuickFilterFeedback,
+                onDismissFeedback = { pendingQuickFilterFeedback = null },
+                editingTarget = editingQuickFilterTarget,
+                onOpenEditor = { editingQuickFilterTarget = it },
+                onDismissEditor = { editingQuickFilterTarget = null },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
             val locatorRefreshKey = "$displayedLogicalTab:${activePresentation.incrementalRefreshBoundaryKey}"
             var oldContentLocatorDismissed by rememberSaveable(locatorRefreshKey) {
                 mutableStateOf(false)
@@ -1346,6 +1503,16 @@ fun DynamicScreen(
                 if (dismissAfterAnimation != null) dismissAfterAnimation {} else showAuthorSearch = false
             }) { AppText("关闭") }
         }
+    }
+    if (showFilterSheet) {
+        com.android.purebilibili.feature.dynamic.components.DynamicFilterSheet(
+            filterState = feedFilterState,
+            followGroups = followGroups,
+            isLoadingGroupMembers = isLoadingSelectedGroupMembers,
+            onFilterChange = updateFeedTypeFilter,
+            onSelectFollowGroup = selectFollowGroup,
+            onDismiss = { showFilterSheet = false },
+        )
     }
     if (showAuthorSearch && !authorSearchGlassHandled) {
         com.android.purebilibili.feature.dynamic.components.DynamicAuthorSearchDialog(
@@ -1972,6 +2139,17 @@ private fun HorizontalUserList(
                     user.name
                 }
 
+                val targetAlpha = resolveDynamicUpPanelItemAlpha(
+                    selectedUserId = selectedUserId,
+                    itemUid = user.uid,
+                    isLive = user.isLive,
+                    isHidden = user.isHidden,
+                )
+                val animatedAlpha by androidx.compose.animation.core.animateFloatAsState(
+                    targetValue = targetAlpha,
+                    label = "horizontalUserFocusAlpha",
+                )
+
                 DynamicUserMenuAnchor(user, enabled = !isShortcut, onOpen = { showMenu = true }) { avatarModifier, menuSource ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1981,7 +2159,7 @@ private fun HorizontalUserList(
                                 onLongClick = if (glassMenuAvailable) null else ({ if (!isShortcut) showMenu = true })
                             )
                             .padding(AppSpacingTokens.ExtraSmall)
-                            .alpha(if (user.isHidden) 0.5f else 1f)
+                            .graphicsLayer { alpha = animatedAlpha }
                     ) {
                         DynamicUserAvatarWithLiveBadge(
                             user = user,
@@ -1991,6 +2169,7 @@ private fun HorizontalUserList(
                                 AppText(
                                     displayName,
                                     style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isSelected)
                                         AppContentColors.accent()
                                     else

@@ -15,13 +15,20 @@ enum class WatchLaterFilter(val viewed: Int, val label: String) {
 }
 
 /** The server-provided order is the default order for the Watch Later list. */
-enum class WatchLaterSortOrder {
-    FORWARD,
-    REVERSE;
+enum class WatchLaterSortOrder(val label: String) {
+    FORWARD("最近添加"),
+    REVERSE("最早添加"),
+    DURATION_ASC("时长最短"),
+    DURATION_DESC("时长最长"),
+    PUBDATE_DESC("投稿最新"),
+    VIEW_DESC("播放最多");
+
+    val requiresServerAscending: Boolean
+        get() = this == REVERSE
 
     fun toggled(): WatchLaterSortOrder = when (this) {
         FORWARD -> REVERSE
-        REVERSE -> FORWARD
+        else -> FORWARD
     }
 
     companion object {
@@ -49,6 +56,22 @@ internal fun sortWatchLaterItems(
     return when (order) {
         WatchLaterSortOrder.FORWARD -> items
         WatchLaterSortOrder.REVERSE -> items.asReversed()
+        WatchLaterSortOrder.DURATION_ASC -> items.sortedBy { it.duration }
+        WatchLaterSortOrder.DURATION_DESC -> items.sortedByDescending { it.duration }
+        WatchLaterSortOrder.PUBDATE_DESC -> items.sortedByDescending { it.pubdate }
+        WatchLaterSortOrder.VIEW_DESC -> items.sortedByDescending { it.stat.view }
+    }
+}
+
+/** 服务端已按 FORWARD/REVERSE 返回顺序，界面仅对附加维度做本地排序。 */
+internal fun applyWatchLaterDisplaySort(
+    items: List<VideoItem>,
+    order: WatchLaterSortOrder
+): List<VideoItem> {
+    return when (order) {
+        WatchLaterSortOrder.FORWARD,
+        WatchLaterSortOrder.REVERSE -> items
+        else -> sortWatchLaterItems(items, order)
     }
 }
 

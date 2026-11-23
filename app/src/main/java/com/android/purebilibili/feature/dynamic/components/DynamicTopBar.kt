@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -112,6 +113,8 @@ fun DynamicTopBarWithTabs(
     shouldShowHorizontalUserList: Boolean = false,
     onAuthorSearchClick: (() -> Unit)? = null,
     authorSearchSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
+    onFilterClick: (() -> Unit)? = null,
+    isFilterActive: Boolean = false,
 ) {
     val density = LocalDensity.current
     val statusBarHeight = WindowInsets.statusBars.getTop(density).let { with(density) { it.toDp() } }
@@ -236,6 +239,15 @@ fun DynamicTopBarWithTabs(
                         horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small, Alignment.End),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        if (onFilterClick != null) {
+                            AppIconButton(onClick = onFilterClick) {
+                                AppIcon(
+                                    imageVector = Icons.Outlined.FilterList,
+                                    contentDescription = "动态筛选",
+                                    tint = if (isFilterActive) AppContentColors.accent() else AppContentColors.primaryText(),
+                                )
+                            }
+                        }
                         if (onAuthorSearchClick != null) {
                             AppIconButton(
                                 onClick = onAuthorSearchClick,

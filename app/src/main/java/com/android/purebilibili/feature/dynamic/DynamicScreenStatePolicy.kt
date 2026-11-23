@@ -195,6 +195,19 @@ internal fun isDynamicUpPanelItemSelected(
     }
 }
 
+/** 选中具体 UP 主时，其余非直播条目柔和降暗至 0.55f 以突出当前焦点；全部动态态保持全亮。 */
+internal fun resolveDynamicUpPanelItemAlpha(
+    selectedUserId: Long?,
+    itemUid: Long,
+    isLive: Boolean,
+    isHidden: Boolean,
+): Float {
+    val baseAlpha = if (isHidden) 0.5f else 1f
+    val hasFocusedUp = selectedUserId != null
+    val isFocused = !hasFocusedUp || isLive || isDynamicUpPanelItemSelected(selectedUserId, itemUid)
+    return if (isFocused) baseAlpha else baseAlpha * 0.55f
+}
+
 internal fun resolveDynamicSelectedUserIdAfterClick(
     selectedUserId: Long?,
     clickedUserId: Long?

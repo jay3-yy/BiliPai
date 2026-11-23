@@ -353,8 +353,9 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
         val current = _uiState.value
         if (filter == current.filter) return current
         return tabCache[filter]?.takeIf {
-            it.query == current.query && it.sortOrder == current.sortOrder
-        }?.copy(dissolvingIds = emptySet()) ?: WatchLaterUiState(
+            it.query == current.query &&
+                it.sortOrder.requiresServerAscending == current.sortOrder.requiresServerAscending
+        }?.copy(sortOrder = current.sortOrder, dissolvingIds = emptySet()) ?: WatchLaterUiState(
             filter = filter,
             query = current.query,
             sortOrder = current.sortOrder,
@@ -373,10 +374,11 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
             tabCache.remove(current.filter)
         }
         val cached = tabCache[filter]
-        _uiState.value = if (
-            cached != null && cached.query == current.query && cached.sortOrder == current.sortOrder
-        ) {
-            cached.copy(filter = filter, dissolvingIds = emptySet())
+        val cacheReusable = cached != null &&
+            cached.query == current.query &&
+            cached.sortOrder.requiresServerAscending == current.sortOrder.requiresServerAscending
+        _uiState.value = if (cacheReusable) {
+            cached.copy(filter = filter, sortOrder = current.sortOrder, dissolvingIds = emptySet())
         } else {
             WatchLaterUiState(
                 isLoading = true,
@@ -386,7 +388,7 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
                 favoriteFolders = current.favoriteFolders,
             )
         }
-        if (cached == null || cached.query != current.query || cached.sortOrder != current.sortOrder) {
+        if (!cacheReusable) {
             loadPage(reset = true, showLoading = true)
         }
     }
@@ -399,10 +401,13 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun updateSortOrder(order: WatchLaterSortOrder) {
-        if (order == _uiState.value.sortOrder) return
+        val previous = _uiState.value.sortOrder
+        if (order == previous) return
         _uiState.value = _uiState.value.copy(sortOrder = order)
-        tabCache.clear()
-        loadPage(reset = true, showLoading = true)
+        if (order.requiresServerAscending != previous.requiresServerAscending) {
+            tabCache.clear()
+            loadPage(reset = true, showLoading = true)
+        }
     }
 
     private fun loadPage(reset: Boolean, showLoading: Boolean) {
@@ -931,7 +936,9 @@ fun WatchLaterScreen(
             searchQuery = query
         }
     }
-    val displayedItems = state.items
+    val displayedItems = remember(state.items, state.sortOrder) {
+        applyWatchLaterDisplaySort(state.items, state.sortOrder)
+    }
     val filters = WatchLaterFilter.entries
     val filterGridStates = filters.associateWith { filter ->
         key(accountIdentity, filter) { rememberCompatibleStaggeredGridState() }
@@ -1218,12 +1225,21 @@ fun WatchLaterScreen(
                     },
                     actions = {
                         if (state.items.isNotEmpty() && !isBatchMode) {
-                            AppTextButton(
-                                modifier = Modifier.appElasticPress(),
-                                onClick = { viewModel.updateSortOrder(state.sortOrder.toggled()) },
+                            AppWindowActionMenu(
+                                enabled = !state.isManaging,
+                                groups = listOf(
+                                    WatchLaterSortOrder.entries.map { order ->
+                                        AppWindowAction(
+                                            label = order.label,
+                                            selected = state.sortOrder == order,
+                                            onClick = { viewModel.updateSortOrder(order) },
+                                        )
+                                    }
+                                ),
                             ) {
                                 AppText(
-                                    if (state.sortOrder == WatchLaterSortOrder.FORWARD) "最近添加" else "最早添加",
+                                    state.sortOrder.label,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                                     tapToCopyEnabled = false,
                                 )
                             }
@@ -1430,7 +1446,9 @@ fun WatchLaterScreen(
                 val state = if (pageFilter == activeState.filter) activeState else viewModel.previewFilter(pageFilter)
                 val pageActive = isCurrentPage && pageFilter == activeState.filter && page == filterPagerState.settledPage
                 val gridState = filterGridStates.getValue(pageFilter)
-                val displayedItems = state.items
+                val displayedItems = remember(state.items, state.sortOrder) {
+        applyWatchLaterDisplaySort(state.items, state.sortOrder)
+    }
                 val renderKeys = remember(displayedItems) {
                     resolveCommonListRenderKeys(displayedItems.map { item ->
                         "watch_later_video_${item.bvid.ifBlank { "id_${item.id}" }}"
