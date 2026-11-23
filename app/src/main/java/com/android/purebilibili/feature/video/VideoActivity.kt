@@ -249,6 +249,7 @@ open class VideoActivity : FragmentActivity() {
                 androidx.lifecycle.viewmodel.compose.viewModel()
             val subReplyPreviewLikesEnabled = commentDisplaySettings.subReplyPreviewLikesEnabled
             val commentIpLocationEnabled = commentDisplaySettings.commentIpLocationEnabled
+            val commentSexEnabled = commentDisplaySettings.commentSexEnabled
             val commentReplyPreviewVisible = commentDisplaySettings.commentReplyPreviewVisible
             val detailedCommentTimeEnabled = commentDisplaySettings.detailedCommentTimeEnabled
             val liquidGlassEnabled = appThemeConfig.liquidGlassEnabled
@@ -296,6 +297,7 @@ open class VideoActivity : FragmentActivity() {
                     com.android.purebilibili.feature.video.viewmodel.LocalReplyTranslation provides replyTranslations,
                     com.android.purebilibili.core.ui.LocalSubReplyPreviewLikesEnabled provides subReplyPreviewLikesEnabled,
                     com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled provides commentIpLocationEnabled,
+                    com.android.purebilibili.core.ui.LocalCommentSexEnabled provides commentSexEnabled,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                     com.android.purebilibili.core.ui.LocalDetailedCommentTimeEnabled provides detailedCommentTimeEnabled,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->

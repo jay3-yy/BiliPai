@@ -26,6 +26,9 @@ val LocalBottomBarContentPadding = compositionLocalOf<Dp> { 0.dp }
 /** 评论 IP 归属地显示开关，由应用根层收集偏好，默认开启。 */
 val LocalCommentIpLocationEnabled = compositionLocalOf { true }
 
+/** 评论性别显示开关，由应用根层收集偏好，默认关闭。 */
+val LocalCommentSexEnabled = compositionLocalOf { false }
+
 /** 楼中楼预览的正文末尾显示点赞数，根层统一订阅，默认开启。 */
 val LocalSubReplyPreviewLikesEnabled = compositionLocalOf { true }
 

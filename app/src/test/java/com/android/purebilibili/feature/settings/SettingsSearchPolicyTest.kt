@@ -450,6 +450,7 @@ class SettingsSearchPolicyTest {
         assertTrue(resolveSettingsSearchResults("首页壁纸").any { it.target == SettingsSearchTarget.HOME_FEED })
         assertTrue(resolveSettingsSearchResults("评论装扮").any { it.target == SettingsSearchTarget.INTERACTION_COMMENT })
         assertTrue(resolveSettingsSearchResults("IP属地").any { it.settingId == "playback.comment_ip_location_enabled" })
+        assertTrue(resolveSettingsSearchResults("显示性别").any { it.settingId == "playback.comment_sex_enabled" })
         assertTrue(resolveSettingsSearchResults("WebDAV").any { it.target == SettingsSearchTarget.DATA_BACKUP })
     }
 

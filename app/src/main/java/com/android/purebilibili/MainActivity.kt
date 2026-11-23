@@ -1453,6 +1453,7 @@ class MainActivity : AppCompatActivity() {
                 androidx.lifecycle.viewmodel.compose.viewModel()
             val subReplyPreviewLikesEnabled = commentDisplaySettings.subReplyPreviewLikesEnabled
             val commentIpLocationEnabled = commentDisplaySettings.commentIpLocationEnabled
+            val commentSexEnabled = commentDisplaySettings.commentSexEnabled
             val detailedCommentTimeEnabled = commentDisplaySettings.detailedCommentTimeEnabled
             val commentReplyPreviewVisible = commentDisplaySettings.commentReplyPreviewVisible
             val liquidGlassEnabled = appThemeConfig.liquidGlassEnabled
@@ -1605,6 +1606,7 @@ class MainActivity : AppCompatActivity() {
                         com.android.purebilibili.feature.video.viewmodel.LocalReplyTranslation provides replyTranslations,
                         com.android.purebilibili.core.ui.LocalSubReplyPreviewLikesEnabled provides subReplyPreviewLikesEnabled,
                         com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled provides commentIpLocationEnabled,
+                        com.android.purebilibili.core.ui.LocalCommentSexEnabled provides commentSexEnabled,
                         LocalDetailedCommentTimeEnabled provides detailedCommentTimeEnabled,
                         com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                         LocalWindowSizeClass provides windowSizeClass,
