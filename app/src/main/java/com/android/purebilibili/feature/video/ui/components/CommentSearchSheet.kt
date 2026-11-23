@@ -684,9 +684,15 @@ private fun CommentSearchResultRow(
                         }
 
                         val location = item.replyControl?.location
-                        if (com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled.current && !location.isNullOrBlank()) {
+                        val metadata = resolveReplyMetadataText(
+                            location = location,
+                            sex = item.member.sex,
+                            showLocation = com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled.current,
+                            showSex = com.android.purebilibili.core.ui.LocalCommentSexEnabled.current
+                        )
+                        if (!metadata.isNullOrBlank()) {
                             AppText(
-                                text = location,
+                                text = metadata,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = AppContentColors.secondaryText().copy(alpha = 0.45f),
                             )

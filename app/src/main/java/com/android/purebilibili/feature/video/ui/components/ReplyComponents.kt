@@ -455,6 +455,20 @@ internal fun resolveReplyLocationText(location: String?): String? {
     return if (cleanLocation.isNotEmpty()) "IP归属地：$cleanLocation" else null
 }
 
+/** 评论时间后的附加信息：IP 归属地与性别，按开关组合，性别放 IP 后面。 */
+internal fun resolveReplyMetadataText(
+    location: String?,
+    sex: String?,
+    showLocation: Boolean,
+    showSex: Boolean
+): String? {
+    val locationText = if (showLocation) resolveReplyLocationText(location) else null
+    val sexText = if (showSex) com.android.purebilibili.core.util.resolveUserSexLabel(sex) else null
+    return listOfNotNull(locationText, sexText)
+        .joinToString(" ")
+        .takeIf { it.isNotEmpty() }
+}
+
 internal fun buildSubReplyPreviewPrefix(
     userName: String,
     isUpComment: Boolean,
@@ -1420,8 +1434,14 @@ fun ReplyItemView(
         }
     }
     val commentIpLocationEnabled = com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled.current
-    val displayLocation = remember(location, commentIpLocationEnabled) {
-        if (commentIpLocationEnabled) resolveReplyLocationText(location) else null
+    val commentSexEnabled = com.android.purebilibili.core.ui.LocalCommentSexEnabled.current
+    val displayLocation = remember(location, item.member.sex, commentIpLocationEnabled, commentSexEnabled) {
+        resolveReplyMetadataText(
+            location = location,
+            sex = item.member.sex,
+            showLocation = commentIpLocationEnabled,
+            showSex = commentSexEnabled
+        )
     }
     val metadataText = remember(item.ctime, displayLocation, detailedCommentTimeEnabled) {
         buildString {
