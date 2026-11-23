@@ -99,12 +99,16 @@ import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayContent
+import com.android.purebilibili.feature.video.ui.gesture.detectEdgeSafeDragGestures
 import com.android.purebilibili.feature.video.ui.gesture.detectPlayerTapGestures
 import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayStyle
 import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelOverlaySpec
 import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelKind
 import com.android.purebilibili.feature.video.ui.gesture.rememberGestureLevelOverlayStyle
+import com.android.purebilibili.feature.video.ui.section.FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP
+import com.android.purebilibili.feature.video.ui.section.FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP
 import com.android.purebilibili.feature.video.ui.section.VideoGestureMode
+import com.android.purebilibili.feature.video.ui.section.shouldIgnoreVideoPlayerHorizontalEdgeDragStart
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.util.FormatUtils
@@ -203,14 +207,17 @@ internal fun shouldStartFullscreenDragGesture(
     screenHeight: Float,
     statusBarExclusionZonePx: Float,
     visibleTopControlsHeightPx: Float,
-    visibleBottomControlsHeightPx: Float
+    visibleBottomControlsHeightPx: Float,
+    bottomEdgeExclusionZonePx: Float = statusBarExclusionZonePx,
 ): Boolean {
     if (!gesturesEnabled || screenHeight <= 0f) return false
     if (startY < statusBarExclusionZonePx) return false
+    val clampedBottomEdgeExclusionPx = bottomEdgeExclusionZonePx.coerceIn(0f, screenHeight * 0.5f)
+    if (startY >= screenHeight - clampedBottomEdgeExclusionPx) return false
     if (!showControls) return true
 
     val topControlsBottom = visibleTopControlsHeightPx.coerceAtLeast(statusBarExclusionZonePx)
-    val bottomControlsTop = (screenHeight - visibleBottomControlsHeightPx).coerceAtLeast(0f)
+    val bottomControlsTop = (screenHeight - maxOf(visibleBottomControlsHeightPx, clampedBottomEdgeExclusionPx)).coerceAtLeast(0f)
     return startY >= topControlsBottom && startY <= bottomControlsTop
 }
 
@@ -636,8 +643,10 @@ private fun FullscreenPlayerOverlayContent(
     // 横屏布局就绪前让点击时的小窗画面承接系统旋转。
     if (waitingForLandscape) return
 
-    // [问题8修复] 状态栏排除区域高度（像素）
-    val statusBarExclusionZonePx = with(density) { 40.dp.toPx() }
+    // [问题8修复] 状态栏与底部系统手势排除区域高度（像素）
+    val statusBarExclusionZonePx = with(density) { FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx() }
+    val bottomEdgeExclusionZonePx = with(density) { FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.dp.toPx() }
+    val horizontalEdgeExclusionZonePx = with(density) { FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx() }
     val visibleTopControlsHeightPx = with(density) {
         VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP.dp.toPx()
     }
@@ -834,21 +843,26 @@ private fun FullscreenPlayerOverlayContent(
                 val screenHeight = size.height.toFloat()
                 var dragGestureActive = false
 
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        dragGestureActive = shouldStartFullscreenDragGesture(
+                detectEdgeSafeDragGestures(
+                    shouldIgnoreStart = { downOffset ->
+                        !shouldStartFullscreenDragGesture(
                             gesturesEnabled = gesturesEnabled,
                             showControls = showControls,
-                            startY = offset.y,
+                            startY = downOffset.y,
                             screenHeight = screenHeight,
                             statusBarExclusionZonePx = statusBarExclusionZonePx,
                             visibleTopControlsHeightPx = visibleTopControlsHeightPx,
-                            visibleBottomControlsHeightPx = visibleBottomControlsHeightPx
+                            visibleBottomControlsHeightPx = visibleBottomControlsHeightPx,
+                            bottomEdgeExclusionZonePx = bottomEdgeExclusionZonePx,
+                        ) || shouldIgnoreVideoPlayerHorizontalEdgeDragStart(
+                            offsetX = downOffset.x,
+                            containerWidthPx = screenWidth,
+                            isFullscreen = true,
+                            edgeGestureExclusionPx = horizontalEdgeExclusionZonePx,
                         )
-                        if (!dragGestureActive) {
-                            gestureMode = FullscreenGestureMode.None
-                            return@detectDragGestures
-                        }
+                    },
+                    onDragStart = { offset ->
+                        dragGestureActive = true
 
                         showControls = true
                         lastInteractionTime = System.currentTimeMillis()
@@ -909,7 +923,7 @@ private fun FullscreenPlayerOverlayContent(
                         gestureMode = FullscreenGestureMode.None
                     },
                     onDrag = { change, dragAmount ->
-                        if (!dragGestureActive) return@detectDragGestures
+                        if (!dragGestureActive) return@detectEdgeSafeDragGestures
                         change.consume()
                         if (gestureMode == FullscreenGestureMode.None) {
                             dragDelta += dragAmount.x

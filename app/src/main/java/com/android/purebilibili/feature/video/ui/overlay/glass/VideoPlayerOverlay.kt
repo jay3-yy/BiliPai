@@ -1571,6 +1571,7 @@ private fun VideoPlayerOverlayContent(
                         }) else null,
                         aiSummaryVisible = (endDrawerVisible && endDrawerInitialTab == 2) || showPortraitAiSummarySheet,
                         isLoggedIn = isLoggedIn,
+                        onAudioClick = onAudioOnlyToggle,
                         onCastClick = onCastClickAction,
                         showCastButton = playerControlVisibility.showCastButton,
                         onMoreClick = {

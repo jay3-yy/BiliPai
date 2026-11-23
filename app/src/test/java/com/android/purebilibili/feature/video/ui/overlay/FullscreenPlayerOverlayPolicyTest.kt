@@ -25,6 +25,22 @@ class FullscreenPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun fullscreenDragGestures_protectBottomSystemGestureEdgeWhenControlsHidden() {
+        assertFalse(
+            shouldStartFullscreenDragGesture(
+                gesturesEnabled = true,
+                showControls = false,
+                startY = 1030f,
+                screenHeight = 1080f,
+                statusBarExclusionZonePx = 48f,
+                visibleTopControlsHeightPx = 96f,
+                visibleBottomControlsHeightPx = 120f,
+                bottomEdgeExclusionZonePx = 56f,
+            )
+        )
+    }
+
+    @Test
     fun fullscreenDragGestures_protectVisibleTopControls() {
         assertFalse(
             shouldStartFullscreenDragGesture(

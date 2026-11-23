@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import com.android.purebilibili.feature.video.ui.gesture.detectEdgeSafeVerticalDragGestures
 import com.android.purebilibili.feature.video.ui.gesture.detectPlayerTapGestures
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -65,7 +66,14 @@ import com.android.purebilibili.feature.live.LivePlayerGesturePolicy
 import com.android.purebilibili.feature.live.shouldToggleLiveFullscreenForDrag
 import com.android.purebilibili.feature.video.ui.gesture.GestureLevelKind
 import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayHost
+import com.android.purebilibili.feature.video.ui.section.FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP
+import com.android.purebilibili.feature.video.ui.section.FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP
+import com.android.purebilibili.feature.video.ui.section.INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP
+import com.android.purebilibili.feature.video.ui.section.INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP
 import com.android.purebilibili.feature.video.ui.section.VideoGestureMode
+import com.android.purebilibili.feature.video.ui.section.resolveVideoPlayerGestureVerticalExclusions
+import com.android.purebilibili.feature.video.ui.section.shouldIgnoreVideoPlayerDragStart
+import com.android.purebilibili.feature.video.ui.section.shouldIgnoreVideoPlayerHorizontalEdgeDragStart
 import android.app.Activity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -368,7 +376,30 @@ fun LivePlayerControls(
 
                             var maxVolume = 0
 
-                            detectVerticalDragGestures(
+                            detectEdgeSafeVerticalDragGestures(
+                                shouldIgnoreStart = { downOffset ->
+                                    val exclusions = resolveVideoPlayerGestureVerticalExclusions(
+                                        containerHeightPx = screenHeight,
+                                        isFullscreen = latestFullscreen,
+                                        controlsVisible = false,
+                                        requestedBottomControlsExclusionPx = 0f,
+                                        inlineTopExclusionPx = INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                        inlineBottomExclusionPx = INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                        fullscreenEdgeExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                        fullscreenBottomExclusionPx = FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                    )
+                                    shouldIgnoreVideoPlayerDragStart(
+                                        offsetY = downOffset.y,
+                                        containerHeightPx = screenHeight,
+                                        topGestureExclusionPx = exclusions.topPx,
+                                        bottomGestureExclusionPx = exclusions.bottomPx,
+                                    ) || shouldIgnoreVideoPlayerHorizontalEdgeDragStart(
+                                        offsetX = downOffset.x,
+                                        containerWidthPx = screenWidth,
+                                        isFullscreen = latestFullscreen,
+                                        edgeGestureExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                    )
+                                },
                                 onDragStart = { offset ->
                                     // 三分区：左 1/3 亮度、右 1/3 音量、中间 1/3 上下滑切换全屏
                                     gestureZone = when {

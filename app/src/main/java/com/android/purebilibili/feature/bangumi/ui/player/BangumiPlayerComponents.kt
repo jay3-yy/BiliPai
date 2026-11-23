@@ -88,15 +88,23 @@ import com.android.purebilibili.feature.video.ui.components.resolveVideoViewport
 import com.android.purebilibili.feature.video.ui.components.toAnime4KDisplayScaleMode
 import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayContent
 import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayHost
+import com.android.purebilibili.feature.video.ui.gesture.detectEdgeSafeDragGestures
 import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelKind
 import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelOverlaySpec
 import com.android.purebilibili.feature.video.ui.gesture.rememberGestureLevelOverlayStyle
 import com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo
 import com.android.purebilibili.feature.video.playback.audio.AudioQualityOption
+import com.android.purebilibili.feature.video.ui.section.FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP
+import com.android.purebilibili.feature.video.ui.section.FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP
+import com.android.purebilibili.feature.video.ui.section.INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP
+import com.android.purebilibili.feature.video.ui.section.INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP
 import com.android.purebilibili.feature.video.ui.section.resolveLongPressPlaybackParameters
 import com.android.purebilibili.feature.video.ui.section.VideoOutputRouter
 import com.android.purebilibili.feature.video.ui.section.VideoGestureMode
 import com.android.purebilibili.feature.video.ui.section.resolveVerticalGestureMode
+import com.android.purebilibili.feature.video.ui.section.resolveVideoPlayerGestureVerticalExclusions
+import com.android.purebilibili.feature.video.ui.section.shouldIgnoreVideoPlayerDragStart
+import com.android.purebilibili.feature.video.ui.section.shouldIgnoreVideoPlayerHorizontalEdgeDragStart
 import com.android.purebilibili.feature.video.ui.section.shouldTriggerFullscreenBySwipe
 import com.android.purebilibili.feature.video.ui.section.resolveSystemStreamVolumeFromGesture
 import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
@@ -493,7 +501,30 @@ fun BangumiPlayerView(
                     var totalDragDistanceX = 0f
                     var totalDragDistanceY = 0f
 
-                    detectDragGestures(
+                    detectEdgeSafeDragGestures(
+                        shouldIgnoreStart = { downOffset ->
+                            val exclusions = resolveVideoPlayerGestureVerticalExclusions(
+                                containerHeightPx = screenHeight,
+                                isFullscreen = isFullscreen,
+                                controlsVisible = showControls,
+                                requestedBottomControlsExclusionPx = 0f,
+                                inlineTopExclusionPx = INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                inlineBottomExclusionPx = INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                fullscreenEdgeExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                fullscreenBottomExclusionPx = FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.dp.toPx(),
+                            )
+                            shouldIgnoreVideoPlayerDragStart(
+                                offsetY = downOffset.y,
+                                containerHeightPx = screenHeight,
+                                topGestureExclusionPx = exclusions.topPx,
+                                bottomGestureExclusionPx = exclusions.bottomPx,
+                            ) || shouldIgnoreVideoPlayerHorizontalEdgeDragStart(
+                                offsetX = downOffset.x,
+                                containerWidthPx = screenWidth,
+                                isFullscreen = isFullscreen,
+                                edgeGestureExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx(),
+                            )
+                        },
                         onDragStart = { position ->
                             showControls = true
                             dragStartX = position.x
@@ -530,13 +561,13 @@ fun BangumiPlayerView(
                         },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            if (isScreenLocked) return@detectDragGestures
+                            if (isScreenLocked) return@detectEdgeSafeDragGestures
                             totalDragDistanceX += dragAmount.x
                             totalDragDistanceY += dragAmount.y
 
                             if (gestureMode == BangumiGestureMode.None) {
                                 if (kotlin.math.hypot(totalDragDistanceX, totalDragDistanceY) < minDragThreshold) {
-                                    return@detectDragGestures
+                                    return@detectEdgeSafeDragGestures
                                 }
                                 gestureMode = if (kotlin.math.abs(totalDragDistanceX) > kotlin.math.abs(totalDragDistanceY)) {
                                     if (seekHaptics.start(seekGestureStartPosition, duration, SystemClock.uptimeMillis())) {

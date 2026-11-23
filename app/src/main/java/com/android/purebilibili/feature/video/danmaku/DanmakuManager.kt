@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -277,10 +278,15 @@ class DanmakuManager private constructor(
     internal fun getHotDanmakuIndex(expectedCid: Long): HotDanmakuIndex? =
         hotDanmakuIndex.takeIf { cachedCid == expectedCid }
 
+    /** Compose-observable live opacity; slider previews and persisted settings share it. */
+    private var liveOpacityState by mutableFloatStateOf(config.opacity)
+    val liveOpacity: Float get() = liveOpacityState
+
     var opacity: Float
         get() = config.opacity
         set(value) {
             config.opacity = value
+            liveOpacityState = value
             applyConfigToController("opacity")
         }
     
@@ -1173,6 +1179,7 @@ class DanmakuManager private constructor(
         val staticToScrollChanged = config.staticDanmakuToScroll != staticDanmakuToScroll
         
         config.opacity = opacity
+        liveOpacityState = opacity
         config.fontScale = fontScale
         config.fontWeight = fontWeight
         config.speedFactor = speed
@@ -1241,19 +1248,32 @@ class DanmakuManager private constructor(
     }
 
     private var viewport: DanmakuViewport? = null
+    private var requestedHotDanmakuSlotHeightPx = 0f
 
-    fun updateHotDanmakuPresentation(items: List<DanmakuItem>, heightPx: Int) {
+    /**
+     * Reserves a stable top band for the counted-danmaku bar. The bar's current
+     * content must not change this height; callers only update it when the
+     * feature, viewport, or text metrics change.
+     */
+    fun updateHotDanmakuSlotHeight(heightPx: Float) {
+        requestedHotDanmakuSlotHeightPx = heightPx.coerceAtLeast(0f)
+        val resolved = resolveDanmakuHotBarReservedHeightPx(
+            requestedHeightPx = requestedHotDanmakuSlotHeightPx,
+            viewportHeightPx = viewport?.heightPx ?: 0,
+        )
+        if (config.hotBarReservedHeightPx == resolved) return
+        config.hotBarReservedHeightPx = resolved
+        applyConfigToController("hot_bar_slot")
+    }
+
+    /** Hides only the rendered copies that the counted bar already shows; layout is untouched. */
+    fun updateHotDanmakuPresentation(items: List<DanmakuItem>) {
         val idsChanged = items.size != hotDanmakuIds.size || items.any { it.danmakuId !in hotDanmakuIds }
         val textsChanged = items.size != hotDanmakuTexts.size || items.any { it.text.orEmpty() !in hotDanmakuTexts }
         if (idsChanged) hotDanmakuIds = items.mapTo(HashSet(items.size)) { it.danmakuId }
         if (textsChanged) hotDanmakuTexts = items.mapTo(HashSet(items.size)) { it.text.orEmpty() }
         if (idsChanged || textsChanged) {
             controller?.setHiddenDanmaku(hotDanmakuIds, hotDanmakuTexts)
-        }
-        // 不随顶部计数条显隐动态修改 hotBarReservedHeightPx，避免在屏弹幕整体上下跳动。
-        if (config.hotBarReservedHeightPx != 0f) {
-            config.hotBarReservedHeightPx = 0f
-            applyConfigToController("hot_bar_space")
         }
     }
 
@@ -1274,9 +1294,15 @@ class DanmakuManager private constructor(
         if (viewport == value) return
         clearTapSelection()
         viewport = value
+        val slotHeight = resolveDanmakuHotBarReservedHeightPx(
+            requestedHeightPx = requestedHotDanmakuSlotHeightPx,
+            viewportHeightPx = value.heightPx,
+        )
+        val slotChanged = config.hotBarReservedHeightPx != slotHeight
+        config.hotBarReservedHeightPx = slotHeight
         val view = danmakuView ?: return
         // A pending layout will apply this configuration in attachView's resize path.
-        if (view.width == value.widthPx && view.height == value.heightPx) {
+        if (slotChanged || (view.width == value.widthPx && view.height == value.heightPx)) {
             applyConfigToController("resize")
         }
     }
@@ -1938,7 +1964,7 @@ class DanmakuManager private constructor(
         val requestGeneration = ++loadGeneration
         val requestWindowGeneration = ++windowGeneration
         clearExplicitSeekResyncMarker()
-        updateHotDanmakuPresentation(emptyList(), 0)
+        updateHotDanmakuPresentation(emptyList())
         cachedDanmakuList = null
         hotDanmakuIndex = null
         sourceDanmakuList = null
@@ -2549,7 +2575,7 @@ class DanmakuManager private constructor(
         val requestGeneration = ++loadGeneration
         val requestWindowGeneration = ++windowGeneration
         clearExplicitSeekResyncMarker()
-        updateHotDanmakuPresentation(emptyList(), 0)
+        updateHotDanmakuPresentation(emptyList())
         cachedDanmakuList = null
         hotDanmakuIndex = null
         sourceDanmakuList = null
@@ -2655,7 +2681,7 @@ class DanmakuManager private constructor(
         clearTapSelection()
         isSeekScrubbing = false
         Log.d(TAG, "clearForVideoChange() - canceling active load and clearing displayed danmakus")
-        updateHotDanmakuPresentation(emptyList(), 0)
+        updateHotDanmakuPresentation(emptyList())
         loadJob?.cancel()
         windowLoadJob?.cancel()
         maskLoadJob?.cancel()
@@ -3164,7 +3190,9 @@ class DanmakuManager private constructor(
     fun release() {
         clearTapSelection()
         Log.d(TAG, " release")
-        updateHotDanmakuPresentation(emptyList(), 0)
+        updateHotDanmakuPresentation(emptyList())
+        requestedHotDanmakuSlotHeightPx = 0f
+        config.hotBarReservedHeightPx = 0f
         clearViewReference()
         loadJob?.cancel()
         loadJob = null

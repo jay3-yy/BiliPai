@@ -12,7 +12,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35], manifest = Config.NONE, application = Application::class)
 class DanmakuDisplayAreaRegressionTest {
     @Test
-    fun countBarKeepsTheFirstRowClearInBothDensityModesAndRestoresItWhenHidden() {
+    fun countBarReservationKeepsTheFirstRowClearInBothDensityModesAndReleasesWhenDisabled() {
         val viewport = DanmakuViewport(1920, 1080, 1f)
         for (massive in listOf(false, true)) {
             val config = DanmakuConfig().apply {

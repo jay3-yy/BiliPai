@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -47,21 +46,28 @@ private val hotDanmakuSendWidth = 36.dp
 private val hotDanmakuSendHeight = 24.dp
 private val hotDanmakuActionGap = 4.dp
 private val hotDanmakuItemPadding = 1.dp
+private val hotDanmakuSlotMinHeight = 30.dp
 
 private fun countWithOneMore(count: Long): Long = count.coerceAtMost(Long.MAX_VALUE - 1L) + 1L
 
-private class HotDanmakuPresentation {
-    var heightPx = 0
-    private var reportedItems = emptyList<DanmakuItem>()
-    private var reportedHeightPx = 0
-
-    fun report(items: List<DanmakuItem>, onChange: (List<DanmakuItem>, Int) -> Unit) {
-        val shownItems = if (heightPx > 0) items else emptyList()
-        val shownHeight = if (shownItems.isEmpty()) 0 else heightPx
-        if (reportedItems == shownItems && reportedHeightPx == shownHeight) return
-        reportedItems = shownItems
-        reportedHeightPx = shownHeight
-        onChange(shownItems, shownHeight)
+/**
+ * Minimum one-line height for the bar itself. The engine slot uses the same
+ * value so the reserved band and the rendered content cannot drift apart.
+ */
+@Composable
+internal fun hotDanmakuBarMinHeightPx(): Float {
+    val density = LocalDensity.current
+    val typography = MaterialTheme.typography
+    val titleMediumLineHeight = typography.titleMedium.lineHeight
+    val titleLargeLineHeight = typography.titleLarge.lineHeight
+    return remember(density, titleMediumLineHeight, titleLargeLineHeight) {
+        with(density) {
+            maxOf(
+                titleMediumLineHeight.toPx(),
+                (titleLargeLineHeight * 0.9f).toPx(),
+                hotDanmakuSendHeight.toPx(),
+            ) + 6.dp.toPx()
+        }
     }
 }
 
@@ -74,11 +80,11 @@ internal fun HotDanmakuBar(
     onSendSame: ((String) -> Unit)?,
     isSending: Boolean,
     opacity: Float = 1f,
+    slotHeight: Dp = hotDanmakuSlotMinHeight,
     modifier: Modifier = Modifier,
-    onPresentationChange: (List<DanmakuItem>, Int) -> Unit,
+    onPresentationChange: (List<DanmakuItem>) -> Unit,
 ) {
     val latestPresentationChange by rememberUpdatedState(onPresentationChange)
-    val presentation = remember { HotDanmakuPresentation() }
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val countStyle = MaterialTheme.typography.titleLarge.copy(
@@ -116,21 +122,15 @@ internal fun HotDanmakuBar(
             sampledItems = index.select(player.currentPosition)
         }
     }
-    if (hotItems.isEmpty()) SideEffect {
-        presentation.heightPx = 0
-        presentation.report(emptyList(), latestPresentationChange)
-    }
     DisposableEffect(Unit) {
         onDispose {
-            presentation.heightPx = 0
-            latestPresentationChange(emptyList(), 0)
+            latestPresentationChange(emptyList())
         }
     }
-    if (hotItems.isNotEmpty()) {
-        BoxWithConstraints(
-            modifier = modifier.fillMaxWidth(),
-            contentAlignment = Alignment.TopCenter,
-        ) {
+    BoxWithConstraints(
+        modifier = modifier.fillMaxWidth().heightIn(min = slotHeight),
+        contentAlignment = Alignment.TopCenter,
+    ) {
             val textStyle = MaterialTheme.typography.titleMedium.copy(
                 shadow = Shadow(Color.Black, Offset(1f, 1f), 3f),
             )
@@ -149,19 +149,13 @@ internal fun HotDanmakuBar(
                     }
                 }
             }
-            val latestVisibleItems by rememberUpdatedState(visibleItems)
-            SideEffect {
-                if (visibleItems.isEmpty()) presentation.heightPx = 0
-                presentation.report(visibleItems, latestPresentationChange)
+            LaunchedEffect(visibleItems) {
+                latestPresentationChange(visibleItems)
             }
             if (visibleItems.isNotEmpty()) Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .graphicsLayer { alpha = opacity.coerceIn(0f, 1f) }
-                    .onSizeChanged {
-                        presentation.heightPx = it.height
-                        presentation.report(latestVisibleItems, latestPresentationChange)
-                    }
                     .padding(1.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically,
@@ -239,4 +233,3 @@ internal fun HotDanmakuBar(
             }
         }
     }
-}

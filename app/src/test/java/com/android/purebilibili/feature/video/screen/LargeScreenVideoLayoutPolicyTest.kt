@@ -283,4 +283,36 @@ class LargeScreenVideoLayoutPolicyTest {
         assertEquals(LargeScreenVideoLayoutMode.AlmostSquare, metrics.mode)
         assertEquals(940f * 0.4f, metrics.playerHeightDp, 1f)
     }
+
+    @Test
+    fun landscapeTheaterIsAvailableOnlyForStageLayouts() {
+        assertTrue(
+            resolveLargeScreenTheaterAvailable(
+                windowWidthDp = 1200f,
+                windowHeightDp = 800f,
+                mode = LargeScreenVideoLayoutMode.Landscape,
+            )
+        )
+        assertTrue(
+            resolveLargeScreenTheaterAvailable(
+                windowWidthDp = 1200f,
+                windowHeightDp = 800f,
+                mode = LargeScreenVideoLayoutMode.Split,
+            )
+        )
+        assertFalse(
+            resolveLargeScreenTheaterAvailable(
+                windowWidthDp = 1200f,
+                windowHeightDp = 800f,
+                mode = LargeScreenVideoLayoutMode.AlmostSquare,
+            )
+        )
+        assertFalse(
+            resolveLargeScreenTheaterAvailable(
+                windowWidthDp = 800f,
+                windowHeightDp = 1200f,
+                mode = LargeScreenVideoLayoutMode.Split,
+            )
+        )
+    }
 }

@@ -197,6 +197,7 @@ fun TopControlBar(
     onCommentClick: (() -> Unit)? = null,
     onAiSummaryClick: (() -> Unit)? = null,
     aiSummaryVisible: Boolean = false,
+    onAudioClick: (() -> Unit)? = null,
     onCastClick: () -> Unit = {}, // Added Cast callback
     showCastButton: Boolean = true,
     onMoreClick: () -> Unit = {},
@@ -576,6 +577,20 @@ fun TopControlBar(
                         }
                     }
 
+                    if (onAudioClick != null && isLandscapeFullscreen &&
+                        showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.AUDIO)
+                    ) {
+                        ActionIcon(
+                            glassEnabled = isFullscreen || glassControls,
+                            icon = Icons.Outlined.Headphones,
+                            contentDescription = "听视频",
+                            isActive = false,
+                            onClick = onAudioClick,
+                            buttonSizeDp = layoutPolicy.buttonSizeDp,
+                            iconSizeDp = layoutPolicy.iconSizeDp
+                        )
+                    }
+
                     if (showCastButton && showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.CAST)) {
                         ActionIcon(
                             glassEnabled = isFullscreen || glassControls,
@@ -602,15 +617,20 @@ fun TopControlBar(
                     }
 
                     if (onAiSummaryClick != null && showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.AI_SUMMARY)) {
-                        ActionIcon(
-                            glassEnabled = isFullscreen || glassControls,
-                            icon = Icons.Outlined.AutoAwesome,
-                            contentDescription = "AI 总结",
-                            isActive = aiSummaryVisible,
-                            onClick = onAiSummaryClick,
-                            buttonSizeDp = layoutPolicy.buttonSizeDp,
-                            iconSizeDp = layoutPolicy.iconSizeDp
-                        )
+                        PlayerControlGlassDock(
+                            enabled = isFullscreen || glassControls,
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                        ) {
+                            AppIconButton(
+                                onClick = onAiSummaryClick,
+                                modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp),
+                            ) {
+                                com.android.purebilibili.core.ui.ClientAiSummaryIcon(
+                                    modifier = Modifier.size(layoutPolicy.iconSizeDp.dp),
+                                    description = "AI 总结",
+                                )
+                            }
+                        }
                     }
 
                     // More (Three dots)

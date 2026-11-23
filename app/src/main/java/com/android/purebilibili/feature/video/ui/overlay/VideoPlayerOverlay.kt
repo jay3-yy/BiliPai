@@ -2893,61 +2893,64 @@ private fun VideoPlayerOverlayContent(
         }
 
         // --- 11. [新增] 侧边栏抽屉 ---
-        LandscapeEndDrawer(
-            visible = endDrawerVisible && isFullscreen,
-            closeProgress = endDrawerCloseProgress,
-            onDismiss = onDismissEndDrawer,
-            relatedVideos = relatedVideos,
-            ugcSeason = ugcSeason,
-            aiSummary = state.aiSummary,
-            aiSummaryPrompt = state.aiSummaryPrompt,
-            onTimestampClick = { seconds ->
-                val targetMs = (seconds * 1000L).coerceAtLeast(0L)
-                onSeekTo?.invoke(targetMs) ?: player.seekTo(targetMs)
-            },
-            currentBvid = bvid,
-            currentCid = cid,
-            initialSelectedTab = endDrawerInitialTab,
-            ownerName = videoOwnerName,
-            ownerFace = videoOwnerFace,
-            isFollowed = isFollowed,
-            followStatusKnown = followStatusKnown,
-            onToggleFollow = onToggleFollow,
-            onVideoClick = { vid, options ->
-                onDismissEndDrawer()
-                onDrawerVideoClick(vid, options)
-            },
-            hazeState = drawerHazeState,
-            modifier = Modifier.align(Alignment.CenterEnd)
-        )
+        // 恢复应用设定的组件风格，避免外层通用播放菜单的默认 MD3 主题覆写抽屉内的 Miuix 组件。
+        com.android.purebilibili.feature.video.ui.components.PlayerNativeMenuTheme(settingsUiStyle) {
+            LandscapeEndDrawer(
+                visible = endDrawerVisible && isFullscreen,
+                closeProgress = endDrawerCloseProgress,
+                onDismiss = onDismissEndDrawer,
+                relatedVideos = relatedVideos,
+                ugcSeason = ugcSeason,
+                aiSummary = state.aiSummary,
+                aiSummaryPrompt = state.aiSummaryPrompt,
+                onTimestampClick = { seconds ->
+                    val targetMs = (seconds * 1000L).coerceAtLeast(0L)
+                    onSeekTo?.invoke(targetMs) ?: player.seekTo(targetMs)
+                },
+                currentBvid = bvid,
+                currentCid = cid,
+                initialSelectedTab = endDrawerInitialTab,
+                ownerName = videoOwnerName,
+                ownerFace = videoOwnerFace,
+                isFollowed = isFollowed,
+                followStatusKnown = followStatusKnown,
+                onToggleFollow = onToggleFollow,
+                onVideoClick = { vid, options ->
+                    onDismissEndDrawer()
+                    onDrawerVideoClick(vid, options)
+                },
+                hazeState = drawerHazeState,
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
 
-        if (showPortraitAiSummarySheet) {
-            com.android.purebilibili.core.ui.AppModalBottomSheet(
-                onDismissRequest = { showPortraitAiSummarySheet = false },
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 520.dp)
-                        .navigationBarsPadding(),
+            if (showPortraitAiSummarySheet) {
+                com.android.purebilibili.core.ui.AppModalBottomSheet(
+                    onDismissRequest = { showPortraitAiSummarySheet = false },
                 ) {
-                    AppText(
-                        text = "AI 总结",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = AppContentColors.primaryText(),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                    com.android.purebilibili.feature.video.ui.section.LandscapeAiSummaryDrawerContent(
-                        aiSummary = state.aiSummary,
-                        aiSummaryPrompt = state.aiSummaryPrompt,
-                        onTimestampClick = { seconds ->
-                            val targetMs = (seconds * 1000L).coerceAtLeast(0L)
-                            onSeekTo?.invoke(targetMs) ?: player.seekTo(targetMs)
-                            showPortraitAiSummarySheet = false
-                        },
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 520.dp)
+                            .navigationBarsPadding(),
+                    ) {
+                        AppText(
+                            text = "AI 总结",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AppContentColors.primaryText(),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                        com.android.purebilibili.feature.video.ui.section.LandscapeAiSummaryDrawerContent(
+                            aiSummary = state.aiSummary,
+                            aiSummaryPrompt = state.aiSummaryPrompt,
+                            onTimestampClick = { seconds ->
+                                val targetMs = (seconds * 1000L).coerceAtLeast(0L)
+                                onSeekTo?.invoke(targetMs) ?: player.seekTo(targetMs)
+                                showPortraitAiSummarySheet = false
+                            },
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
                 }
             }
         }

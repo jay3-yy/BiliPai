@@ -1744,7 +1744,7 @@ fun VideoSettingsPanel(
                 VideoSettingsSwitchRow(
                     icon = rememberSettingsSemanticIcon(SettingsIconRole.PROGRESS_PEAK_DANMAKU),
                     title = "显示计数弹幕",
-                    subtitle = if (danmakuHotBarEnabled) "按内容长度自动显示 1～3 条完整横幅，均匀排布" else "已关闭，普通弹幕照常显示",
+                    subtitle = if (danmakuHotBarEnabled) "固定预留顶部一行，按内容长度自动显示 1～3 条完整横幅" else "已关闭，普通弹幕照常显示",
                     checked = danmakuHotBarEnabled,
                     onCheckedChange = { checked ->
                         scope.launch {

@@ -20,6 +20,46 @@ class DanmakuConfigPolicyTest {
     }
 
     @Test
+    fun `hot danmaku slot uses one stable layout band`() {
+        val viewport = DanmakuViewport(1920, 1080, 3f)
+        val lineHeight = 18f * 3f * 1.6f
+        val slot = resolveHotDanmakuSlotHeightPx(
+            enabled = true,
+            viewport = viewport,
+            fontScale = 1f,
+            lineHeightMultiplier = 1.6f,
+            isFullscreen = true,
+            barMinHeightPx = 30f * 3f,
+        )
+
+        assertEquals(30f * 3f, slot, 0.001f)
+        assertEquals(
+            lineHeight,
+            resolveHotDanmakuSlotHeightPx(
+                enabled = true,
+                viewport = viewport,
+                fontScale = 1f,
+                lineHeightMultiplier = 1.6f,
+                isFullscreen = true,
+                barMinHeightPx = 1f,
+            ),
+            0.001f,
+        )
+        assertEquals(
+            0f,
+            resolveHotDanmakuSlotHeightPx(
+                enabled = false,
+                viewport = viewport,
+                fontScale = 1f,
+                lineHeightMultiplier = 1.6f,
+                isFullscreen = true,
+                barMinHeightPx = 30f * 3f,
+            ),
+            0f,
+        )
+    }
+
+    @Test
     fun `bilibili font grades should remain relative to user font scale`() {
         assertEquals(0.72f, resolveBilibiliDanmakuFontScale(18f), 0.001f)
         assertEquals(1.0f, resolveBilibiliDanmakuFontScale(25f), 0.001f)

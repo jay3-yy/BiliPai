@@ -186,6 +186,7 @@ internal fun shouldIgnoreVideoPlayerHorizontalEdgeDragStart(
 internal const val INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP = 24
 internal const val INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP = 12
 internal const val FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP = 48
+internal const val FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP = 56
 
 internal data class VideoPlayerGestureVerticalExclusions(
     val topPx: Float,
@@ -199,7 +200,8 @@ internal fun resolveVideoPlayerGestureVerticalExclusions(
     requestedBottomControlsExclusionPx: Float,
     inlineTopExclusionPx: Float,
     inlineBottomExclusionPx: Float,
-    fullscreenEdgeExclusionPx: Float
+    fullscreenEdgeExclusionPx: Float,
+    fullscreenBottomExclusionPx: Float = fullscreenEdgeExclusionPx,
 ): VideoPlayerGestureVerticalExclusions {
     if (containerHeightPx <= 0f) {
         return VideoPlayerGestureVerticalExclusions(0f, 0f)
@@ -207,8 +209,8 @@ internal fun resolveVideoPlayerGestureVerticalExclusions(
     val requestedTop = if (isFullscreen) fullscreenEdgeExclusionPx else inlineTopExclusionPx
     val requestedBottom = when {
         isFullscreen && controlsVisible ->
-            maxOf(fullscreenEdgeExclusionPx, requestedBottomControlsExclusionPx)
-        isFullscreen -> fullscreenEdgeExclusionPx
+            maxOf(fullscreenBottomExclusionPx, requestedBottomControlsExclusionPx)
+        isFullscreen -> fullscreenBottomExclusionPx
         else -> inlineBottomExclusionPx
     }
     val maximumCombinedExclusion = containerHeightPx * 0.5f

@@ -207,6 +207,38 @@ class VideoPlayerSectionPolicyTest {
         assertFalse(shouldIgnoreVideoPlayerHorizontalEdgeDragStart(20f, 1_000f, false, 48f))
     }
 
+    @Test
+    fun fullscreenHiddenControls_appliesDedicatedBottomSystemGestureExclusion() {
+        val exclusions = resolveVideoPlayerGestureVerticalExclusions(
+            containerHeightPx = 400f,
+            isFullscreen = true,
+            controlsVisible = false,
+            requestedBottomControlsExclusionPx = 0f,
+            inlineTopExclusionPx = INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP.toFloat(),
+            inlineBottomExclusionPx = INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.toFloat(),
+            fullscreenEdgeExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.toFloat(),
+            fullscreenBottomExclusionPx = FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.toFloat(),
+        )
+        assertEquals(FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.toFloat(), exclusions.topPx, 0.001f)
+        assertEquals(FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.toFloat(), exclusions.bottomPx, 0.001f)
+        assertTrue(
+            shouldIgnoreVideoPlayerDragStart(
+                offsetY = 348f,
+                containerHeightPx = 400f,
+                topGestureExclusionPx = exclusions.topPx,
+                bottomGestureExclusionPx = exclusions.bottomPx,
+            )
+        )
+        assertFalse(
+            shouldIgnoreVideoPlayerDragStart(
+                offsetY = 320f,
+                containerHeightPx = 400f,
+                topGestureExclusionPx = exclusions.topPx,
+                bottomGestureExclusionPx = exclusions.bottomPx,
+            )
+        )
+    }
+
 
     @Test
     fun dragStart_ignoresProgressPreviewZoneAboveBottomControls() {

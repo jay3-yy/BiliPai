@@ -216,6 +216,17 @@ internal fun resolveShowRelatedInIntro(mode: LargeScreenVideoLayoutMode): Boolea
     return mode == LargeScreenVideoLayoutMode.AlmostSquare
 }
 
+internal fun resolveLargeScreenTheaterAvailable(
+    windowWidthDp: Float,
+    windowHeightDp: Float,
+    mode: LargeScreenVideoLayoutMode,
+): Boolean = windowWidthDp > windowHeightDp && when (mode) {
+    LargeScreenVideoLayoutMode.Landscape,
+    LargeScreenVideoLayoutMode.Split,
+    LargeScreenVideoLayoutMode.VerticalThreePane -> true
+    else -> false
+}
+
 internal fun resolveIncludeRelatedTabInSecondary(mode: LargeScreenVideoLayoutMode): Boolean {
     return mode != LargeScreenVideoLayoutMode.AlmostSquare
 }

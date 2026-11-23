@@ -830,7 +830,7 @@ fun DanmakuSettingsPanel(
                                     fullscreenStyle = isFullscreenStyle,
                                 )
                                 AppText(
-                                    text = "根据文字、计数和按钮宽度自动显示 1～3 条完整横幅，均匀排布。普通模式按实际高度避让；海量模式不改变轨道和行数。关闭后普通弹幕照常显示。",
+                                    text = "开启时固定预留顶部一行，按文字、计数和按钮宽度自动显示 1～3 条完整横幅，均匀排布；横幅出现或消失不会推动其他弹幕。关闭后普通弹幕照常显示。",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = panelColors.supportingColor,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

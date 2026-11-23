@@ -40,11 +40,11 @@ class TopControlBarPolicyTest {
     }
 
     @Test
-    fun landscapeFullscreen_showsTitleStatusAndEngagementWithoutCastOrAudio() {
+    fun landscapeFullscreen_showsTitleStatusEngagementAndAudioWithoutCast() {
         val policy = resolveTopControlBarLayoutPolicy(isPortrait = false, isFullscreen = true)
         assertTrue(policy.showTitle)
         assertTrue(policy.showStatus)
-        assertFalse(policy.showAudio)
+        assertTrue(policy.showAudio)
         assertFalse(policy.showCast)
         assertTrue(policy.showDanmakuActions)
         assertTrue(policy.showEngagement)

@@ -96,6 +96,7 @@ import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayCont
 import com.android.purebilibili.feature.video.ui.gesture.SwipeToFullscreenHint
 import com.android.purebilibili.feature.video.ui.gesture.TwoFingerSpeedGestureMode
 import com.android.purebilibili.feature.video.ui.gesture.rememberGestureLevelOverlayStyle
+import com.android.purebilibili.feature.video.ui.gesture.detectEdgeSafeDragGestures
 import com.android.purebilibili.feature.video.ui.gesture.detectPlayerTapGestures
 import com.android.purebilibili.feature.video.ui.gesture.resolveLockedTwoFingerSpeedAxis
 import com.android.purebilibili.feature.video.ui.gesture.resolveTwoFingerGesturePlaybackSpeed
@@ -103,6 +104,7 @@ import com.android.purebilibili.feature.video.ui.gesture.resolveTwoFingerSpeedGe
 import com.android.purebilibili.feature.video.ui.overlay.FullscreenDoubleTapAction
 import com.android.purebilibili.feature.video.ui.overlay.nextFullscreenSeekFeedbackEvent
 import com.android.purebilibili.feature.video.ui.overlay.resolveFullscreenDoubleTapAction
+import com.android.purebilibili.feature.video.ui.section.FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP
 import com.android.purebilibili.feature.video.ui.section.FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP
 import com.android.purebilibili.feature.video.ui.section.INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP
 import com.android.purebilibili.feature.video.ui.section.INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP
@@ -116,6 +118,7 @@ import com.android.purebilibili.feature.video.ui.section.resolveVerticalGestureM
 import com.android.purebilibili.feature.video.ui.section.resolveVideoPlayerGestureVerticalExclusions
 import com.android.purebilibili.feature.video.ui.section.shouldAutoExitFullscreenOnPlaybackEnded
 import com.android.purebilibili.feature.video.ui.section.shouldIgnoreVideoPlayerDragStart
+import com.android.purebilibili.feature.video.ui.section.shouldIgnoreVideoPlayerHorizontalEdgeDragStart
 import com.android.purebilibili.feature.video.ui.section.shouldLockLongPressSpeedInTargetZone
 import com.android.purebilibili.feature.video.ui.section.shouldTriggerFullscreenBySwipe
 import com.android.purebilibili.feature.video.ui.section.shouldUnlockLockedLongPressSpeedFromRightDownDrag
@@ -856,9 +859,9 @@ fun OfflineVideoPlayerScreen(
                     var dragStartX = 0f
                     val fullscreenSwipeThresholdPx = SwipeToFullscreenDragThresholdDp.toPx()
                     fullscreenSwipeProgress = 0f
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            // 边缘防误触
+                    detectEdgeSafeDragGestures(
+                        shouldIgnoreStart = { downOffset ->
+                            // 边缘防误触（基于初始落点，避免全屏底部快速上滑越过排除区）
                             val gestureExclusions = resolveVideoPlayerGestureVerticalExclusions(
                                 containerHeightPx = size.height.toFloat(),
                                 isFullscreen = isFullscreen,
@@ -867,44 +870,46 @@ fun OfflineVideoPlayerScreen(
                                 inlineTopExclusionPx = INLINE_PLAYER_TOP_GESTURE_EXCLUSION_DP.dp.toPx(),
                                 inlineBottomExclusionPx = INLINE_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.dp.toPx(),
                                 fullscreenEdgeExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx(),
+                                fullscreenBottomExclusionPx = FULLSCREEN_PLAYER_BOTTOM_GESTURE_EXCLUSION_DP.dp.toPx(),
                             )
-                            val isEdgeGesture = shouldIgnoreVideoPlayerDragStart(
-                                offsetY = offset.y,
+                            shouldIgnoreVideoPlayerDragStart(
+                                offsetY = downOffset.y,
                                 containerHeightPx = size.height.toFloat(),
                                 topGestureExclusionPx = gestureExclusions.topPx,
                                 bottomGestureExclusionPx = gestureExclusions.bottomPx,
+                            ) || shouldIgnoreVideoPlayerHorizontalEdgeDragStart(
+                                offsetX = downOffset.x,
+                                containerWidthPx = size.width.toFloat(),
+                                isFullscreen = isFullscreen,
+                                edgeGestureExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx(),
                             )
+                        },
+                        onDragStart = { offset ->
+                            isGestureVisible = true
+                            gestureMode = VideoGestureMode.None
+                            dragStartX = offset.x
+                            totalDragDistanceY = 0f
+                            totalDragDistanceX = 0f
 
-                            if (isEdgeGesture) {
-                                isGestureVisible = false
-                                gestureMode = VideoGestureMode.None
-                            } else {
-                                isGestureVisible = true
-                                gestureMode = VideoGestureMode.None
-                                dragStartX = offset.x
-                                totalDragDistanceY = 0f
-                                totalDragDistanceX = 0f
+                            startVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                            startPosition = player.currentPosition
+                            seekTargetTime = startPosition
 
-                                startVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                                startPosition = player.currentPosition
-                                seekTargetTime = startPosition
+                            val attributes = getActivity()?.window?.attributes
+                            val currentWindowBrightness = attributes?.screenBrightness ?: -1f
 
-                                val attributes = getActivity()?.window?.attributes
-                                val currentWindowBrightness = attributes?.screenBrightness ?: -1f
-
-                                if (currentWindowBrightness < 0) {
-                                    try {
-                                        val sysBrightness = Settings.System.getInt(
-                                            context.contentResolver,
-                                            Settings.System.SCREEN_BRIGHTNESS
-                                        )
-                                        startBrightness = sysBrightness / 255f
-                                    } catch (e: Exception) {
-                                        startBrightness = 0.5f
-                                    }
-                                } else {
-                                    startBrightness = currentWindowBrightness
+                            if (currentWindowBrightness < 0) {
+                                try {
+                                    val sysBrightness = Settings.System.getInt(
+                                        context.contentResolver,
+                                        Settings.System.SCREEN_BRIGHTNESS
+                                    )
+                                    startBrightness = sysBrightness / 255f
+                                } catch (e: Exception) {
+                                    startBrightness = 0.5f
                                 }
+                            } else {
+                                startBrightness = currentWindowBrightness
                             }
                         },
                         onDragEnd = {

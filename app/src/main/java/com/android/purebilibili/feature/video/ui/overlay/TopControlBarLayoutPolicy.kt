@@ -28,7 +28,7 @@ internal fun resolveTopControlBarLayoutPolicy(
 ): TopControlBarLayoutPolicy = TopControlBarLayoutPolicy(
     showTitle = isFullscreen || (!horizontalScreen && !isPortrait),
     showStatus = !isPortrait && (isFullscreen || !horizontalScreen),
-    showAudio = !isFileSource && !isFullscreen && isUgc,
+    showAudio = !isFileSource && isUgc && (!isFullscreen || !isPortrait),
     showCast = !isFileSource && !isFullscreen,
     showDanmakuActions = !isPortrait || isFullscreen,
     showEngagement = !isFileSource && isFullscreen && showFullscreenActionItems,

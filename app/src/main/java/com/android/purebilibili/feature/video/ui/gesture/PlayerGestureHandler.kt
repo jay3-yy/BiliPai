@@ -7,7 +7,11 @@ import android.media.AudioManager
 import android.provider.Settings
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.verticalDrag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,7 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -398,6 +404,90 @@ private suspend fun androidx.compose.ui.input.pointer.AwaitPointerEventScope.wai
         if (!change.pressed) return change
         if (awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Final)
                 .changes.any { it.isConsumed }) return null
+    }
+}
+
+/**
+ * Detects drag gestures while gating on the initial pointer-down coordinate rather than the
+ * post-slop drag coordinate. Fast swipes from system gesture edges (such as repeated bottom
+ * swipes in fullscreen when the system gesture bar is hidden) can move past the edge exclusion
+ * zone before touch slop is crossed; checking the initial down position rejects them without
+ * consuming pointer movement.
+ */
+internal suspend fun PointerInputScope.detectEdgeSafeDragGestures(
+    shouldIgnoreStart: (Offset) -> Boolean = { false },
+    onDragStart: (Offset) -> Unit = {},
+    onDragEnd: () -> Unit = {},
+    onDragCancel: () -> Unit = {},
+    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit,
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (shouldIgnoreStart(down.position)) {
+            return@awaitEachGesture
+        }
+        var drag: PointerInputChange?
+        var overSlop = Offset.Zero
+        do {
+            drag = awaitTouchSlopOrCancellation(down.id) { change, over ->
+                change.consume()
+                overSlop = over
+            }
+        } while (drag != null && !drag.isConsumed)
+        if (drag != null) {
+            onDragStart(down.position)
+            onDrag(drag, overSlop)
+            if (
+                drag(drag.id) {
+                    onDrag(it, it.positionChange())
+                    it.consume()
+                }
+            ) {
+                onDragEnd()
+            } else {
+                onDragCancel()
+            }
+        }
+    }
+}
+
+/**
+ * Vertical-only variant of [detectEdgeSafeDragGestures] that gates on the initial down position.
+ */
+internal suspend fun PointerInputScope.detectEdgeSafeVerticalDragGestures(
+    shouldIgnoreStart: (Offset) -> Boolean = { false },
+    onDragStart: (Offset) -> Unit = {},
+    onDragEnd: () -> Unit = {},
+    onDragCancel: () -> Unit = {},
+    onVerticalDrag: (change: PointerInputChange, dragAmount: Float) -> Unit,
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (shouldIgnoreStart(down.position)) {
+            return@awaitEachGesture
+        }
+        var drag: PointerInputChange?
+        var overSlop = 0f
+        do {
+            drag = awaitVerticalTouchSlopOrCancellation(down.id) { change, over ->
+                change.consume()
+                overSlop = over
+            }
+        } while (drag != null && !drag.isConsumed)
+        if (drag != null) {
+            onDragStart(down.position)
+            onVerticalDrag(drag, overSlop)
+            if (
+                verticalDrag(drag.id) {
+                    onVerticalDrag(it, it.positionChange().y)
+                    it.consume()
+                }
+            ) {
+                onDragEnd()
+            } else {
+                onDragCancel()
+            }
+        }
     }
 }
 

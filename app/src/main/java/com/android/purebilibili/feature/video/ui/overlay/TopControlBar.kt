@@ -434,8 +434,12 @@ fun TopControlBar(
                             active = relatedVideosVisible, iconSize = 18)
                     }
                     if (showAiSummaryBtn) {
-                        HeaderIcon(Icons.Outlined.AutoAwesome, "AI 总结", requireNotNull(onAiSummaryClick),
-                            active = aiSummaryVisible, iconSize = 18)
+                        HeaderButton("AI 总结", requireNotNull(onAiSummaryClick), active = aiSummaryVisible) {
+                            com.android.purebilibili.core.ui.ClientAiSummaryIcon(
+                                modifier = Modifier.size(18.dp),
+                                description = null,
+                            )
+                        }
                     }
                     if (showLikeBtn) {
                         Box(Modifier.likeBurstAnchor()) {
