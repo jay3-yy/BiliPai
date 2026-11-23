@@ -238,6 +238,11 @@ internal fun VideoSettingsPanel(
     // 定时关闭
     sleepTimerMinutes: Int?,
     onSleepTimerChange: (Int?) -> Unit,
+    abLoopState: com.android.purebilibili.feature.video.playback.policy.VideoAbLoopState =
+        com.android.purebilibili.feature.video.playback.policy.VideoAbLoopState(),
+    onSetAbLoopPointA: () -> Unit = {},
+    onSetAbLoopPointB: () -> Unit = {},
+    onClearAbLoop: () -> Unit = {},
     isFullscreen: Boolean = false,
     playerBounds: androidx.compose.ui.unit.IntRect? = null,
 
@@ -259,11 +264,13 @@ internal fun VideoSettingsPanel(
     currentSpeed: Float = 1.0f,
     onSpeedChange: (Float) -> Unit = {},
 
-    // 镜像翻转
+    // 镜像翻转与缩放
     isFlippedHorizontal: Boolean = false,
     isFlippedVertical: Boolean = false,
+    videoScale: Float = 1f,
     onFlipHorizontal: () -> Unit = {},
     onFlipVertical: () -> Unit = {},
+    onVideoScaleChange: (Float) -> Unit = {},
 
     // 音频模式
     isAudioOnly: Boolean = false,
@@ -385,6 +392,9 @@ internal fun VideoSettingsPanel(
     val hideCenterPlayback = com.android.purebilibili.feature.video.ui.overlay.rememberHideCenterPlayback()
     val visibleActionCounts by remember(context) { FullscreenActionCountSettings.getVisibleCounts(context) }
         .collectAsStateWithLifecycle(initialValue = null)
+    val visibleTopBarItems by remember(context) {
+        com.android.purebilibili.core.store.FullscreenTopBarSettings.getVisibleItems(context)
+    }.collectAsStateWithLifecycle(initialValue = null)
     val seekForwardSeconds by com.android.purebilibili.core.store.SettingsManager
         .getSeekForwardSeconds(context)
         .collectAsStateWithLifecycle(initialValue = 10
@@ -482,6 +492,12 @@ internal fun VideoSettingsPanel(
                 put(SLEEP_TIMER) {
                     PlayerSettingsRow(SLEEP_TIMER.title, formatPlayerMenuTimerValue(sleepTimerMinutes)) { page = "sleep" }
                 }
+                put(AB_LOOP) {
+                    PlayerSettingsRow(
+                        AB_LOOP.title,
+                        com.android.purebilibili.feature.video.playback.policy.formatAbLoopSummary(abLoopState),
+                    ) { page = "abLoop" }
+                }
                 onEditPlayUrl?.let { action ->
                     put(PLAY_URL) { PlayerSettingsRow(PLAY_URL.title) { dismissWithAction(action) } }
                 }
@@ -530,6 +546,7 @@ internal fun VideoSettingsPanel(
                     val transform = buildList {
                         if (isFlippedHorizontal) add("左右翻转")
                         if (isFlippedVertical) add("上下翻转")
+                        if (kotlin.math.abs(videoScale - 1f) >= 0.01f) add("${(videoScale * 100).toInt()}%")
                     }.joinToString("、").ifEmpty { "默认" }
                     PlayerSettingsRow(TRANSFORM.title, transform) { page = "transform" }
                 }
@@ -582,6 +599,12 @@ internal fun VideoSettingsPanel(
                     put(REPORT) { PlayerSettingsRow(REPORT.title) { dismissWithAction(action) } }
                 }
                 if (isFullscreen) {
+                    put(TOP_BAR_ITEMS) {
+                        val summary = visibleTopBarItems?.let {
+                            "${it.size}/${com.android.purebilibili.core.store.FullscreenTopBarItem.entries.size}"
+                        }
+                        PlayerSettingsRow(TOP_BAR_ITEMS.title, summary) { page = "topBarItems" }
+                    }
                     put(ACTION_COUNTS) { PlayerSettingsRow(ACTION_COUNTS.title) { page = "actionCounts" } }
                 }
                 put(ADVANCED) { PlayerSettingsRow(ADVANCED.title) { page = "advanced" } }
@@ -667,16 +690,50 @@ internal fun VideoSettingsPanel(
                     PlayerSettingsRow("返回") {
                         page = when (page) {
                             "cdnAdvanced" -> "cdn"
-                            "enhancement", "cdn", "transform", "audio", "codec" ->
+                            "abLoop", "enhancement", "cdn", "transform", "audio", "codec" ->
                                 if (customizeFullscreenMoreMenu) "playbackSettings" else "main"
                             else -> "main"
                         }
                     }
-                    val submenuTitle = when (page) { "quality" -> "选择画质"; "audio" -> "选择音质"; "codec" -> "首选编码格式"; "cdn", "cdnAdvanced" -> "CDN 设置"; "transform" -> "画面变换"; "enhancement" -> "画质增强"; "actionCounts" -> FullscreenActionCountSettings.TITLE; else -> null }
+                    val submenuTitle = when (page) { "quality" -> "选择画质"; "audio" -> "选择音质"; "codec" -> "首选编码格式"; "cdn", "cdnAdvanced" -> "CDN 设置"; "transform" -> "画面变换"; "abLoop" -> "A-B 区间循环"; "enhancement" -> "画质增强"; "actionCounts" -> FullscreenActionCountSettings.TITLE; "topBarItems" -> com.android.purebilibili.core.store.FullscreenTopBarSettings.TITLE; else -> null }
                     submenuTitle?.let { title ->
                         Box(Modifier.fillMaxWidth().height(45.dp), contentAlignment = Alignment.Center) { Text(title, fontSize = 14.sp) }
                     }
                     when (page) {
+                        "topBarItems" -> {
+                            com.android.purebilibili.core.store.FullscreenTopBarItemGroup.entries.forEach { group ->
+                                AppText(
+                                    text = group.title,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = AppContentColors.secondaryText(),
+                                )
+                                com.android.purebilibili.core.store.FullscreenTopBarItem.entries
+                                    .filter { it.group == group }
+                                    .forEach { item ->
+                                        PlayerSettingsToggleRow(
+                                            title = item.title,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            checked = visibleTopBarItems?.contains(item) == true,
+                                            enabled = visibleTopBarItems != null,
+                                            onCheckedChange = { visible ->
+                                                scope.launch {
+                                                    com.android.purebilibili.core.store.FullscreenTopBarSettings.setVisible(context, item, visible)
+                                                }
+                                            },
+                                        )
+                                    }
+                            }
+                            if (visibleTopBarItems != null &&
+                                visibleTopBarItems != com.android.purebilibili.core.store.FullscreenTopBarSettings.defaultVisibleItems
+                            ) {
+                                PlayerSettingsRow("恢复默认") {
+                                    scope.launch {
+                                        com.android.purebilibili.core.store.FullscreenTopBarSettings.resetDefaults(context)
+                                    }
+                                }
+                            }
+                        }
                         "actionCounts" -> {
                             FullscreenActionCount.entries.forEach { count ->
                                 PlayerSettingsToggleRow(
@@ -690,13 +747,71 @@ internal fun VideoSettingsPanel(
                                 )
                             }
                         }
+                        "abLoop" -> {
+                            PlayerSettingsRow(
+                                "当前区间",
+                                com.android.purebilibili.feature.video.playback.policy.formatAbLoopSummary(abLoopState),
+                                onClick = null,
+                            )
+                            PlayerSettingsRow("设当前时间为 A 点") { onSetAbLoopPointA() }
+                            PlayerSettingsRow("设当前时间为 B 点") { onSetAbLoopPointB() }
+                            if (abLoopState.hasAnyPoint) {
+                                PlayerSettingsRow("清除 A-B 区间") { onClearAbLoop() }
+                            }
+                        }
                         "transform" -> {
                             VideoSettingsSwitchRow(flipHorizontalIcon, "左右翻转", null, isFlippedHorizontal) { onFlipHorizontal() }
                             VideoSettingsSwitchRow(flipVerticalIcon, "上下翻转", null, isFlippedVertical) { onFlipVertical() }
-                            if (isFlippedHorizontal || isFlippedVertical) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.Small),
+                                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    VideoSettingsPanelText("画面缩放", VideoSettingsPanelTextRole.TITLE)
+                                    VideoSettingsPanelText(
+                                        "${(videoScale * 100).toInt()}%",
+                                        VideoSettingsPanelTextRole.BODY,
+                                        color = if (kotlin.math.abs(videoScale - 1f) >= 0.01f) AppContentColors.accent() else AppContentColors.secondaryText(),
+                                    )
+                                }
+                                Slider(
+                                    value = videoScale.coerceIn(0.5f, 2.0f),
+                                    onValueChange = { onVideoScaleChange((it * 20f).toInt() / 20f) },
+                                    valueRange = 0.5f..2.0f,
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    listOf(0.75f to "75%", 1.0f to "100%", 1.15f to "115%", 1.33f to "21:9", 1.5f to "150%").forEach { (preset, label) ->
+                                        val selected = kotlin.math.abs(videoScale - preset) < 0.02f
+                                        AppSurface(
+                                            onClick = { onVideoScaleChange(preset) },
+                                            shape = AppShapes.container(ContainerLevel.Chip),
+                                            color = if (selected) AppContentColors.accent().copy(alpha = 0.18f)
+                                                else AppSurfaceTokens.surfaceContainerHigh().copy(alpha = 0.65f),
+                                        ) {
+                                            VideoSettingsPanelText(
+                                                text = label,
+                                                role = VideoSettingsPanelTextRole.OPTION,
+                                                color = if (selected) AppContentColors.accent() else AppContentColors.primaryText(),
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            if (isFlippedHorizontal || isFlippedVertical || kotlin.math.abs(videoScale - 1f) >= 0.01f) {
                                 PlayerSettingsRow("恢复默认") {
                                     if (isFlippedHorizontal) onFlipHorizontal()
                                     if (isFlippedVertical) onFlipVertical()
+                                    if (kotlin.math.abs(videoScale - 1f) >= 0.01f) onVideoScaleChange(1f)
                                 }
                             }
                         }

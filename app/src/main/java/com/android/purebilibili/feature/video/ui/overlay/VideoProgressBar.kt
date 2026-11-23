@@ -75,6 +75,8 @@ fun VideoProgressBar(
     viewPoints: List<com.android.purebilibili.data.model.response.ViewPoint> = emptyList(),
     sponsorMarkers: List<SponsorProgressMarker> = emptyList(),
     pbpRidgeSamples: List<PbpRidgeSample> = emptyList(),
+    abLoopPointAMs: Long? = null,
+    abLoopPointBMs: Long? = null,
     currentChapter: String? = null,
     onChapterClick: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -393,6 +395,9 @@ fun VideoProgressBar(
                                     resolveProgressFraction(point.fromMs, duration)
                                         .takeIf { it in 0.01f..0.99f }?.let { size.width * it }
                                 } else emptyList()
+                                val (abStartFraction, abEndFraction) = com.android.purebilibili.feature.video.playback.policy
+                                    .resolveAbLoopProgressFractions(abLoopPointAMs, abLoopPointBMs, duration)
+                                val abMarkerColor = Color(0xFF4FC3F7)
                                 onDrawBehind {
                                     if (ridgePoints.size >= 2 && size.width > 0f) {
                                         drawPath(ridgePath, ridgeBrush)
@@ -414,6 +419,25 @@ fun VideoProgressBar(
                                     glassTrackHighlight?.draw(this, trackHeightPx)
                                     sponsorLines.forEach { (start, end, color) ->
                                         drawLine(color, start, end, trackHeightPx, StrokeCap.Round)
+                                    }
+                                    if (abStartFraction != null && abEndFraction != null && abEndFraction > abStartFraction) {
+                                        drawLine(
+                                            color = abMarkerColor.copy(alpha = 0.85f),
+                                            start = Offset(size.width * abStartFraction, centerY),
+                                            end = Offset(size.width * abEndFraction, centerY),
+                                            strokeWidth = trackHeightPx * 1.35f,
+                                            cap = StrokeCap.Round,
+                                        )
+                                    }
+                                    listOfNotNull(abStartFraction, abEndFraction).forEach { fraction ->
+                                        val x = size.width * fraction
+                                        drawLine(
+                                            color = abMarkerColor,
+                                            start = Offset(x, trackTop - 4f),
+                                            end = Offset(x, trackTop + trackHeightPx + 4f),
+                                            strokeWidth = 2.5f,
+                                            cap = StrokeCap.Round,
+                                        )
                                     }
                                     chapterXs.forEach { x ->
                                         drawLine(Color.White.copy(alpha = 0.85f), Offset(x, trackTop - 2f),

@@ -277,6 +277,11 @@ fun VideoSettingsPanel(
     // 定时关闭
     sleepTimerMinutes: Int?,
     onSleepTimerChange: (Int?) -> Unit,
+    abLoopState: com.android.purebilibili.feature.video.playback.policy.VideoAbLoopState =
+        com.android.purebilibili.feature.video.playback.policy.VideoAbLoopState(),
+    onSetAbLoopPointA: () -> Unit = {},
+    onSetAbLoopPointB: () -> Unit = {},
+    onClearAbLoop: () -> Unit = {},
     isFullscreen: Boolean = false,
 
     // 视频控制
@@ -297,11 +302,13 @@ fun VideoSettingsPanel(
     currentSpeed: Float = 1.0f,
     onSpeedChange: (Float) -> Unit = {},
 
-    // 镜像翻转
+    // 镜像翻转与缩放
     isFlippedHorizontal: Boolean = false,
     isFlippedVertical: Boolean = false,
+    videoScale: Float = 1f,
     onFlipHorizontal: () -> Unit = {},
     onFlipVertical: () -> Unit = {},
+    onVideoScaleChange: (Float) -> Unit = {},
 
     // 音频模式
     isAudioOnly: Boolean = false,
@@ -426,6 +433,14 @@ fun VideoSettingsPanel(
         .getDanmakuHotBarEnabled(context)
         .collectAsStateWithLifecycle(initialValue = true
         )
+    val visibleTopBarItems by remember(context) {
+        com.android.purebilibili.core.store.FullscreenTopBarSettings.getVisibleItems(context)
+    }.collectAsStateWithLifecycle(initialValue = null)
+    val visibleActionCounts by remember(context) {
+        com.android.purebilibili.core.store.FullscreenActionCountSettings.getVisibleCounts(context)
+    }.collectAsStateWithLifecycle(initialValue = null)
+    var showTopBarItemsDetails by remember { mutableStateOf(false) }
+    var showActionCountsDetails by remember { mutableStateOf(false) }
     val timerIcon = rememberAppTimerIcon()
     val refreshIcon = rememberAppRefreshIcon()
     val photoIcon = rememberAppPhotoIcon()
@@ -542,6 +557,179 @@ fun VideoSettingsPanel(
                     )
                 }
                 SettingsDivider()
+            }
+
+            groups.item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = customSectionHorizontalPadding,
+                            vertical = customSectionVerticalPadding,
+                        )
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppIcon(
+                                imageVector = refreshIcon,
+                                contentDescription = null,
+                                tint = if (abLoopState.isActive) AppContentColors.accent() else AppContentColors.secondaryText(),
+                                modifier = Modifier.size(panelSpec.iconSize),
+                            )
+                            Spacer(modifier = Modifier.width(panelSpec.iconGap))
+                            VideoSettingsPanelText(
+                                text = "A-B 区间循环",
+                                role = VideoSettingsPanelTextRole.TITLE,
+                                legacyFontWeight = FontWeight.Medium,
+                                color = AppContentColors.primaryText(),
+                            )
+                        }
+                        VideoSettingsPanelText(
+                            text = com.android.purebilibili.feature.video.playback.policy.formatAbLoopSummary(abLoopState),
+                            role = VideoSettingsPanelTextRole.BODY,
+                            color = if (abLoopState.isActive) AppContentColors.accent() else AppContentColors.secondaryText(),
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(customTitleToOptionsGap))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(panelSpec.chipSpacing),
+                    ) {
+                        AppSurface(
+                            onClick = onSetAbLoopPointA,
+                            shape = RoundedCornerShape(panelSpec.chipCornerRadius),
+                            color = if (abLoopState.pointAMs != null) AppContentColors.accent().copy(alpha = 0.18f)
+                                else AppSurfaceTokens.surfaceContainerHigh().copy(alpha = 0.7f),
+                            modifier = Modifier.height(panelSpec.chipHeight),
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(horizontal = panelSpec.chipHorizontalPadding),
+                            ) {
+                                VideoSettingsPanelText(
+                                    text = "设 A 点",
+                                    role = VideoSettingsPanelTextRole.OPTION,
+                                    color = if (abLoopState.pointAMs != null) AppContentColors.accent() else AppContentColors.primaryText(),
+                                )
+                            }
+                        }
+                        AppSurface(
+                            onClick = onSetAbLoopPointB,
+                            shape = RoundedCornerShape(panelSpec.chipCornerRadius),
+                            color = if (abLoopState.pointBMs != null) AppContentColors.accent().copy(alpha = 0.18f)
+                                else AppSurfaceTokens.surfaceContainerHigh().copy(alpha = 0.7f),
+                            modifier = Modifier.height(panelSpec.chipHeight),
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(horizontal = panelSpec.chipHorizontalPadding),
+                            ) {
+                                VideoSettingsPanelText(
+                                    text = "设 B 点",
+                                    role = VideoSettingsPanelTextRole.OPTION,
+                                    color = if (abLoopState.pointBMs != null) AppContentColors.accent() else AppContentColors.primaryText(),
+                                )
+                            }
+                        }
+                        if (abLoopState.hasAnyPoint) {
+                            AppSurface(
+                                onClick = onClearAbLoop,
+                                shape = RoundedCornerShape(panelSpec.chipCornerRadius),
+                                color = AppSurfaceTokens.surfaceContainerHigh().copy(alpha = 0.7f),
+                                modifier = Modifier.height(panelSpec.chipHeight),
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(horizontal = panelSpec.chipHorizontalPadding),
+                                ) {
+                                    VideoSettingsPanelText(
+                                        text = "清除",
+                                        role = VideoSettingsPanelTextRole.OPTION,
+                                        color = AppContentColors.primaryText(),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                SettingsDivider()
+            }
+
+            if (isFullscreen) {
+                groups.item {
+                    SettingsItem(
+                        icon = settingsIcon,
+                        title = com.android.purebilibili.core.store.FullscreenTopBarSettings.TITLE,
+                        subtitle = visibleTopBarItems?.let {
+                            "已显示 ${it.size}/${com.android.purebilibili.core.store.FullscreenTopBarItem.entries.size}"
+                        } ?: "默认",
+                        onClick = { showTopBarItemsDetails = !showTopBarItemsDetails },
+                    )
+                    if (showTopBarItemsDetails) {
+                        com.android.purebilibili.core.store.FullscreenTopBarItem.entries.forEach { item ->
+                            VideoSettingsSwitchRow(
+                                icon = settingsIcon,
+                                title = item.title,
+                                subtitle = item.group.title,
+                                checked = visibleTopBarItems?.contains(item) == true,
+                                enabled = visibleTopBarItems != null,
+                                onCheckedChange = { visible ->
+                                    scope.launch {
+                                        com.android.purebilibili.core.store.FullscreenTopBarSettings.setVisible(context, item, visible)
+                                    }
+                                },
+                            )
+                        }
+                        if (visibleTopBarItems != null &&
+                            visibleTopBarItems != com.android.purebilibili.core.store.FullscreenTopBarSettings.defaultVisibleItems
+                        ) {
+                            SettingsItem(
+                                icon = refreshIcon,
+                                title = "恢复默认",
+                                onClick = {
+                                    scope.launch {
+                                        com.android.purebilibili.core.store.FullscreenTopBarSettings.resetDefaults(context)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                    SettingsDivider()
+                }
+
+                groups.item {
+                    SettingsItem(
+                        icon = qualityIcon,
+                        title = com.android.purebilibili.core.store.FullscreenActionCountSettings.TITLE,
+                        subtitle = visibleActionCounts?.let {
+                            "已显示 ${it.size}/${com.android.purebilibili.core.store.FullscreenActionCount.entries.size}"
+                        } ?: "默认",
+                        onClick = { showActionCountsDetails = !showActionCountsDetails },
+                    )
+                    if (showActionCountsDetails) {
+                        com.android.purebilibili.core.store.FullscreenActionCount.entries.forEach { count ->
+                            VideoSettingsSwitchRow(
+                                icon = qualityIcon,
+                                title = count.title,
+                                subtitle = null,
+                                checked = visibleActionCounts?.contains(count) == true,
+                                enabled = visibleActionCounts != null,
+                                onCheckedChange = { visible ->
+                                    scope.launch {
+                                        com.android.purebilibili.core.store.FullscreenActionCountSettings.setVisible(context, count, visible)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                    SettingsDivider()
+                }
             }
 
             groups.item {
@@ -698,19 +886,74 @@ fun VideoSettingsPanel(
                     subtitle = buildList {
                         if (isFlippedHorizontal) add("左右翻转")
                         if (isFlippedVertical) add("上下翻转")
+                        if (kotlin.math.abs(videoScale - 1f) >= 0.01f) add("${(videoScale * 100).toInt()}%")
                     }.joinToString("、").ifEmpty { "默认" },
                     onClick = { showTransformDetails = !showTransformDetails },
                 )
                 if (showTransformDetails) {
                     VideoSettingsSwitchRow(flipHorizontalIcon, "左右翻转", null, isFlippedHorizontal) { onFlipHorizontal() }
                     VideoSettingsSwitchRow(flipVerticalIcon, "上下翻转", null, isFlippedVertical) { onFlipVertical() }
-                    if (isFlippedHorizontal || isFlippedVertical) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal = customSectionHorizontalPadding,
+                                vertical = AppSpacingTokens.Small,
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            VideoSettingsPanelText("画面缩放", VideoSettingsPanelTextRole.TITLE, color = AppContentColors.primaryText())
+                            VideoSettingsPanelText(
+                                "${(videoScale * 100).toInt()}%",
+                                VideoSettingsPanelTextRole.BODY,
+                                color = if (kotlin.math.abs(videoScale - 1f) >= 0.01f) AppContentColors.accent() else AppContentColors.secondaryText(),
+                            )
+                        }
+                        com.android.purebilibili.core.ui.components.AppSlider(
+                            value = videoScale.coerceIn(0.5f, 2.0f),
+                            onValueChange = { onVideoScaleChange((it * 20f).toInt() / 20f) },
+                            valueRange = 0.5f..2.0f,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(panelSpec.chipSpacing),
+                        ) {
+                            listOf(0.75f to "75%", 1.0f to "100%", 1.15f to "115%", 1.33f to "21:9", 1.5f to "150%").forEach { (preset, label) ->
+                                val selected = kotlin.math.abs(videoScale - preset) < 0.02f
+                                AppSurface(
+                                    onClick = { onVideoScaleChange(preset) },
+                                    shape = RoundedCornerShape(panelSpec.chipCornerRadius),
+                                    color = if (selected) AppContentColors.accent().copy(alpha = 0.18f)
+                                        else AppSurfaceTokens.surfaceContainerHigh().copy(alpha = 0.7f),
+                                    modifier = Modifier.height(panelSpec.chipHeight),
+                                ) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier.padding(horizontal = panelSpec.chipHorizontalPadding),
+                                    ) {
+                                        VideoSettingsPanelText(
+                                            text = label,
+                                            role = VideoSettingsPanelTextRole.OPTION,
+                                            color = if (selected) AppContentColors.accent() else AppContentColors.primaryText(),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (isFlippedHorizontal || isFlippedVertical || kotlin.math.abs(videoScale - 1f) >= 0.01f) {
                         SettingsItem(
                             icon = refreshIcon,
                             title = "恢复默认",
                             onClick = {
                                 if (isFlippedHorizontal) onFlipHorizontal()
                                 if (isFlippedVertical) onFlipVertical()
+                                if (kotlin.math.abs(videoScale - 1f) >= 0.01f) onVideoScaleChange(1f)
                             },
                         )
                     }
@@ -1525,6 +1768,7 @@ private fun VideoSettingsSwitchRow(
     title: String,
     subtitle: String?,
     checked: Boolean,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
     AppSwitchPreference(
@@ -1532,6 +1776,7 @@ private fun VideoSettingsSwitchRow(
         title = title,
         subtitle = subtitle,
         checked = checked,
+        enabled = enabled,
         onCheckedChange = onCheckedChange,
         iconTint = AppSurfaceTokens.onSurfaceVariantActions(),
     )

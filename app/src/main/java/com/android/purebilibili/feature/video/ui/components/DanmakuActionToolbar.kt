@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -85,6 +86,21 @@ internal fun DanmakuActionToolbar(
         }
     }
     com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = true, onBackCompleted = onDismiss)
+    val motionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+    val popupReveal = remember(anchor, motionEnabled) {
+        androidx.compose.animation.core.Animatable(if (motionEnabled) 0f else 1f)
+    }
+    androidx.compose.runtime.LaunchedEffect(popupReveal, motionEnabled) {
+        if (motionEnabled) {
+            popupReveal.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = 0.74f,
+                    stiffness = 560f,
+                ),
+            )
+        }
+    }
     Popup(
         popupPositionProvider = position,
         onDismissRequest = onDismiss,
@@ -97,7 +113,16 @@ internal fun DanmakuActionToolbar(
             shape = bubbleShape,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,
-            modifier = modifier.widthIn(max = maxWidth),
+            modifier = modifier
+                .widthIn(max = maxWidth)
+                .graphicsLayer {
+                    val progress = popupReveal.value
+                    val scale = 0.86f + 0.14f * progress
+                    alpha = progress.coerceIn(0f, 1f)
+                    scaleX = scale
+                    scaleY = scale
+                    translationY = (1f - progress) * 8.dp.toPx()
+                },
         ) {
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp, vertical = 6.dp)) {
                 val countLabel = if (voteCount > 999) "999+" else voteCount.toString()

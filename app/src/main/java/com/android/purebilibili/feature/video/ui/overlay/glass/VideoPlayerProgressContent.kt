@@ -40,6 +40,8 @@ internal fun PlayerControlProgressBar(
     currentChapterProvider: () -> String?,
     onChapterClick: () -> Unit,
     modifier: Modifier = Modifier,
+    abLoopPointAMs: Long? = null,
+    abLoopPointBMs: Long? = null,
     neutralGlassTrack: Boolean = false,
 ) {
     val progress = progressProvider()
@@ -60,6 +62,8 @@ internal fun PlayerControlProgressBar(
         viewPoints = viewPoints,
         sponsorMarkers = sponsorMarkers,
         pbpRidgeSamples = pbpRidgeSamples,
+        abLoopPointAMs = abLoopPointAMs,
+        abLoopPointBMs = abLoopPointBMs,
         currentChapter = currentChapterProvider(),
         onChapterClick = onChapterClick,
         modifier = modifier,

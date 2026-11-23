@@ -262,6 +262,9 @@ fun DanmakuSettingsPanel(
     showAdvancedSection: Boolean = false,
     fontWeight: Int = 5,
     speed: Float,
+    timeOffsetMs: Long = 0L,
+    onTimeOffsetMsChange: (Long) -> Unit = {},
+    onExportDanmaku: ((com.android.purebilibili.feature.video.danmaku.DanmakuExportFormat) -> Unit)? = null,
     displayArea: Float = 0.5f,
     strokeWidth: Float = 1.5f,
     lineHeight: Float = 1.6f,
@@ -425,6 +428,56 @@ fun DanmakuSettingsPanel(
                         DanmakuSliderItem("滚动弹幕时长", scrollDurationSeconds, 1f..50f, displayValue = { "$it 秒" }, onValueChange = onScrollDurationSecondsChange, colors = panelColors, resetValue = 7f, steps = 48, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.SCROLL_DURATION, next) } })
                         DanmakuSliderItem("静态弹幕时长", staticDurationSeconds, 1f..50f, displayValue = { "$it 秒" }, onValueChange = onStaticDurationSecondsChange, colors = panelColors, resetValue = 4f, steps = 48, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.STATIC_DURATION, next) } })
                         DanmakuSliderItem("弹幕行高", lineHeight, 1f..3f, displayValue = { "$it" }, onValueChange = onLineHeightChange, colors = panelColors, resetValue = 1.6f, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.LINE_HEIGHT, next) } })
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            AppText("时间轴偏移", style = MaterialTheme.typography.bodyMedium, color = panelColors.titleColor)
+                            AppText(
+                                com.android.purebilibili.feature.video.danmaku.formatDanmakuTimeOffsetLabel(timeOffsetMs),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (timeOffsetMs != 0L) MaterialTheme.colorScheme.primary else panelColors.supportingColor,
+                            )
+                        }
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            listOf(-5000L to "-5s", -1000L to "-1s", -500L to "-0.5s", 500L to "+0.5s", 1000L to "+1s", 5000L to "+5s").forEach { (delta, label) ->
+                                com.android.purebilibili.core.ui.components.AppFilterChip(
+                                    selected = false,
+                                    onClick = { onTimeOffsetMsChange(timeOffsetMs + delta) },
+                                    label = { AppText(label) },
+                                )
+                            }
+                            if (timeOffsetMs != 0L) {
+                                com.android.purebilibili.core.ui.components.AppFilterChip(
+                                    selected = true,
+                                    onClick = { onTimeOffsetMsChange(0L) },
+                                    label = { AppText("归零") },
+                                )
+                            }
+                        }
+                        if (onExportDanmaku != null) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                AppText("导出弹幕", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = panelColors.titleColor)
+                                com.android.purebilibili.core.ui.components.AppFilterChip(
+                                    selected = false,
+                                    onClick = { onExportDanmaku(com.android.purebilibili.feature.video.danmaku.DanmakuExportFormat.XML) },
+                                    label = { AppText("XML") },
+                                )
+                                com.android.purebilibili.core.ui.components.AppFilterChip(
+                                    selected = false,
+                                    onClick = { onExportDanmaku(com.android.purebilibili.feature.video.danmaku.DanmakuExportFormat.ASS) },
+                                    label = { AppText("ASS") },
+                                )
+                            }
+                        }
                         DanmakuSettingsAction("高级设置", onClick = { showExtraSettings = true })
                     } else if (glass) {
                         if (onShowDanmakuPool != null) {
@@ -444,6 +497,27 @@ fun DanmakuSettingsPanel(
                                 steps = 7, displayValue = { "${it.roundToInt()} 条" },
                                 onValueChange = { onDuplicateMergeCountThresholdChange(it.roundToInt()) }, colors = panelColors, resetValue = 2f)
                         }
+                        val duplicateSuppressThreshold by remember(settingsContext) {
+                            SettingsManager.getDanmakuDuplicateSuppressThreshold(settingsContext)
+                        }.collectAsStateWithLifecycle(initialValue = 0)
+                        DanmakuSliderItem(
+                            "屏蔽大量重复",
+                            duplicateSuppressThreshold.toFloat(),
+                            0f..20f,
+                            steps = 19,
+                            displayValue = { v ->
+                                val n = v.roundToInt()
+                                if (n < 2) "关闭" else "≥$n 条屏蔽"
+                            },
+                            onValueChange = { v ->
+                                val target = v.roundToInt().let { if (it == 1) 2 else it }
+                                settingsScopeCoroutine.launch {
+                                    SettingsManager.setDanmakuDuplicateSuppressThreshold(settingsContext, target)
+                                }
+                            },
+                            colors = panelColors,
+                            resetValue = 0f,
+                        )
                         if (showAdvancedSection || showSmartOcclusionSection) {
                             DanmakuSettingsSectionTitle("显示与避让")
                             if (showAdvancedSection) {
@@ -866,6 +940,32 @@ fun DanmakuSettingsPanel(
                                     colors = panelColors,
                                     fullscreenStyle = isFullscreenStyle,
                                     resetValue = 2f,
+                                    tickCount = 5
+                                )
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                val landscapeDuplicateSuppressThreshold by remember(settingsContext) {
+                                    SettingsManager.getDanmakuDuplicateSuppressThreshold(settingsContext)
+                                }.collectAsStateWithLifecycle(initialValue = 0)
+                                DanmakuSliderItem(
+                                    label = "屏蔽大量重复",
+                                    value = landscapeDuplicateSuppressThreshold.toFloat(),
+                                    valueRange = 0f..20f,
+                                    steps = 19,
+                                    displayValue = { v ->
+                                        val n = v.roundToInt()
+                                        if (n < 2) "关闭" else "≥$n 条屏蔽"
+                                    },
+                                    onValueChange = { v ->
+                                        val target = v.roundToInt().let { if (it == 1) 2 else it }
+                                        settingsScopeCoroutine.launch {
+                                            SettingsManager.setDanmakuDuplicateSuppressThreshold(settingsContext, target)
+                                        }
+                                    },
+                                    colors = panelColors,
+                                    fullscreenStyle = isFullscreenStyle,
+                                    resetValue = 0f,
                                     tickCount = 5
                                 )
                             }

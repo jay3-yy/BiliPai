@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
@@ -191,7 +192,7 @@ fun PortraitSubtitleHost(
         "${pageBvid}_${pageCid}_${success.subtitlePrimaryLanguage}_${success.subtitleSecondaryLanguage}_" +
             "${success.subtitlePrimaryLikelyAi}_${success.subtitleSecondaryLikelyAi}_${subtitleAutoPreference.name}"
     }
-    var displayModePreference by rememberSaveable(sessionKey) {
+    var displayModePreference by rememberSaveable(pageBvid, pageCid) {
         mutableStateOf(
             resolveSubtitleDisplayModeByAutoPreference(
                 preference = subtitleAutoPreference,
@@ -205,7 +206,7 @@ fun PortraitSubtitleHost(
             )
         )
     }
-    var largeTextEnabled by rememberSaveable("${sessionKey}_large") {
+    var largeTextEnabled by rememberSaveable(pageBvid, pageCid) {
         mutableStateOf(false)
     }
 
@@ -315,9 +316,11 @@ fun PortraitSubtitleHost(
         subtitleAppearance == PlayerSubtitleAppearance()
     Box(modifier = modifier.fillMaxSize()) {
         if (keepMounted && subtitleSession.selectedTrackKey == null) {
+            val isTopPlacement = subtitleAppearance.placement ==
+                com.android.purebilibili.feature.video.ui.components.SubtitlePlacement.TOP
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
+                    .align(if (isTopPlacement) Alignment.TopCenter else Alignment.BottomCenter)
                     .offset {
                         IntOffset(
                             x = 0,
@@ -332,12 +335,18 @@ fun PortraitSubtitleHost(
                         if (glassLayout) Modifier
                             .fillMaxWidth(0.92f)
                             .padding(horizontal = 12.dp)
-                            .padding(bottom = bottomPaddingDp.dp)
+                            .then(
+                                if (isTopPlacement) Modifier.statusBarsPadding().padding(top = subtitleAppearance.bottomPadding.dp)
+                                else Modifier.padding(bottom = bottomPaddingDp.dp)
+                            )
                             .padding(vertical = 6.dp)
                         else Modifier
                             .fillMaxWidth()
                             .padding(horizontal = subtitleAppearance.horizontalPadding.dp)
-                            .padding(bottom = (bottomPaddingDp + subtitleAppearance.bottomPadding).dp)
+                            .then(
+                                if (isTopPlacement) Modifier.statusBarsPadding().padding(top = subtitleAppearance.bottomPadding.dp)
+                                else Modifier.padding(bottom = (bottomPaddingDp + subtitleAppearance.bottomPadding).dp)
+                            )
                     )
                     .then(
                         if (subtitlePositionLocked) {

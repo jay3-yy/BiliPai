@@ -1,6 +1,7 @@
 // 文件路径: feature/video/ui/components/DanmakuSendDialog.kt
 package com.android.purebilibili.feature.video.ui.components
 
+import androidx.compose.foundation.text.handwriting.handwritingHandler
 import com.android.purebilibili.core.ui.AppContentColors
 
 import com.android.purebilibili.core.ui.components.AppColorPicker
@@ -256,6 +257,7 @@ internal fun DanmakuSendDialogContent(
                         .heightIn(min = 48.dp)
                         .testTag("danmaku_compact_input")
                         .focusRequester(focusRequester)
+                        .handwritingHandler()
                         .pointerInput(isSending) {
                             if (!isSending) {
                                 awaitEachGesture {

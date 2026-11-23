@@ -257,6 +257,8 @@ internal fun BangumiPlayerOverlayHost(
             isFlippedHorizontal = features.isFlippedHorizontal,
             isFlippedVertical = features.isFlippedVertical,
             sleepTimerMinutes = features.sleepTimerMinutes,
+            abLoopState = features.abLoopState,
+            danmakuTimeOffsetMs = danmakuManager.timeOffsetMs,
             currentAspectRatio = currentAspectRatio,
             showDislikeAction = shouldShowBangumiOverlayDislikeAction(),
             coverUrl = coverUrl,
@@ -311,9 +313,41 @@ internal fun BangumiPlayerOverlayHost(
             onDanmakuInputClick = features.onDanmakuInputClick,
             onLandscapeCommentClick = features.onCommentClick,
             onSleepTimerChange = features.onSleepTimerChange,
+            onSetAbLoopPointA = features.onSetAbLoopPointA,
+            onSetAbLoopPointB = features.onSetAbLoopPointB,
+            onClearAbLoop = features.onClearAbLoop,
             onDanmakuOpacityChange = onDanmakuOpacityChange,
             onDanmakuFontScaleChange = onDanmakuFontScaleChange,
             onDanmakuSpeedChange = onDanmakuSpeedChange,
+            onDanmakuTimeOffsetMsChange = { offsetMs -> danmakuManager.updateTimeOffsetMs(offsetMs) },
+            onExportDanmaku = { format ->
+                val (exportCid, items) = danmakuManager.snapshotExportableDanmaku()
+                if (items.isEmpty()) {
+                    onShowMessage("当前暂无可导出的弹幕")
+                } else {
+                    val exportTitle = resolveBangumiOverlayShareTitle(title = title, subtitle = subtitle).ifBlank { "bangumi_$epId" }
+                    settingsScope.launch {
+                        val content = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                            when (format) {
+                                com.android.purebilibili.feature.video.danmaku.DanmakuExportFormat.XML ->
+                                    com.android.purebilibili.feature.video.danmaku.encodeDanmakuToBilibiliXml(exportCid, items)
+                                com.android.purebilibili.feature.video.danmaku.DanmakuExportFormat.ASS ->
+                                    com.android.purebilibili.feature.video.danmaku.encodeDanmakuToAss(exportTitle, items)
+                            }
+                        }
+                        com.android.purebilibili.feature.video.danmaku.exportDanmakuToDownloads(
+                            context = context,
+                            fileNameBase = "${exportTitle}_ep${epId}",
+                            format = format,
+                            content = content,
+                        ).onSuccess { path ->
+                            onShowMessage("已导出 ${items.size} 条弹幕至 $path")
+                        }.onFailure { error ->
+                            onShowMessage("导出弹幕失败：${error.message ?: "未知错误"}")
+                        }
+                    }
+                }
+            },
             onDanmakuDisplayAreaChange = onDanmakuDisplayAreaChange,
             onDanmakuFontWeightChange = { value -> settingsScope.launch { SettingsManager.setDanmakuFontWeight(context, value, danmakuSettingsScope) } },
             onDanmakuStrokeWidthChange = { value -> settingsScope.launch { SettingsManager.setDanmakuStrokeWidth(context, value, danmakuSettingsScope) } },

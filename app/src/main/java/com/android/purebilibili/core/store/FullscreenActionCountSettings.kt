@@ -8,8 +8,10 @@ import kotlinx.coroutines.flow.map
 
 enum class FullscreenActionCount(val title: String, internal val preferenceName: String) {
     LIKE("点赞数", "show_fullscreen_like_count"),
-    COMMENT("评论数", "show_fullscreen_comment_count"),
+    COIN("投币数", "show_fullscreen_coin_count"),
     FAVORITE("收藏数", "show_fullscreen_favorite_count"),
+    SHARE("分享数", "show_fullscreen_share_count"),
+    COMMENT("评论数", "show_fullscreen_comment_count"),
 }
 
 object FullscreenActionCountSettings {

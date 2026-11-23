@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.onSizeChanged
@@ -72,6 +73,7 @@ internal fun HotDanmakuBar(
     onLikeDanmaku: (Long, Boolean) -> Unit,
     onSendSame: ((String) -> Unit)?,
     isSending: Boolean,
+    opacity: Float = 1f,
     modifier: Modifier = Modifier,
     onPresentationChange: (List<DanmakuItem>, Int) -> Unit,
 ) {
@@ -155,6 +157,7 @@ internal fun HotDanmakuBar(
             if (visibleItems.isNotEmpty()) Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .graphicsLayer { alpha = opacity.coerceIn(0f, 1f) }
                     .onSizeChanged {
                         presentation.heightPx = it.height
                         presentation.report(latestVisibleItems, latestPresentationChange)

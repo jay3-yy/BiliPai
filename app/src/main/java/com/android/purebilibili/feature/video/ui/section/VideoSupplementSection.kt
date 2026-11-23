@@ -211,6 +211,52 @@ private fun AiSummaryInlineDragHandle(
 }
 
 @Composable
+internal fun LandscapeAiSummaryDrawerContent(
+    aiSummary: AiSummaryData?,
+    aiSummaryPrompt: AiSummaryPromptState?,
+    onTimestampClick: ((Long) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val hasSummary = hasAiSummaryContent(aiSummary)
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 12.dp),
+    ) {
+        if (hasSummary && aiSummary != null) {
+            AiSummaryPanelBody(
+                aiSummary = aiSummary,
+                onTimestampClick = onTimestampClick,
+                onCreateNoteDraftClick = {},
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AppText(
+                    text = aiSummaryPrompt?.title ?: "当前视频暂无 AI 总结",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = AppContentColors.primaryText(),
+                )
+                aiSummaryPrompt?.message?.takeIf { it.isNotBlank() }?.let { detail ->
+                    AppText(
+                        text = detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppContentColors.secondaryText(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun AiSummaryPanelBody(
     aiSummary: AiSummaryData,
     onTimestampClick: ((Long) -> Unit)?,

@@ -195,6 +195,8 @@ fun TopControlBar(
     shareMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
     onShareClick: () -> Unit = {},
     onCommentClick: (() -> Unit)? = null,
+    onAiSummaryClick: (() -> Unit)? = null,
+    aiSummaryVisible: Boolean = false,
     onCastClick: () -> Unit = {}, // Added Cast callback
     showCastButton: Boolean = true,
     onMoreClick: () -> Unit = {},
@@ -203,10 +205,13 @@ fun TopControlBar(
     actionEndPaddingDp: Int? = null,
     isFavorited: Boolean = false,
     onFavoriteClick: () -> Unit = {},
+    coinCount: Long? = null,
+    shareCount: Long? = null,
     onActionDockBoundsChanged: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val visibleCounts = rememberVisibleFullscreenCounts()
+    val visibleTopBarItems = rememberVisibleFullscreenTopBarItems()
     val showCounts = isFullscreen
     fun visibleCount(kind: com.android.purebilibili.core.store.FullscreenActionCount, value: Long?): Long? =
         value.takeIf { showCounts && kind in visibleCounts }
@@ -214,8 +219,13 @@ fun TopControlBar(
     val displayCutoutInsets = WindowInsets.displayCutout
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
     val configuration = LocalConfiguration.current
+    val isLandscapeFullscreen = isFullscreen &&
+        configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    fun showTopItem(item: com.android.purebilibili.core.store.FullscreenTopBarItem): Boolean =
+        !isLandscapeFullscreen || item in visibleTopBarItems
     val homeVisible = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE &&
-        onHomeClick != null
+        onHomeClick != null &&
+        showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.HOME)
     val ambient = LocalAmbientPresentation.current
     var rowOrigin by remember { mutableStateOf<Offset?>(null) }
     var rowWidthPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -273,11 +283,12 @@ fun TopControlBar(
             delay(30_000L)
         }
     }
-    val statusInfo = remember(currentTimeText, batteryLevelPercent, showBatteryLevel, showCurrentTime) {
+    val statusItemVisible = showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.STATUS)
+    val statusInfo = remember(currentTimeText, batteryLevelPercent, showBatteryLevel, showCurrentTime, statusItemVisible) {
         resolveLandscapeTopStatusInfo(
-            showBatteryLevel = showBatteryLevel,
+            showBatteryLevel = showBatteryLevel && statusItemVisible,
             batteryLevelPercent = batteryLevelPercent,
-            showCurrentTime = showCurrentTime,
+            showCurrentTime = showCurrentTime && statusItemVisible,
             currentTimeText = currentTimeText
         )
     }
@@ -460,8 +471,11 @@ fun TopControlBar(
                 Row(
                     modifier = if (isFullscreen || glassControls) Modifier
                         .horizontalScroll(rememberScrollState())
-                        // 在固定按钮行高度之外预留角标空间，避免滚动容器裁掉数字顶部。
-                        .padding(top = com.android.purebilibili.feature.video.ui.overlay.PlayerActionCountTopOverflow)
+                        // 在固定按钮行高度之外预留角标空间，避免滚动容器裁掉数字顶部与右缘。
+                        .padding(
+                            top = com.android.purebilibili.feature.video.ui.overlay.PlayerActionCountTopOverflow,
+                            end = com.android.purebilibili.feature.video.ui.overlay.PlayerActionCountEndOverflow,
+                        )
                         .padding(horizontal = 4.dp)
                         .then(alignedGlassDockHeight?.let { Modifier.height(it) } ?: Modifier)
                     else Modifier,
@@ -469,21 +483,25 @@ fun TopControlBar(
                     horizontalArrangement = Arrangement.spacedBy(if (isFullscreen || glassControls) 6.dp else layoutPolicy.actionSpacingDp.dp)
                 ) {
                     if (showInteractiveActionGroup) {
-                        // Like
-                        Box(modifier = Modifier.likeBurstAnchor()) {
-                            ActionIcon(
-                                glassEnabled = isFullscreen || glassControls,
-                                icon = if (likeStatusKnown && isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
-                                contentDescription = if (likeStatusKnown) "点赞" else "点赞状态尚未确认",
-                                count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.LIKE, likeCount),
-                                isActive = likeStatusKnown && isLiked,
-                                onClick = { haptic(HapticType.LIGHT); onLikeClick() },
-                                buttonSizeDp = layoutPolicy.buttonSizeDp,
-                                iconSizeDp = layoutPolicy.iconSizeDp
-                            )
+                        if (showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.LIKE)) {
+                            // Like
+                            Box(modifier = Modifier.likeBurstAnchor()) {
+                                ActionIcon(
+                                    glassEnabled = isFullscreen || glassControls,
+                                    icon = if (likeStatusKnown && isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
+                                    contentDescription = if (likeStatusKnown) "点赞" else "点赞状态尚未确认",
+                                    count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.LIKE, likeCount),
+                                    isActive = likeStatusKnown && isLiked,
+                                    onClick = { haptic(HapticType.LIGHT); onLikeClick() },
+                                    buttonSizeDp = layoutPolicy.buttonSizeDp,
+                                    iconSizeDp = layoutPolicy.iconSizeDp
+                                )
+                            }
                         }
 
-                        if (showDislikeAction && !separateGlassMore) {
+                        if (showDislikeAction && !separateGlassMore &&
+                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.DISLIKE)
+                        ) {
                             // Dislike
                             ActionIcon(
                                 glassEnabled = isFullscreen || glassControls,
@@ -496,19 +514,24 @@ fun TopControlBar(
                             )
                         }
 
-                        // Coin
-                        ActionIcon(
-                            glassEnabled = isFullscreen || glassControls,
-                            icon = AppIcons.BiliCoin,
-                            contentDescription = "投币",
-                            isActive = isCoined,
-                            onClick = { haptic(HapticType.LIGHT); onCoinClick() },
-                            buttonSizeDp = layoutPolicy.buttonSizeDp,
-                            iconSizeDp = layoutPolicy.iconSizeDp
-                        )
+                        if (showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.COIN)) {
+                            // Coin
+                            ActionIcon(
+                                glassEnabled = isFullscreen || glassControls,
+                                icon = AppIcons.BiliCoin,
+                                contentDescription = "投币",
+                                count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.COIN, coinCount),
+                                isActive = isCoined,
+                                onClick = { haptic(HapticType.LIGHT); onCoinClick() },
+                                buttonSizeDp = layoutPolicy.buttonSizeDp,
+                                iconSizeDp = layoutPolicy.iconSizeDp
+                            )
+                        }
 
                         // Glass fullscreen completes the engagement group; native keeps its actions.
-                        if (separateGlassMore) {
+                        if (separateGlassMore &&
+                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.FAVORITE)
+                        ) {
                             ActionIcon(
                                 glassEnabled = isFullscreen || glassControls,
                                 icon = favoriteIcon,
@@ -522,7 +545,9 @@ fun TopControlBar(
                             )
                         }
 
-                        if (showDislikeAction && separateGlassMore) {
+                        if (showDislikeAction && separateGlassMore &&
+                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.DISLIKE)
+                        ) {
                             // Dislike
                             ActionIcon(
                                 glassEnabled = isFullscreen || glassControls,
@@ -535,20 +560,23 @@ fun TopControlBar(
                             )
                         }
 
-                        // Share
-                        ActionIcon(
-                            glassEnabled = isFullscreen || glassControls,
-                            icon = Icons.Outlined.Share,
-                            contentDescription = "分享",
-                            modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onShareClick) } ?: Modifier,
-                            isActive = false,
-                            onClick = onShareClick,
-                            buttonSizeDp = layoutPolicy.buttonSizeDp,
-                            iconSizeDp = layoutPolicy.iconSizeDp
-                        )
+                        if (showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.SHARE)) {
+                            // Share
+                            ActionIcon(
+                                glassEnabled = isFullscreen || glassControls,
+                                icon = Icons.Outlined.Share,
+                                contentDescription = "分享",
+                                modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onShareClick) } ?: Modifier,
+                                count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.SHARE, shareCount),
+                                isActive = false,
+                                onClick = onShareClick,
+                                buttonSizeDp = layoutPolicy.buttonSizeDp,
+                                iconSizeDp = layoutPolicy.iconSizeDp
+                            )
+                        }
                     }
 
-                    if (showCastButton) {
+                    if (showCastButton && showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.CAST)) {
                         ActionIcon(
                             glassEnabled = isFullscreen || glassControls,
                             icon = Icons.Outlined.Cast,
@@ -560,7 +588,7 @@ fun TopControlBar(
                         )
                     }
 
-                    if (onCommentClick != null) {
+                    if (onCommentClick != null && showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.COMMENT)) {
                         ActionIcon(
                             glassEnabled = isFullscreen || glassControls,
                             icon = Icons.Outlined.Comment,
@@ -568,6 +596,18 @@ fun TopControlBar(
                             count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.COMMENT, commentCount),
                             isActive = false,
                             onClick = onCommentClick,
+                            buttonSizeDp = layoutPolicy.buttonSizeDp,
+                            iconSizeDp = layoutPolicy.iconSizeDp
+                        )
+                    }
+
+                    if (onAiSummaryClick != null && showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.AI_SUMMARY)) {
+                        ActionIcon(
+                            glassEnabled = isFullscreen || glassControls,
+                            icon = Icons.Outlined.AutoAwesome,
+                            contentDescription = "AI 总结",
+                            isActive = aiSummaryVisible,
+                            onClick = onAiSummaryClick,
                             buttonSizeDp = layoutPolicy.buttonSizeDp,
                             iconSizeDp = layoutPolicy.iconSizeDp
                         )

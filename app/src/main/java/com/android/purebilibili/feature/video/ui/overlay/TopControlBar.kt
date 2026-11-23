@@ -137,8 +137,12 @@ fun TopControlBar(
     onSponsorSegmentsClick: (() -> Unit)? = null,
     onCommentClick: (() -> Unit)? = null,
     onRelatedVideosClick: (() -> Unit)? = null,
+    onAiSummaryClick: (() -> Unit)? = null,
+    coinCount: Long? = null,
+    shareCount: Long? = null,
     commentsVisible: Boolean = false,
     relatedVideosVisible: Boolean = false,
+    aiSummaryVisible: Boolean = false,
     simplifiedPortrait: Boolean = false,
     authorKey: String = "",
     authorName: String = "",
@@ -159,15 +163,20 @@ fun TopControlBar(
         showFullscreenActionItems = showInteractiveActions,
     )
     val visibleCounts = rememberVisibleFullscreenCounts()
+    val visibleTopBarItems = rememberVisibleFullscreenTopBarItems()
     val showCounts = isFullscreen
     fun visibleCount(kind: com.android.purebilibili.core.store.FullscreenActionCount, value: Long?): Long? =
         value.takeIf { showCounts && kind in visibleCounts }
+    fun showTopItem(item: com.android.purebilibili.core.store.FullscreenTopBarItem): Boolean =
+        !isFullscreen || isPortrait || item in visibleTopBarItems
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val hostStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
-    val clockVisible = !simplifiedPortrait && policy.showStatus && showCurrentTime
-    val batteryVisible = !simplifiedPortrait && policy.showStatus && showBatteryLevel
+    val clockVisible = !simplifiedPortrait && policy.showStatus && showCurrentTime &&
+        showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.STATUS)
+    val batteryVisible = !simplifiedPortrait && policy.showStatus && showBatteryLevel &&
+        showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.STATUS)
     val currentTime by produceState(initialValue = formatCurrentTime(), clockVisible, hostStarted) {
         if (!shouldPollTopControlBarClock(clockVisible, hostStarted)) return@produceState
         while (true) {
@@ -224,7 +233,7 @@ fun TopControlBar(
                 left = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(buttonSpacing)) {
                         HeaderIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回", onBack, iconSize = if (glass) 15 else 20)
-                        if (onHomeClick != null) {
+                        if (onHomeClick != null && showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.HOME)) {
                             HeaderIcon(Icons.Outlined.Home, "返回首页", onHomeClick)
                         }
                     }
@@ -254,27 +263,39 @@ fun TopControlBar(
                             }
                             if (clockVisible) HeaderStatusText(currentTime)
                         }
-                        if (!simplifiedPortrait && policy.showAudio && onAudioClick != null) {
+                        if (!simplifiedPortrait && policy.showAudio && onAudioClick != null &&
+                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.AUDIO)
+                        ) {
                             HeaderIcon(Icons.Outlined.Headphones, "听音频", onAudioClick)
                         }
-                        if (!simplifiedPortrait && policy.showCast && showCastButton && onCastClick != null) {
+                        if (!simplifiedPortrait && policy.showCast && showCastButton && onCastClick != null &&
+                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.CAST)
+                        ) {
                             HeaderIcon(Icons.Outlined.Cast, "投屏", onCastClick)
                         }
-                        if (!simplifiedPortrait && !isFileSource && showSponsorSubmitButton && onSponsorSubmitClick != null) {
+                        if (!simplifiedPortrait && !isFileSource && showSponsorSubmitButton && onSponsorSubmitClick != null &&
+                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.SPONSOR)
+                        ) {
                             HeaderButton(sponsorSubmitDescription, onSponsorSubmitClick) {
                                 PiliPlusDanmakuGlyph("\uE814", sponsorSubmitDescription, Color.White, 20.dp)
                             }
                         }
-                        if (!simplifiedPortrait && showSponsorSegmentsButton && onSponsorSegmentsClick != null) {
+                        if (!simplifiedPortrait && showSponsorSegmentsButton && onSponsorSegmentsClick != null &&
+                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.SPONSOR)
+                        ) {
                             HeaderButton("片段信息", onSponsorSegmentsClick) { HeaderAdvertisementIcon() }
                         }
                         if (!simplifiedPortrait && policy.showDanmakuActions) {
-                            if (onSendDanmakuClick != null) {
+                            if (onSendDanmakuClick != null &&
+                                showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.SEND_DANMAKU)
+                            ) {
                                 HeaderButton("发弹幕", onSendDanmakuClick) {
                                     PiliPlusDanmakuSendIcon(tint = Color.White, size = 20.dp)
                                 }
                             }
-                            if (onDanmakuToggle != null) {
+                            if (onDanmakuToggle != null &&
+                                showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.DANMAKU_TOGGLE)
+                            ) {
                                 val description = if (danmakuEnabled) "关闭弹幕" else "开启弹幕"
                                 HeaderButton(description, onDanmakuToggle) {
                                     PiliPlusDanmakuGlyph(
@@ -286,12 +307,16 @@ fun TopControlBar(
                                 }
                             }
                         }
-                        if (!simplifiedPortrait && onDanmakuSettingsClick != null) {
+                        if (!simplifiedPortrait && onDanmakuSettingsClick != null &&
+                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.DANMAKU_SETTINGS)
+                        ) {
                             HeaderButton("弹幕设置", onDanmakuSettingsClick, modifier = danmakuMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onDanmakuSettingsClick) } ?: Modifier) {
                                 PiliPlusDanmakuSettingsIcon(tint = Color.White, size = 20.dp)
                             }
                         }
-                        if (!simplifiedPortrait && showPipButton && onPipClick != null) {
+                        if (!simplifiedPortrait && showPipButton && onPipClick != null &&
+                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.PIP)
+                        ) {
                             HeaderIcon(Icons.Outlined.PictureInPicture, "画中画", onPipClick)
                         }
                         if (!simplifiedPortrait) extraActions?.invoke()
@@ -371,8 +396,24 @@ fun TopControlBar(
                     }
                 },
             )
+            val showCommentBtn = onCommentClick != null &&
+                showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.COMMENT)
+            val showRelatedBtn = onRelatedVideosClick != null &&
+                showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.RELATED)
+            val showAiSummaryBtn = onAiSummaryClick != null &&
+                showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.AI_SUMMARY)
+            val showLikeBtn = policy.showEngagement && onLikeClick != null &&
+                showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.LIKE)
+            val showDislikeBtn = policy.showEngagement && policy.showDislike && allowDislikeAction && onDislikeClick != null &&
+                showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.DISLIKE)
+            val showCoinBtn = policy.showEngagement && onCoinClick != null &&
+                showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.COIN)
+            val showFavoriteBtn = policy.showEngagement && onFavoriteClick != null &&
+                showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.FAVORITE)
+            val showShareBtn = policy.showEngagement && onShareClick != null &&
+                showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.SHARE)
             // 侧栏入口属于浏览功能，不随点赞、投币等互动快捷键一起隐藏。
-            if (!simplifiedPortrait && (policy.showEngagement || onCommentClick != null || onRelatedVideosClick != null)) {
+            if (!simplifiedPortrait && (showCommentBtn || showRelatedBtn || showAiSummaryBtn || showLikeBtn || showDislikeBtn || showCoinBtn || showFavoriteBtn || showShareBtn)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -383,47 +424,59 @@ fun TopControlBar(
                         .padding(top = PlayerActionCountTopOverflow, end = PlayerActionCountEndOverflow),
                     horizontalArrangement = if (glass) Arrangement.spacedBy(buttonSpacing, Alignment.End) else Arrangement.End,
                 ) {
-                    if (onCommentClick != null) {
-                        HeaderIcon(Icons.Outlined.Forum, "评论", onCommentClick,
+                    if (showCommentBtn) {
+                        HeaderIcon(Icons.Outlined.Forum, "评论", requireNotNull(onCommentClick),
                             active = commentsVisible, iconSize = 18,
                             count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.COMMENT, commentCount))
                     }
-                    if (onRelatedVideosClick != null) {
-                        HeaderIcon(Icons.Outlined.VideoLibrary, "相关推荐", onRelatedVideosClick,
+                    if (showRelatedBtn) {
+                        HeaderIcon(Icons.Outlined.VideoLibrary, "相关推荐", requireNotNull(onRelatedVideosClick),
                             active = relatedVideosVisible, iconSize = 18)
                     }
-                    if (policy.showEngagement) {
-                        if (onLikeClick != null) {
-                            Box(Modifier.likeBurstAnchor()) {
-                                HeaderIcon(
-                                    if (likeStatusKnown && isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
-                                    if (likeStatusKnown) "点赞" else "点赞状态尚未确认",
-                                    requireNotNull(likeClick), active = likeStatusKnown && isLiked, iconSize = 18,
-                                    gestureModifier = likeGesture, progress = triplePress.progress,
-                                    count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.LIKE, likeCount),
-                                )
-                            }
-                        }
-                        if (policy.showDislike && allowDislikeAction && onDislikeClick != null) {
+                    if (showAiSummaryBtn) {
+                        HeaderIcon(Icons.Outlined.AutoAwesome, "AI 总结", requireNotNull(onAiSummaryClick),
+                            active = aiSummaryVisible, iconSize = 18)
+                    }
+                    if (showLikeBtn) {
+                        Box(Modifier.likeBurstAnchor()) {
                             HeaderIcon(
-                                if (isDisliked) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
-                                "点踩", onDislikeClick, active = isDisliked, iconSize = 18,
+                                if (likeStatusKnown && isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                                if (likeStatusKnown) "点赞" else "点赞状态尚未确认",
+                                requireNotNull(likeClick), active = likeStatusKnown && isLiked, iconSize = 18,
+                                gestureModifier = likeGesture, progress = triplePress.progress,
+                                count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.LIKE, likeCount),
                             )
                         }
-                        if (onCoinClick != null) HeaderIcon(
-                            AppIcons.BiliCoin, "投币", { haptic(HapticType.LIGHT); onCoinClick() }, active = isCoined,
-                            progress = triplePress.progress, iconSize = 18,
+                    }
+                    if (showDislikeBtn) {
+                        HeaderIcon(
+                            if (isDisliked) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
+                            "点踩", requireNotNull(onDislikeClick), active = isDisliked, iconSize = 18,
                         )
-                        if (onFavoriteClick != null) {
-                            HeaderIcon(
-                                if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                                "收藏", { haptic(HapticType.LIGHT); onFavoriteClick() }, active = isFavorited, iconSize = 18,
-                                onLongClick = onFavoriteLongClick, progress = triplePress.progress,
-                                modifier = Modifier.favoriteFolderMenuSource(),
-                                count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.FAVORITE, favoriteCount),
-                            )
-                        }
-                        if (onShareClick != null) HeaderIcon(Icons.Outlined.Share, "分享", onShareClick, iconSize = 18, modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onShareClick) } ?: Modifier)
+                    }
+                    if (showCoinBtn) {
+                        HeaderIcon(
+                            AppIcons.BiliCoin, "投币", { haptic(HapticType.LIGHT); requireNotNull(onCoinClick)() }, active = isCoined,
+                            progress = triplePress.progress, iconSize = 18,
+                            count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.COIN, coinCount),
+                        )
+                    }
+                    if (showFavoriteBtn) {
+                        HeaderIcon(
+                            if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                            "收藏", { haptic(HapticType.LIGHT); requireNotNull(onFavoriteClick)() }, active = isFavorited, iconSize = 18,
+                            onLongClick = onFavoriteLongClick, progress = triplePress.progress,
+                            modifier = Modifier.favoriteFolderMenuSource(),
+                            count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.FAVORITE, favoriteCount),
+                        )
+                    }
+                    if (showShareBtn) {
+                        val shareAction = requireNotNull(onShareClick)
+                        HeaderIcon(
+                            Icons.Outlined.Share, "分享", shareAction, iconSize = 18,
+                            modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = shareAction) } ?: Modifier,
+                            count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.SHARE, shareCount),
+                        )
                     }
                 }
             }

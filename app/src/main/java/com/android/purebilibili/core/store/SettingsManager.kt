@@ -1122,6 +1122,7 @@ data class DanmakuSettings(
     val mergeDuplicates: Boolean = true,
     val duplicateMergeWindowMs: Int = 15_000,
     val duplicateMergeCountThreshold: Int = 2,
+    val duplicateSuppressThreshold: Int = 0,
     val allowScroll: Boolean = true,
     val allowTop: Boolean = true,
     val allowBottom: Boolean = true,
@@ -5624,6 +5625,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                     defaultValue = DEFAULT_DANMAKU_DUPLICATE_MERGE_COUNT_THRESHOLD
                 )
             ),
+            duplicateSuppressThreshold = (preferences[KEY_DANMAKU_DUPLICATE_SUPPRESS_THRESHOLD] ?: 0).coerceIn(0, 20),
             allowScroll = readScopedDanmakuPreference(
                 preferences = preferences,
                 scopeKey = keyDanmakuAllowScroll(scope),
@@ -7428,10 +7430,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences -> preferences[KEY_AUTO_CHECK_APP_UPDATE] = value }
     }
 
-    // --- 更新检测渠道（默认测试版，保留用户已保存的选择）---
+    // --- 更新检测渠道（默认正式版，保留用户已保存的选择）---
     fun getAppUpdateChannel(context: Context): Flow<AppUpdateChannel> = context.settingsDataStore.data
         .map { preferences ->
-            AppUpdateChannel.fromValue(preferences[KEY_APP_UPDATE_CHANNEL] ?: AppUpdateChannel.BETA.value)
+            AppUpdateChannel.fromValue(preferences[KEY_APP_UPDATE_CHANNEL] ?: AppUpdateChannel.STABLE.value)
         }
 
     suspend fun setAppUpdateChannel(context: Context, channel: AppUpdateChannel) {
@@ -8457,6 +8459,47 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     ) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_TABLET_COMMENT_PANEL_WIDTH_PRESET] = preset.value
+        }
+    }
+
+    private val KEY_DANMAKU_DUPLICATE_SUPPRESS_THRESHOLD = intPreferencesKey("danmaku_duplicate_suppress_threshold")
+
+    fun getDanmakuDuplicateSuppressThreshold(context: Context): Flow<Int> =
+        context.settingsDataStore.data
+            .map { preferences -> (preferences[KEY_DANMAKU_DUPLICATE_SUPPRESS_THRESHOLD] ?: 0).coerceIn(0, 20) }
+
+    suspend fun setDanmakuDuplicateSuppressThreshold(context: Context, threshold: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DANMAKU_DUPLICATE_SUPPRESS_THRESHOLD] = threshold.coerceIn(0, 20)
+        }
+    }
+
+    private val KEY_TABLET_THEATER_MODE_ENABLED = booleanPreferencesKey("tablet_theater_mode_enabled")
+    private val KEY_PHONE_THEATER_MODE_ENABLED = booleanPreferencesKey("phone_theater_mode_enabled")
+
+    fun getTabletTheaterModeEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_TABLET_THEATER_MODE_ENABLED] ?: false }
+
+    suspend fun setTabletTheaterModeEnabled(
+        context: Context,
+        enabled: Boolean,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_TABLET_THEATER_MODE_ENABLED] = enabled
+        }
+    }
+
+    fun getPhoneTheaterModeEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_PHONE_THEATER_MODE_ENABLED] ?: false }
+
+    suspend fun setPhoneTheaterModeEnabled(
+        context: Context,
+        enabled: Boolean,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_PHONE_THEATER_MODE_ENABLED] = enabled
         }
     }
 

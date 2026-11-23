@@ -398,7 +398,7 @@ internal val MusicArtworkScrimColors = listOf(
 private val LocalMusicPlaybackPositionState =
     staticCompositionLocalOf<androidx.compose.runtime.State<Long>?> { null }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun MusicPlayerContent(
     sourceState: MusicPlayerUiState,
@@ -500,6 +500,15 @@ internal fun MusicPlayerContent(
     var showActions by remember { mutableStateOf(false) }
     var showMoreMenuEditor by remember { mutableStateOf(false) }
     var showLyricsOffsetSettings by remember { mutableStateOf(false) }
+    var showAbLoopSheet by remember { mutableStateOf(false) }
+    val abLoopController = com.android.purebilibili.feature.video.playback.policy.rememberPlayerAbLoopController(
+        player = playbackPositionSource,
+        identityKey = playbackPositionIdentity ?: "${sourceState.title}_${sourceState.durationMs}",
+        fallbackIsPlaying = sourceState.isPlaying,
+        fallbackPositionProvider = { positionMsFlow?.value ?: sourceState.positionMs },
+        fallbackDurationProvider = { sourceState.durationMs },
+        onSeekTo = onSeek,
+    )
     var expandedRightPaneTab by remember { mutableStateOf(ExpandedRightPaneTab.LYRICS) }
     var layoutPreferenceName by rememberSaveable {
         mutableStateOf(MusicPlayerLayoutPreference.AUTO.name)
@@ -1523,6 +1532,12 @@ internal fun MusicPlayerContent(
                             onVideoModeClick?.let { add(MusicMoreMenuEntry.VIDEO_MODE, action = it) }
                             onCollectionClick?.let { add(MusicMoreMenuEntry.COLLECTION, action = it) }
                             onSpeedClick?.let { add(MusicMoreMenuEntry.SPEED, currentValue = speedValue, action = it) }
+                            add(
+                                MusicMoreMenuEntry.AB_LOOP,
+                                currentValue = com.android.purebilibili.feature.video.playback.policy
+                                    .formatAbLoopSummary(abLoopController.state)
+                                    .takeIf { abLoopController.state.hasAnyPoint },
+                            ) { showAbLoopSheet = true }
                             if (onPlayFromHistory != null) add(MusicMoreMenuEntry.HISTORY) { showPlayHistory = true }
                             onSleepTimerClick?.let { add(MusicMoreMenuEntry.SLEEP_TIMER, currentValue = sleepTimerValue, action = it) }
                             onFavoriteClick?.let {
@@ -1803,6 +1818,65 @@ internal fun MusicPlayerContent(
                                 color = AppContentColors.secondaryText()
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAbLoopSheet) {
+        AppModalBottomSheet(
+            onDismissRequest = { showAbLoopSheet = false },
+            containerColor = AppSurfaceTokens.surface(),
+            contentColor = AppContentColors.primaryText(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = com.android.purebilibili.core.ui.AppSpacingTokens.Large)
+                    .navigationBarsPadding()
+                    .padding(bottom = com.android.purebilibili.core.ui.AppSpacingTokens.Large),
+                verticalArrangement = Arrangement.spacedBy(com.android.purebilibili.core.ui.AppSpacingTokens.Medium),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppText(
+                        text = "A-B 区间循环",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AppContentColors.primaryText(),
+                    )
+                    AppText(
+                        text = com.android.purebilibili.feature.video.playback.policy
+                            .formatAbLoopSummary(abLoopController.state),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (abLoopController.state.isActive) AppContentColors.accent() else AppContentColors.secondaryText(),
+                    )
+                }
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    com.android.purebilibili.core.ui.components.AppFilterChip(
+                        selected = abLoopController.state.pointAMs != null,
+                        onClick = abLoopController.setPointA,
+                        label = { AppText("设当前为 A 点") },
+                    )
+                    com.android.purebilibili.core.ui.components.AppFilterChip(
+                        selected = abLoopController.state.pointBMs != null,
+                        onClick = abLoopController.setPointB,
+                        label = { AppText("设当前为 B 点") },
+                    )
+                    if (abLoopController.state.hasAnyPoint) {
+                        com.android.purebilibili.core.ui.components.AppFilterChip(
+                            selected = false,
+                            onClick = abLoopController.clear,
+                            label = { AppText("清除") },
+                        )
                     }
                 }
             }

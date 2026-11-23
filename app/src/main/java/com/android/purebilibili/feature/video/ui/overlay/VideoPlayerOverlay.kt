@@ -735,6 +735,7 @@ private fun VideoPlayerOverlayContent(
     var showVideoSettings by remember { mutableStateOf(false) }  //  新增
     var showPortraitMore by remember(bvid, cid, isFullscreen) { mutableStateOf(false) }
     var showPortraitMoreEditor by remember(bvid, cid, isFullscreen) { mutableStateOf(false) }
+    var showPortraitAiSummarySheet by remember(bvid, cid) { mutableStateOf(false) }
     var portraitControlMenuRequest by remember(bvid, cid, isFullscreen) { mutableStateOf<PlayerControlAnchor?>(null) }
     val localShareMenuSource = com.android.purebilibili.core.ui.components.rememberAppGlassMenuSource()
     val shareMenuSource = actions.shareMenuSource ?: localShareMenuSource
@@ -1353,7 +1354,7 @@ private fun VideoPlayerOverlayContent(
         )
     }
 
-    val playerMenuVisible = showPortraitMore || showPortraitMoreEditor || portraitControlMenuRequest != null || pendingVideoShare != null || bottomControlFloatingPanelVisible || showQualityMenu ||
+    val playerMenuVisible = showPortraitMore || showPortraitMoreEditor || showPortraitAiSummarySheet || portraitControlMenuRequest != null || pendingVideoShare != null || bottomControlFloatingPanelVisible || showQualityMenu ||
         showSpeedMenu || showRatioMenu || showEpisodeMenu || showEpisodeSourceMenu ||
         showChapterList || showDanmakuSettings || showVideoSettings || showCastDialog ||
         showSponsorSegments || showEnableSponsorPlugin || showPlayerInformation || danmakuComposerVisible
@@ -1686,6 +1687,8 @@ private fun VideoPlayerOverlayContent(
                     showInteractiveActions = showFullscreenActionItems,
                     likeCount = state.likeCount.takeIf { state.engagementCountsKnown },
                     favoriteCount = state.favoriteCount.takeIf { state.engagementCountsKnown },
+                    coinCount = state.totalCoinCount.takeIf { state.engagementCountsKnown },
+                    shareCount = state.shareCount.takeIf { state.engagementCountsKnown },
                     commentCount = state.commentCount.takeIf { state.engagementCountsKnown },
                     onBack = onBack,
                     onHomeClick = actions.onHomeClick,
@@ -1720,8 +1723,18 @@ private fun VideoPlayerOverlayContent(
                         if (endDrawerVisible && endDrawerInitialTab == 0) onDismissEndDrawer()
                         else onShowEndDrawer(0)
                     }) else null,
+                    onAiSummaryClick = if (bvid.isNotBlank()) ({
+                        if (landscapeSidePanelsAvailable) {
+                            if (landscapeCommentPanelVisible) onLandscapeCommentClick?.invoke()
+                            if (endDrawerVisible && endDrawerInitialTab == 2) onDismissEndDrawer()
+                            else onShowEndDrawer(2)
+                        } else {
+                            showPortraitAiSummarySheet = true
+                        }
+                    }) else null,
                     commentsVisible = landscapeCommentPanelVisible,
                     relatedVideosVisible = endDrawerVisible && endDrawerInitialTab == 0,
+                    aiSummaryVisible = (endDrawerVisible && endDrawerInitialTab == 2) || showPortraitAiSummarySheet,
                     onMoreClick = {
                         activeMoreSource = moreSource
                         onDismissEndDrawer()
@@ -1903,6 +1916,8 @@ private fun VideoPlayerOverlayContent(
                             viewPoints = viewPoints,
                             sponsorMarkers = sponsorMarkers,
                             pbpRidgeSamples = pbpRidgeSamples,
+                            abLoopPointAMs = state.abLoopState.pointAMs,
+                            abLoopPointBMs = state.abLoopState.pointBMs,
                             heatmapEnabled = showHeatmap,
                             onHeatmapToggle = { showHeatmap = !showHeatmap },
                             showViewPoints = showViewPointMarkers,
@@ -2348,6 +2363,9 @@ private fun VideoPlayerOverlayContent(
                     showAdvancedSection = true,
                     fontWeight = danmakuFontWeight,
                     speed = danmakuSpeed,
+                    timeOffsetMs = state.danmakuTimeOffsetMs,
+                    onTimeOffsetMsChange = actions.onDanmakuTimeOffsetMsChange,
+                    onExportDanmaku = actions.onExportDanmaku,
                     displayArea = danmakuDisplayArea,
                     strokeWidth = danmakuStrokeWidth,
                     lineHeight = danmakuLineHeight,
@@ -2506,6 +2524,9 @@ private fun VideoPlayerOverlayContent(
                 if (landscapeSidePanelsAvailable && relatedVideos.isNotEmpty()) {
                     add(PortraitMoreMenuEntry.RELATED) { onShowEndDrawer(0) }
                 }
+                if (bvid.isNotBlank()) {
+                    add(PortraitMoreMenuEntry.AI_SUMMARY) { showPortraitAiSummarySheet = true }
+                }
                 if (isFullscreen) add(PortraitMoreMenuEntry.LANDSCAPE, action = onToggleFullscreen)
                 if (playerControlVisibility.showCastButton) add(PortraitMoreMenuEntry.CAST, action = onCastClickAction)
                 add(PortraitMoreMenuEntry.PIP, action = onPipClick)
@@ -2604,6 +2625,10 @@ private fun VideoPlayerOverlayContent(
                     playerBounds = playerBoundsInWindow,
                     sleepTimerMinutes = menuSession.sleepTimerMinutes,
                     onSleepTimerChange = menuSession.onSleepTimerChange,
+                    abLoopState = state.abLoopState,
+                    onSetAbLoopPointA = actions.onSetAbLoopPointA,
+                    onSetAbLoopPointB = actions.onSetAbLoopPointB,
+                    onClearAbLoop = actions.onClearAbLoop,
                     sleepWaitForVideoEnd = menuSession.sleepWaitForVideoEnd,
                     onSleepWaitForVideoEndChange = menuSession.onSleepWaitForVideoEndChange,
                     sleepExitApp = menuSession.sleepExitApp,
@@ -2639,8 +2664,10 @@ private fun VideoPlayerOverlayContent(
                     },
                     isFlippedHorizontal = isFlippedHorizontal,
                     isFlippedVertical = isFlippedVertical,
+                    videoScale = state.videoScale,
                     onFlipHorizontal = onFlipHorizontal,
                     onFlipVertical = onFlipVertical,
+                    onVideoScaleChange = actions.onVideoScaleChange,
                     isAudioOnly = isAudioOnly,
                     onAudioOnlyToggle = onAudioOnlyToggle,
                     //  CDN 线路切换
@@ -2872,6 +2899,12 @@ private fun VideoPlayerOverlayContent(
             onDismiss = onDismissEndDrawer,
             relatedVideos = relatedVideos,
             ugcSeason = ugcSeason,
+            aiSummary = state.aiSummary,
+            aiSummaryPrompt = state.aiSummaryPrompt,
+            onTimestampClick = { seconds ->
+                val targetMs = (seconds * 1000L).coerceAtLeast(0L)
+                onSeekTo?.invoke(targetMs) ?: player.seekTo(targetMs)
+            },
             currentBvid = bvid,
             currentCid = cid,
             initialSelectedTab = endDrawerInitialTab,
@@ -2887,6 +2920,37 @@ private fun VideoPlayerOverlayContent(
             hazeState = drawerHazeState,
             modifier = Modifier.align(Alignment.CenterEnd)
         )
+
+        if (showPortraitAiSummarySheet) {
+            com.android.purebilibili.core.ui.AppModalBottomSheet(
+                onDismissRequest = { showPortraitAiSummarySheet = false },
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 520.dp)
+                        .navigationBarsPadding(),
+                ) {
+                    AppText(
+                        text = "AI 总结",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AppContentColors.primaryText(),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                    com.android.purebilibili.feature.video.ui.section.LandscapeAiSummaryDrawerContent(
+                        aiSummary = state.aiSummary,
+                        aiSummaryPrompt = state.aiSummaryPrompt,
+                        onTimestampClick = { seconds ->
+                            val targetMs = (seconds * 1000L).coerceAtLeast(0L)
+                            onSeekTo?.invoke(targetMs) ?: player.seekTo(targetMs)
+                            showPortraitAiSummarySheet = false
+                        },
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+            }
+        }
 
         // --- 12. 📺 投屏对话框 ---
         val currentCastSignature = remember(currentAid, cid, currentQuality, currentVideoUrl, currentAudioUrl) {
@@ -3128,6 +3192,9 @@ fun LandscapeEndDrawer(
     // Data
     relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo>,
     ugcSeason: com.android.purebilibili.data.model.response.UgcSeason?,
+    aiSummary: com.android.purebilibili.data.model.response.AiSummaryData? = null,
+    aiSummaryPrompt: com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState? = null,
+    onTimestampClick: ((Long) -> Unit)? = null,
     currentBvid: String,
     currentCid: Long,
     initialSelectedTab: Int = 0,
@@ -3303,22 +3370,29 @@ fun LandscapeEndDrawer(
 
                     // 2. Tab Row
                     val hasSeason = ugcSeason != null && ugcSeason.sections.isNotEmpty()
-                    var selectedTab by remember { mutableIntStateOf(0) } // 0: 推荐, 1: 合集
-                    LaunchedEffect(visible, initialSelectedTab, hasSeason) {
+                    val showAiSummaryTab = currentBvid.isNotBlank()
+                    var selectedTab by remember { mutableIntStateOf(0) } // 0: 推荐, 1: 合集, 2: AI 总结
+                    LaunchedEffect(visible, initialSelectedTab, hasSeason, showAiSummaryTab) {
                         if (visible) {
-                            selectedTab = if (hasSeason) initialSelectedTab.coerceIn(0, 1) else 0
+                            selectedTab = when {
+                                initialSelectedTab == 2 && showAiSummaryTab -> 2
+                                initialSelectedTab == 1 && hasSeason -> 1
+                                else -> 0
+                            }
                         }
                     }
 
-                    if (hasSeason) {
+                    val tabOptions = buildList {
+                        add(AppSegmentOption(0, "推荐视频"))
+                        if (hasSeason) add(AppSegmentOption(1, "合集列表"))
+                        if (showAiSummaryTab) add(AppSegmentOption(2, "AI 总结"))
+                    }
+                    if (tabOptions.size > 1) {
                         AppThemeAdaptiveTabRow(
                             // Glass indicator fills the measured slot; native geometry keeps its defaults.
                             liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
                             role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
-                            options = listOf(
-                                AppSegmentOption(0, "推荐视频"),
-                                AppSegmentOption(1, "合集列表"),
-                            ),
+                            options = tabOptions,
                             selectedValue = selectedTab,
                             onSelectionChange = { selectedTab = it },
                             modifier = Modifier
@@ -3341,7 +3415,14 @@ fun LandscapeEndDrawer(
 
                     // 3. 列表内容
                     Box(modifier = Modifier.weight(1f).landscapeControlCenterGroup(index = 2)) {
-                        if (selectedTab == 0) {
+                        if (selectedTab == 2) {
+                            com.android.purebilibili.feature.video.ui.section.LandscapeAiSummaryDrawerContent(
+                                aiSummary = aiSummary,
+                                aiSummaryPrompt = aiSummaryPrompt,
+                                onTimestampClick = onTimestampClick,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else if (selectedTab == 0) {
                             // 推荐视频列表（滚动位置跨抽屉开关保留）
                             val relatedListState = rememberSaveable(
                                 saver = LazyListState.Saver

@@ -662,6 +662,8 @@ private fun FullscreenPlayerOverlayContent(
         }
     }
 
+    val keyboardShortcutOverrides =
+        com.android.purebilibili.core.ui.adaptive.LocalKeyboardShortcutOverrides.current
     Box(
         modifier = Modifier
             .then(autoHide.focusModifier)
@@ -676,11 +678,15 @@ private fun FullscreenPlayerOverlayContent(
             .hazeSourceCompat(overlayHazeState)
             .focusRequester(rootFocusRequester)
             .onPreviewKeyEvent { event ->
+                val nativeEvent = event.nativeKeyEvent
                 val action = resolveFullscreenKeyboardAction(
-                    key = event.key.toFullscreenShortcutKey(),
+                    key = resolveFullscreenShortcutKey(
+                        keyCode = nativeEvent.keyCode,
+                        modifiers = nativeEvent.metaState,
+                        overrides = keyboardShortcutOverrides,
+                    ),
                     isKeyDown = event.type == KeyEventType.KeyDown,
-                    hasCommandModifier = event.isCtrlPressed || event.isAltPressed ||
-                        event.isMetaPressed || event.isShiftPressed,
+                    hasCommandModifier = event.isCtrlPressed || event.isAltPressed || event.isMetaPressed,
                     shortcutsEnabled = inputDevicePolicy.enableKeyboardNavigation &&
                         (gesturesEnabled || event.key == Key.Escape),
                 )

@@ -20,6 +20,7 @@ internal enum class MusicMoreMenuEntry(
     VIDEO_MODE("video_mode", "返回视频"),
     COLLECTION("collection", "选集 / 合集"),
     SPEED("speed", "播放倍速"),
+    AB_LOOP("ab_loop", "A-B 区间循环"),
     HISTORY("history", "最近播放"),
     SLEEP_TIMER("sleep_timer", "定时关闭"),
     FAVORITE("favorite", "收藏"),

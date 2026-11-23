@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.android.purebilibili.core.store.FullscreenActionCountSettings
+import com.android.purebilibili.core.store.FullscreenTopBarSettings
 import com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED
 import com.android.purebilibili.feature.nearby.NEARBY_TITLE
 import com.android.purebilibili.feature.settings.playbackSettingTitle
@@ -18,6 +19,7 @@ internal enum class FullscreenMoreMenuEntry(override val id: String, override va
     DOWNLOAD("download", "离线缓存"),
     SAVE_COVER("save_cover", "保存封面"),
     SLEEP_TIMER("sleep_timer", "定时关闭"),
+    AB_LOOP("ab_loop", "A-B 区间循环"),
     PLAY_URL("play_url", "播放地址"),
     CHAPTERS("chapters", playbackSettingTitle("playback.chapter_display_mode")),
     CENTER_PLAYBACK("center_playback", playbackSettingTitle("playback.show_center_playback_button")),
@@ -39,6 +41,7 @@ internal enum class FullscreenMoreMenuEntry(override val id: String, override va
     DIAGNOSTICS("diagnostics", "播放器诊断"),
     REPORT("report", "举报"),
     ACTION_COUNTS("action_counts", FullscreenActionCountSettings.TITLE),
+    TOP_BAR_ITEMS("top_bar_items", FullscreenTopBarSettings.TITLE),
     ADVANCED("advanced", "高级设置"),
     SPEED("speed", "播放倍速"),
 }
@@ -50,6 +53,7 @@ internal val fullscreenMoreMenuEntries = FullscreenMoreMenuEntry.entries.filter 
 internal const val PLAYER_PLAYBACK_SETTINGS_TITLE = "播放设置"
 
 internal val fullscreenPlaybackSettingsEntries = setOf(
+    FullscreenMoreMenuEntry.AB_LOOP,
     FullscreenMoreMenuEntry.ENHANCEMENT,
     FullscreenMoreMenuEntry.VOLUME,
     FullscreenMoreMenuEntry.CDN,
@@ -96,6 +100,7 @@ internal enum class PortraitMoreMenuEntry(override val id: String, override val 
     CHAPTERS("chapters", "分段信息"),
     HEATMAP("heatmap", "高能进度条"),
     RELATED("related", "相关推荐"),
+    AI_SUMMARY("ai_summary", "AI 总结"),
     LANDSCAPE("landscape", "横屏播放"),
     CAST("cast", "投屏"),
     PIP("pip", "画中画"),

@@ -58,6 +58,7 @@ class DanmakuConfig {
     var mergeDuplicates = true
     var duplicateMergeWindowMs = 15_000
     var duplicateMergeCountThreshold = 2
+    var duplicateSuppressThreshold = 0
 
     // [新增] 类型屏蔽（与 B 站 blockxxx 语义对齐，true=显示/不屏蔽）
     var allowScroll = true

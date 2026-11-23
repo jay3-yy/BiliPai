@@ -32,6 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.handwriting.handwritingHandler
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
@@ -341,6 +342,7 @@ internal fun LandscapeDanmakuComposerEditor(
                     modifier = Modifier.weight(1f)
                         .testTag("danmaku_landscape_composer_input")
                         .focusRequester(focusRequester)
+                        .handwritingHandler()
                         .pointerInput(isSending) {
                             if (!isSending) {
                                 awaitEachGesture {

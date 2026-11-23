@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.handwriting.handwritingDetector
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.android.purebilibili.core.ui.components.AppText
@@ -38,6 +39,7 @@ fun LandscapeDanmakuInput(
             .clip(AppShapes.container(ContainerLevel.Card))
             .background(Color.White.copy(alpha = 0.15f))
             .appDesktopFocusableItemVisuals()
+            .handwritingDetector { onClick() }
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp),
         contentAlignment = Alignment.CenterStart

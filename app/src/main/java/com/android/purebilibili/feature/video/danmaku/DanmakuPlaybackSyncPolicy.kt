@@ -12,6 +12,22 @@ private const val EXPLICIT_SEEK_RESYNC_TOLERANCE_MS = 500L
 private const val EXPLICIT_SEEK_RESYNC_WINDOW_MS = 1500L
 private const val MIN_ENGINE_PLAYBACK_SPEED = 0.1f
 private const val MAX_ENGINE_PLAYBACK_SPEED = 4.0f
+internal const val MIN_DANMAKU_TIME_OFFSET_MS = -60_000L
+internal const val MAX_DANMAKU_TIME_OFFSET_MS = 60_000L
+
+internal fun normalizeDanmakuTimeOffsetMs(offsetMs: Long): Long =
+    offsetMs.coerceIn(MIN_DANMAKU_TIME_OFFSET_MS, MAX_DANMAKU_TIME_OFFSET_MS)
+
+/** 与字幕偏移约定一致：正值延后显示，负值提前显示。 */
+internal fun applyDanmakuTimeOffsetMs(positionMs: Long, offsetMs: Long): Long =
+    (positionMs - offsetMs).coerceAtLeast(0L)
+
+internal fun formatDanmakuTimeOffsetLabel(offsetMs: Long): String {
+    if (offsetMs == 0L) return "0.0s"
+    val seconds = kotlin.math.abs(offsetMs) / 1000.0
+    val direction = if (offsetMs > 0L) "延后" else "提前"
+    return String.format(java.util.Locale.US, "%s %.1fs", direction, seconds)
+}
 
 internal enum class DanmakuSyncAction {
     None,

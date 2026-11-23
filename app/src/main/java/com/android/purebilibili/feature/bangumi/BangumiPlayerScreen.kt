@@ -5,6 +5,7 @@ import com.android.purebilibili.core.player.withAppVideoDecoderDiagnostics
 import com.android.purebilibili.core.player.withAppVideoDecoderPreference
 
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.feature.video.player.basicPlayerKeyboardShortcuts
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.appElasticPress
 
@@ -509,6 +510,11 @@ fun BangumiPlayerScreen(
     val subtitleState = rememberBangumiSubtitles(
         successState?.currentEpisode?.bvid.orEmpty(), successState?.currentEpisode?.cid ?: 0L, exoPlayer
     )
+    val abLoopController = com.android.purebilibili.feature.video.playback.policy.rememberPlayerAbLoopController(
+        player = exoPlayer,
+        identityKey = "${successState?.currentEpisode?.bvid.orEmpty()}_${successState?.currentEpisode?.cid ?: 0L}",
+        onSeekedToA = { pointA -> danmakuManager.seekTo(pointA) },
+    )
     fun seekFromComment(positionMs: Long) {
         val duration = exoPlayer.duration.takeIf { it > 0 } ?: Long.MAX_VALUE
         com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction(exoPlayer, positionMs.coerceIn(0L, duration))
@@ -561,6 +567,10 @@ fun BangumiPlayerScreen(
             sleepTimerMinutes = minutes?.takeIf { it > 0 }
             sleepDeadlineMs = sleepTimerMinutes?.let { android.os.SystemClock.elapsedRealtime() + it * 60_000L }
         },
+        abLoopState = abLoopController.state,
+        onSetAbLoopPointA = abLoopController.setPointA,
+        onSetAbLoopPointB = abLoopController.setPointB,
+        onClearAbLoop = abLoopController.clear,
         subtitle = subtitleState,
     )
     val danmakuEnabled = danmakuSettings.enabled && danmakuAllowed
@@ -964,6 +974,12 @@ fun BangumiPlayerScreen(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
+            .basicPlayerKeyboardShortcuts(
+                player = exoPlayer,
+                isInPipMode = isInPipMode,
+                isTextInputActive = showDanmakuSend,
+                onToggleFullscreen = { toggleOrientation() },
+            )
             .background(if (isFullscreen) Color.Black else AppSurfaceTokens.groupedListContainer())
     ) {
         //  获取清晰度数据

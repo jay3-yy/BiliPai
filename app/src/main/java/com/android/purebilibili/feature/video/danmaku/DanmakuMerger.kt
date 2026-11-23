@@ -25,10 +25,13 @@ object DanmakuMerger {
     fun merge(
         list: List<DanmakuItem>,
         intervalMs: Long = 15_000,
-        countThreshold: Int = 2
+        countThreshold: Int = 2,
+        suppressThreshold: Int = 0,
+        mergeIntoSingle: Boolean = true,
     ): Pair<List<DanmakuItem>, List<AdvancedDanmakuData>> {
         if (list.isEmpty()) return Pair(list, emptyList())
         val normalizedCountThreshold = countThreshold.coerceAtLeast(2)
+        val normalizedSuppressThreshold = suppressThreshold.coerceAtLeast(0)
 
         val standardList = mutableListOf<DanmakuItem>()
         
@@ -59,7 +62,7 @@ object DanmakuMerger {
                             currentBatch.add(item)
                         } else {
                             // 结算上一批
-                            processBatch(currentBatch, standardList, normalizedCountThreshold)
+                            processBatch(currentBatch, standardList, normalizedCountThreshold, normalizedSuppressThreshold, mergeIntoSingle)
                             if (currentBatch.size > 1) mergedCount += (currentBatch.size - 1)
                             
                             // 开启新的一批
@@ -71,7 +74,7 @@ object DanmakuMerger {
                 
                 // 结算最后一批
                 if (currentBatch.isNotEmpty()) {
-                    processBatch(currentBatch, standardList, normalizedCountThreshold)
+                    processBatch(currentBatch, standardList, normalizedCountThreshold, normalizedSuppressThreshold, mergeIntoSingle)
                     if (currentBatch.size > 1) mergedCount += (currentBatch.size - 1)
                 }
             }
@@ -91,12 +94,19 @@ object DanmakuMerger {
     private fun processBatch(
         batch: List<DanmakuItem>,
         standardOut: MutableList<DanmakuItem>,
-        countThreshold: Int
+        countThreshold: Int,
+        suppressThreshold: Int = 0,
+        mergeIntoSingle: Boolean = true,
     ) {
         if (batch.isEmpty()) return
+        if (suppressThreshold > 0 && batch.size >= suppressThreshold) {
+            return
+        }
         
         if (batch.size == 1) {
             standardOut.add(batch[0])
+        } else if (!mergeIntoSingle) {
+            standardOut.addAll(batch)
         } else {
             // 继续以标准弹幕形式存在，但带上 xN 标记，不再升级为中央黄色高级弹幕。
             standardOut.add(combineBatch(batch, countThreshold))

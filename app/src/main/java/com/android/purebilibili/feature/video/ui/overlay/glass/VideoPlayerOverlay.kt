@@ -741,6 +741,7 @@ private fun VideoPlayerOverlayContent(
     }
     var showChapterList by remember { mutableStateOf(false) }  // 📖 章节列表
     var showCastDialog by remember { mutableStateOf(false) }   // 📺 投屏对话框
+    var showPortraitAiSummarySheet by remember(bvid, cid) { mutableStateOf(false) }
     var activeCastPlugin by remember { mutableStateOf<CastPluginApi?>(null) }
     var activeCastRoute by remember { mutableStateOf<CastPluginRoute?>(null) }
     var lastCastMediaSignature by remember { mutableStateOf<CastMediaSourceSignature?>(null) }
@@ -1535,6 +1536,8 @@ private fun VideoPlayerOverlayContent(
                         showInteractiveActions = showFullscreenActionItems,
                         likeCount = state.likeCount.takeIf { state.engagementCountsKnown },
                         favoriteCount = state.favoriteCount.takeIf { state.engagementCountsKnown },
+                        coinCount = state.totalCoinCount.takeIf { state.engagementCountsKnown },
+                        shareCount = state.shareCount.takeIf { state.engagementCountsKnown },
                         commentCount = state.commentCount.takeIf { state.engagementCountsKnown },
                         onBack = onBack,
                         onHomeClick = actions.onHomeClick,
@@ -1557,6 +1560,16 @@ private fun VideoPlayerOverlayContent(
                             }
                         },
                         onCommentClick = onLandscapeCommentClick,
+                        onAiSummaryClick = if (bvid.isNotBlank()) ({
+                            if (isFullscreen) {
+                                if (landscapeCommentPanelVisible) onLandscapeCommentClick?.invoke()
+                                if (endDrawerVisible && endDrawerInitialTab == 2) onDismissEndDrawer()
+                                else onShowEndDrawer(2)
+                            } else {
+                                showPortraitAiSummarySheet = true
+                            }
+                        }) else null,
+                        aiSummaryVisible = (endDrawerVisible && endDrawerInitialTab == 2) || showPortraitAiSummarySheet,
                         isLoggedIn = isLoggedIn,
                         onCastClick = onCastClickAction,
                         showCastButton = playerControlVisibility.showCastButton,
@@ -1690,6 +1703,8 @@ private fun VideoPlayerOverlayContent(
                     onViewPointsToggle = { onChapterVisibilityChange(!showViewPointMarkers) },
                     sponsorMarkers = sponsorMarkers,
                     pbpRidgeSamples = pbpRidgeSamples,
+                    abLoopPointAMs = state.abLoopState.pointAMs,
+                    abLoopPointBMs = state.abLoopState.pointBMs,
                     currentChapterProvider = { if (showViewPointMarkers) currentChapterProvider() else null },
                     onChapterClick = { showChapterList = true },
                     // 📱 [新增] 竖屏全屏模式
@@ -2190,6 +2205,9 @@ private fun VideoPlayerOverlayContent(
                 showAdvancedSection = true,
                 fontWeight = danmakuFontWeight,
                 speed = danmakuSpeed,
+                timeOffsetMs = state.danmakuTimeOffsetMs,
+                onTimeOffsetMsChange = actions.onDanmakuTimeOffsetMsChange,
+                onExportDanmaku = actions.onExportDanmaku,
                 displayArea = danmakuDisplayArea,
                 strokeWidth = danmakuStrokeWidth,
                 lineHeight = danmakuLineHeight,
@@ -2303,6 +2321,10 @@ private fun VideoPlayerOverlayContent(
                 isFullscreen = isFullscreen,
                 sleepTimerMinutes = sleepTimerMinutes,
                 onSleepTimerChange = onSleepTimerChange,
+                abLoopState = state.abLoopState,
+                onSetAbLoopPointA = actions.onSetAbLoopPointA,
+                onSetAbLoopPointB = actions.onSetAbLoopPointB,
+                onClearAbLoop = actions.onClearAbLoop,
                 onReload = onReloadVideo,
                 onDanmakuSettingsClick = {
                     showVideoSettings = false
@@ -2336,8 +2358,10 @@ private fun VideoPlayerOverlayContent(
                 },
                 isFlippedHorizontal = isFlippedHorizontal,
                 isFlippedVertical = isFlippedVertical,
+                videoScale = state.videoScale,
                 onFlipHorizontal = onFlipHorizontal,
                 onFlipVertical = onFlipVertical,
+                onVideoScaleChange = actions.onVideoScaleChange,
                 isAudioOnly = isAudioOnly,
                 onAudioOnlyToggle = onAudioOnlyToggle,
                 //  CDN 线路切换
@@ -2480,6 +2504,12 @@ private fun VideoPlayerOverlayContent(
             onDismiss = onDismissEndDrawer,
             relatedVideos = relatedVideos,
             ugcSeason = ugcSeason,
+            aiSummary = state.aiSummary,
+            aiSummaryPrompt = state.aiSummaryPrompt,
+            onTimestampClick = { seconds ->
+                val targetMs = (seconds * 1000L).coerceAtLeast(0L)
+                onSeekTo?.invoke(targetMs) ?: player.seekTo(targetMs)
+            },
             currentBvid = bvid,
             currentCid = cid,
             initialSelectedTab = endDrawerInitialTab,
@@ -2495,6 +2525,37 @@ private fun VideoPlayerOverlayContent(
             hazeState = drawerHazeState,
             modifier = Modifier.align(Alignment.CenterEnd)
         )
+
+        if (showPortraitAiSummarySheet) {
+            com.android.purebilibili.core.ui.AppModalBottomSheet(
+                onDismissRequest = { showPortraitAiSummarySheet = false },
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 520.dp)
+                        .navigationBarsPadding(),
+                ) {
+                    AppText(
+                        text = "AI 总结",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AppContentColors.primaryText(),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                    com.android.purebilibili.feature.video.ui.section.LandscapeAiSummaryDrawerContent(
+                        aiSummary = state.aiSummary,
+                        aiSummaryPrompt = state.aiSummaryPrompt,
+                        onTimestampClick = { seconds ->
+                            val targetMs = (seconds * 1000L).coerceAtLeast(0L)
+                            onSeekTo?.invoke(targetMs) ?: player.seekTo(targetMs)
+                            showPortraitAiSummarySheet = false
+                        },
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+            }
+        }
 
         // --- 12. 📺 投屏对话框 ---
         val currentCastSignature = remember(currentAid, cid, currentQuality, currentVideoUrl, currentAudioUrl) {
@@ -2951,6 +3012,9 @@ fun LandscapeEndDrawer(
     // Data
     relatedVideos: List<com.android.purebilibili.data.model.response.RelatedVideo>,
     ugcSeason: com.android.purebilibili.data.model.response.UgcSeason?,
+    aiSummary: com.android.purebilibili.data.model.response.AiSummaryData? = null,
+    aiSummaryPrompt: com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState? = null,
+    onTimestampClick: ((Long) -> Unit)? = null,
     currentBvid: String,
     currentCid: Long,
     initialSelectedTab: Int = 0,
@@ -3126,22 +3190,29 @@ fun LandscapeEndDrawer(
 
                     // 2. Tab Row
                     val hasSeason = ugcSeason != null && ugcSeason.sections.isNotEmpty()
-                    var selectedTab by remember { mutableIntStateOf(0) } // 0: 推荐, 1: 合集
-                    LaunchedEffect(visible, initialSelectedTab, hasSeason) {
+                    val showAiSummaryTab = currentBvid.isNotBlank()
+                    var selectedTab by remember { mutableIntStateOf(0) } // 0: 推荐, 1: 合集, 2: AI 总结
+                    LaunchedEffect(visible, initialSelectedTab, hasSeason, showAiSummaryTab) {
                         if (visible) {
-                            selectedTab = if (hasSeason) initialSelectedTab.coerceIn(0, 1) else 0
+                            selectedTab = when {
+                                initialSelectedTab == 2 && showAiSummaryTab -> 2
+                                initialSelectedTab == 1 && hasSeason -> 1
+                                else -> 0
+                            }
                         }
                     }
 
-                    if (hasSeason) {
+                    val tabOptions = buildList {
+                        add(AppSegmentOption(0, "推荐视频"))
+                        if (hasSeason) add(AppSegmentOption(1, "合集列表"))
+                        if (showAiSummaryTab) add(AppSegmentOption(2, "AI 总结"))
+                    }
+                    if (tabOptions.size > 1) {
                         AppThemeAdaptiveTabRow(
                             // Glass indicator fills the measured slot; native geometry keeps its defaults.
                             liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
                             role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
-                            options = listOf(
-                                AppSegmentOption(0, "推荐视频"),
-                                AppSegmentOption(1, "合集列表"),
-                            ),
+                            options = tabOptions,
                             selectedValue = selectedTab,
                             onSelectionChange = { selectedTab = it },
                             modifier = Modifier
@@ -3164,7 +3235,14 @@ fun LandscapeEndDrawer(
 
                     // 3. 列表内容
                     Box(modifier = Modifier.weight(1f).landscapeControlCenterGroup(index = 2)) {
-                        if (selectedTab == 0) {
+                        if (selectedTab == 2) {
+                            com.android.purebilibili.feature.video.ui.section.LandscapeAiSummaryDrawerContent(
+                                aiSummary = aiSummary,
+                                aiSummaryPrompt = aiSummaryPrompt,
+                                onTimestampClick = onTimestampClick,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else if (selectedTab == 0) {
                             // 推荐视频列表（滚动位置跨抽屉开关保留）
                             val relatedListState = rememberSaveable(
                                 saver = LazyListState.Saver

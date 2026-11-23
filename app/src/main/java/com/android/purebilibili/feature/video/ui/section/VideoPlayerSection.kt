@@ -1522,6 +1522,12 @@ private fun VideoPlayerSectionContent(
     val lockHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.PLAYER_GESTURES)
     //  共享弹幕管理器（用于所有 seek 路径的一致同步）
     val danmakuManager = rememberDanmakuManager(bvid)
+    val abLoopController = com.android.purebilibili.feature.video.playback.policy.rememberPlayerAbLoopController(
+        player = playerState.player,
+        identityKey = bvid to currentSeekSessionCid,
+        isScrubbingProvider = { sharedSeekSession.isSliderMoving },
+        onSeekedToA = { pointA -> danmakuManager.seekTo(pointA) },
+    )
     val danmakuTapCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
     val danmakuTapEnabled by rememberUpdatedState(
         danmakuHostActive && !isInPipMode && !suppressTransientOverlaysForTransition &&
@@ -1785,6 +1791,8 @@ private fun VideoPlayerSectionContent(
     val inputDevicePolicy = com.android.purebilibili.core.ui.adaptive.resolveInputDevicePolicy(
         com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current,
     )
+    val keyboardShortcutOverrides = com.android.purebilibili.core.ui.adaptive.LocalKeyboardShortcutOverrides.current
+    val theaterModeController = com.android.purebilibili.feature.video.screen.LocalTabletTheaterModeController.current
     if (inputDevicePolicy.enableKeyboardNavigation) {
         rootModifier = rootModifier
             .focusGroup()
@@ -1793,7 +1801,8 @@ private fun VideoPlayerSectionContent(
                     event = event,
                     isScreenLocked = isScreenLocked,
                     isInPipMode = isInPipMode,
-                    isTextInputActive = danmakuComposerVisible
+                    isTextInputActive = danmakuComposerVisible,
+                    overrides = keyboardShortcutOverrides,
                 ) ?: return@onKeyEvent false
 
                 when (action) {
@@ -1849,6 +1858,14 @@ private fun VideoPlayerSectionContent(
                             AudioManager.FLAG_SHOW_UI
                         )
                         true
+                    }
+                    PlayerKeyAction.ToggleTheaterMode -> {
+                        if (!isFullscreen && theaterModeController != null) {
+                            theaterModeController.toggle()
+                            true
+                        } else {
+                            false
+                        }
                     }
                     PlayerKeyAction.ToggleFullscreen -> {
                         onToggleFullscreen()
@@ -4731,6 +4748,7 @@ private fun VideoPlayerSectionContent(
                             likedDanmakuIds = hotBarLikedDanmakuIds,
                             onLikeDanmaku = actions.onLikeDanmakuToggle,
                             isSending = sendingHotDanmaku || isSendingDanmakuComposer,
+                            opacity = danmakuOpacity,
                             onSendSame = sendSameDanmaku?.takeIf { canSendHotBarDanmaku }?.let { send ->
                                 { message: String ->
                                     if (!sendingHotDanmaku && !isSendingDanmakuComposer) {
@@ -4876,15 +4894,17 @@ private fun VideoPlayerSectionContent(
             subtitleBelongsToCurrentVideo,
             subtitleDisplayModePreference,
             subtitlePrimaryAvailable,
-            subtitleSecondaryAvailable
+            subtitleSecondaryAvailable,
+            subtitlePrimaryTrackBound,
+            subtitleSecondaryTrackBound
         ) {
             if (!subtitleFeatureEnabled || !subtitleBelongsToCurrentVideo) {
                 SubtitleDisplayMode.OFF
             } else {
                 normalizeSubtitleDisplayMode(
                     preferredMode = subtitleDisplayModePreference,
-                    hasPrimaryTrack = subtitlePrimaryAvailable,
-                    hasSecondaryTrack = subtitleSecondaryAvailable
+                    hasPrimaryTrack = subtitlePrimaryTrackBound || subtitlePrimaryAvailable,
+                    hasSecondaryTrack = subtitleSecondaryTrackBound || subtitleSecondaryAvailable
                 )
             }
         }
@@ -5335,6 +5355,7 @@ private fun VideoPlayerSectionContent(
                     coverUrl = uiState.info.pic,
                     isFlippedHorizontal = effectiveFlippedHorizontal,
                     isFlippedVertical = effectiveFlippedVertical,
+                    videoScale = scale,
                     //  [新增] CDN 线路切换
                     currentCdnIndex = currentCdnIndex,
                     cdnCount = cdnCount,
@@ -5359,6 +5380,8 @@ private fun VideoPlayerSectionContent(
                     }.orEmpty(),
                     //  [新增] 定时关闭
                     sleepTimerMinutes = sleepTimerMinutes,
+                    abLoopState = abLoopController.state,
+                    danmakuTimeOffsetMs = danmakuManager.timeOffsetMs,
                     // 🖼️ [新增] 视频预览图数据
                     videoshotData = videoshotData,
                     // 📖 [新增] 视频章节数据
@@ -5400,6 +5423,8 @@ private fun VideoPlayerSectionContent(
                     // [新增] 侧边栏抽屉数据与交互
                     relatedVideos = relatedVideos,
                     ugcSeason = ugcSeason,
+                    aiSummary = uiState.aiSummary,
+                    aiSummaryPrompt = uiState.aiSummaryPrompt,
                     isFollowed = isFollowed,
                     followStatusKnown = followStatusKnown,
                     isLiked = isLiked,
@@ -5448,6 +5473,38 @@ private fun VideoPlayerSectionContent(
                     onSponsorContributionMarkWholeVideo = onSponsorContributionMarkWholeVideo,
                     onSponsorContributionCancel = onSponsorContributionCancel,
                     onDanmakuInputClick = onDanmakuInputClick,
+                    onDanmakuTimeOffsetMsChange = { offsetMs ->
+                        danmakuManager.updateTimeOffsetMs(offsetMs)
+                    },
+                    onExportDanmaku = { format ->
+                        val (exportCid, items) = danmakuManager.snapshotExportableDanmaku()
+                        if (items.isEmpty()) {
+                            Toast.makeText(context, "当前暂无可导出的弹幕", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val title = uiState.info.title.ifBlank { bvid }
+                            scope.launch {
+                                val content = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                    when (format) {
+                                        com.android.purebilibili.feature.video.danmaku.DanmakuExportFormat.XML ->
+                                            com.android.purebilibili.feature.video.danmaku.encodeDanmakuToBilibiliXml(exportCid, items)
+                                        com.android.purebilibili.feature.video.danmaku.DanmakuExportFormat.ASS ->
+                                            com.android.purebilibili.feature.video.danmaku.encodeDanmakuToAss(title, items)
+                                    }
+                                }
+                                val result = com.android.purebilibili.feature.video.danmaku.exportDanmakuToDownloads(
+                                    context = context,
+                                    fileNameBase = "${title}_${bvid}",
+                                    format = format,
+                                    content = content,
+                                )
+                                result.onSuccess { path ->
+                                    Toast.makeText(context, "已导出 ${items.size} 条弹幕至 $path", Toast.LENGTH_LONG).show()
+                                }.onFailure { error ->
+                                    Toast.makeText(context, "导出弹幕失败：${error.message ?: "未知错误"}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    },
                     onDismissDanmakuComposer = onDismissDanmakuComposer,
                     onSendDanmakuComposer = onSendDanmakuComposer,
                     onDanmakuComposerDraftChange = onDanmakuComposerDraftChange,
@@ -5473,6 +5530,15 @@ private fun VideoPlayerSectionContent(
                             Toast.makeText(context, "HDR 原色输出不支持画面翻转，请先切换至普通画质", Toast.LENGTH_SHORT).show()
                         } else isFlippedVertical = !isFlippedVertical
                     },
+                    onVideoScaleChange = { nextScale ->
+                        val clamped = nextScale.coerceIn(0.5f, 2.0f)
+                        scale = clamped
+                        if (kotlin.math.abs(clamped - 1f) < 0.01f) {
+                            scale = 1f
+                            panX = 0f
+                            panY = 0f
+                        }
+                    },
                     //  [新增] 画质切换（用于设置面板）
                     onQualityChange = { qid ->
                         onQualityChange(qid)
@@ -5494,6 +5560,9 @@ private fun VideoPlayerSectionContent(
                         },
                     ),
                     onSleepTimerChange = onSleepTimerChange,
+                    onSetAbLoopPointA = abLoopController.setPointA,
+                    onSetAbLoopPointB = abLoopController.setPointB,
+                    onClearAbLoop = abLoopController.clear,
                     onPortraitFullscreen = onPortraitFullscreen,
                     // 📲 [新增] 小窗模式
                     // 📲 [新增] 小窗模式

@@ -51,6 +51,11 @@ data class BangumiPlayerFeatures(
     val sleepTimerMinutes: Int? = null,
     val sleepDeadlineMs: () -> Long? = { null },
     val onSleepTimerChange: (Int?) -> Unit = {},
+    val abLoopState: com.android.purebilibili.feature.video.playback.policy.VideoAbLoopState =
+        com.android.purebilibili.feature.video.playback.policy.VideoAbLoopState(),
+    val onSetAbLoopPointA: () -> Unit = {},
+    val onSetAbLoopPointB: () -> Unit = {},
+    val onClearAbLoop: () -> Unit = {},
     val subtitle: BangumiSubtitleState = BangumiSubtitleState(),
 )
 

@@ -169,6 +169,7 @@ internal fun PlayerSettingsRow(title: String, subtitle: String? = null, onClick:
         "播放信息" -> Icons.Outlined.Info
         "举报" -> Icons.Outlined.ErrorOutline
         FullscreenActionCountSettings.TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ic_settings_action_counts_24)
+        com.android.purebilibili.core.store.FullscreenTopBarSettings.TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ms_widgets_24)
         PLAYER_MENU_EDITOR_TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ms_reorder_24)
         PLAYER_PLAYBACK_SETTINGS_TITLE -> Icons.Outlined.Tune
         PLAYER_TOP_SHORTCUT_TITLE -> Icons.Outlined.VerticalAlignTop

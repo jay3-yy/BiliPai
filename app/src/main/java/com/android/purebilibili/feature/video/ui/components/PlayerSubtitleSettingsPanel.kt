@@ -31,6 +31,17 @@ import kotlin.math.roundToInt
 
 const val SUBTITLE_APPEARANCE_TITLE = "字幕样式"
 
+enum class SubtitlePlacement(val storedValue: String, val label: String) {
+    BOTTOM("bottom", "底部"),
+    TOP("top", "顶部"),
+    ;
+
+    companion object {
+        fun fromStored(value: String?): SubtitlePlacement =
+            entries.firstOrNull { it.storedValue == value } ?: BOTTOM
+    }
+}
+
 data class PlayerSubtitleAppearance(
     val inlineFontScale: Float = 1f,
     val fullscreenFontScale: Float = 1.5f,
@@ -43,6 +54,7 @@ data class PlayerSubtitleAppearance(
     val strokeColor: Int = android.graphics.Color.BLACK,
     val fontFileName: String = "",
     val fontDisplayName: String = "",
+    val placement: SubtitlePlacement = SubtitlePlacement.BOTTOM,
 )
 
 /** Changes are controlled by the caller and must update both the renderer and its persisted store. */
@@ -113,10 +125,33 @@ fun PlayerSubtitleSettingsPanel(
             SubtitleAppearanceSlider("描边粗细", appearance.strokeWidth, 0f..5f, 2f, { "$it" }, steps = 9) {
                 onAppearanceChange(appearance.copy(strokeWidth = it))
             }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("字幕安放位置", Modifier.weight(1f), fontSize = 14.sp)
+                SubtitlePlacement.entries.forEach { option ->
+                    com.android.purebilibili.core.ui.components.AppFilterChip(
+                        selected = appearance.placement == option,
+                        onClick = { onAppearanceChange(appearance.copy(placement = option)) },
+                        label = { Text(option.label) },
+                    )
+                }
+            }
             SubtitleAppearanceSlider("左右边距", appearance.horizontalPadding.toFloat(), 0f..100f, 24f, { "${it.roundToInt()}" }, steps = 99) {
                 onAppearanceChange(appearance.copy(horizontalPadding = it.roundToInt()))
             }
-            SubtitleAppearanceSlider("底部边距", appearance.bottomPadding.toFloat(), 0f..200f, 24f, { "${it.roundToInt()}" }, steps = 199) {
+            SubtitleAppearanceSlider(
+                if (appearance.placement == SubtitlePlacement.TOP) "顶部边距" else "底部边距",
+                appearance.bottomPadding.toFloat(),
+                0f..200f,
+                24f,
+                { "${it.roundToInt()}" },
+                steps = 199,
+            ) {
                 onAppearanceChange(appearance.copy(bottomPadding = it.roundToInt()))
             }
             SubtitleAppearanceSlider("背景不透明度", appearance.backgroundOpacity, 0f..1f, 0.67f, { "${(it * 100).roundToInt()}%" }, steps = 99) {

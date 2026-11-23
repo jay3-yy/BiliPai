@@ -8,8 +8,11 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.ClosedCaptionOff
+import androidx.compose.material.icons.outlined.AspectRatio
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
+import androidx.compose.material.icons.outlined.ViewSidebar
+import com.android.purebilibili.feature.video.screen.LocalTabletTheaterModeController
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -207,6 +210,8 @@ fun BottomControlBar(
     viewPoints: List<com.android.purebilibili.data.model.response.ViewPoint> = emptyList(),
     sponsorMarkers: List<SponsorProgressMarker> = emptyList(),
     pbpRidgeSamples: List<PbpRidgeSample> = emptyList(),
+    abLoopPointAMs: Long? = null,
+    abLoopPointBMs: Long? = null,
     onChapterClick: () -> Unit = {},
     onSeekStart: () -> Unit = {},
     onSeekDragStart: (Long) -> Unit = {},
@@ -311,6 +316,8 @@ fun BottomControlBar(
                         viewPoints = if (showViewPoints) viewPoints else emptyList(),
                         sponsorMarkers = sponsorMarkers,
                         pbpRidgeSamples = if (heatmapEnabled) pbpRidgeSamples else emptyList(),
+                        abLoopPointAMs = abLoopPointAMs,
+                        abLoopPointBMs = abLoopPointBMs,
                         currentChapterProvider = { null },
                         onChapterClick = onChapterClick,
                         modifier = Modifier
@@ -371,6 +378,8 @@ fun BottomControlBar(
                         viewPoints = if (showViewPoints) viewPoints else emptyList(),
                         sponsorMarkers = sponsorMarkers,
                         pbpRidgeSamples = if (heatmapEnabled) pbpRidgeSamples else emptyList(),
+                        abLoopPointAMs = abLoopPointAMs,
+                        abLoopPointBMs = abLoopPointBMs,
                         currentChapterProvider = { null },
                         onChapterClick = onChapterClick,
                         // 进度条槽位固定为 14dp；预览按完整高度向上展开，不能被槽位压缩到按钮区。
@@ -522,6 +531,16 @@ fun BottomControlBar(
                                 height = controlContentHeight,
                                 text = currentQualityLabel, description = "画质", onClick = onQualityClick,
                                 modifier = anchor(PlayerControlAnchor.QUALITY, "player_quality_action"),
+                            )
+                        }
+                        val theaterController = LocalTabletTheaterModeController.current
+                        if (!isFullscreen && theaterController != null) {
+                            PlayerControlIconAction(
+                                icon = if (theaterController.isActive) Icons.Outlined.ViewSidebar else Icons.Outlined.AspectRatio,
+                                description = if (theaterController.isActive) "退出影院模式" else "影院模式",
+                                width = slotWidth, height = 30.dp, iconSize = 22.dp,
+                                onClick = theaterController.toggle,
+                                modifier = Modifier.testTag("player_theater_toggle"),
                             )
                         }
                         if (!isFullscreen || viewportIsLandscape) {
