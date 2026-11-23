@@ -58,6 +58,6 @@ class PlaybackPreferencesSettingsTest {
             intPreferencesKey("music_lyrics_ui_style") to -1,
         ))
         assertEquals(SettingsManager.MiniPlayerMode.OFF, settings.miniPlayerMode)
-        assertEquals(SettingsManager.MusicLyricsUiStyle.CLASSIC, settings.musicLyricsUiStyle)
+        assertEquals(SettingsManager.MusicLyricsUiStyle.ARC, settings.musicLyricsUiStyle)
     }
 }

@@ -153,16 +153,26 @@ internal class ListenVideoLibraryLoader(
         onResourcesIndexed: suspend (List<FavoriteData>) -> Unit = {},
     ): ListenVideoIndexResult {
         val validFolders = folders.filter { it.id > 0L }
-        val resources = mutableListOf<FavoriteData>()
+        val deduplicated = linkedMapOf<String, FavoriteData>()
         val failedFolderIds = linkedSetOf<Long>()
         var haltedByRiskControl = false
+        var emittedInitialBatch = false
         for ((index, folder) in validFolders.withIndex()) {
-            var folderResources = emptyList<FavoriteData>()
-            val result = loadFolder(folder.id) {
-                folderResources = it
-                onResourcesIndexed(resources + folderResources)
+            val sizeBeforeFolder = deduplicated.size
+            val result = loadFolder(folder.id) { folderResources ->
+                val sizeBeforePage = deduplicated.size
+                folderResources.forEach { resource ->
+                    deduplicated[resource.listenVideoIndexKey()] = resource
+                }
+                if (!emittedInitialBatch && deduplicated.size > sizeBeforePage) {
+                    emittedInitialBatch = true
+                    onResourcesIndexed(deduplicated.values.toList())
+                }
             }
-            resources += folderResources
+            if (deduplicated.size > sizeBeforeFolder) {
+                emittedInitialBatch = true
+                onResourcesIndexed(deduplicated.values.toList())
+            }
             if (result.isFailure) {
                 failedFolderIds += folder.id
                 if (isFavoriteRiskControlError(result.exceptionOrNull()!!)) {
@@ -176,13 +186,7 @@ internal class ListenVideoLibraryLoader(
         }
 
         return ListenVideoIndexResult(
-            resources = resources.distinctBy { resource ->
-                    if (resource.type == 21) {
-                        "album:${resource.season_id.takeIf { it > 0L } ?: resource.id}"
-                    } else {
-                        "track:${resource.bvid.ifBlank { resource.bv_id }}"
-                    }
-                },
+            resources = deduplicated.values.toList(),
             failedFolderIds = failedFolderIds,
             haltedByRiskControl = haltedByRiskControl
         )
@@ -264,5 +268,13 @@ internal class ListenVideoLibraryLoader(
             folderPages[mediaId to page] = response
         }
         result
+    }
+}
+
+internal fun FavoriteData.listenVideoIndexKey(): String {
+    return if (type == 21) {
+        "album:${season_id.takeIf { it > 0L } ?: id}"
+    } else {
+        "track:${bvid.ifBlank { bv_id }}"
     }
 }

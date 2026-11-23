@@ -122,3 +122,36 @@ internal fun resolveListenVideoPlaybackSelection(
         }
     )
 }
+
+internal fun filterListenVideoPlaylists(
+    playlists: List<ListenVideoPlaylist>,
+    query: String,
+): List<ListenVideoPlaylist> {
+    val normalized = query.trim()
+    if (normalized.isEmpty()) return playlists
+    return playlists.filter { it.title.contains(normalized, ignoreCase = true) }
+}
+
+internal fun filterListenVideoAlbums(
+    albums: List<ListenVideoAlbum>,
+    query: String,
+): List<ListenVideoAlbum> {
+    val normalized = query.trim()
+    if (normalized.isEmpty()) return albums
+    return albums.filter { album ->
+        album.title.contains(normalized, ignoreCase = true) ||
+            album.artistName.contains(normalized, ignoreCase = true)
+    }
+}
+
+internal fun filterListenVideoArtists(
+    artists: List<ListenVideoArtist>,
+    query: String,
+): List<ListenVideoArtist> {
+    val normalized = query.trim()
+    if (normalized.isEmpty()) return artists
+    return artists.filter { artist ->
+        artist.name.contains(normalized, ignoreCase = true) ||
+            artist.tracks.any { track -> track.title.contains(normalized, ignoreCase = true) }
+    }
+}

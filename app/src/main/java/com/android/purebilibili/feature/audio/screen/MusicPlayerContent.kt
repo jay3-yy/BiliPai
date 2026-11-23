@@ -165,6 +165,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -595,7 +596,7 @@ internal fun MusicPlayerContent(
     val settingsScope = rememberCoroutineScope()
     val storedLyricsUiStyle by remember(context) { SettingsManager.getMusicLyricsUiStyle(context) }
         .collectAsStateWithLifecycle<SettingsManager.MusicLyricsUiStyle?>(initialValue = null)
-    val lyricsUiStyle = storedLyricsUiStyle ?: SettingsManager.MusicLyricsUiStyle.CLASSIC
+    val lyricsUiStyle = storedLyricsUiStyle ?: SettingsManager.MusicLyricsUiStyle.ARC
     val liquidGlassTuning = remember(
         homeSettings.liquidGlassProgress,
         homeSettings.liquidGlassAdvancedSettings,
@@ -872,6 +873,7 @@ internal fun MusicPlayerContent(
                                 controlsVisible = lyricsControlsVisible,
                                 onControlsVisibleChange = { lyricsControlsVisible = it },
                                 showBottomControls = false,
+                                playerLayout = layout,
                                 lyricsUiStyle = lyricsUiStyle,
                                 showTranslations = lyricsShowTranslations,
                                 onToggleTranslations = { toggleLyricsTranslations() },
@@ -1029,6 +1031,7 @@ internal fun MusicPlayerContent(
                                 },
                                 showBottomControls = false,
                                 fullScreenLyrics = true,
+                                playerLayout = layout,
                                 lyricsUiStyle = lyricsUiStyle,
                                 showTranslations = lyricsShowTranslations,
                                 onToggleTranslations = { toggleLyricsTranslations() },
@@ -1279,7 +1282,7 @@ internal fun MusicPlayerContent(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .widthIn(max = maximumContentWidth)
-                                .padding(top = 48.dp, start = horizontalPadding, end = horizontalPadding, bottom = 16.dp),
+                                .padding(top = 12.dp, start = horizontalPadding, end = horizontalPadding, bottom = 12.dp),
                             horizontalArrangement = Arrangement.spacedBy(gutter)
                         ) {
                             PlayerPage(
@@ -1354,6 +1357,7 @@ internal fun MusicPlayerContent(
                                                 controlsVisible = lyricsControlsVisible,
                                                 onControlsVisibleChange = { lyricsControlsVisible = it },
                                                 showBottomControls = false,
+                                                playerLayout = layout,
                                                 lyricsUiStyle = lyricsUiStyle,
                                                 showTranslations = lyricsShowTranslations,
                                                 onToggleTranslations = { toggleLyricsTranslations() },
@@ -2583,12 +2587,13 @@ private fun PlayerPage(
     onToggleTitleCollapsed: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val topPadding = if (compactLandscape) 0.dp else if (isExpandedLayout) 12.dp else 56.dp
-    val bottomPadding = if (isExpandedLayout) 12.dp else 12.dp
+    val topPadding = if (compactLandscape) 0.dp else if (isExpandedLayout) 36.dp else 56.dp
+    val bottomPadding = if (isExpandedLayout) 16.dp else 12.dp
     val horizontalPadding = if (isExpandedLayout) 16.dp else chromeSpec.horizontalPaddingDp.dp
     // 竖屏封面不再额外放大：1.12 倍会让上半区超出可用高度，
     // 底部「轻点查看完整歌词」预览行被 clipToBounds 裁切
     val portraitArtworkSizeDp = artworkSizeDp
+    val expandedColumnWidthDp = portraitArtworkSizeDp.coerceIn(260, 360)
 
     Column(
         modifier = modifier
@@ -2603,15 +2608,23 @@ private fun PlayerPage(
                 bottom = bottomPadding
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        verticalArrangement = if (isExpandedLayout) {
+            Arrangement.spacedBy(20.dp, Alignment.CenterVertically)
+        } else {
+            Arrangement.SpaceBetween
+        }
     ) {
         if (!compactLandscape) {
-            // 上半部：封面展示与实时歌词空间（弹性居中占满可用剩余空间，绝不挤压底部控制栏）
+            // 上半部：封面展示与实时歌词空间；大屏双栏与下方控播同宽居中成一体，竖屏弹性居中占满剩余空间。
             Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .clipToBounds()
+                    .then(
+                        if (isExpandedLayout) {
+                            Modifier.widthIn(max = expandedColumnWidthDp.dp).fillMaxWidth()
+                        } else {
+                            Modifier.weight(1f).fillMaxWidth().clipToBounds()
+                        }
+                    )
                     .pointerInput(onChromeTap) {
                         if (onChromeTap == null) return@pointerInput
                         detectTapGestures { onChromeTap() }
@@ -2632,7 +2645,11 @@ private fun PlayerPage(
                     MusicArtwork(
                         coverUrl = state.coverUrl,
                         bitmap = artworkBitmap,
-                        modifier = Modifier.width(portraitArtworkSizeDp.dp),
+                        modifier = if (isExpandedLayout) {
+                            Modifier.fillMaxWidth()
+                        } else {
+                            Modifier.width(portraitArtworkSizeDp.dp)
+                        },
                         shape = if (coverStyle == MusicCoverStyle.TURNTABLE) CircleShape else AppShapes.container(ContainerLevel.Card),
                         rotate = shouldRotateMusicArtwork(
                             isPlaying = state.isPlaying,
@@ -2652,10 +2669,11 @@ private fun PlayerPage(
                     val lyricsUiStyle by remember(previewContext) {
                         SettingsManager.getMusicLyricsUiStyle(previewContext)
                     }.collectAsStateWithLifecycle(
-                        initialValue = SettingsManager.MusicLyricsUiStyle.CLASSIC
+                        initialValue = SettingsManager.MusicLyricsUiStyle.ARC
                     )
                     val previewPositionMs = LocalMusicPlaybackPositionState.current?.value ?: state.positionMs
-                    if (lyricsUiStyle == SettingsManager.MusicLyricsUiStyle.IMMERSIVE &&
+                    if ((lyricsUiStyle == SettingsManager.MusicLyricsUiStyle.IMMERSIVE ||
+                            lyricsUiStyle == SettingsManager.MusicLyricsUiStyle.ARC) &&
                         state.lyrics != null
                     ) {
                         // Immersive cover pane uses Halcyon PlayerMiniLyrics.
@@ -2689,10 +2707,16 @@ private fun PlayerPage(
 
         }
 
-        // 下半部：歌曲信息与控制组件区（始终稳定坐落于底端，完整展示播放/暂停与切歌）
+        // 下半部：歌曲信息与控制组件区；大屏双栏与封面严格同宽居中对齐。
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .then(
+                    if (isExpandedLayout) {
+                        Modifier.widthIn(max = expandedColumnWidthDp.dp).fillMaxWidth()
+                    } else {
+                        Modifier.fillMaxWidth()
+                    }
+                )
                 .pointerInput(onChromeTap) {
                     if (onChromeTap == null) return@pointerInput
                     detectTapGestures { onChromeTap() }
@@ -2737,7 +2761,7 @@ private fun PlayerPage(
                         color = MusicContentColor,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1,
+                        maxLines = if (isExpandedLayout) 2 else 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.height(3.dp))
@@ -2841,7 +2865,8 @@ private fun PlayerPage(
                     MusicSecondaryControls(
                         mode = state.playMode,
                         shuffleEnabled = state.shuffleEnabled,
-                        showQueue = state.queueControls.showQueue || state.queue.isNotEmpty(),
+                        // 大屏分栏右上角已有独立队列入口，左栏底排不再重复展示第二个队列按钮。
+                        showQueue = !isExpandedLayout && (state.queueControls.showQueue || state.queue.isNotEmpty()),
                         onPlayModeChange = onPlayModeChange,
                         onShuffleEnabledChange = onShuffleEnabledChange,
                         onCommentsClick = onCommentsClick,
@@ -3494,8 +3519,9 @@ private fun LyricsPage(
     onToggleTranslations: () -> Unit = {},
     showBottomControls: Boolean = true,
     fullScreenLyrics: Boolean = false,
+    playerLayout: MusicPlayerLayout = MusicPlayerLayout.COMPACT_PAGER,
     isDarkEnvironment: Boolean = true,
-    lyricsUiStyle: SettingsManager.MusicLyricsUiStyle = SettingsManager.MusicLyricsUiStyle.CLASSIC,
+    lyricsUiStyle: SettingsManager.MusicLyricsUiStyle = SettingsManager.MusicLyricsUiStyle.ARC,
     pageVisible: Boolean = true,
     modifier: Modifier = Modifier
 ) {
@@ -3504,7 +3530,25 @@ private fun LyricsPage(
         com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val document = state.lyrics
     val currentPositionMs = LocalMusicPlaybackPositionState.current?.value ?: state.positionMs
-    val immersiveLyrics = lyricsUiStyle == SettingsManager.MusicLyricsUiStyle.IMMERSIVE
+    val arcLyrics = lyricsUiStyle == SettingsManager.MusicLyricsUiStyle.ARC
+    val immersiveLyrics = lyricsUiStyle == SettingsManager.MusicLyricsUiStyle.IMMERSIVE || arcLyrics
+    val lyricsContext = LocalContext.current
+    val lyricsSettingsScope = rememberCoroutineScope()
+    val arcTiltIntensity by remember(lyricsContext) {
+        com.android.purebilibili.core.store.AudioLyricsSettingsStore.observeArcTiltIntensity(lyricsContext)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.ArcLyricsTiltIntensity.STANDARD
+    )
+    val arcCurveDirection by remember(lyricsContext) {
+        com.android.purebilibili.core.store.AudioLyricsSettingsStore.observeArcCurveDirection(lyricsContext)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.ArcLyricsCurveDirection.LEFT
+    )
+    val translationFontScale by remember(lyricsContext) {
+        com.android.purebilibili.core.store.AudioLyricsSettingsStore.observeTranslationFontScale(lyricsContext)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.LyricsTranslationFontScale.STANDARD
+    )
     var stableCurrentIndex by remember(document) {
         mutableIntStateOf(
             document?.let {
@@ -3623,24 +3667,60 @@ private fun LyricsPage(
                     suppressLeadingZero = true,
                 ).index.coerceIn(-1, (halcyonLines.size - 1).coerceAtLeast(0))
             }
-            // Wholesale Halcyon `LyricsPlayerPage` layout (header/footer chrome stay BiliPai's).
+            val config = LocalConfiguration.current
+            val arcProfile = remember(
+                arcLyrics,
+                playerLayout,
+                config.screenWidthDp,
+                config.screenHeightDp,
+                fullScreenLyrics,
+                arcTiltIntensity,
+                arcCurveDirection,
+            ) {
+                if (arcLyrics) {
+                    com.android.purebilibili.feature.audio.lyrics.halcyon.resolveArcLyricViewportProfile(
+                        layout = playerLayout,
+                        widthDp = config.screenWidthDp,
+                        heightDp = config.screenHeightDp,
+                        fullScreenLyrics = fullScreenLyrics,
+                        tiltScale = arcTiltIntensity.tiltScale,
+                        curveDirection = arcCurveDirection,
+                    )
+                } else {
+                    null
+                }
+            }
+            val applySystemBarInsets = arcProfile?.applySystemBarInsets
+                ?: (playerLayout != MusicPlayerLayout.TABLETOP && playerLayout != MusicPlayerLayout.COMPACT_LANDSCAPE)
             androidx.compose.foundation.layout.Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(horizontal = 28.dp)
+                    .then(
+                        if (applySystemBarInsets) {
+                            Modifier
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                                .windowInsetsPadding(WindowInsets.navigationBars)
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .then(
+                        if (arcProfile != null) {
+                            Modifier
+                        } else {
+                            Modifier.padding(horizontal = 28.dp)
+                        }
+                    )
             ) {
                 androidx.compose.foundation.layout.Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .clipToBounds()
+                        .then(if (arcLyrics) Modifier else Modifier.clipToBounds())
                         .playerLyricPerspective(
-                            // Halcyon `lyricPerspectiveEffect` defaults to false.
                             enabled = false,
                             angle = HALCYON_DEFAULT_PERSPECTIVE_ANGLE,
-                            lyricTextAlign = if (fullScreenLyrics) {
+                            lyricTextAlign = if (fullScreenLyrics && !arcLyrics) {
                                 com.android.purebilibili.feature.audio.lyrics.halcyon.PLAYER_LYRIC_ALIGN_CENTER
                             } else {
                                 com.android.purebilibili.feature.audio.lyrics.halcyon.PLAYER_LYRIC_ALIGN_LEFT
@@ -3662,10 +3742,12 @@ private fun LyricsPage(
                             com.android.purebilibili.feature.audio.lyrics.halcyon.HalcyonLyricSettings.lyricFontWeight,
                         ),
                         fontScale = 1f,
-                        secondaryFontScale = 1f,
-                        primaryTextSizeSp = com.android.purebilibili.feature.audio.lyrics.halcyon.HalcyonLyricSettings.primaryTextSizeSp,
-                        secondaryTextSizeSp = com.android.purebilibili.feature.audio.lyrics.halcyon.HalcyonLyricSettings.secondaryTextSizeSp,
-                        lyricTextAlign = if (fullScreenLyrics) {
+                        secondaryFontScale = translationFontScale.scale,
+                        primaryTextSizeSp = arcProfile?.primaryTextSizeSp
+                            ?: com.android.purebilibili.feature.audio.lyrics.halcyon.HalcyonLyricSettings.primaryTextSizeSp,
+                        secondaryTextSizeSp = arcProfile?.secondaryTextSizeSp
+                            ?: com.android.purebilibili.feature.audio.lyrics.halcyon.HalcyonLyricSettings.secondaryTextSizeSp,
+                        lyricTextAlign = if (fullScreenLyrics && !arcLyrics) {
                             com.android.purebilibili.feature.audio.lyrics.halcyon.PLAYER_LYRIC_ALIGN_CENTER
                         } else {
                             com.android.purebilibili.feature.audio.lyrics.halcyon.PLAYER_LYRIC_ALIGN_LEFT
@@ -3676,12 +3758,18 @@ private fun LyricsPage(
                             seekToLyric(line.timeMs)
                         },
                         onLineLongClick = {},
-                        topContentPadding = 72.dp,
+                        topContentPadding = (arcProfile?.topContentPaddingDp ?: 72).dp,
                         // 全屏歌词时底部让出紧凑 dock 的高度，当前行不被播放键压住
-                        bottomContentPadding = if (fullScreenLyrics) 200.dp else 72.dp,
+                        bottomContentPadding = (arcProfile?.bottomContentPaddingDp ?: if (fullScreenLyrics) 200 else 72).dp,
+                        startContentPadding = (arcProfile?.horizontalPaddingStartDp ?: 0).dp,
+                        endContentPadding = (arcProfile?.horizontalPaddingEndDp ?: 0).dp,
+                        lineSpacing = (arcProfile?.lineSpacingDp ?: 25).dp,
                         nonCurrentLineBlurEnabled = blurEnabled,
-                        focusOffsetRatio = if (fullScreenLyrics) 0.40f else 0.24f,
+                        focusOffsetRatio = arcProfile?.focusOffsetRatio ?: if (fullScreenLyrics) 0.40f else 0.24f,
                         useFocusLeadingPadding = false,
+                        arcPerspectiveEnabled = arcLyrics,
+                        arcViewportProfile = arcProfile,
+                        reduceMotion = reduceMotion,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -3807,6 +3895,33 @@ private fun LyricsPage(
                 showTranslations = showTranslations,
                 lyricsOffsetMs = document?.offsetMs ?: 0L,
                 sourceLabel = BiliSubtitleLyricsPolicy.resolveSourceLabel(document),
+                arcTiltIntensity = if (arcLyrics) arcTiltIntensity else null,
+                onArcTiltIntensityChange = { nextIntensity ->
+                    lyricsSettingsScope.launch {
+                        com.android.purebilibili.core.store.AudioLyricsSettingsStore.setArcTiltIntensity(
+                            lyricsContext,
+                            nextIntensity,
+                        )
+                    }
+                },
+                arcCurveDirection = if (arcLyrics) arcCurveDirection else null,
+                onArcCurveDirectionChange = { nextDirection ->
+                    lyricsSettingsScope.launch {
+                        com.android.purebilibili.core.store.AudioLyricsSettingsStore.setArcCurveDirection(
+                            lyricsContext,
+                            nextDirection,
+                        )
+                    }
+                },
+                translationFontScale = if (immersiveLyrics && showTranslations) translationFontScale else null,
+                onTranslationFontScaleChange = { nextScale ->
+                    lyricsSettingsScope.launch {
+                        com.android.purebilibili.core.store.AudioLyricsSettingsStore.setTranslationFontScale(
+                            lyricsContext,
+                            nextScale,
+                        )
+                    }
+                },
                 contentColor = sheetContentColor,
                 secondaryColor = sheetSecondaryColor,
                 onToggleTranslations = onToggleTranslations,
@@ -4174,6 +4289,12 @@ private fun LyricsSettingsContent(
     showTranslations: Boolean,
     lyricsOffsetMs: Long,
     sourceLabel: String = "",
+    arcTiltIntensity: com.android.purebilibili.core.store.ArcLyricsTiltIntensity? = null,
+    onArcTiltIntensityChange: (com.android.purebilibili.core.store.ArcLyricsTiltIntensity) -> Unit = {},
+    arcCurveDirection: com.android.purebilibili.core.store.ArcLyricsCurveDirection? = null,
+    onArcCurveDirectionChange: (com.android.purebilibili.core.store.ArcLyricsCurveDirection) -> Unit = {},
+    translationFontScale: com.android.purebilibili.core.store.LyricsTranslationFontScale? = null,
+    onTranslationFontScaleChange: (com.android.purebilibili.core.store.LyricsTranslationFontScale) -> Unit = {},
     contentColor: Color = AppContentColors.primaryText(),
     secondaryColor: Color = AppContentColors.secondaryText(),
     onToggleTranslations: () -> Unit,
@@ -4201,11 +4322,107 @@ private fun LyricsSettingsContent(
                 style = MaterialTheme.typography.bodyMedium
             )
         }
+        if (arcTiltIntensity != null) {
+            AppText(
+                "弧面倾斜强度 · ${arcTiltIntensity.label}",
+                color = secondaryColor,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.android.purebilibili.core.store.ArcLyricsTiltIntensity.entries.forEach { option ->
+                    val selected = option == arcTiltIntensity
+                    AppSurface(
+                        onClick = { onArcTiltIntensityChange(option) },
+                        shape = AppShapes.container(ContainerLevel.Card),
+                        color = if (selected) {
+                            AppContentColors.accent()
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AppText(
+                                text = option.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (selected) AppContentColors.onAccent() else secondaryColor
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (arcCurveDirection != null) {
+            AppText(
+                "弧面偏移方向 · ${arcCurveDirection.label}",
+                color = secondaryColor,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.android.purebilibili.core.store.ArcLyricsCurveDirection.entries.forEach { option ->
+                    val selected = option == arcCurveDirection
+                    AppSurface(
+                        onClick = { onArcCurveDirectionChange(option) },
+                        shape = AppShapes.container(ContainerLevel.Card),
+                        color = if (selected) {
+                            AppContentColors.accent()
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AppText(
+                                text = option.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (selected) AppContentColors.onAccent() else secondaryColor
+                            )
+                        }
+                    }
+                }
+            }
+        }
         MusicActionSheetItem(
             if (showTranslations) "隐藏翻译与罗马音" else "显示翻译与罗马音",
             contentColor = contentColor,
             onClick = onToggleTranslations
         )
+        if (translationFontScale != null) {
+            AppText(
+                "双语翻译字号 · ${translationFontScale.label}",
+                color = secondaryColor,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.android.purebilibili.core.store.LyricsTranslationFontScale.entries.forEach { option ->
+                    val selected = option == translationFontScale
+                    AppSurface(
+                        onClick = { onTranslationFontScaleChange(option) },
+                        shape = AppShapes.container(ContainerLevel.Card),
+                        color = if (selected) {
+                            AppContentColors.accent()
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AppText(
+                                text = option.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (selected) AppContentColors.onAccent() else secondaryColor
+                            )
+                        }
+                    }
+                }
+            }
+        }
         AppText(
             "歌词时间校正 · ${formatLyricsOffset(lyricsOffsetMs)}",
             color = secondaryColor
@@ -4606,7 +4823,7 @@ private fun TabletopPlayerLayout(
     hingeStartDp: Int? = null,
     hingeEndDp: Int? = null,
     isDarkEnvironment: Boolean = true,
-    lyricsUiStyle: SettingsManager.MusicLyricsUiStyle = SettingsManager.MusicLyricsUiStyle.CLASSIC,
+    lyricsUiStyle: SettingsManager.MusicLyricsUiStyle = SettingsManager.MusicLyricsUiStyle.ARC,
     showTranslations: Boolean = true,
     onToggleTranslations: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -4692,6 +4909,7 @@ private fun TabletopPlayerLayout(
                     controlsVisible = false,
                     onControlsVisibleChange = {},
                     showBottomControls = false,
+                    playerLayout = MusicPlayerLayout.TABLETOP,
                     lyricsUiStyle = lyricsUiStyle,
                     showTranslations = showTranslations,
                     onToggleTranslations = onToggleTranslations,

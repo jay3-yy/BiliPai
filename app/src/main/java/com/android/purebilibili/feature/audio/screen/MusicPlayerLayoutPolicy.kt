@@ -194,9 +194,9 @@ internal fun resolveMusicArtworkSizeDp(
             280,
         )
         MusicPlayerLayout.EXPANDED_SPLIT -> minOf(
-            (availableWidthDp / 2 - 48).coerceAtLeast(0),
-            (availableHeightDp - 240).coerceAtLeast(100),
-            340
+            (availableWidthDp / 2 - 40).coerceAtLeast(0),
+            (availableHeightDp - 220).coerceAtLeast(100),
+            360
         )
         MusicPlayerLayout.TABLETOP -> minOf(
             (availableWidthDp / 2 - 48).coerceAtLeast(0),

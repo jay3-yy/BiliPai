@@ -255,6 +255,8 @@ internal enum class SettingsIconRole(
     CAST_BUTTON(R.drawable.ms_cast_24, R.drawable.ph_screencast_24),
     PROGRESS_PEAK_DANMAKU(R.drawable.ms_graphic_eq_24, R.drawable.ph_waveform_24),
     IMAGE_3D_PAGE(R.drawable.ms_3d_rotation_24, R.drawable.ph_cube_24),
+    AUDIO_LYRICS_ARC_TILT(R.drawable.ms_3d_rotation_24, R.drawable.ph_cube_24),
+    AUDIO_LYRICS_ARC_DIRECTION(R.drawable.ms_swap_horiz_24, R.drawable.ph_arrows_horizontal_24),
     SPLASH_ICON_ANIMATION(R.drawable.ms_filter_frames_24),
     NAV_ICON_CROSS_SCALE(R.drawable.ms_compare_arrows_24, R.drawable.ph_arrows_horizontal_24),
     SUB_REPLY_THREADED(R.drawable.ms_lan_24, R.drawable.ph_tree_structure_24),

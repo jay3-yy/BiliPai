@@ -337,6 +337,27 @@ class ListenVideoLibraryLoaderTest {
         assertFalse(viewModel.uiState.value.isIndexing)
     }
 
+    @Test
+    fun `index emits initial batch promptly then batches remaining pages per folder`() = runTest {
+        val source = FakeListenVideoDataSource(
+            folderPages = mapOf(
+                1L to mapOf(
+                    1 to Result.success(page("BV1", hasMore = true)),
+                    2 to Result.success(page("BV2", hasMore = true)),
+                    3 to Result.success(page("BV3", hasMore = false)),
+                )
+            )
+        )
+        val emittedSizes = mutableListOf<Int>()
+        val result = ListenVideoLibraryLoader(source, minimumRequestIntervalMillis = 0L).indexFolders(
+            folders = listOf(FavFolder(id = 1L, title = "MultiPage")),
+            onResourcesIndexed = { emittedSizes += it.size },
+        )
+
+        assertEquals(listOf(1, 3), emittedSizes)
+        assertEquals(listOf("BV1", "BV2", "BV3"), result.resources.map { it.bvid })
+    }
+
     private fun page(bvid: String, hasMore: Boolean): FavoriteResourceData {
         return FavoriteResourceData(
             medias = listOf(

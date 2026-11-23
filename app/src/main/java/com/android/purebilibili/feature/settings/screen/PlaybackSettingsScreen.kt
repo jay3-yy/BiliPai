@@ -859,6 +859,8 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                                 "经典全屏歌词；可在听视频右上角更多菜单临时切换"
                             SettingsManager.MusicLyricsUiStyle.IMMERSIVE ->
                                 "大字歌词，随播放逐字高亮"
+                            SettingsManager.MusicLyricsUiStyle.ARC ->
+                                "左对齐 3D 弧面倾斜歌词，当前句居中高亮"
                         },
                         options = listOf(
                             AppSegmentOption(
@@ -869,11 +871,65 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                                 SettingsManager.MusicLyricsUiStyle.IMMERSIVE,
                                 SettingsManager.MusicLyricsUiStyle.IMMERSIVE.label
                             ),
+                            AppSegmentOption(
+                                SettingsManager.MusicLyricsUiStyle.ARC,
+                                SettingsManager.MusicLyricsUiStyle.ARC.label
+                            ),
                         ),
                         selectedValue = musicLyricsUiStyle,
                         onSelectionChange = { style ->
                             settingsScope.launch {
                                 SettingsManager.setMusicLyricsUiStyle(context, style)
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+                if (musicLyricsUiStyle == SettingsManager.MusicLyricsUiStyle.ARC) {
+                    val arcTiltIntensity by remember(context) {
+                        com.android.purebilibili.core.store.AudioLyricsSettingsStore.observeArcTiltIntensity(context)
+                    }.collectAsStateWithLifecycle(
+                        initialValue = com.android.purebilibili.core.store.ArcLyricsTiltIntensity.STANDARD
+                    )
+                    val arcCurveDirection by remember(context) {
+                        com.android.purebilibili.core.store.AudioLyricsSettingsStore.observeArcCurveDirection(context)
+                    }.collectAsStateWithLifecycle(
+                        initialValue = com.android.purebilibili.core.store.ArcLyricsCurveDirection.LEFT
+                    )
+                    AppPreferenceDivider()
+                    SettingsSingleChoicePreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_LYRICS_ARC_TILT),
+                        title = "弧面倾斜强度",
+                        subtitle = "调节 3D 弧面歌词的倾斜角度与纵深收拢",
+                        options = com.android.purebilibili.core.store.ArcLyricsTiltIntensity.entries.map {
+                            AppSegmentOption(it, it.label)
+                        },
+                        selectedValue = arcTiltIntensity,
+                        onSelectionChange = { intensity ->
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.AudioLyricsSettingsStore.setArcTiltIntensity(
+                                    context,
+                                    intensity,
+                                )
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                    AppPreferenceDivider()
+                    SettingsSingleChoicePreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_LYRICS_ARC_DIRECTION),
+                        title = "弧面偏移方向",
+                        subtitle = "控制上下歌词向左侧或右侧弯曲收拢",
+                        options = com.android.purebilibili.core.store.ArcLyricsCurveDirection.entries.map {
+                            AppSegmentOption(it, it.label)
+                        },
+                        selectedValue = arcCurveDirection,
+                        onSelectionChange = { direction ->
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.AudioLyricsSettingsStore.setArcCurveDirection(
+                                    context,
+                                    direction,
+                                )
                             }
                         },
                         iconTint = AppContentColors.secondaryText()

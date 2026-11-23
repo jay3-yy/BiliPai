@@ -7592,7 +7592,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             audioNowPlayingBarEnabled = preferences[KEY_AUDIO_NOW_PLAYING_BAR_ENABLED] ?: true,
             audioNowPlayingBarImmersiveEnabled = preferences[KEY_AUDIO_NOW_PLAYING_BAR_IMMERSIVE_ENABLED] ?: true,
             audioNowPlayingBarOpensAudioMode = preferences[KEY_AUDIO_NOW_PLAYING_BAR_OPENS_AUDIO_MODE] ?: false,
-            musicLyricsUiStyle = MusicLyricsUiStyle.fromValue(preferences[KEY_MUSIC_LYRICS_UI_STYLE] ?: MusicLyricsUiStyle.CLASSIC.value),
+            musicLyricsUiStyle = MusicLyricsUiStyle.fromValue(preferences[KEY_MUSIC_LYRICS_UI_STYLE] ?: MusicLyricsUiStyle.ARC.value),
             loudnessNormalizationEnabled = preferences[KEY_LOUDNESS_NORMALIZATION_ENABLED] ?: false,
             audioSpectrumEnabled = preferences[KEY_AUDIO_SPECTRUM_ENABLED] ?: false,
             startupAutoPlayEnabled = preferences[KEY_STARTUP_AUTO_PLAY_ENABLED] ?: false,
@@ -7830,20 +7830,24 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     /**
      * 听视频歌词界面风格。
      * - CLASSIC: 现有全屏歌词列
-     * - IMMERSIVE: 沉浸式大字歌词（Halcyon 风格）
+     * - IMMERSIVE: 沉浸式大字歌词
+     * - ARC: 3D 弧面旋转歌词
      */
     enum class MusicLyricsUiStyle(val value: Int, val label: String) {
         CLASSIC(0, "经典"),
-        IMMERSIVE(1, "沉浸");
+        IMMERSIVE(1, "沉浸"),
+        ARC(2, "弧面");
 
         fun next(): MusicLyricsUiStyle = when (this) {
             CLASSIC -> IMMERSIVE
-            IMMERSIVE -> CLASSIC
+            IMMERSIVE -> ARC
+            ARC -> CLASSIC
         }
 
         companion object {
             fun fromValue(value: Int): MusicLyricsUiStyle = when (value) {
                 1 -> IMMERSIVE
+                2 -> ARC
                 else -> CLASSIC
             }
         }
@@ -7852,7 +7856,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getMusicLyricsUiStyle(context: Context): Flow<MusicLyricsUiStyle> =
         context.settingsDataStore.data.map { preferences ->
             MusicLyricsUiStyle.fromValue(
-                preferences[KEY_MUSIC_LYRICS_UI_STYLE] ?: MusicLyricsUiStyle.CLASSIC.value
+                preferences[KEY_MUSIC_LYRICS_UI_STYLE] ?: MusicLyricsUiStyle.ARC.value
             )
         }
 

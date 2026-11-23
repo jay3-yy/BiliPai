@@ -1,11 +1,13 @@
 package com.android.purebilibili.feature.audio.screen
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -15,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
@@ -37,10 +40,18 @@ internal fun ListenVideoCollectionPlayer(
         if (state.firstTrack == null && state.error == null) {
             AppSurface(modifier = Modifier.fillMaxSize(), color = com.android.purebilibili.feature.audio.lyrics.halcyon.PlayerPalette.Default.middle) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    AppTextButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(top = 40.dp)) {
+                    AppTextButton(
+                        onClick = onBack,
+                        modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 8.dp, start = 8.dp)
+                    ) {
                         AppText("返回", color = androidx.compose.ui.graphics.Color.White)
                     }
-                    Column(modifier = Modifier.align(Alignment.Center).padding(24.dp)) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        AdaptiveLoadingIndicator()
                         AppText(title, style = MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color.White)
                         AppText("正在读取播放列表", color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.72f))
                     }
@@ -50,10 +61,17 @@ internal fun ListenVideoCollectionPlayer(
         if (state.firstTrack == null && state.error != null) {
             AppSurface(modifier = Modifier.fillMaxSize(), color = com.android.purebilibili.feature.audio.lyrics.halcyon.PlayerPalette.Default.middle) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    AppTextButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(top = 40.dp)) {
+                    AppTextButton(
+                        onClick = onBack,
+                        modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 8.dp, start = 8.dp)
+                    ) {
                         AppText("返回", color = androidx.compose.ui.graphics.Color.White)
                     }
-                    Column(modifier = Modifier.align(Alignment.Center).padding(24.dp)) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         AppText(title, style = MaterialTheme.typography.titleLarge, color = androidx.compose.ui.graphics.Color.White)
                         AppText(state.error.orEmpty(), color = androidx.compose.ui.graphics.Color.White)
                         AppTextButton(onClick = viewModel::retry) { AppText("重试", color = androidx.compose.ui.graphics.Color.White) }

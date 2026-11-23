@@ -14,6 +14,7 @@ import com.android.purebilibili.feature.audio.library.ListenVideoLibraryLoader
 import com.android.purebilibili.feature.audio.library.ListenVideoPlaylist
 import com.android.purebilibili.feature.audio.library.ListenVideoSection
 import com.android.purebilibili.feature.audio.library.ListenVideoTrack
+import com.android.purebilibili.feature.audio.library.listenVideoIndexKey
 import com.android.purebilibili.feature.audio.library.mapListenVideoAlbums
 import com.android.purebilibili.feature.audio.library.mapListenVideoArtists
 import com.android.purebilibili.feature.audio.library.mapListenVideoPlaylists
@@ -63,6 +64,7 @@ internal class ListenVideoViewModel(
     private var ownedFolders: List<FavFolder> = emptyList()
     private var collectedFolders: List<FavFolder> = emptyList()
     private var indexedResources: List<FavoriteData> = emptyList()
+    private val indexedFolderIds = linkedSetOf<Long>()
     private var indexCompleted = false
     private var lastDetailTitle = ""
     private var lastDetailRequest: (suspend () -> Result<List<FavoriteData>>)? = null
@@ -89,6 +91,7 @@ internal class ListenVideoViewModel(
         ownedFolders = emptyList()
         collectedFolders = emptyList()
         indexedResources = emptyList()
+        indexedFolderIds.clear()
         indexCompleted = false
         lastDetailTitle = ""
         lastDetailRequest = null
@@ -147,6 +150,7 @@ internal class ListenVideoViewModel(
                 collectedFolders = collectedResult.getOrDefault(emptyList())
                 isFoldersLoading = false
                 indexedResources = emptyList()
+                indexedFolderIds.clear()
                 indexCompleted = false
                 _uiState.update {
                     it.copy(
@@ -267,20 +271,23 @@ internal class ListenVideoViewModel(
         if (backgroundPaused || isFoldersLoading || indexJob?.isActive == true || _uiState.value.isLoading) return
         val generation = _uiState.value.generation
         val identity = accountRequests.identity
+        val validOwnedFolders = ownedFolders.filter { it.id > 0L }
         val targets = if (onlyFailed) {
-            ownedFolders.filter { it.id in _uiState.value.failedFolderIds }
+            validOwnedFolders.filter { it.id in _uiState.value.failedFolderIds }
         } else {
-            ownedFolders
+            validOwnedFolders.filter { it.id !in indexedFolderIds }
         }
         if (targets.isEmpty()) {
             indexCompleted = true
             return
         }
+        val baseCompletedCount = if (onlyFailed) 0 else indexedFolderIds.size
+        val progressTotalCount = if (onlyFailed) targets.size else validOwnedFolders.size
         _uiState.update {
             it.copy(
                 isIndexing = true,
-                indexedFolderCount = 0,
-                totalFolderCount = targets.size
+                indexedFolderCount = baseCompletedCount,
+                totalFolderCount = progressTotalCount
             )
         }
         indexJob = accountRequests.launch {
@@ -289,45 +296,57 @@ internal class ListenVideoViewModel(
                 folders = targets,
                 onFolderIndexed = { completed, total ->
                     if (accountRequests.isCurrent(identity) && _uiState.value.generation == generation) {
+                        val resolvedCompleted = if (onlyFailed) completed else (baseCompletedCount + completed).coerceAtMost(progressTotalCount)
+                        val resolvedTotal = if (onlyFailed) total else progressTotalCount
                         _uiState.update {
-                            it.copy(indexedFolderCount = completed, totalFolderCount = total)
+                            it.copy(indexedFolderCount = resolvedCompleted, totalFolderCount = resolvedTotal)
                         }
                     }
                 },
                 onResourcesIndexed = { resources ->
-                    val allResources = withContext(Dispatchers.Default) {
-                        (previousResources + resources).distinctBy { resource ->
-                            if (resource.type == 21) "album:${resource.season_id.takeIf { it > 0L } ?: resource.id}"
-                            else "track:${resource.bvid.ifBlank { resource.bv_id }}"
-                        }
+                    val snapshot = withContext(Dispatchers.Default) {
+                        val allResources = (previousResources + resources).distinctBy(FavoriteData::listenVideoIndexKey)
+                        Triple(
+                            allResources,
+                            mapListenVideoArtists(allResources),
+                            mapListenVideoAlbums(collectedFolders, allResources)
+                        )
                     }
-                    val artists = withContext(Dispatchers.Default) { mapListenVideoArtists(allResources) }
-                    val albums = withContext(Dispatchers.Default) { mapListenVideoAlbums(collectedFolders, allResources) }
                     if (accountRequests.isCurrent(identity) && _uiState.value.generation == generation) {
-                        indexedResources = allResources
-                        _uiState.update { it.copy(artists = artists, albums = albums) }
+                        indexedResources = snapshot.first
+                        _uiState.update { it.copy(artists = snapshot.second, albums = snapshot.third) }
                     }
                 },
             )
             if (!accountRequests.isCurrent(identity) || _uiState.value.generation != generation) return@launch
-            val resources = withContext(Dispatchers.Default) {
-                (indexedResources + result.resources).distinctBy { resource ->
-                    if (resource.type == 21) "album:${resource.season_id.takeIf { it > 0L } ?: resource.id}"
-                    else "track:${resource.bvid.ifBlank { resource.bv_id }}"
+            val snapshot = withContext(Dispatchers.Default) {
+                val resources = (indexedResources + result.resources).distinctBy(FavoriteData::listenVideoIndexKey)
+                Triple(
+                    resources,
+                    mapListenVideoAlbums(collectedFolders, resources),
+                    mapListenVideoArtists(resources)
+                )
+            }
+            if (!accountRequests.isCurrent(identity) || _uiState.value.generation != generation) return@launch
+            indexedResources = snapshot.first
+            targets.forEach { folder ->
+                if (folder.id !in result.failedFolderIds) {
+                    indexedFolderIds += folder.id
                 }
             }
-            val albums = withContext(Dispatchers.Default) { mapListenVideoAlbums(collectedFolders, resources) }
-            val artists = withContext(Dispatchers.Default) { mapListenVideoArtists(resources) }
-            if (!accountRequests.isCurrent(identity) || _uiState.value.generation != generation) return@launch
-            indexedResources = resources
-            indexCompleted = result.failedFolderIds.isEmpty()
+            val remainingFailedIds = if (onlyFailed) {
+                result.failedFolderIds
+            } else {
+                (_uiState.value.failedFolderIds - indexedFolderIds) + result.failedFolderIds
+            }
+            indexCompleted = remainingFailedIds.isEmpty() && validOwnedFolders.all { it.id in indexedFolderIds }
             _uiState.update {
                 it.copy(
                     isIndexing = false,
-                    albums = albums,
-                    artists = artists,
-                    failedFolderIds = result.failedFolderIds,
-                    error = result.failedFolderIds.takeIf(Set<Long>::isNotEmpty)?.let {
+                    albums = snapshot.second,
+                    artists = snapshot.third,
+                    failedFolderIds = remainingFailedIds,
+                    error = remainingFailedIds.takeIf(Set<Long>::isNotEmpty)?.let {
                         if (result.haltedByRiskControl) {
                             "已触发收藏夹风控，整理已暂停；${it.size} 个收藏夹可稍后重试"
                         } else {
@@ -360,17 +379,29 @@ internal class ListenVideoViewModel(
             val result = request()
             if (!accountRequests.isCurrent(identity) || _uiState.value.generation != generation) return@launch
             val resources = result.getOrNull().orEmpty()
-            indexedResources = (indexedResources + resources).distinctBy { resource ->
-                "${resource.type}:${resource.bvid.ifBlank { resource.bv_id }}:${resource.season_id}:${resource.id}"
+            val detailSnapshot = withContext(Dispatchers.Default) {
+                val mergedResources = (indexedResources + resources).distinctBy(FavoriteData::listenVideoIndexKey)
+                val tracks = resources
+                    .mapNotNull(FavoriteData::toListenVideoTrackOrNull)
+                    .distinctBy(ListenVideoTrack::bvid)
+                Triple(
+                    mergedResources,
+                    tracks,
+                    Pair(
+                        mapListenVideoAlbums(collectedFolders, mergedResources),
+                        mapListenVideoArtists(mergedResources)
+                    )
+                )
             }
+            if (!accountRequests.isCurrent(identity) || _uiState.value.generation != generation) return@launch
+            indexedResources = detailSnapshot.first
             _uiState.update {
                 it.copy(
-                    selectedTracks = resources.mapNotNull(FavoriteData::toListenVideoTrackOrNull)
-                        .distinctBy(ListenVideoTrack::bvid),
+                    selectedTracks = detailSnapshot.second,
                     isDetailLoading = false,
                     detailError = result.exceptionOrNull()?.userMessage("内容加载失败"),
-                    albums = mapListenVideoAlbums(collectedFolders, indexedResources),
-                    artists = mapListenVideoArtists(indexedResources)
+                    albums = detailSnapshot.third.first,
+                    artists = detailSnapshot.third.second
                 )
             }
         }

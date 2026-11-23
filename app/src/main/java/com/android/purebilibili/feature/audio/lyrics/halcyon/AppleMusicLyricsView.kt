@@ -27,7 +27,14 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
@@ -73,6 +80,8 @@ internal fun AppleMusicLyricsView(
     onLineLongClick: (HalcyonLyricLine) -> Unit,
     topContentPadding: Dp = 72.dp,
     bottomContentPadding: Dp = 132.dp,
+    startContentPadding: Dp = 0.dp,
+    endContentPadding: Dp = 0.dp,
     lineSpacing: Dp = 25.dp,
     focusOffsetRatio: Float = 0.24f,
     focusOffsetNudgeDp: Dp = 0.dp,
@@ -84,6 +93,9 @@ internal fun AppleMusicLyricsView(
     singleLine: Boolean = false,
     followWordFocus: Boolean = false,
     showBackgroundText: Boolean = true,
+    arcPerspectiveEnabled: Boolean = false,
+    arcViewportProfile: ArcLyricViewportProfile? = null,
+    reduceMotion: Boolean = false,
     linePresentation: ((Int, HalcyonLyricLine) -> MiniLyricLinePresentation?)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -418,10 +430,52 @@ internal fun AppleMusicLyricsView(
         }
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(top = leadingFocusPadding, bottom = trailingFocusPadding),
+            contentPadding = PaddingValues(
+                start = startContentPadding,
+                top = leadingFocusPadding,
+                end = endContentPadding,
+                bottom = trailingFocusPadding,
+            ),
             verticalArrangement = Arrangement.spacedBy(lineSpacing),
             userScrollEnabled = userScrollEnabled,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (arcPerspectiveEnabled) {
+                        Modifier
+                            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+                            .drawWithContent {
+                                drawContent()
+                                val topFadePx = minOf(84.dp.toPx(), size.height * 0.24f)
+                                val bottomFadePx = minOf(72.dp.toPx(), size.height * 0.20f)
+                                if (topFadePx > 0f) {
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(Color.Transparent, Color.Black),
+                                            startY = 0f,
+                                            endY = topFadePx,
+                                        ),
+                                        size = Size(size.width, topFadePx),
+                                        blendMode = BlendMode.DstIn,
+                                    )
+                                }
+                                if (bottomFadePx > 0f) {
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(Color.Black, Color.Transparent),
+                                            startY = size.height - bottomFadePx,
+                                            endY = size.height,
+                                        ),
+                                        topLeft = Offset(0f, size.height - bottomFadePx),
+                                        size = Size(size.width, bottomFadePx),
+                                        blendMode = BlendMode.DstIn,
+                                    )
+                                }
+                            }
+                    } else {
+                        Modifier
+                    }
+                )
         ) {
             lyrics.forEachIndexed { index, line ->
                 interludes.firstOrNull { it.nextLineIndex == index }?.let { interlude ->
@@ -438,10 +492,32 @@ internal fun AppleMusicLyricsView(
                         )
                     }
                 }
-                item(key = "${line.timeMs}-$index") {
+                val itemKey = "${line.timeMs}-$index"
+                item(key = itemKey) {
                     val duetActive = line.isDuetLine() && line.isActiveAt(smoothPositionMs)
                     val lineIsActive = activeInterlude == null && (index == activeIndex || duetActive)
                     val presentation = linePresentation?.invoke(index, line)
+                    val rowModifier = Modifier
+                        .then(
+                            if (arcPerspectiveEnabled) {
+                                Modifier.arcLyricRowTransform(
+                                    listState = listState,
+                                    itemKey = itemKey,
+                                    focusOffsetRatio = focusOffsetRatio,
+                                    reduceMotion = reduceMotion,
+                                    viewportProfile = arcViewportProfile,
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .then(
+                            if (index == lyrics.lastIndex) {
+                                Modifier.onSizeChanged { trailingLineHeightPx = it.height }
+                            } else {
+                                Modifier
+                            }
+                        )
                     AppleMusicLyricLine(
                         line = line,
                         active = lineIsActive,
@@ -480,11 +556,7 @@ internal fun AppleMusicLyricsView(
                         } else null,
                         onTapFraction = line.openingSeekHandler(onLineClick),
                         touchFeedbackEnabled = touchFeedbackEnabled,
-                        modifier = if (index == lyrics.lastIndex) {
-                            Modifier.onSizeChanged { trailingLineHeightPx = it.height }
-                        } else {
-                            Modifier
-                        }
+                        modifier = rowModifier
                     )
                 }
             }

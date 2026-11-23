@@ -119,6 +119,27 @@ class ListenVideoLibraryPolicyTest {
         assertEquals(70L, selection.items[1].cid)
     }
 
+    @Test
+    fun `local keyword filters match playlists albums and artists case-insensitively`() {
+        val playlists = listOf(
+            ListenVideoPlaylist(1L, "Lo-Fi Study", "", 10, FavFolderSource.OWNED),
+            ListenVideoPlaylist(2L, "粤语经典", "", 20, FavFolderSource.OWNED)
+        )
+        val albums = listOf(
+            ListenVideoAlbum(10L, 100L, "夜间电台", "", 8, "DJ Alpha"),
+            ListenVideoAlbum(11L, 101L, "古典钢琴", "", 5, "Beta")
+        )
+        val artists = listOf(
+            ListenVideoArtist(100L, "Miku", "", listOf(track("BV1", "Tell Your World"))),
+            ListenVideoArtist(101L, "周深", "", listOf(track("BV2", "大鱼")))
+        )
+
+        assertEquals(listOf(1L), filterListenVideoPlaylists(playlists, "  lofi".replace("lofi", "lo-fi")).map { it.mediaId })
+        assertEquals(listOf(10L), filterListenVideoAlbums(albums, "alpha").map { it.seasonId })
+        assertEquals(listOf(100L), filterListenVideoArtists(artists, "world").map { it.mid })
+        assertEquals(playlists, filterListenVideoPlaylists(playlists, "   "))
+    }
+
     private fun trackData(
         bvid: String,
         artistMid: Long,
