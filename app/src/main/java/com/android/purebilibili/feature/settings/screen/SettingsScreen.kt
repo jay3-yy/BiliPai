@@ -143,7 +143,7 @@ fun SettingsScreen(
     val autoCheckUpdateEnabled by remember(context) { SettingsManager.getAutoCheckAppUpdate(context) }
         .collectAsStateWithLifecycle(initialValue = true)
     val appUpdateChannel by remember(context) { SettingsManager.getAppUpdateChannel(context) }
-        .collectAsStateWithLifecycle(initialValue = SettingsManager.AppUpdateChannel.BETA)
+        .collectAsStateWithLifecycle(initialValue = SettingsManager.AppUpdateChannel.STABLE)
     val incrementalTimelineRefreshEnabled by remember(context) { SettingsManager.getIncrementalTimelineRefresh(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val dynamicVisibleTabIds by remember(context) { SettingsManager.getDynamicTabVisibleTabs(context) }
