@@ -1860,6 +1860,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_SUB_REPLY_PREVIEW_LIKES_ENABLED =
         booleanPreferencesKey("sub_reply_preview_likes_enabled")
     private val KEY_COMMENT_IP_LOCATION_ENABLED = booleanPreferencesKey("comment_ip_location_enabled")
+    private val KEY_COMMENT_SEX_ENABLED = booleanPreferencesKey("comment_sex_enabled")
     private val KEY_DETAILED_COMMENT_TIME_ENABLED =
         booleanPreferencesKey("detailed_comment_time_enabled")
     private val KEY_COMMENT_REPLY_PREVIEW_VISIBLE =
@@ -7024,6 +7025,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     data class CommentDisplaySettings(
         val subReplyPreviewLikesEnabled: Boolean = true,
         val commentIpLocationEnabled: Boolean = true,
+        val commentSexEnabled: Boolean = false,
         val detailedCommentTimeEnabled: Boolean = false,
         val commentReplyPreviewVisible: Boolean = true,
     )
@@ -7209,6 +7211,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 CommentDisplaySettings(
                     subReplyPreviewLikesEnabled = preferences[KEY_SUB_REPLY_PREVIEW_LIKES_ENABLED] ?: true,
                     commentIpLocationEnabled = preferences[KEY_COMMENT_IP_LOCATION_ENABLED] ?: true,
+                    commentSexEnabled = preferences[KEY_COMMENT_SEX_ENABLED] ?: false,
                     detailedCommentTimeEnabled = preferences[KEY_DETAILED_COMMENT_TIME_ENABLED] ?: false,
                     commentReplyPreviewVisible = preferences[KEY_COMMENT_REPLY_PREVIEW_VISIBLE] ?: true,
                 )
@@ -7234,6 +7237,17 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setCommentIpLocationEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_COMMENT_IP_LOCATION_ENABLED] = enabled
+        }
+    }
+
+    fun getCommentSexEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_COMMENT_SEX_ENABLED] ?: false }
+            .distinctUntilChanged()
+
+    suspend fun setCommentSexEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_COMMENT_SEX_ENABLED] = enabled
         }
     }
 
@@ -9477,6 +9491,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_COMMENT_AVATAR_PUSH_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_COMMENT_MEMBER_DECORATIONS_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_COMMENT_IP_LOCATION_ENABLED, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(KEY_COMMENT_SEX_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_DETAILED_COMMENT_TIME_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_IMAGE_PREVIEW_LONG_PRESS_SAVE_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_IMAGE_PREVIEW_3D_PAGE_ENABLED, SettingsShareSection.PLAYBACK),

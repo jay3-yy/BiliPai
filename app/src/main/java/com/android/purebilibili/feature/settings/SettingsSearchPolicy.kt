@@ -133,6 +133,15 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         focusId = SettingsSearchFocusIds.PLAYBACK_INTERACTION,
     ),
     SettingsSearchEntry(
+        settingId = "legacy.013",
+        target = SettingsSearchTarget.INTERACTION_COMMENT,
+        title = settingItemTitle("playback.comment_sex_enabled"),
+        subtitle = "在评论和 UP 主页的 IP 归属地后显示性别；未公开性别的用户不显示",
+        section = "设置",
+        aliases = listOf("显示性别", "评论性别", "性别", "男女", "男女性别", "IP后面显示性别"),
+        focusId = SettingsSearchFocusIds.PLAYBACK_INTERACTION,
+    ),
+    SettingsSearchEntry(
         settingId = "legacy.008",
         target = SettingsSearchTarget.INTERACTION_COMMENT,
         title = "完整评论时间",

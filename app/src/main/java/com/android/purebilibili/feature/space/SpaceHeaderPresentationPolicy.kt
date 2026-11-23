@@ -95,6 +95,8 @@ internal fun resolveSpaceBannerColorFilter(
 internal fun resolveSpaceDisplayTags(
     spaceTags: List<SpaceTagItem>,
     ipLocation: String? = null,
+    sex: String? = null,
+    showSex: Boolean = false,
 ): List<SpaceTagItem> {
     val result = mutableListOf<SpaceTagItem>()
     val locationTag = spaceTags.firstOrNull { it.type == "location" }
@@ -113,6 +115,11 @@ internal fun resolveSpaceDisplayTags(
                     type = "location"
                 )
         )
+    }
+    if (showSex) {
+        com.android.purebilibili.core.util.resolveUserSexLabel(sex)?.let { sexLabel ->
+            result.add(SpaceTagItem(title = sexLabel, type = "sex"))
+        }
     }
     result.addAll(otherTags)
     return result

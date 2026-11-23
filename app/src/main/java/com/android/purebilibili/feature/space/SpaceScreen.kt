@@ -4018,8 +4018,19 @@ private fun SpaceHeaderIdentityInfo(
             }
 
             val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-            val displayTags = remember(userInfo.spaceTags, userInfo.ipLocation) {
-                resolveSpaceDisplayTags(userInfo.spaceTags, userInfo.ipLocation)
+            val commentSexEnabled = com.android.purebilibili.core.ui.LocalCommentSexEnabled.current
+            val displayTags = remember(
+                userInfo.spaceTags,
+                userInfo.ipLocation,
+                userInfo.sex,
+                commentSexEnabled
+            ) {
+                resolveSpaceDisplayTags(
+                    spaceTags = userInfo.spaceTags,
+                    ipLocation = userInfo.ipLocation,
+                    sex = userInfo.sex,
+                    showSex = commentSexEnabled
+                )
             }
             if (userInfo.mid > 0L || displayTags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))

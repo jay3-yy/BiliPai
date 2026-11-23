@@ -131,6 +131,7 @@ internal enum class SettingsIconRole(
     REPEATED_COMMENT_FILTER(R.drawable.ms_content_copy_24, R.drawable.ph_copy_simple_24),
     CONTENT_FILTER_HISTORY(R.drawable.ms_fact_check_24, R.drawable.ph_list_checks_24),
     COMMENT_IP_LOCATION(R.drawable.ic_settings_comment_ip_location_24),
+    COMMENT_GENDER(R.drawable.ms_person_24, R.drawable.ph_user_24),
     COMMENT_EXACT_TIME(R.drawable.ms_calendar_clock_24, R.drawable.ph_calendar_dots_24),
     COMMENT_AVATAR_PUSH(R.drawable.ic_settings_comment_avatar_push_24),
     SUB_REPLY_PREVIEW_LIKES(R.drawable.ic_settings_sub_reply_likes_24),

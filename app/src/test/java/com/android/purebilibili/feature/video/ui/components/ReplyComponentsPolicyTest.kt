@@ -175,6 +175,43 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
+    fun `resolveReplyMetadataText keeps sex after ip and respects toggles`() {
+        assertEquals(
+            "IP归属地：上海 男",
+            resolveReplyMetadataText("IP属地：上海", "男", showLocation = true, showSex = true)
+        )
+        assertEquals(
+            "IP归属地：北京 保密",
+            resolveReplyMetadataText("北京", "保密", showLocation = true, showSex = true)
+        )
+        assertEquals(
+            "女",
+            resolveReplyMetadataText(null, "女", showLocation = true, showSex = true)
+        )
+        assertEquals(
+            "IP归属地：上海",
+            resolveReplyMetadataText("IP属地：上海", "男", showLocation = true, showSex = false)
+        )
+        assertEquals(
+            "男",
+            resolveReplyMetadataText("IP属地：上海", "男", showLocation = false, showSex = true)
+        )
+        assertEquals(
+            "IP归属地：上海",
+            resolveReplyMetadataText("IP属地：上海", "", showLocation = true, showSex = true)
+        )
+        assertNull(
+            resolveReplyMetadataText(null, "保密", showLocation = false, showSex = false)
+        )
+        assertNull(
+            resolveReplyMetadataText(null, "未知", showLocation = true, showSex = true)
+        )
+        assertNull(
+            resolveReplyMetadataText(null, null, showLocation = true, showSex = true)
+        )
+    }
+
+    @Test
     fun `buildSubReplyPreviewPrefix includes separator and optional up tag`() {
         assertContentEquals(
             listOf("测试用户", " ", "[UP]", ": "),

@@ -127,4 +127,25 @@ class SpaceHeaderPresentationPolicyTest {
         assertEquals("location", result[0].type)
         assertEquals("已实名认证", result[1].title)
     }
+
+    @Test
+    fun `resolveSpaceDisplayTags puts sex after location only when enabled`() {
+        val tags = listOf(
+            SpaceTagItem(type = "location", title = "IP属地：广东"),
+            SpaceTagItem(type = "real_name", title = "已实名认证")
+        )
+
+        val enabled = resolveSpaceDisplayTags(tags, sex = "男", showSex = true)
+        assertEquals(listOf("location", "sex", "real_name"), enabled.map { it.type })
+        assertEquals("男", enabled[1].title)
+
+        val disabled = resolveSpaceDisplayTags(tags, sex = "男", showSex = false)
+        assertEquals(listOf("location", "real_name"), disabled.map { it.type })
+
+        val privacy = resolveSpaceDisplayTags(tags, sex = "保密", showSex = true)
+        assertEquals("保密", privacy[1].title)
+
+        val unknown = resolveSpaceDisplayTags(tags, sex = "未知", showSex = true)
+        assertEquals(listOf("location", "real_name"), unknown.map { it.type })
+    }
 }

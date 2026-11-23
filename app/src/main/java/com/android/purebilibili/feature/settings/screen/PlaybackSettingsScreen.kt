@@ -1382,6 +1382,8 @@ private fun PlaybackInteractionSettingsSection(
         .collectAsStateWithLifecycle(initialValue = false)
     val commentIpLocationEnabled by remember(context) { SettingsManager.getCommentIpLocationEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = true)
+    val commentSexEnabled by remember(context) { SettingsManager.getCommentSexEnabled(context) }
+        .collectAsStateWithLifecycle(initialValue = false)
     val detailedCommentTimeEnabled by remember(context) { SettingsManager.getDetailedCommentTimeEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val subReplyThreadedEnabled by remember(context) { SettingsManager.getSubReplyThreadedEnabled(context) }
@@ -1703,6 +1705,25 @@ SettingsItemAnchor("playback.subtitle_auto_preference") {
                 onCheckedChange = { enabled ->
                     scope.launch {
                         SettingsManager.setCommentIpLocationEnabled(context, enabled)
+                    }
+                },
+                iconTint = AppContentColors.secondaryText(),
+            )
+        }
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.comment_sex_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.COMMENT_GENDER),
+                title = playbackSettingTitle("playback.comment_sex_enabled"),
+                subtitle = if (commentSexEnabled) {
+                    "在评论和 UP 主页的 IP 归属地后显示；未公开性别的用户不显示"
+                } else {
+                    "关闭后评论和 UP 主页不显示性别"
+                },
+                checked = commentSexEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch {
+                        SettingsManager.setCommentSexEnabled(context, enabled)
                     }
                 },
                 iconTint = AppContentColors.secondaryText(),
