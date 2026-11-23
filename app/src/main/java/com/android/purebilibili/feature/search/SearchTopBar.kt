@@ -50,6 +50,7 @@ import com.android.purebilibili.core.ui.rememberAppClearIcon
 import com.android.purebilibili.core.ui.rememberAppSearchIcon
 import androidx.compose.ui.text.style.TextOverflow
 import com.android.purebilibili.core.util.responsiveContentWidth
+import androidx.compose.foundation.text.handwriting.handwritingHandler
 import com.android.purebilibili.core.ui.motion.continuityTween
 
 // 顶部搜索栏：输入状态持有选区，搜索逻辑只订阅文字变化。
@@ -357,6 +358,7 @@ private fun SearchTopBarInputField(
             state = state,
             modifier = modifier
                 .focusRequester(focusRequester)
+                .handwritingHandler()
                 .then(
                     if (containerColor.alpha > 0.001f) {
                         Modifier

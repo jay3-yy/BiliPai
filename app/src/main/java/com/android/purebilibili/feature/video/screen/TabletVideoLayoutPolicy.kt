@@ -3,7 +3,65 @@ package com.android.purebilibili.feature.video.screen
 import com.android.purebilibili.core.store.TabletCommentPanelWidthPreset
 import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
 import com.android.purebilibili.core.util.AppFoldPosture
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
+
+internal data class TabletTheaterModeController(
+    val isActive: Boolean,
+    val toggle: () -> Unit,
+)
+
+internal val LocalTabletTheaterModeController = compositionLocalOf<TabletTheaterModeController?> { null }
+
+internal fun resolveTabletTheaterModeActive(
+    requested: Boolean,
+    companionPane: Boolean,
+    useTabletopLayout: Boolean,
+): Boolean = requested && !companionPane && !useTabletopLayout
+
+internal fun resolveTabletTheaterPlayerSizeDp(
+    availableWidthDp: Float,
+    screenHeightDp: Int,
+    isTheaterMode: Boolean,
+    useTabletopLayout: Boolean,
+    policyMaxWidthDp: Int,
+): Pair<Float, Float> {
+    val safeWidth = availableWidthDp.coerceAtLeast(1f)
+    if (!isTheaterMode) {
+        val width = minOf(safeWidth, policyMaxWidthDp.toFloat())
+        return width to (width * 9f / 16f)
+    }
+    // 影院大舞台：窗口内横向最大化，同时将高度上限控制在屏高 68%，保证下方简介/互动区一屏可见。
+    val maxStageHeight = (screenHeightDp * 0.68f).coerceAtLeast(240f)
+    val width = minOf(safeWidth, maxStageHeight * 16f / 9f)
+    return width to (width * 9f / 16f)
+}
+
+internal fun resolvePhoneTheaterModeActive(
+    requested: Boolean,
+    useTabletLayout: Boolean,
+    isFullscreenMode: Boolean,
+    isInPipMode: Boolean,
+    isPortraitFullscreen: Boolean,
+): Boolean = requested &&
+    !useTabletLayout &&
+    !isFullscreenMode &&
+    !isInPipMode &&
+    !isPortraitFullscreen
+
+/** 手机竖屏影院模式下的暗场舞台目标高度：在不挤压评论区的前提下放大舞台至屏高 44% 上限。 */
+internal fun resolvePhoneTheaterStageHeightDp(
+    baseInlineHeightDp: Float,
+    screenHeightDp: Int,
+    isTheaterMode: Boolean,
+): Float {
+    val safeBase = baseInlineHeightDp.coerceAtLeast(1f)
+    if (!isTheaterMode) return safeBase
+    val targetCap = (screenHeightDp * 0.44f).coerceAtLeast(safeBase)
+    return minOf(targetCap, safeBase * 1.42f)
+}
+
+internal const val PHONE_THEATER_BODY_DIM_ALPHA = 0.42f
 
 data class TabletVideoLayoutPolicy(
     val primaryRatio: Float,

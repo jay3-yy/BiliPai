@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.bangumi
 
+import com.android.purebilibili.core.ui.adaptive.adaptiveCardHoverEffect
+import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.wallpaperMediaCardSurface
 import com.android.purebilibili.core.ui.AppContentColors
@@ -1141,14 +1143,20 @@ private fun PosterGridCard(
     onLongClick: () -> Unit,
 ) {
     val transition = rememberBangumiCardTransition(item.seasonId, onClick = onClick)
+    val secondaryClickHandler = remember(onLongClick) {
+        { _: androidx.compose.ui.geometry.Offset -> onLongClick() }
+    }
     // Only the poster is rounded; keep the title block square for cleaner media rows.
     Column(
-        modifier = transition.modifier.appCombinedClickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = if (transition.enabled) null else LocalIndication.current,
-            onClick = transition.onClick,
-            onLongClick = onLongClick,
-        ),
+        modifier = transition.modifier
+            .adaptiveCardHoverEffect(shape = AppShapes.container(ContainerLevel.Field))
+            .onSecondaryClick(secondaryClickHandler)
+            .appCombinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = if (transition.enabled) null else LocalIndication.current,
+                onClick = transition.onClick,
+                onLongClick = onLongClick,
+            ),
     ) {
         PosterImage(
             cover = item.cover,
@@ -1181,13 +1189,19 @@ private fun SearchPosterCard(
     onLongClick: () -> Unit,
 ) {
     val transition = rememberBangumiCardTransition(item.seasonId, onClick = onClick)
+    val secondaryClickHandler = remember(onLongClick) {
+        { _: androidx.compose.ui.geometry.Offset -> onLongClick() }
+    }
     Column(
-        modifier = transition.modifier.appCombinedClickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = if (transition.enabled) null else LocalIndication.current,
-            onClick = transition.onClick,
-            onLongClick = onLongClick,
-        ),
+        modifier = transition.modifier
+            .adaptiveCardHoverEffect(shape = AppShapes.container(ContainerLevel.Field))
+            .onSecondaryClick(secondaryClickHandler)
+            .appCombinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = if (transition.enabled) null else LocalIndication.current,
+                onClick = transition.onClick,
+                onLongClick = onLongClick,
+            ),
     ) {
         PosterImage(
             cover = item.cover,
@@ -1256,13 +1270,20 @@ private fun FollowPosterCard(
     modifier: Modifier = Modifier,
 ) {
     val transition = rememberBangumiCardTransition(item.seasonId, onClick = onClick)
+    val secondaryClickHandler = remember(onLongClick) {
+        { _: androidx.compose.ui.geometry.Offset -> onLongClick() }
+    }
     Column(
-        modifier = modifier.then(transition.modifier).appCombinedClickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = if (transition.enabled) null else LocalIndication.current,
-            onClick = transition.onClick,
-            onLongClick = onLongClick,
-        ),
+        modifier = modifier
+            .then(transition.modifier)
+            .adaptiveCardHoverEffect(shape = AppShapes.container(ContainerLevel.Field))
+            .onSecondaryClick(secondaryClickHandler)
+            .appCombinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = if (transition.enabled) null else LocalIndication.current,
+                onClick = transition.onClick,
+                onLongClick = onLongClick,
+            ),
     ) {
         PosterImage(
             cover = item.cover,
@@ -1298,10 +1319,15 @@ private fun TimelineEpisodeCard(
     modifier: Modifier = Modifier,
 ) {
     val transition = rememberBangumiCardTransition(episode.seasonId, episode.episodeId, onClick)
+    val secondaryClickHandler = remember(onLongClick) {
+        { _: androidx.compose.ui.geometry.Offset -> onLongClick() }
+    }
     Column(
         modifier = modifier
             .then(transition.modifier)
             .width(104.dp)
+            .adaptiveCardHoverEffect(shape = AppShapes.container(ContainerLevel.Field))
+            .onSecondaryClick(secondaryClickHandler)
             .appCombinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = if (transition.enabled) null else LocalIndication.current,
@@ -1351,6 +1377,9 @@ private fun FollowInfoCard(
     onUnfollow: () -> Unit,
 ) {
     val transition = rememberBangumiCardTransition(item.seasonId, onClick = onClick)
+    val secondaryClickHandler = remember(onLongClick) {
+        { _: androidx.compose.ui.geometry.Offset -> onLongClick() }
+    }
     val cardSurface = wallpaperMediaCardSurface(
         containerColor = if (selected) AppSurfaceTokens.secondaryContainer() else AppSurfaceTokens.cardContainer(),
         shape = AppShapes.container(ContainerLevel.Card),
@@ -1363,7 +1392,9 @@ private fun FollowInfoCard(
             .fillMaxWidth()
             .heightIn(min = 150.dp)
             .then(transition.modifier)
+            .adaptiveCardHoverEffect(shape = AppShapes.container(ContainerLevel.Card))
             .then(cardSurface.modifier)
+            .onSecondaryClick(secondaryClickHandler)
             .appCombinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = if (transition.enabled) null else LocalIndication.current,

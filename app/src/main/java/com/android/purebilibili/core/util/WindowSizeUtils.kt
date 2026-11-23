@@ -379,16 +379,20 @@ private fun androidx.compose.material3.adaptive.Posture.toAppFoldingFeatureInfo(
     )
 }
 
+internal fun isPrecisePointerSource(sources: Int): Boolean {
+    return (sources and InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE ||
+        (sources and InputDevice.SOURCE_MOUSE_RELATIVE) == InputDevice.SOURCE_MOUSE_RELATIVE ||
+        (sources and InputDevice.SOURCE_TOUCHPAD) == InputDevice.SOURCE_TOUCHPAD ||
+        (sources and InputDevice.SOURCE_STYLUS) == InputDevice.SOURCE_STYLUS ||
+        (sources and InputDevice.SOURCE_BLUETOOTH_STYLUS) == InputDevice.SOURCE_BLUETOOTH_STYLUS
+}
+
 private fun Context.hasPrecisePointer(): Boolean {
     val inputManager = getSystemService(InputManager::class.java) ?: return false
     return inputManager.inputDeviceIds.any { deviceId ->
         val device = inputManager.getInputDevice(deviceId) ?: return@any false
         val deviceEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1 || device.isEnabled
-        deviceEnabled && (
-            device.supportsSource(InputDevice.SOURCE_MOUSE) ||
-                device.supportsSource(InputDevice.SOURCE_MOUSE_RELATIVE) ||
-                device.supportsSource(InputDevice.SOURCE_TOUCHPAD)
-            )
+        deviceEnabled && isPrecisePointerSource(device.sources)
     }
 }
 

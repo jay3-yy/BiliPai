@@ -57,6 +57,15 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
+internal fun resolvePreferredScannerCameraSelector(
+    hasBackCamera: Boolean,
+    hasFrontCamera: Boolean,
+): CameraSelector? = when {
+    hasBackCamera -> CameraSelector.DEFAULT_BACK_CAMERA
+    hasFrontCamera -> CameraSelector.DEFAULT_FRONT_CAMERA
+    else -> null
+}
+
 /** CameraX scanner shared by Bilibili login authorization and BiliPai session transfer. */
 @Composable
 fun BiliPaiTransferScanner(
@@ -180,7 +189,11 @@ fun BiliPaiTransferScanner(
             if (!active.get()) return@Runnable
             try {
                 val provider = providerFuture.get()
-                if (!provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)) {
+                val cameraSelector = resolvePreferredScannerCameraSelector(
+                    hasBackCamera = provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA),
+                    hasFrontCamera = provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA),
+                )
+                if (cameraSelector == null) {
                     reportError()
                     return@Runnable
                 }
@@ -243,7 +256,7 @@ fun BiliPaiTransferScanner(
                     }
                 }
                 val camera = provider.bindToLifecycle(
-                    lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analysis,
+                    lifecycleOwner, cameraSelector, preview, analysis,
                 )
                 boundProvider = provider
                 boundPreview = preview

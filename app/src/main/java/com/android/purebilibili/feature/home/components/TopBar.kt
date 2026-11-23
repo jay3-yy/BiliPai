@@ -4,6 +4,7 @@ package com.android.purebilibili.feature.home.components
 import com.android.purebilibili.navigation.isTabSelectionInProgress
 import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
+import androidx.compose.foundation.text.handwriting.handwritingDetector
 import com.android.purebilibili.core.ui.AppContentColors
 
 import coil3.request.crossfade
@@ -893,6 +894,7 @@ fun FluidHomeTopBar(
                         .height(AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.ExtraSmall)
                         .clip(AppShapes.container(ContainerLevel.Pill))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .handwritingDetector { onSearchClick() }
                         .appActionClickable(
                             interactionSource = searchClickInteractionSource,
                             indication = null

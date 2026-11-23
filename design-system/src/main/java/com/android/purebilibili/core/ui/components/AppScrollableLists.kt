@@ -71,6 +71,7 @@ fun AppLazyColumn(
     horizontalAlignment: Alignment.Horizontal = Alignment.Start,
     flingBehavior: FlingBehavior = ScrollableDefaults.flingBehavior(),
     userScrollEnabled: Boolean = true,
+    showScrollBar: Boolean = true,
     overscrollEffect: OverscrollEffect? = rememberOverscrollEffect(),
     content: LazyListScope.() -> Unit,
 ) {
@@ -89,7 +90,7 @@ fun AppLazyColumn(
                 overscrollEffect = overscrollEffect, content = content,
             )
         }
-        if (LocalAppUiStyle.current == AppUiStyle.MIUIX && userScrollEnabled) {
+        if (LocalAppUiStyle.current == AppUiStyle.MIUIX && userScrollEnabled && showScrollBar && LocalScrollBarAllowed.current) {
             Box(Modifier.matchParentSize()) {
                 VerticalScrollBar(
                     adapter = rememberScrollBarAdapter(state),
@@ -113,6 +114,7 @@ fun AppLazyVerticalGrid(
     horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
     flingBehavior: FlingBehavior = ScrollableDefaults.flingBehavior(),
     userScrollEnabled: Boolean = true,
+    showScrollBar: Boolean = true,
     overscrollEffect: OverscrollEffect? = rememberOverscrollEffect(),
     content: LazyGridScope.() -> Unit,
 ) {
@@ -131,7 +133,7 @@ fun AppLazyVerticalGrid(
                 userScrollEnabled = userScrollEnabled, overscrollEffect = overscrollEffect, content = content,
             )
         }
-        if (LocalAppUiStyle.current == AppUiStyle.MIUIX && userScrollEnabled) {
+        if (LocalAppUiStyle.current == AppUiStyle.MIUIX && userScrollEnabled && showScrollBar && LocalScrollBarAllowed.current) {
             Box(Modifier.matchParentSize()) {
                 VerticalScrollBar(
                     adapter = rememberScrollBarAdapter(state),

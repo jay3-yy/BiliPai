@@ -64,11 +64,17 @@ internal fun BottomPagerPageLifecycle(
     page: Int,
     content: @Composable () -> Unit,
 ) {
-    val maxLifecycle = if (page == state.selectedPage && !state.isNavigating) {
+    val isSettledCurrentPage = page == state.selectedPage && !state.isNavigating
+    val maxLifecycle = if (isSettledCurrentPage) {
         Lifecycle.State.RESUMED
     } else {
         Lifecycle.State.STARTED
     }
     val owner = rememberLifecycleOwner(maxLifecycle = maxLifecycle)
-    CompositionLocalProvider(LocalLifecycleOwner provides owner, content = content)
+    CompositionLocalProvider(
+        LocalLifecycleOwner provides owner,
+        com.android.purebilibili.core.ui.components.LocalScrollBarAllowed provides
+            (com.android.purebilibili.core.ui.components.LocalScrollBarAllowed.current && isSettledCurrentPage),
+        content = content,
+    )
 }

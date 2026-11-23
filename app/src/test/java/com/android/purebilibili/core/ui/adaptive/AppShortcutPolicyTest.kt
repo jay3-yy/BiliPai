@@ -131,4 +131,14 @@ class AppShortcutPolicyTest {
             },
         )
     }
+
+    @Test
+    fun playerShortcutHelperDefinitions_haveUniqueKeyCombinationsAndCoverCorePlaybackKeys() {
+        val combinations = PLAYER_SHORTCUT_HELPER_DEFINITIONS.map { it.keyCode to it.modifiers }
+        assertEquals(combinations.size, combinations.toSet().size)
+        assertTrue((KeyEvent.KEYCODE_SPACE to 0) in combinations)
+        assertTrue((KeyEvent.KEYCODE_F to 0) in combinations)
+        assertTrue((KeyEvent.KEYCODE_M to 0) in combinations)
+        assertTrue((KeyEvent.KEYCODE_DPAD_RIGHT to KeyEvent.META_SHIFT_ON) in combinations)
+    }
 }

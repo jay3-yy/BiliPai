@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.download
 import com.android.purebilibili.core.player.withAppVideoDecoderDiagnostics
 import com.android.purebilibili.core.player.withAppVideoDecoderPreference
 
+import com.android.purebilibili.feature.video.player.basicPlayerKeyboardShortcuts
 import com.android.purebilibili.core.ui.AppContentColors
 
 import com.android.purebilibili.feature.video.ui.overlay.NextWatchOverlay
@@ -769,6 +770,11 @@ fun OfflineVideoPlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .basicPlayerKeyboardShortcuts(
+                    player = player,
+                    onToggleFullscreen = { toggleFullscreen() },
+                    onToggleDanmaku = { danmakuEnabled = !danmakuEnabled },
+                )
                 .background(Color.Black)
                 .pointerInput(player, playbackFailure, isFullscreen, twoFingerSpeedMode, playbackSpeedOptions) {
                     if (playbackFailure != null || !isFullscreen || task.isAudioOnly ||

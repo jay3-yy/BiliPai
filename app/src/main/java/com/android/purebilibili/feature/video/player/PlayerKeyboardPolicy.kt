@@ -1,5 +1,15 @@
 package com.android.purebilibili.feature.video.player
 
+import android.content.Context
+import android.media.AudioManager
+import androidx.compose.foundation.focusable
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -8,7 +18,15 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
+import androidx.media3.common.Player
+import com.android.purebilibili.core.ui.adaptive.CustomKeyBinding
+import com.android.purebilibili.core.ui.adaptive.CustomShortcutOverrides
+import com.android.purebilibili.core.ui.adaptive.CustomShortcutSlot
+import com.android.purebilibili.core.ui.adaptive.LocalKeyboardShortcutOverrides
+import com.android.purebilibili.core.ui.adaptive.normalizeShortcutModifiers
 
 sealed interface PlayerKeyAction {
     data object PlayPause : PlayerKeyAction
@@ -17,6 +35,7 @@ sealed interface PlayerKeyAction {
     data object VolumeUp : PlayerKeyAction
     data object VolumeDown : PlayerKeyAction
     data object ToggleMute : PlayerKeyAction
+    data object ToggleTheaterMode : PlayerKeyAction
     data object ToggleFullscreen : PlayerKeyAction
     data object ToggleDanmaku : PlayerKeyAction
     data object ToggleLike : PlayerKeyAction
@@ -33,27 +52,59 @@ sealed interface PlayerKeyAction {
 internal const val KEYBOARD_SEEK_SHORT_STEP_MS = 5_000L
 internal const val KEYBOARD_SEEK_LONG_STEP_MS = 10_000L
 
+private fun CustomShortcutSlot.toPlayerKeyAction(): PlayerKeyAction? = when (this) {
+    CustomShortcutSlot.PlayerPlayPause -> PlayerKeyAction.PlayPause
+    CustomShortcutSlot.PlayerTheaterMode -> PlayerKeyAction.ToggleTheaterMode
+    CustomShortcutSlot.PlayerFullscreen -> PlayerKeyAction.ToggleFullscreen
+    CustomShortcutSlot.PlayerMute -> PlayerKeyAction.ToggleMute
+    CustomShortcutSlot.PlayerDanmaku -> PlayerKeyAction.ToggleDanmaku
+    CustomShortcutSlot.PlayerLike -> PlayerKeyAction.ToggleLike
+    CustomShortcutSlot.PlayerCoin -> PlayerKeyAction.Coin
+    CustomShortcutSlot.PlayerFavorite -> PlayerKeyAction.ToggleFavorite
+    CustomShortcutSlot.PlayerTriple -> PlayerKeyAction.TripleAction
+    CustomShortcutSlot.PlayerScreenshot -> PlayerKeyAction.TakeScreenshot
+    CustomShortcutSlot.PlayerLock -> PlayerKeyAction.ToggleScreenLock
+    CustomShortcutSlot.PlayerPreviousPart -> PlayerKeyAction.PreviousPart
+    CustomShortcutSlot.PlayerNextPart -> PlayerKeyAction.NextPart
+    else -> null
+}
+
 internal fun resolvePlayerKeyAction(
     event: KeyEvent,
     isScreenLocked: Boolean = false,
     isInPipMode: Boolean = false,
     isTextInputActive: Boolean = false,
+    overrides: CustomShortcutOverrides = CustomShortcutOverrides(),
 ): PlayerKeyAction? {
     if (event.type != KeyEventType.KeyDown) return null
     if (isInPipMode || isTextInputActive) return null
 
-    // Screen locked: only L (unlock) is accepted
+    // Do not intercept system-level shortcuts (Ctrl, Alt, Meta/Cmd)
+    if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) {
+        return null
+    }
+
+    val nativeEvent = event.nativeKeyEvent
+    val pressed = CustomKeyBinding(
+        keyCode = nativeEvent.keyCode,
+        modifiers = normalizeShortcutModifiers(nativeEvent.metaState),
+    )
+
+    // Screen locked: only the configured lock/unlock key is accepted
     if (isScreenLocked) {
-        return if (event.key == Key.L && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) {
+        return if (pressed == overrides.bindingFor(CustomShortcutSlot.PlayerLock)) {
             PlayerKeyAction.ToggleScreenLock
         } else {
             null
         }
     }
 
-    // Do not intercept system-level shortcuts (Ctrl, Alt, Meta/Cmd)
-    if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) {
-        return null
+    // 优先匹配所有可自定义播放器键位槽（含默认与用户自定义覆写）
+    for (slot in CustomShortcutSlot.entries) {
+        val action = slot.toPlayerKeyAction() ?: continue
+        if (pressed == overrides.bindingFor(slot)) {
+            return action
+        }
     }
 
     val shift = event.isShiftPressed
@@ -69,23 +120,14 @@ internal fun resolvePlayerKeyAction(
     }
 
     return when (event.key) {
-        Key.Spacebar, Key.K -> PlayerKeyAction.PlayPause
+        Key.K -> if (!overrides.isCustomized(CustomShortcutSlot.PlayerPlayPause)) PlayerKeyAction.PlayPause else null
+        Key.Enter, Key.NumPadEnter ->
+            if (!overrides.isCustomized(CustomShortcutSlot.PlayerFullscreen)) PlayerKeyAction.ToggleFullscreen else null
         Key.DirectionLeft -> PlayerKeyAction.SeekRelative(-KEYBOARD_SEEK_SHORT_STEP_MS)
         Key.DirectionRight -> PlayerKeyAction.SeekRelative(KEYBOARD_SEEK_SHORT_STEP_MS)
         Key.J -> PlayerKeyAction.SeekRelative(-KEYBOARD_SEEK_LONG_STEP_MS)
         Key.DirectionUp -> PlayerKeyAction.VolumeUp
         Key.DirectionDown -> PlayerKeyAction.VolumeDown
-        Key.F, Key.Enter, Key.NumPadEnter -> PlayerKeyAction.ToggleFullscreen
-        Key.M -> PlayerKeyAction.ToggleMute
-        Key.D -> PlayerKeyAction.ToggleDanmaku
-        Key.Q -> PlayerKeyAction.ToggleLike
-        Key.W -> PlayerKeyAction.Coin
-        Key.E -> PlayerKeyAction.ToggleFavorite
-        Key.R -> PlayerKeyAction.TripleAction
-        Key.S -> PlayerKeyAction.TakeScreenshot
-        Key.L -> PlayerKeyAction.ToggleScreenLock
-        Key.LeftBracket -> PlayerKeyAction.PreviousPart
-        Key.RightBracket -> PlayerKeyAction.NextPart
         Key.Zero, Key.NumPad0 -> PlayerKeyAction.SeekPercent(0.0f)
         Key.One, Key.NumPad1 -> PlayerKeyAction.SeekPercent(0.1f)
         Key.Two, Key.NumPad2 -> PlayerKeyAction.SeekPercent(0.2f)
@@ -116,4 +158,93 @@ internal fun calculateSeekTargetPositionMs(
         }
         else -> null
     }
+}
+
+/**
+ * 为番剧、离线等独立播放页面提供统一的硬件键盘快捷键支持（空格播放/暂停、
+ * 方向键快进退/音量、M 静音、F/Enter 全屏、D 弹幕、Shift+1/2 倍速、0-9 进度跳转）。
+ */
+@Composable
+internal fun Modifier.basicPlayerKeyboardShortcuts(
+    player: Player?,
+    isInPipMode: Boolean = false,
+    isTextInputActive: Boolean = false,
+    onToggleFullscreen: (() -> Unit)? = null,
+    onToggleDanmaku: (() -> Unit)? = null,
+): Modifier {
+    val context = LocalContext.current
+    var volumeBeforeMute by remember { mutableFloatStateOf(1f) }
+    val currentPlayer by rememberUpdatedState(player)
+    val currentInPip by rememberUpdatedState(isInPipMode)
+    val currentTextInputActive by rememberUpdatedState(isTextInputActive)
+    val currentToggleFullscreen by rememberUpdatedState(onToggleFullscreen)
+    val currentToggleDanmaku by rememberUpdatedState(onToggleDanmaku)
+    val currentOverrides by rememberUpdatedState(LocalKeyboardShortcutOverrides.current)
+
+    return this
+        .focusable()
+        .onKeyEvent { event ->
+            val targetPlayer = currentPlayer ?: return@onKeyEvent false
+            val action = resolvePlayerKeyAction(
+                event = event,
+                isInPipMode = currentInPip,
+                isTextInputActive = currentTextInputActive,
+                overrides = currentOverrides,
+            ) ?: return@onKeyEvent false
+
+            when (action) {
+                PlayerKeyAction.PlayPause -> {
+                    if (targetPlayer.isPlaying) targetPlayer.pause() else targetPlayer.play()
+                    true
+                }
+                is PlayerKeyAction.SeekRelative,
+                is PlayerKeyAction.SeekPercent -> {
+                    val targetPosition = calculateSeekTargetPositionMs(
+                        currentPositionMs = targetPlayer.currentPosition,
+                        durationMs = targetPlayer.duration,
+                        action = action,
+                    ) ?: return@onKeyEvent false
+                    targetPlayer.seekTo(targetPosition)
+                    true
+                }
+                PlayerKeyAction.VolumeUp -> {
+                    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                    audioManager?.adjustStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        AudioManager.ADJUST_RAISE,
+                        AudioManager.FLAG_SHOW_UI,
+                    )
+                    true
+                }
+                PlayerKeyAction.VolumeDown -> {
+                    val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                    audioManager?.adjustStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        AudioManager.ADJUST_LOWER,
+                        AudioManager.FLAG_SHOW_UI,
+                    )
+                    true
+                }
+                PlayerKeyAction.ToggleMute -> {
+                    if (targetPlayer.volume > 0f) {
+                        volumeBeforeMute = targetPlayer.volume
+                        targetPlayer.volume = 0f
+                    } else {
+                        targetPlayer.volume = volumeBeforeMute.coerceAtLeast(0.5f)
+                    }
+                    true
+                }
+                PlayerKeyAction.ToggleFullscreen -> {
+                    currentToggleFullscreen?.invoke() != null
+                }
+                PlayerKeyAction.ToggleDanmaku -> {
+                    currentToggleDanmaku?.invoke() != null
+                }
+                is PlayerKeyAction.SetSpeed -> {
+                    targetPlayer.setPlaybackSpeed(action.speed)
+                    true
+                }
+                else -> false
+            }
+        }
 }

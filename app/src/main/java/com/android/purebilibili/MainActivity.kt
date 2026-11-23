@@ -88,7 +88,16 @@ import androidx.window.layout.WindowMetrics
 import androidx.window.layout.WindowMetricsCalculator
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.ui.adaptive.APP_SHORTCUT_DEFINITIONS
+import androidx.compose.foundation.border
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.mimeTypes
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import com.android.purebilibili.core.ui.adaptive.ExternalDropAction
+import com.android.purebilibili.core.ui.adaptive.buildAppKeyboardShortcutGroups
+import com.android.purebilibili.core.ui.adaptive.resolveExternalDropAction
+import com.android.purebilibili.core.ui.adaptive.resolveExternalDroppedText
 import com.android.purebilibili.core.ui.adaptive.AppShortcutAction
 import com.android.purebilibili.core.ui.adaptive.resolveAppShortcutAction
 import com.android.purebilibili.core.ui.LocalDetailedCommentTimeEnabled
@@ -1551,6 +1560,9 @@ class MainActivity : AppCompatActivity() {
                 windowSizeClass = windowSizeClass,
                 windowPosture = materialWindowAdaptiveInfo.windowPosture,
             )
+            val keyboardShortcutOverrides by com.android.purebilibili.core.store.KeyboardShortcutStore
+                .observe(this@MainActivity)
+                .collectAsState(initial = com.android.purebilibili.core.store.KeyboardShortcutStore.current)
 
             // 6. 传入参数
             PureBiliBiliTheme(
@@ -1609,6 +1621,7 @@ class MainActivity : AppCompatActivity() {
                         com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                         LocalWindowSizeClass provides windowSizeClass,
                         LocalAppWindowAdaptiveInfo provides appWindowAdaptiveInfo,
+                        com.android.purebilibili.core.ui.adaptive.LocalKeyboardShortcutOverrides provides keyboardShortcutOverrides,
                         com.android.purebilibili.core.ui.LocalHingeSafeOverlayRegions provides
                             com.android.purebilibili.core.ui.adaptive.rememberHingeSafeOverlayRegions(
                                 adaptiveInfo = appWindowAdaptiveInfo
@@ -1766,6 +1779,61 @@ class MainActivity : AppCompatActivity() {
                                             onFinished = { showFirstLaunchSetup = false },
                                         )
                                     } else {
+                                var isExternalDropActive by remember { mutableStateOf(false) }
+                                val externalDropTarget = remember {
+                                    object : DragAndDropTarget {
+                                        override fun onEntered(event: DragAndDropEvent) {
+                                            isExternalDropActive = true
+                                        }
+
+                                        override fun onExited(event: DragAndDropEvent) {
+                                            isExternalDropActive = false
+                                        }
+
+                                        override fun onEnded(event: DragAndDropEvent) {
+                                            isExternalDropActive = false
+                                        }
+
+                                        override fun onDrop(event: DragAndDropEvent): Boolean {
+                                            isExternalDropActive = false
+                                            val droppedText = resolveExternalDroppedText(
+                                                event.toAndroidDragEvent().clipData
+                                            )
+                                            return when (val action = resolveExternalDropAction(droppedText)) {
+                                                is ExternalDropAction.OpenLink -> {
+                                                    resolveIntentLinkAndNavigate(action.rawText)
+                                                    true
+                                                }
+                                                is ExternalDropAction.Search -> {
+                                                    pendingSearchKeyword = action.keyword
+                                                    pendingNavigationRoute = ScreenRoutes.Search.route
+                                                    true
+                                                }
+                                                null -> false
+                                            }
+                                        }
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .dragAndDropTarget(
+                                            shouldStartDragAndDrop = { event ->
+                                                event.mimeTypes().any { it.startsWith("text/") }
+                                            },
+                                            target = externalDropTarget,
+                                        )
+                                        .then(
+                                            if (isExternalDropActive) {
+                                                Modifier.border(
+                                                    width = 2.dp,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                )
+                                            } else {
+                                                Modifier
+                                            }
+                                        ),
+                                ) {
                                 com.android.purebilibili.feature.nearby.NearbyHandoffHost(
                                     miniPlayer = miniPlayerManager,
                                     onOpenVideo = { video ->
@@ -1835,6 +1903,7 @@ class MainActivity : AppCompatActivity() {
                                 mainHazeState = mainHazeState, //  传递全局 Haze 状态
                                 onBrandFeedbackBottomInsetChanged = { brandFeedbackBottomInset = it }
                                 )
+                                }
                                 }
                                     }
                                 }
@@ -2529,14 +2598,19 @@ class MainActivity : AppCompatActivity() {
             return true
         }
         // 键鼠全局快捷键：仅纯 Ctrl 组合（Ctrl+K/F、Ctrl+,、Ctrl+数字），
-        // 普通字符键由聚焦的 TextField 自行消费，不会进入该分支。
-        resolveAppShortcutAction(event)?.let { action ->
-            when (action) {
-                AppShortcutAction.OpenSearch -> pendingRoute = "search"
-                AppShortcutAction.OpenSettings -> pendingRoute = "settings"
-                is AppShortcutAction.SelectBottomNavItem -> pendingAppShortcutNavIndex = action.index
+        // 普通字符键由聚焦的 TextField 自行消费，录制自定义键位时也放行给录制弹窗。
+        if (!com.android.purebilibili.core.store.KeyboardShortcutStore.isCapturingShortcut) {
+            resolveAppShortcutAction(
+                event = event,
+                overrides = com.android.purebilibili.core.store.KeyboardShortcutStore.current,
+            )?.let { action ->
+                when (action) {
+                    AppShortcutAction.OpenSearch -> pendingRoute = "search"
+                    AppShortcutAction.OpenSettings -> pendingRoute = "settings"
+                    is AppShortcutAction.SelectBottomNavItem -> pendingAppShortcutNavIndex = action.index
+                }
+                return true
             }
-            return true
         }
         return super.dispatchKeyEvent(event)
     }
@@ -2546,22 +2620,10 @@ class MainActivity : AppCompatActivity() {
         menu: Menu?,
         deviceId: Int,
     ) {
-        val shortcutInfos = APP_SHORTCUT_DEFINITIONS.map { definition ->
-            val labelRes = when (definition.action) {
-                AppShortcutAction.OpenSearch -> R.string.keyboard_shortcut_open_search
-                AppShortcutAction.OpenSettings -> R.string.keyboard_shortcut_open_settings
-                is AppShortcutAction.SelectBottomNavItem -> R.string.keyboard_shortcut_select_bottom_nav
-            }
-            android.view.KeyboardShortcutInfo(
-                getString(labelRes),
-                definition.helperCharacter,
-                definition.helperMetaState,
-            )
-        }
-        data.add(
-            android.view.KeyboardShortcutGroup(
-                getString(R.string.keyboard_shortcut_group_app),
-                shortcutInfos,
+        data.addAll(
+            buildAppKeyboardShortcutGroups(
+                context = this,
+                overrides = com.android.purebilibili.core.store.KeyboardShortcutStore.current,
             )
         )
         super.onProvideKeyboardShortcuts(data, menu, deviceId)

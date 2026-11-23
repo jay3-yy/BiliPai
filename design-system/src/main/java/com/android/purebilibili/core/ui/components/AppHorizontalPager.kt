@@ -92,6 +92,9 @@ fun AppHorizontalPager(
             com.android.purebilibili.core.ui.LocalVisualWorkAllowed provides (
                 com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current && pageVisualWorkActive.value
             ),
+            LocalScrollBarAllowed provides (
+                LocalScrollBarAllowed.current && pageVisualWorkActive.value
+            ),
         ) {
             pageContent(page)
         }

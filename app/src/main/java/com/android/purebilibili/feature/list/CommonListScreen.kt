@@ -8,6 +8,8 @@ import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSw
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
 import com.android.purebilibili.core.ui.components.wallpaperMediaCardSurface
+import com.android.purebilibili.core.ui.adaptive.adaptiveCardHoverEffect
+import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 import com.android.purebilibili.core.ui.AppContentColors
 
 import androidx.compose.ui.draw.drawWithContent
@@ -3505,13 +3507,18 @@ private fun HistoryArticleCard(
     val cardSurface = wallpaperMediaCardSurface(
         AppSurfaceTokens.cardContainer(), AppShapes.container(ContainerLevel.Sheet),
     )
+    val secondaryClickHandler = remember(onLongClick) {
+        onLongClick?.let { callback -> { _: androidx.compose.ui.geometry.Offset -> callback() } }
+    }
     AppCard(
         modifier = modifier
             .fillMaxWidth()
+            .adaptiveCardHoverEffect(shape = AppShapes.container(ContainerLevel.Sheet))
             .then(cardSurface.modifier)
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()
             }
+            .onSecondaryClick(secondaryClickHandler)
             .appCombinedClickable(
                 onClick = appActionWithFeedback(triggerArticleClick),
                 onLongClick = onLongClick

@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.message
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -118,7 +119,7 @@ internal fun MessageCenterScreen(
                         },
                     ),
                 ) {
-                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                    BoxWithConstraints(Modifier.fillMaxSize().focusGroup()) {
                         InboxScreen(
                             onBack = onBack,
                             onTopItemClick = onTopItemClick,
@@ -148,15 +149,17 @@ internal fun MessageCenterScreen(
                 entry<MessageConversation>(metadata = ListDetailSceneStrategy.detailPane()) { conversation ->
                     val layout = LocalListDetailSceneScope.current?.scaffoldTransitionScope
                         ?.scaffoldStateTransition?.targetState
-                    ChatScreen(
-                        talkerId = conversation.talkerId,
-                        sessionType = conversation.sessionType,
-                        userName = conversation.userName.ifBlank { "用户${conversation.talkerId}" },
-                        onBack = closeConversation,
-                        onNavigateToVideo = onNavigateToVideo,
-                        onOpenBilibiliLink = onOpenBilibiliLink,
-                        showCloseButton = layout?.get(ListDetailPaneScaffoldRole.List) == PaneAdaptedValue.Expanded,
-                    )
+                    Box(Modifier.fillMaxSize().focusGroup()) {
+                        ChatScreen(
+                            talkerId = conversation.talkerId,
+                            sessionType = conversation.sessionType,
+                            userName = conversation.userName.ifBlank { "用户${conversation.talkerId}" },
+                            onBack = closeConversation,
+                            onNavigateToVideo = onNavigateToVideo,
+                            onOpenBilibiliLink = onOpenBilibiliLink,
+                            showCloseButton = layout?.get(ListDetailPaneScaffoldRole.List) == PaneAdaptedValue.Expanded,
+                        )
+                    }
                 }
             },
         )

@@ -9,7 +9,9 @@ import com.android.purebilibili.core.util.HapticType
 
 import com.android.purebilibili.feature.video.ui.components.RelatedVideoList
 
+import androidx.compose.foundation.focusGroup
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 
 import com.android.purebilibili.feature.video.ambient.PlayerAmbientLayout
 import com.android.purebilibili.navigation.animatePagerSelection
@@ -342,15 +344,48 @@ internal fun TabletVideoLayout(
     val secondaryDefaultTab by SettingsManager
         .getTabletSecondaryDefaultTab(context)
         .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED)
+    val theaterModePreferred by SettingsManager
+        .getTabletTheaterModeEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
+    val theaterScope = rememberCoroutineScope()
+    var theaterSideCurtainOpen by rememberSaveable(bvid) { mutableStateOf(false) }
+    val isTheaterMode = resolveTabletTheaterModeActive(
+        requested = theaterModePreferred,
+        companionPane = companionPane,
+        useTabletopLayout = layoutPolicy.useTabletopLayout,
+    )
+    LaunchedEffect(isTheaterMode) {
+        if (!isTheaterMode) theaterSideCurtainOpen = false
+    }
+    val effectiveSecondaryPaneHidden = if (isTheaterMode) {
+        !theaterSideCurtainOpen
+    } else {
+        secondaryPaneHidden
+    }
+    val theaterController = remember(isTheaterMode, theaterModePreferred, companionPane, layoutPolicy.useTabletopLayout) {
+        if (companionPane || layoutPolicy.useTabletopLayout) {
+            null
+        } else {
+            TabletTheaterModeController(
+                isActive = isTheaterMode,
+                toggle = {
+                    theaterScope.launch {
+                        SettingsManager.setTabletTheaterModeEnabled(context, !theaterModePreferred)
+                    }
+                },
+            )
+        }
+    }
     val activity = remember(context) {
         (context as? android.app.Activity)
             ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
     }
 
+    CompositionLocalProvider(LocalTabletTheaterModeController provides theaterController) {
     AppSplitLayout(
-        secondaryPaneVisible = !secondaryPaneHidden,
+        secondaryPaneVisible = !effectiveSecondaryPaneHidden,
         primaryContent = {
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxSize().focusGroup()) {
                 // 📹 左侧：播放器 + 视频信息（可滚动）
                 Column(
                     modifier = Modifier
@@ -415,16 +450,28 @@ internal fun TabletVideoLayout(
                     Modifier
                 }
 
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val playerWidth = if (layoutPolicy.useTabletopLayout) {
-                        minOf(maxWidth, maxHeight * 16f / 9f, layoutPolicy.playerMaxWidthDp.dp)
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (isTheaterMode) Modifier.background(Color.Black) else Modifier)
+                ) {
+                    val (resolvedWidthDp, resolvedHeightDp) = if (layoutPolicy.useTabletopLayout) {
+                        val width = minOf(maxWidth.value, maxHeight.value * 16f / 9f, layoutPolicy.playerMaxWidthDp.toFloat())
+                        width to (width * 9f / 16f)
                     } else {
-                        minOf(maxWidth, layoutPolicy.playerMaxWidthDp.dp)
+                        resolveTabletTheaterPlayerSizeDp(
+                            availableWidthDp = maxWidth.value,
+                            screenHeightDp = configuration.screenHeightDp,
+                            isTheaterMode = isTheaterMode,
+                            useTabletopLayout = false,
+                            policyMaxWidthDp = layoutPolicy.playerMaxWidthDp,
+                        )
                     }
+                    val playerWidth = resolvedWidthDp.dp
                     val videoHeight = if (forceCoverOnlyOnReturn) {
                         playerWidth / VIDEO_SHARED_COVER_ASPECT_RATIO
                     } else {
-                        playerWidth * 9f / 16f
+                        resolvedHeightDp.dp
                     }
                     PlayerAmbientLayout(
                         modifier = Modifier.fillMaxWidth().align(Alignment.Center),
@@ -541,6 +588,44 @@ internal fun TabletVideoLayout(
                     }
                 }
 
+                // 影院模式快捷栏：支持在不离开大舞台的前提下临时展开/收起右侧评论与推荐侧栏。
+                if (isTheaterMode) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = layoutPolicy.infoMaxWidthDp.dp)
+                            .align(Alignment.CenterHorizontally)
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppSurface(
+                            onClick = { theaterSideCurtainOpen = !theaterSideCurtainOpen },
+                            shape = AppShapes.container(ContainerLevel.Pill),
+                            color = AppSurfaceTokens.surfaceContainer(),
+                        ) {
+                            AppText(
+                                text = if (theaterSideCurtainOpen) "收起评论侧栏" else "展开评论侧栏",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = AppContentColors.primaryText(),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                        AppSurface(
+                            onClick = { theaterController?.toggle() },
+                            shape = AppShapes.container(ContainerLevel.Pill),
+                            color = AppSurfaceTokens.surfaceContainer(),
+                        ) {
+                            AppText(
+                                text = "退出影院",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = AppContentColors.secondaryText(),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+
                 // Tabletop 把简介移到铰链下方；普通平板仍在播放器下方展示。
                 if (!layoutPolicy.useTabletopLayout &&
                     (contentState != null || uiState is VideoPlaybackUiState.Loading)
@@ -593,7 +678,7 @@ internal fun TabletVideoLayout(
         }
     },
         secondaryContent = {
-            Box(Modifier.fillMaxSize().videoDetailTransitionChrome(transitionChromeAlphaProvider)) {
+            Box(Modifier.fillMaxSize().focusGroup().videoDetailTransitionChrome(transitionChromeAlphaProvider)) {
                 // 📝 右侧：评论 / 相关推荐
                 VideoDetailSkeletonHandoff(
                     identity = bvid,
@@ -720,6 +805,7 @@ internal fun TabletVideoLayout(
         } else null,
         primaryRatio = primaryRatio
     )
+    }
 }
 
 @Composable

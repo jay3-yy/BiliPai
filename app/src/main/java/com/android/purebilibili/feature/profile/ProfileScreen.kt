@@ -1776,6 +1776,7 @@ private fun ProfileSpaceContent(
                 LazyColumn(
                     state = mobileListState,
                     flingBehavior = profileHeaderFling,
+                    showScrollBar = false,
                     modifier = Modifier
                         .fillMaxSize()
                         .onGloballyPositioned {
@@ -2121,6 +2122,7 @@ private fun ProfileSpaceFeedColumn(
     val listState = pageListStates.getValue(space.selectedTab)
     LazyColumn(
         state = listState,
+        showScrollBar = false,
         modifier = Modifier
             .fillMaxSize()
             .onGloballyPositioned { if (isPageActive) feedRootTopPx = it.boundsInRoot().top },
@@ -4416,6 +4418,7 @@ private fun MobileProfileContent(
             // 📜 滚动内容
             LazyColumn(
                 state = guestListState,
+                showScrollBar = false,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     // [Modified] 顶部留白，适配居中顶部栏（64dp + Status Bar ~ 30-40dp）

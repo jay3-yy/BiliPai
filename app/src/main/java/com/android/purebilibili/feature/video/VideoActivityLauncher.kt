@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video
 
+import android.content.Context
 import android.content.Intent
 import android.app.Activity
 import android.content.pm.ActivityInfo
@@ -38,6 +39,47 @@ internal object VideoActivityLauncher {
     internal fun releaseParent(activity: Activity) {
         activity.intent?.getStringExtra(EXTRA_PARENT_SESSION)?.let { parentWindows.remove(it) }
         keepLandscapeBack.remove(activity)
+    }
+
+    /** 构建用于大屏/分屏侧窗打开独立视频窗口的 Intent。 */
+    internal fun buildAdjacentVideoWindowIntent(
+        context: Context,
+        request: VideoOpenRequest,
+    ): Intent {
+        return Intent(context, VideoActivity::class.java)
+            .putExtras(request.toBundle())
+            .addFlags(
+                Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT or
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_MULTIPLE_TASK,
+            )
+    }
+
+    /** 在分屏/多窗口的相邻侧窗中打开指定视频。 */
+    internal fun openInAdjacentWindow(
+        context: Context,
+        bvid: String,
+        cid: Long = 0L,
+        title: String = "",
+        coverUrl: String = "",
+    ): Boolean {
+        val trimmedBvid = bvid.trim()
+        if (trimmedBvid.isEmpty()) return false
+        val intent = buildAdjacentVideoWindowIntent(
+            context = context,
+            request = VideoOpenRequest(
+                bvid = trimmedBvid,
+                cid = cid,
+                title = title,
+                coverUrl = coverUrl,
+            ),
+        )
+        MiniPlayerManager.getInstance(context).apply {
+            haltForeignPlaybackForIncomingVideo(trimmedBvid)
+            exitMiniMode(animate = false)
+        }
+        context.startActivity(intent)
+        return true
     }
 
     suspend fun open(

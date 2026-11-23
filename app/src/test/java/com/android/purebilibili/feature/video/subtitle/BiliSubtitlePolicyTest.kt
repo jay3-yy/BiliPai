@@ -155,7 +155,7 @@ class BiliSubtitlePolicyTest {
         assertEquals(2, tracks.size)
         assertEquals("official", tracks.first().idStr)
         assertEquals(
-            "2|official|zh-Hans|https://aisubtitle.hdslb.com/bfs/subtitle/official.json",
+            "official|zh-Hans|aisubtitle.hdslb.com/bfs/subtitle/official.json",
             tracks.first().trackKey
         )
     }
@@ -684,4 +684,13 @@ class BiliSubtitlePolicyTest {
         assertTrue(availability.primarySelectable)
         assertTrue(availability.secondarySelectable)
     }
+    @Test
+    fun `track identity survives signed url refresh and distinguishes paths`() {
+        val original = buildSubtitleTrackKey(42L, "42", "zh", "https://aisubtitle.hdslb.com/bfs/subtitle/a.json?token=old")
+        val refreshed = buildSubtitleTrackKey(42L, "42", "zh", "https://aisubtitle.hdslb.com/bfs/subtitle/a.json?token=new")
+        val other = buildSubtitleTrackKey(42L, "42", "zh", "https://aisubtitle.hdslb.com/bfs/subtitle/b.json?token=old")
+        kotlin.test.assertEquals(original, refreshed)
+        kotlin.test.assertNotEquals(original, other)
+    }
+
 }

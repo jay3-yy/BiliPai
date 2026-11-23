@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.live
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -53,16 +54,16 @@ internal fun LiveRoomLayout(
             AppHingePaneLayout(
                 modifier = Modifier.fillMaxSize(),
                 primaryContent = {
-                    Column(Modifier.fillMaxSize()) {
+                    Column(Modifier.fillMaxSize().focusGroup()) {
                         if (!isFullscreen) roomHeader()
                         Box(Modifier.weight(1f).fillMaxWidth()) { player() }
                     }
                 },
                 secondaryContent = if (!isFullscreen) ({
                     if (superChat == null) {
-                        interaction(false, true)
+                        Box(Modifier.fillMaxSize().focusGroup()) { interaction(false, true) }
                     } else {
-                        Column(Modifier.fillMaxSize()) {
+                        Column(Modifier.fillMaxSize().focusGroup()) {
                             superChat()
                             Box(Modifier.weight(1f).fillMaxWidth()) { interaction(false, true) }
                         }
@@ -83,8 +84,8 @@ internal fun LiveRoomLayout(
                 modifier = Modifier.fillMaxSize(),
                 content = {
                     Box { if (!isFullscreen) roomHeader() }
-                    Box(Modifier.clipToBounds()) { player() }
-                    Box { if (showInteraction) interaction(vertical, !vertical) }
+                    Box(Modifier.clipToBounds().focusGroup()) { player() }
+                    Box(Modifier.focusGroup()) { if (showInteraction) interaction(vertical, !vertical) }
                     Box { if (vertical && !isFullscreen) inputFooter() }
                     Box { superChat?.invoke() }
                 },

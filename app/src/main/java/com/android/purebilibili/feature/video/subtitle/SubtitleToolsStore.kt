@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import com.android.purebilibili.core.store.settingsDataStore
 import com.android.purebilibili.feature.video.ui.components.PlayerSubtitleAppearance
+import com.android.purebilibili.feature.video.ui.components.SubtitlePlacement
 import kotlinx.coroutines.flow.map
 
 object SubtitleToolsStore {
@@ -22,13 +23,15 @@ object SubtitleToolsStore {
     private val strokeColor = intPreferencesKey("subtitle_tools_stroke_color")
     private val fontFile = stringPreferencesKey("subtitle_tools_font_file")
     private val fontName = stringPreferencesKey("subtitle_tools_font_name")
+    private val placement = stringPreferencesKey("subtitle_tools_placement")
 
     fun appearance(context: Context) = context.settingsDataStore.data.map { prefs ->
         normalizeSubtitleAppearance(PlayerSubtitleAppearance(
             prefs[inline] ?: 1f, prefs[fullscreen] ?: 1.5f, prefs[weight] ?: 6,
             prefs[stroke] ?: 2f, prefs[horizontal] ?: 24, prefs[bottom] ?: 24, prefs[opacity] ?: 0.67f,
             prefs[textColor] ?: android.graphics.Color.WHITE, prefs[strokeColor] ?: android.graphics.Color.BLACK,
-            prefs[fontFile].orEmpty(), prefs[fontName].orEmpty()
+            prefs[fontFile].orEmpty(), prefs[fontName].orEmpty(),
+            SubtitlePlacement.fromStored(prefs[placement]),
         ))
     }
 
@@ -41,6 +44,7 @@ object SubtitleToolsStore {
             it[opacity] = value.backgroundOpacity
             it[textColor] = value.textColor; it[strokeColor] = value.strokeColor
             it[fontFile] = value.fontFileName; it[fontName] = value.fontDisplayName
+            it[placement] = value.placement.storedValue
         }
     }
 }

@@ -6574,6 +6574,8 @@ fun AppNavigation(
                             SettingsTabletEntry(key) {
                                 com.android.purebilibili.feature.settings.screen.ContentFilterHistoryScreen(
                                     onBack = { performSystemBackAction() },
+                                    onVideoClick = { bvid -> navigateToVideoInNavigation3(bvid, 0L, "") },
+                                    onDynamicClick = { dynamicId -> pushNavigation3Key(BiliPaiNavKey.DynamicDetail(dynamicId)) },
                                 )
                             }
                         BiliPaiNavEntryContentRole.JS_PLUGIN_CONTENT ->

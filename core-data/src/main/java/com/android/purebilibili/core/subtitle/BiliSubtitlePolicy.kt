@@ -147,12 +147,13 @@ fun buildSubtitleTrackKey(
     languageCode: String?,
     subtitleUrl: String
 ): String {
-    return listOf(
-        subtitleId.coerceAtLeast(0L).toString(),
-        subtitleIdStr.trim(),
-        languageCode?.trim().orEmpty(),
-        normalizeBilibiliSubtitleUrl(subtitleUrl)
-    ).joinToString("|")
+    val id = subtitleIdStr.trim().ifBlank { subtitleId.takeIf { it > 0L }?.toString() ?: "no-id" }
+    val language = languageCode?.trim().orEmpty().ifBlank { "unknown" }
+    val uri = runCatching { java.net.URI(normalizeBilibiliSubtitleUrl(subtitleUrl)) }.getOrNull()
+    val host = uri?.host?.lowercase().orEmpty()
+    val path = uri?.path?.lowercase().orEmpty()
+    val location = if (host.isNotBlank() && path.isNotBlank()) host + path else path
+    return listOf(id, language, location).filter { it.isNotBlank() }.joinToString("|")
 }
 
 fun mapPlayerInfoSubtitleTracks(subtitles: List<SubtitleItem>): List<SubtitleTrackMeta> {

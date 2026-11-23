@@ -446,19 +446,35 @@ private fun PiliExternalSubtitleLinesContent(
     val secondaryText = secondaryTextProvider()
     if (text.isNullOrBlank() && secondaryText.isNullOrBlank()) return
     val session = tools.session
-    BoxWithConstraints(modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+    val isTopPlacement = tools.appearance.placement ==
+        com.android.purebilibili.feature.video.ui.components.SubtitlePlacement.TOP
+    BoxWithConstraints(
+        modifier.fillMaxSize(),
+        contentAlignment = if (isTopPlacement) Alignment.TopCenter else Alignment.BottomCenter,
+    ) {
         val density = LocalDensity.current
         val heightPx = with(density) { maxHeight.toPx() }.coerceAtLeast(1f)
         val navigationInsetPx = WindowInsets.navigationBars.getBottom(density)
         val spatialModifier = Modifier.offset {
-            val bottomOffsetPx = resolveSubtitleBottomOffsetPx(
-                isFullscreen, controlsVisible, tools.controls.positionLocked,
-                navigationInsetPx, bottomControlsHeightPx, density.density,
-                persistentBottomOverlayHeightPx = persistentBottomOverlayHeightProvider(),
-            )
-            IntOffset(0, (heightPx * verticalOffsetProvider()).roundToInt() - bottomOffsetPx)
+            val verticalShiftPx = (heightPx * verticalOffsetProvider()).roundToInt()
+            if (isTopPlacement) {
+                IntOffset(0, verticalShiftPx)
+            } else {
+                val bottomOffsetPx = resolveSubtitleBottomOffsetPx(
+                    isFullscreen, controlsVisible, tools.controls.positionLocked,
+                    navigationInsetPx, bottomControlsHeightPx, density.density,
+                    persistentBottomOverlayHeightPx = persistentBottomOverlayHeightProvider(),
+                )
+                IntOffset(0, verticalShiftPx - bottomOffsetPx)
+            }
         }.padding(horizontal = tools.appearance.horizontalPadding.dp)
-            .padding(bottom = tools.appearance.bottomPadding.dp)
+            .then(
+                if (isTopPlacement) {
+                    Modifier.padding(top = tools.appearance.bottomPadding.dp)
+                } else {
+                    Modifier.padding(bottom = tools.appearance.bottomPadding.dp)
+                }
+            )
             .then(if (tools.controls.positionLocked) Modifier else Modifier.pointerInput(session.identity, heightPx) {
                 detectDragGestures(
                     onDragStart = { onDragStateChange(true) },

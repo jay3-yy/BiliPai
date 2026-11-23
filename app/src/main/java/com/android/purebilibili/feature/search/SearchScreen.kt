@@ -8,6 +8,7 @@ import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
 import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.resolveAppCountedTabLabel
 import com.android.purebilibili.core.ui.components.appCountedTabOption
+import com.android.purebilibili.core.ui.adaptive.adaptiveCardHoverEffect
 import com.android.purebilibili.core.ui.AppContentColors
 
 import androidx.compose.ui.draw.clipToBounds
@@ -2715,7 +2716,10 @@ private fun SearchResultCardSurface(
     if (onClick != null) {
         val control = navigationTarget?.let { rememberSystemWindowNavigationControl(it, shape, onClick) }
         AppSurface(
-            modifier = modifier.fillMaxWidth().then(control?.modifier ?: Modifier),
+            modifier = modifier
+                .fillMaxWidth()
+                .adaptiveCardHoverEffect(shape = shape)
+                .then(control?.modifier ?: Modifier),
             onClick = control?.onClick ?: onClick,
             color = color,
             shape = shape,

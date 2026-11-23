@@ -1529,6 +1529,7 @@ private fun LiveRoomScreen(
         }
     }
 
+    val liveKeyboardShortcutOverrides = com.android.purebilibili.core.ui.adaptive.LocalKeyboardShortcutOverrides.current
     val keyboardModifier = if (liveKeyboardControlsEnabled) {
         Modifier
             .focusRequester(liveKeyboardFocusRequester)
@@ -1538,6 +1539,7 @@ private fun LiveRoomScreen(
                     event = event,
                     isInPipMode = pipPresentation,
                     isTextInputActive = showSendDanmakuSheet || showShareMessageSheet,
+                    overrides = liveKeyboardShortcutOverrides,
                 ) ?: return@onKeyEvent false
                 when (action) {
                     PlayerKeyAction.PlayPause -> {

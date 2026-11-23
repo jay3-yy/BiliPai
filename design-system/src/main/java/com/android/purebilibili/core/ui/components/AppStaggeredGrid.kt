@@ -58,7 +58,7 @@ fun AppLazyVerticalStaggeredGrid(
                 userScrollEnabled = userScrollEnabled, overscrollEffect = overscrollEffect, content = content,
             )
         }
-        if (LocalAppUiStyle.current == AppUiStyle.MIUIX && userScrollEnabled) {
+        if (LocalAppUiStyle.current == AppUiStyle.MIUIX && userScrollEnabled && LocalScrollBarAllowed.current) {
             val adapter = remember(state) { StaggeredGridScrollBarAdapter(state) }
             Box(Modifier.matchParentSize()) {
                 VerticalScrollBar(

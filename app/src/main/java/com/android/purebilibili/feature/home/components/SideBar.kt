@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
+import androidx.compose.foundation.focusGroup
 import com.android.purebilibili.core.ui.AppContentColors
 
 import com.android.purebilibili.core.ui.AppSpacingTokens
@@ -108,12 +109,13 @@ fun FrostedSideBar(
     if (foldPosture == AppFoldPosture.Tabletop) {
         return
     }
+    val groupedModifier = modifier.focusGroup()
     ProvideBottomBarSkinMotion(uiSkinDecoration) {
         if (rememberAppNavigationCapabilities().usePlatformSideRail) {
             MiuixSideBar(
                 currentItem = currentItem,
                 onItemClick = onItemClick,
-                modifier = modifier,
+                modifier = groupedModifier,
                 firstItemModifier = firstItemModifier,
                 hazeState = hazeState,
                 onHomeDoubleTap = onHomeDoubleTap,
@@ -143,13 +145,13 @@ fun FrostedSideBar(
                 onToggleSidebar = onToggleSidebar,
                 onAccountSwitchClick = onAccountSwitchClick,
                 firstItemModifier = firstItemModifier,
-                modifier = modifier,
+                modifier = groupedModifier,
             )
         } else {
             FrostedSideBarContent(
                 currentItem = currentItem,
                 onItemClick = onItemClick,
-                modifier = modifier,
+                modifier = groupedModifier,
                 firstItemModifier = firstItemModifier,
                 hazeState = hazeState,
                 onHomeDoubleTap = onHomeDoubleTap,

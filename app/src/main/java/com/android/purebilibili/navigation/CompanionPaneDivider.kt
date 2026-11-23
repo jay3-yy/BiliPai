@@ -24,7 +24,10 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -49,6 +52,15 @@ internal fun CompanionPaneDivider(
     contentWidth: Dp,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
+    val resizePointerIcon = androidx.compose.runtime.remember(context) {
+        PointerIcon(
+            android.view.PointerIcon.getSystemIcon(
+                context,
+                android.view.PointerIcon.TYPE_HORIZONTAL_DOUBLE_ARROW,
+            )
+        )
+    }
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val direction = if (layoutDirection == LayoutDirection.Rtl) -1f else 1f
@@ -87,6 +99,7 @@ internal fun CompanionPaneDivider(
                     IntOffset(x, 0)
                 }
                 .size(48.dp, 96.dp)
+                .pointerHoverIcon(resizePointerIcon)
                 .testTag("companion_pane_divider")
                 .semantics {
                     contentDescription = description

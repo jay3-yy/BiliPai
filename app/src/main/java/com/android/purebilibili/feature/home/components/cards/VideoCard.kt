@@ -132,9 +132,14 @@ import com.android.purebilibili.core.ui.ContainerLevel
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick as semanticClick
+import androidx.compose.material.icons.outlined.OpenInNew
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.adaptive.adaptiveCardHoverEffect
+import com.android.purebilibili.core.ui.adaptive.adaptiveExternalTextDragSource
+import com.android.purebilibili.core.ui.adaptive.buildVideoDragShareText
 import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
+import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
+import com.android.purebilibili.feature.video.VideoActivityLauncher
 import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.ui.components.resolveUpStatsText
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
@@ -1589,6 +1594,11 @@ internal fun ElegantVideoCard(
         Box(
             modifier = coverSharedBoundsModifier
                 .fillMaxWidth()
+                .adaptiveExternalTextDragSource(
+                    label = video.bvid.ifBlank { "BiliPai" },
+                    textProvider = { buildVideoDragShareText(video.bvid, video.title) },
+                    previewTitleProvider = { video.title.ifBlank { video.bvid } },
+                )
                 .videoCardShellReturnCoverAlpha(
                     enabled = useCardShellSharedBounds,
                     bvid = video.bvid,
@@ -2434,6 +2444,23 @@ internal fun ElegantVideoCard(
                                     android.widget.Toast.makeText(context, "已复制 ${video.bvid}", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             )
+                            val adaptiveInfo = LocalAppWindowAdaptiveInfo.current
+                            if (adaptiveInfo.windowSizeClass.isTablet || adaptiveInfo.displayContext.isInMultiWindowMode) {
+                                AppDropdownMenuItem(
+                                    leadingIcon = { AppIcon(Icons.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(20.dp), tint = AppContentColors.primaryText()) },
+                                    text = { AppText("在分屏新窗口打开", color = AppContentColors.primaryText()) },
+                                    onClick = {
+                                        menu.expanded = false
+                                        VideoActivityLauncher.openInAdjacentWindow(
+                                            context = context,
+                                            bvid = video.bvid,
+                                            cid = video.cid,
+                                            title = video.title,
+                                            coverUrl = video.pic,
+                                        )
+                                    }
+                                )
+                            }
                         }
 
                         // 稍后再看

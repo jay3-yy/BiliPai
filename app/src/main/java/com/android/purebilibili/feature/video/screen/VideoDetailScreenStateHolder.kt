@@ -1,7 +1,9 @@
 // 文件路径: feature/video/screen/VideoDetailScreen.kt
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.core.ui.motion.continuityTween
 import com.android.purebilibili.core.ui.components.appElasticPress
@@ -42,6 +44,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.Animatable
@@ -2676,8 +2679,10 @@ internal fun VideoDetailScreenStateHolder(
     }
     var subtitlePreferenceSessionKey by rememberSaveable { mutableStateOf<String?>(null) }
     var subtitleDisplayModeOverride by rememberSaveable { mutableStateOf(SubtitleDisplayMode.OFF) }
-    LaunchedEffect(subtitlePreferenceSession.key) {
-        subtitleDisplayModeOverride = resolveSubtitleDisplayModePreference(
+    val subtitleVideoCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid ?: 0L
+    var subtitleManuallyChanged by rememberSaveable(currentBvid, subtitleVideoCid) { mutableStateOf(false) }
+    LaunchedEffect(subtitlePreferenceSession.key, subtitleManuallyChanged) {
+        if (!subtitleManuallyChanged) subtitleDisplayModeOverride = resolveSubtitleDisplayModePreference(
             previousSessionKey = subtitlePreferenceSessionKey,
             nextSessionKey = subtitlePreferenceSession.key,
             previousMode = subtitleDisplayModeOverride,
@@ -3944,7 +3949,10 @@ internal fun VideoDetailScreenStateHolder(
                 detailShellSharedBoundsEnabled && useReturningVideoDetailVisualState,
             suppressSubtitleOverlay = shouldSuppressSubtitleOverlay,
             subtitleDisplayModePreferenceOverride = subtitleDisplayModeOverride,
-            onSubtitleDisplayModePreferenceOverrideChange = { subtitleDisplayModeOverride = it },
+            onSubtitleDisplayModePreferenceOverrideChange = {
+                subtitleManuallyChanged = true
+                subtitleDisplayModeOverride = it
+            },
             fullscreenExtras = ContinuousPlayerFullscreenExtras(
                 commentStateHandle = commentStateHandle,
                 danmakuComposerVisible = showDanmakuDialog && isFullscreenMode,
@@ -4794,8 +4802,63 @@ internal fun VideoDetailScreenStateHolder(
                                 lerp(expandedViewportWidth, collapsedViewportWidth, layoutCollapseProgress.value)
                             }
                         }
-                        val inlinePlayerHeight = remember(collapseMotion, playerTopInset) {
-                            derivedStateOf { collapseMotion.viewportHeight.value + playerTopInset }
+                        val phoneTheaterModePreferred by SettingsManager
+                            .getPhoneTheaterModeEnabled(context)
+                            .collectAsStateWithLifecycle(initialValue = false)
+                        val isPhoneTheaterActive = resolvePhoneTheaterModeActive(
+                            requested = phoneTheaterModePreferred,
+                            useTabletLayout = useTabletLayout,
+                            isFullscreenMode = isFullscreenMode,
+                            isInPipMode = isPipMode,
+                            isPortraitFullscreen = isPortraitFullscreen,
+                        )
+                        val phoneTheaterController = remember(
+                            isPhoneTheaterActive,
+                            phoneTheaterModePreferred,
+                            useTabletLayout,
+                            isFullscreenMode,
+                            isPipMode,
+                            isPortraitFullscreen,
+                        ) {
+                            if (useTabletLayout || isFullscreenMode || isPipMode || isPortraitFullscreen) {
+                                null
+                            } else {
+                                TabletTheaterModeController(
+                                    isActive = isPhoneTheaterActive,
+                                    toggle = {
+                                        sortPreferenceScope.launch {
+                                            SettingsManager.setPhoneTheaterModeEnabled(
+                                                context,
+                                                !phoneTheaterModePreferred,
+                                            )
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                        val phoneTheaterTargetStageHeight = resolvePhoneTheaterStageHeightDp(
+                            baseInlineHeightDp = collapseMotion.viewportHeight.value.value,
+                            screenHeightDp = screenHeightDp.value.toInt(),
+                            isTheaterMode = isPhoneTheaterActive && layoutCollapseProgress.value == 0f,
+                        ).dp
+                        val animatedPhoneStageHeight by animateDpAsState(
+                            targetValue = phoneTheaterTargetStageHeight,
+                            label = "phoneTheaterStageHeight",
+                        )
+                        val inlinePlayerHeight = remember(
+                            collapseMotion,
+                            playerTopInset,
+                            isPhoneTheaterActive,
+                            animatedPhoneStageHeight,
+                        ) {
+                            derivedStateOf {
+                                val effectiveViewportHeight = if (isPhoneTheaterActive && layoutCollapseProgress.value == 0f) {
+                                    animatedPhoneStageHeight
+                                } else {
+                                    collapseMotion.viewportHeight.value
+                                }
+                                effectiveViewportHeight + playerTopInset
+                            }
                         }
                         // 全屏容器高：全屏（横屏窗口）取窗口高；收起动画起点（竖屏窗口）取
                         // 横屏窗口高的等效几何 ≈ 竖屏窗口宽。此前取 screenHeightDp，旋转回
@@ -5312,22 +5375,28 @@ internal fun VideoDetailScreenStateHolder(
                                         alpha = returnMediaFrameProvider().playerAlpha * nowPlayingMediaAlphaProvider()
                                     }
                             ) {
-                                continuousPlayerContent(
-                                    ContinuousPlayerHostLayout(
-                                        modifier = Modifier.align(Alignment.TopCenter),
-                                        viewportWidth = screenWidthDp,
-                                        viewportWidthProvider = if (continuousFullscreenTransitionEnabled) {
-                                            null
-                                        } else {
-                                            { inlineViewportWidth.value }
-                                        },
-                                        alpha = inlinePlayerAlpha,
-                                        scale = inlinePlayerScale,
-                                        isFullscreen = false,
-                                        contentTopInset = playerTopInset,
-                                        statusBarBackdrop = statusBarBackdrop,
+                                CompositionLocalProvider(
+                                    LocalTabletTheaterModeController provides phoneTheaterController
+                                ) {
+                                    continuousPlayerContent(
+                                        ContinuousPlayerHostLayout(
+                                            modifier = Modifier.align(
+                                                if (isPhoneTheaterActive) Alignment.Center else Alignment.TopCenter
+                                            ),
+                                            viewportWidth = screenWidthDp,
+                                            viewportWidthProvider = if (continuousFullscreenTransitionEnabled) {
+                                                null
+                                            } else {
+                                                { inlineViewportWidth.value }
+                                            },
+                                            alpha = inlinePlayerAlpha,
+                                            scale = inlinePlayerScale,
+                                            isFullscreen = false,
+                                            contentTopInset = playerTopInset,
+                                            statusBarBackdrop = statusBarBackdrop,
+                                        )
                                     )
-                                )
+                                }
                             }
                             // 入场常驻封面与挂载后的播放面共用一条状态栏背景。
                             if (!suppressPhoneDetailBodyForDirectPortrait &&
@@ -5563,8 +5632,48 @@ internal fun VideoDetailScreenStateHolder(
                                 val showSkeleton = showBody && if (detailContentState != null) {
                                     skeletonHandoffActive || (!detailContentVisible && !isLeaving)
                                 } else loadingState?.retryAttempt == 0
+                                val phoneTheaterBodyAlpha by animateFloatAsState(
+                                    targetValue = if (isPhoneTheaterActive) PHONE_THEATER_BODY_DIM_ALPHA else 1f,
+                                    label = "phoneTheaterBodyAlpha",
+                                )
                                 // 保留同一骨架节点直到正文盖住它，避免首帧重新创建与测量整套占位。
-                                Box(Modifier.fillMaxSize()) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .then(if (isPhoneTheaterActive) Modifier.background(Color.Black) else Modifier)
+                                ) {
+                                    if (isPhoneTheaterActive) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color.Black)
+                                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            AppText(
+                                                text = "影院暗场模式",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = Color.White.copy(alpha = 0.72f),
+                                            )
+                                            AppText(
+                                                text = "退出影院",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = Color.White.copy(alpha = 0.9f),
+                                                modifier = Modifier
+                                                    .clip(AppShapes.container(ContainerLevel.Pill))
+                                                    .background(Color.White.copy(alpha = 0.14f))
+                                                    .clickable { phoneTheaterController?.toggle() }
+                                                    .padding(horizontal = 10.dp, vertical = 4.dp),
+                                            )
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxWidth()
+                                            .graphicsLayer { alpha = phoneTheaterBodyAlpha }
+                                    ) {
                                     if (showSkeleton) {
                                         VideoDetailSkeleton(
                                             animated = !deferVideoDetailEntryContent || entryTransitionFinished,
@@ -5782,6 +5891,7 @@ internal fun VideoDetailScreenStateHolder(
                                             }
                                         }
                                     }
+                                }
                                 }
                             }
                             }  // Detail body

@@ -5,6 +5,7 @@ package com.android.purebilibili.feature.plugin.js
 import com.android.purebilibili.core.player.withAppVideoDecoderDiagnostics
 import com.android.purebilibili.core.player.withAppVideoDecoderPreference
 
+import com.android.purebilibili.feature.video.player.basicPlayerKeyboardShortcuts
 import com.android.purebilibili.core.ui.AppContentColors
 
 import android.view.ViewGroup
@@ -227,6 +228,7 @@ fun ExternalMediaPlayerScreen(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .basicPlayerKeyboardShortcuts(player = player)
                 .background(Color.Black)
         ) {
             Box(

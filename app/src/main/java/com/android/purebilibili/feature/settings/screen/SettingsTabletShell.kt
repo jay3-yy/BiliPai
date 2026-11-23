@@ -4,6 +4,7 @@ import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.feature.settings.SettingsFunctionIcon
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.theme.AppUiStyle
+import androidx.compose.foundation.focusGroup
 import com.android.purebilibili.core.ui.AppContentColors
 
 import android.os.Build
@@ -140,6 +141,7 @@ fun SettingsTabletShell(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .focusGroup()
                 .then(paneBackground)
                 .padding(horizontal = layoutPolicy.detailPanePaddingDp.dp),
         ) {
@@ -156,7 +158,8 @@ fun SettingsTabletShell(
         Box(
             modifier = Modifier
                 .preferredWidth(layoutPolicy.primaryRatio)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .focusGroup(),
         ) {
             val config = LocalAppThemeConfig.current
             val lowBlurBudget = isLowBlurBudgetForced()

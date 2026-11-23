@@ -20,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -284,6 +285,9 @@ open class VideoActivity : FragmentActivity() {
                 // 独立播放窗口必须读取女仆开关，不能依赖 CompositionLocal 默认值。
                 com.android.purebilibili.core.ui.MaidLottieAnimationSettingsHost {
                 ProvideAppTextSelectionHost {
+                val keyboardShortcutOverrides by com.android.purebilibili.core.store.KeyboardShortcutStore
+                    .observe(this@VideoActivity)
+                    .collectAsState(initial = com.android.purebilibili.core.store.KeyboardShortcutStore.current)
                 CompositionLocalProvider(
                     com.android.purebilibili.core.ui.blur.LocalProgressiveBlurRenderer provides
                         com.android.purebilibili.core.ui.blur.rememberWindowProgressiveBlurRenderer(),
@@ -308,6 +312,7 @@ open class VideoActivity : FragmentActivity() {
                     com.android.purebilibili.core.ui.LocalAdaptiveScaffoldHazeFactory provides
                         { userEnabled -> com.android.purebilibili.core.ui.blur.rememberAppScaffoldHazeHandle(userEnabled) },
                     LocalAppWindowAdaptiveInfo provides appWindowAdaptiveInfo,
+                    com.android.purebilibili.core.ui.adaptive.LocalKeyboardShortcutOverrides provides keyboardShortcutOverrides,
                     com.android.purebilibili.core.ui.LocalHingeSafeOverlayRegions provides
                         com.android.purebilibili.core.ui.adaptive.rememberHingeSafeOverlayRegions(
                             adaptiveInfo = appWindowAdaptiveInfo
@@ -429,6 +434,20 @@ open class VideoActivity : FragmentActivity() {
             return true
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun onProvideKeyboardShortcuts(
+        data: MutableList<android.view.KeyboardShortcutGroup>,
+        menu: android.view.Menu?,
+        deviceId: Int,
+    ) {
+        data.addAll(
+            com.android.purebilibili.core.ui.adaptive.buildAppKeyboardShortcutGroups(
+                context = this,
+                overrides = com.android.purebilibili.core.store.KeyboardShortcutStore.current,
+            )
+        )
+        super.onProvideKeyboardShortcuts(data, menu, deviceId)
     }
 
     override fun finish() {
