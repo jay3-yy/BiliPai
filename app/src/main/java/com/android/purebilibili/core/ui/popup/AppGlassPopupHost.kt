@@ -127,7 +127,9 @@ import com.android.purebilibili.core.ui.components.AppGlassMenuPresenter
 import com.android.purebilibili.core.ui.components.AppGlassMenuRequest
 import com.android.purebilibili.core.ui.components.AppGlassMenuPlacement
 import com.android.purebilibili.core.ui.components.AppGlassMenuScope
+import com.android.purebilibili.core.ui.components.LocalAppGlassMenuScrollableContent
 import com.android.purebilibili.core.ui.components.LocalAppGlassMenuPresenter
+import com.android.purebilibili.core.ui.components.rememberMenuScrollHintState
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.LocalAppSingleChoicePopupPresenter
 import com.android.purebilibili.core.ui.isAppInDarkTheme
@@ -1110,6 +1112,12 @@ private fun AppGlassChoicePopupCard(
     val itemBottomPadding = with(density) { PopupItemInset.roundToPx() }
     // 只记录玻璃底层，排除正文与子控件，供内嵌标签栏采样，避免透出清晰的原始视频。
     val interactivePanel = request.menu?.interactiveContent == true
+    val scrollHintState = if (!interactivePanel) {
+        rememberMenuScrollHintState(
+            state = scrollState,
+            maxOverscrollPx = { scrollState.viewportSize * 0.35f },
+        )
+    } else null
     val panelSurfaceSource = if (interactivePanel) rememberChromeBackdropSource() else null
     val contentBackdrop = panelSurfaceSource?.takeIf { it.isReady }?.backdrop ?: backdrop
     val contentMenuScope = remember(controller, contentBackdrop, wholeItemViewport, fitWholeItems, scrollState) {
@@ -1439,8 +1447,6 @@ private fun AppGlassChoicePopupCard(
         Box(
             modifier = Modifier
                 .graphicsLayer { applyPopupContentFrame(morph, cornerRadiusPx, densityScale) }
-                .then(if (!interactivePanel && request.menu?.showScrollbar == true) Modifier
-                    else Modifier.popupScrollHint(scrollState))
                 .graphicsLayer {
                     clip = true
                     val frame = morph.frame(cornerRadiusPx, densityScale)
@@ -1455,9 +1461,16 @@ private fun AppGlassChoicePopupCard(
                     .onGloballyPositioned {
                         if (fitWholeItems) wholeItemViewport.updateViewport(it, scrollState.value)
                     }
-                    .then(if (interactivePanel) Modifier else Modifier.verticalScroll(scrollState)),
+                    .then(if (interactivePanel) Modifier else Modifier.verticalScroll(scrollState))
+                    .then(
+                        if (scrollHintState != null) {
+                            Modifier.nestedScroll(scrollHintState.nestedScrollConnection)
+                        } else Modifier,
+                    ),
             ) {
                 // 次要文字按玻璃底色叠最差背景校正对比，主文字与状态色沿用原调色板。
+                // 交互面板的列表自行滚动，玻璃上下文交给 AppLazyColumn 绘制提示。
+                CompositionLocalProvider(LocalAppGlassMenuScrollableContent provides interactivePanel) {
                 com.android.purebilibili.core.ui.ProvideAppGlassPopupContentColors(
                     glassSurfaceColor = surfaceColor,
                 ) {
@@ -1537,13 +1550,25 @@ private fun AppGlassChoicePopupCard(
                     }
                 }
                 }
+                }
             }
-            if (!interactivePanel && request.menu?.showScrollbar == true) {
-                Box(Modifier.matchParentSize()) {
-                    com.android.purebilibili.core.ui.components.AppMenuScrollbar(
-                        scrollState = scrollState,
-                        glass = true,
-                        modifier = Modifier.align(Alignment.CenterEnd),
+            if (!interactivePanel) {
+                if (request.menu?.showScrollbar == true) {
+                    Box(Modifier.matchParentSize()) {
+                        com.android.purebilibili.core.ui.components.AppMenuScrollbar(
+                            scrollState = scrollState,
+                            glass = true,
+                            modifier = Modifier.align(Alignment.CenterEnd),
+                        )
+                    }
+                } else {
+                    // 提示按卡片宽度定位；正文使用 intrinsic width 时会比卡片窄，不能挂在内层。
+                    Box(
+                        Modifier.matchParentSize().popupScrollHint(
+                            scrollState = scrollState,
+                            overscrollPx = scrollHintState?.overscrollPx ?: { 0f },
+                            maxOverscrollPx = { scrollState.viewportSize * 0.35f },
+                        )
                     )
                 }
             }

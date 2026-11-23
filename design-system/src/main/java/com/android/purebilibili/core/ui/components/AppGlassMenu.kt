@@ -81,6 +81,8 @@ class AppGlassMenuScope(
 )
 
 val LocalAppGlassMenuActive = compositionLocalOf { false }
+/** True only inside a rendered glass popup, not in the app content underneath it. */
+val LocalAppGlassMenuScrollableContent = compositionLocalOf { false }
 
 val LocalAppGlassMenuBackdrop = compositionLocalOf<Backdrop?> { null }
 /** 媒体控件可显式指定深色材质；普通页面沿用宿主主题。 */
