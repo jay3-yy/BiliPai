@@ -69,8 +69,6 @@ typealias LinkedDockNowPlayingSlot = @Composable (
 @Composable
 internal fun LinkedBottomDock(
     currentItem: BottomNavItem,
-    firstItem: BottomNavItem,
-    firstLabel: String,
     searchEnabled: Boolean,
     collapseRequested: Boolean,
     onSearchClick: () -> Unit,
@@ -89,7 +87,7 @@ internal fun LinkedBottomDock(
     isTopLevelDestination: Boolean = true,
     mergeOnScrollDownEnabled: Boolean = true,
     compactOnScrollEnabled: Boolean = false,
-    currentLabel: String = firstLabel,
+    currentLabel: String = "",
     animateNowPlayingPresence: Boolean = true,
     hasUiSkinDecoration: Boolean = false,
     modifier: Modifier = Modifier,
@@ -584,9 +582,9 @@ internal fun LinkedBottomDock(
                         )
                         AppIcon(
                             imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
-                                resolveHomeNavigationBarIcon(firstItem, currentItem == firstItem)
-                            } else resolveMaterialBottomBarIcon(firstItem, currentItem == firstItem),
-                            contentDescription = "$firstLabel，展开底栏",
+                                resolveHomeNavigationBarIcon(currentItem, selected = true)
+                            } else resolveMaterialBottomBarIcon(currentItem, selected = true),
+                            contentDescription = "$currentLabel，展开底栏",
                             tint = navigationColor,
                             modifier = if (homeGlassMotion) Modifier.graphicsLayer(homeElasticState.layerBlock) else Modifier,
                         )

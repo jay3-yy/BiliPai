@@ -2455,11 +2455,6 @@ private fun MaterialBottomBar(
         if (searchEnabled || nowPlayingContent != null || hasHostedNowPlaying || homeSettings.bottomBarScrollCompactEnabled) {
             LinkedBottomDock(
                 currentItem = currentItem,
-                firstItem = bottomBarVisibleItems.firstOrNull() ?: BottomNavItem.HOME,
-                firstLabel = resolveBottomNavItemLabel(
-                    bottomBarVisibleItems.firstOrNull() ?: BottomNavItem.HOME,
-                    itemLabels
-                ),
                 searchEnabled = searchEnabled,
                 collapseRequested = collapseLinkedDock,
                 onSearchClick = onSearchClick,
@@ -3660,8 +3655,6 @@ private fun BiliPaiFloatingBottomBar(
     if (bottomBarSearchEnabled || nowPlayingContent != null || hasHostedNowPlaying || compactOnScrollEnabled) {
         LinkedBottomDock(
             currentItem = currentItem,
-            firstItem = visibleItems.firstOrNull() ?: BottomNavItem.HOME,
-            firstLabel = resolveBottomNavItemLabel(visibleItems.firstOrNull() ?: BottomNavItem.HOME, itemLabels),
             dockPhase = linkedDockPhase,
             onDockPhaseChange = onLinkedDockPhaseChange,
             isTopLevelDestination = isTopLevelDestination,
