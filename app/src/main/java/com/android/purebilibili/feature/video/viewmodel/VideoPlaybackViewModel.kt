@@ -1069,24 +1069,9 @@ internal fun buildSubtitleTrackBindingKey(
     languageCode: String,
     subtitleUrl: String = ""
 ): String {
-    val idPart = subtitleIdStr.takeIf { it.isNotBlank() }
-        ?: subtitleId.takeIf { it > 0L }?.toString()
-        ?: "no-id"
-    val baseKey = "${idPart}|${languageCode.ifBlank { "unknown" }}"
-    val normalizedUrl = normalizeBilibiliSubtitleUrl(subtitleUrl)
-    if (normalizedUrl.isBlank()) return baseKey
-    val urlPathKey = runCatching {
-        val uri = java.net.URI(normalizedUrl)
-        val host = uri.host?.lowercase().orEmpty()
-        val path = uri.path?.lowercase().orEmpty()
-        when {
-            host.isNotBlank() && path.isNotBlank() -> "$host$path"
-            path.isNotBlank() -> path
-            else -> ""
-        }
-    }.getOrDefault("")
-    if (urlPathKey.isBlank()) return baseKey
-    return "$baseKey|$urlPathKey"
+    return com.android.purebilibili.core.subtitle.buildSubtitleTrackKey(
+        subtitleId, subtitleIdStr, languageCode, subtitleUrl
+    )
 }
 
 internal fun shouldApplySubtitleTrackBinding(
@@ -6689,10 +6674,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun selectSubtitleTrack(trackKey: String) {
-        val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
+        val current = _uiState.value as? VideoPlaybackUiState.Success
         val normalizedTrackKey = trackKey.trim()
-        if (normalizedTrackKey.isBlank() || current.subtitleTracks.isEmpty()) return
-        if (current.subtitleOwnerBvid != current.info.bvid || current.subtitleOwnerCid != current.info.cid) return
+        if (current == null || normalizedTrackKey.isBlank() || current.subtitleTracks.isEmpty() ||
+            current.subtitleOwnerBvid != current.info.bvid || current.subtitleOwnerCid != current.info.cid) {
+            return
+        }
 
         loadSubtitleTracksFromPlayerInfo(
             bvid = current.info.bvid,
@@ -6714,8 +6701,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         precomputedTracks: List<SubtitleTrackMeta>? = null,
         selectedPrimaryTrackKey: String? = null
     ) {
-        val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
-        if (current.info.bvid != bvid || current.info.cid != cid) return
+        val current = _uiState.value as? VideoPlaybackUiState.Success
+        if (current == null || current.info.bvid != bvid || current.info.cid != cid) {
+            return
+        }
         if (!shouldApplyPlayerInfoResult(
                 activeRequestToken = currentLoadRequestToken,
                 resultRequestToken = requestToken,
@@ -6736,6 +6725,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
         val selectedPrimaryTrack = selectedPrimaryTrackKey
             ?.let { key -> trackMetas.firstOrNull { it.trackKey == key } }
+        if (selectedPrimaryTrackKey != null && selectedPrimaryTrack == null) {
+            android.widget.Toast.makeText(getApplication(), "字幕轨道已失效，请重新选择", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         val selection = resolveDefaultSubtitleLanguages(
             tracks = trackMetas,
             preferredPrimaryLanguage = preferredPrimaryLanguage
@@ -6966,6 +6959,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 }
             }
 
+            if (selectedPrimaryTrackKey != null && (primaryResult.isFailure || primaryResult.getOrNull().isNullOrEmpty())) {
+                android.widget.Toast.makeText(getApplication(), "字幕加载失败，请重新选择重试", android.widget.Toast.LENGTH_SHORT).show()
+            }
             val primaryCues = primaryResult.getOrElse {
                 emptyList()
             }
@@ -6973,7 +6969,14 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 emptyList()
             }
 
-            val subtitleDecision = resolveSubtitleTrackLoadDecision(
+            val subtitleDecision = if (selectedPrimaryTrackKey != null) SubtitleTrackLoadDecision(
+                primaryLanguage = primaryTrack.lan,
+                secondaryLanguage = secondaryTrack?.lan,
+                primaryLikelyAi = isLikelyAiSubtitleTrack(primaryTrack),
+                secondaryLikelyAi = secondaryTrack?.let(::isLikelyAiSubtitleTrack) ?: false,
+                primaryCues = primaryCues,
+                secondaryCues = secondaryCues
+            ) else resolveSubtitleTrackLoadDecision(
                 primaryLanguage = primaryTrack.lan,
                 primaryCues = primaryCues,
                 primaryLikelyAi = isLikelyAiSubtitleTrack(primaryTrack),
@@ -7020,6 +7023,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         subtitleOwnerCid = cid,
                         subtitlePrimaryLanguage = subtitleDecision.primaryLanguage,
                         subtitleSecondaryLanguage = subtitleDecision.secondaryLanguage,
+                        subtitlePrimaryTrackKey = if (subtitleDecision.primaryCues === secondaryCues && secondaryCues.isNotEmpty()) secondaryTrackKey else primaryTrackKey,
+                        subtitleSecondaryTrackKey = if (subtitleDecision.secondaryLanguage == null) null else secondaryTrackKey,
                         subtitlePrimaryLikelyAi = subtitleDecision.primaryLikelyAi,
                         subtitleSecondaryLikelyAi = subtitleDecision.secondaryLikelyAi,
                         subtitlePrimaryCues = subtitleDecision.primaryCues,

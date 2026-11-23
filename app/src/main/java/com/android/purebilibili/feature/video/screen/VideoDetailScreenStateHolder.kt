@@ -2676,8 +2676,10 @@ internal fun VideoDetailScreenStateHolder(
     }
     var subtitlePreferenceSessionKey by rememberSaveable { mutableStateOf<String?>(null) }
     var subtitleDisplayModeOverride by rememberSaveable { mutableStateOf(SubtitleDisplayMode.OFF) }
-    LaunchedEffect(subtitlePreferenceSession.key) {
-        subtitleDisplayModeOverride = resolveSubtitleDisplayModePreference(
+    val subtitleVideoCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid ?: 0L
+    var subtitleManuallyChanged by rememberSaveable(currentBvid, subtitleVideoCid) { mutableStateOf(false) }
+    LaunchedEffect(subtitlePreferenceSession.key, subtitleManuallyChanged) {
+        if (!subtitleManuallyChanged) subtitleDisplayModeOverride = resolveSubtitleDisplayModePreference(
             previousSessionKey = subtitlePreferenceSessionKey,
             nextSessionKey = subtitlePreferenceSession.key,
             previousMode = subtitleDisplayModeOverride,
@@ -3944,7 +3946,10 @@ internal fun VideoDetailScreenStateHolder(
                 detailShellSharedBoundsEnabled && useReturningVideoDetailVisualState,
             suppressSubtitleOverlay = shouldSuppressSubtitleOverlay,
             subtitleDisplayModePreferenceOverride = subtitleDisplayModeOverride,
-            onSubtitleDisplayModePreferenceOverrideChange = { subtitleDisplayModeOverride = it },
+            onSubtitleDisplayModePreferenceOverrideChange = {
+                subtitleManuallyChanged = true
+                subtitleDisplayModeOverride = it
+            },
             fullscreenExtras = ContinuousPlayerFullscreenExtras(
                 commentStateHandle = commentStateHandle,
                 danmakuComposerVisible = showDanmakuDialog && isFullscreenMode,

@@ -4876,15 +4876,17 @@ private fun VideoPlayerSectionContent(
             subtitleBelongsToCurrentVideo,
             subtitleDisplayModePreference,
             subtitlePrimaryAvailable,
-            subtitleSecondaryAvailable
+            subtitleSecondaryAvailable,
+            subtitlePrimaryTrackBound,
+            subtitleSecondaryTrackBound
         ) {
             if (!subtitleFeatureEnabled || !subtitleBelongsToCurrentVideo) {
                 SubtitleDisplayMode.OFF
             } else {
                 normalizeSubtitleDisplayMode(
                     preferredMode = subtitleDisplayModePreference,
-                    hasPrimaryTrack = subtitlePrimaryAvailable,
-                    hasSecondaryTrack = subtitleSecondaryAvailable
+                    hasPrimaryTrack = subtitlePrimaryTrackBound || subtitlePrimaryAvailable,
+                    hasSecondaryTrack = subtitleSecondaryTrackBound || subtitleSecondaryAvailable
                 )
             }
         }

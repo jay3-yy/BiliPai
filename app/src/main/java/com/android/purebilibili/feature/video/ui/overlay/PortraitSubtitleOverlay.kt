@@ -191,7 +191,7 @@ fun PortraitSubtitleHost(
         "${pageBvid}_${pageCid}_${success.subtitlePrimaryLanguage}_${success.subtitleSecondaryLanguage}_" +
             "${success.subtitlePrimaryLikelyAi}_${success.subtitleSecondaryLikelyAi}_${subtitleAutoPreference.name}"
     }
-    var displayModePreference by rememberSaveable(sessionKey) {
+    var displayModePreference by rememberSaveable(pageBvid, pageCid) {
         mutableStateOf(
             resolveSubtitleDisplayModeByAutoPreference(
                 preference = subtitleAutoPreference,
@@ -205,7 +205,7 @@ fun PortraitSubtitleHost(
             )
         )
     }
-    var largeTextEnabled by rememberSaveable("${sessionKey}_large") {
+    var largeTextEnabled by rememberSaveable(pageBvid, pageCid) {
         mutableStateOf(false)
     }
 
