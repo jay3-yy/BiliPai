@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.*
 import kotlinx.coroutines.flow.*
 
-enum class ContentFilterScope { VIDEO, COMMENT, DANMAKU }
+enum class ContentFilterScope { VIDEO, COMMENT, DANMAKU, DYNAMIC }
 enum class ContentVideoSurface { RECOMMEND, POPULAR, RANK, SEARCH, RELATED, OTHER }
 
 data class ContentVideoKeywordPolicy(
@@ -39,8 +39,14 @@ data class ContentFilterSnapshot(
     val aiReplyAllowedMids: Set<Long> = emptySet(),
 ) {
     private val titleRegex by lazy { compileContentTitlePattern(videoTitlePattern) }
+    private val sharedKeywordMatcher by lazy { ContentKeywordMatcher.compile(keywords) }
+
+    fun matchesSharedKeywords(text: String): Boolean = sharedKeywordMatcher.matches(text)
+
+    fun firstMatchingSharedKeyword(text: String): String? = sharedKeywordMatcher.firstMatch(text)
+
     fun blocksText(text: String, scope: ContentFilterScope): Boolean =
-        (keywordFilteringEnabled && scope in scopes && keywords.any { text.contains(it, ignoreCase = true) }) ||
+        (keywordFilteringEnabled && scope in scopes && matchesSharedKeywords(text)) ||
             (scope == ContentFilterScope.VIDEO && (
                 (keywordFilteringEnabled && titleRegex?.containsMatchIn(text) == true) ||
                     (adFilteringEnabled && adVideoKeywords.any { text.contains(it, ignoreCase = true) })
@@ -67,7 +73,7 @@ data class ContentFilterSnapshot(
             !(surface == ContentVideoSurface.RECOMMEND && followed && videoPolicy.exemptFollowed)
         return when {
             blocksUser(mid) -> ContentFilterReason.BLOCKED_USER
-            contentAllowed && ContentFilterScope.VIDEO in scopes && keywords.any { title.contains(it, true) } ->
+            contentAllowed && ContentFilterScope.VIDEO in scopes && matchesSharedKeywords(title) ->
                 ContentFilterReason.KEYWORD
             contentAllowed && videoPolicy.applies(surface) && titleRegex?.containsMatchIn(title) == true ->
                 ContentFilterReason.TITLE_PATTERN
@@ -178,6 +184,52 @@ object ContentFilterRules {
             it.remove(legacyWords)
         }
     }
+
+    /** 增量追加共享屏蔽词并合并作用域，不覆盖已有词条；返回本次实际新增词数。 */
+    suspend fun appendKeywords(
+        context: Context,
+        newKeywords: List<String>,
+        ensureScopes: Set<ContentFilterScope>,
+    ): Int {
+        val cleaned = newKeywords.map(String::trim).filter(String::isNotEmpty)
+        var addedCount = 0
+        store(context).edit { prefs ->
+            val existing = parseCommentKeywords(prefs[words] ?: prefs[legacyWords].orEmpty())
+            val seenLower = existing.mapTo(hashSetOf()) { it.lowercase() }
+            val merged = existing.toMutableList()
+            for (word in cleaned) {
+                if (seenLower.add(word.lowercase())) {
+                    merged.add(word)
+                    addedCount++
+                }
+            }
+            val currentScopes = prefs[scopeKey]?.mapNotNull { name ->
+                ContentFilterScope.entries.firstOrNull { it.name == name }
+            }?.toSet() ?: setOf(ContentFilterScope.COMMENT)
+            val nextScopes = currentScopes + ensureScopes
+            prefs[words] = merged.joinToString("\n")
+            prefs[scopeKey] = nextScopes.map { it.name }.toSet()
+            prefs.remove(legacyWords)
+        }
+        return addedCount
+    }
+
+    /** 从共享屏蔽词中移除指定规则（忽略大小写），返回是否确实移除了词条。 */
+    suspend fun removeKeyword(context: Context, keyword: String): Boolean {
+        val target = keyword.trim()
+        if (target.isEmpty()) return false
+        var removed = false
+        store(context).edit { prefs ->
+            val existing = parseCommentKeywords(prefs[words] ?: prefs[legacyWords].orEmpty())
+            val remaining = existing.filterNot { it.equals(target, ignoreCase = true) }
+            if (remaining.size != existing.size) {
+                removed = true
+                prefs[words] = remaining.joinToString("\n")
+                prefs.remove(legacyWords)
+            }
+        }
+        return removed
+    }
 }
 
 /** 保留旧标题规则中各行合并、分组及忽略大小写的匹配语义。 */
@@ -186,4 +238,84 @@ fun compileContentTitlePattern(text: String): Regex? {
         if ('|' in it && !it.startsWith("(")) "($it)" else it
     }
     return patterns.takeIf { it.isNotEmpty() }?.joinToString("|")?.let { Regex(it, RegexOption.IGNORE_CASE) }
+}
+
+class ContentKeywordMatcher private constructor(
+    private val rules: List<CompiledContentKeywordRule>,
+) {
+    fun matches(text: String): Boolean = rules.any { it.matches(text) }
+
+    fun firstMatch(text: String): String? = rules.firstOrNull { it.matches(text) }?.rawRule
+
+    companion object {
+        val EMPTY = ContentKeywordMatcher(emptyList())
+
+        fun compile(rawKeywords: List<String>): ContentKeywordMatcher =
+            if (rawKeywords.isEmpty()) EMPTY
+            else ContentKeywordMatcher(compileSharedContentKeywordRules(rawKeywords))
+    }
+}
+
+internal sealed interface CompiledContentKeywordRule {
+    val rawRule: String
+    fun matches(text: String): Boolean
+
+    data class Contains(override val rawRule: String, val keyword: String) : CompiledContentKeywordRule {
+        override fun matches(text: String): Boolean = text.contains(keyword, ignoreCase = true)
+    }
+
+    data class ExactWord(override val rawRule: String, val regex: Regex) : CompiledContentKeywordRule {
+        override fun matches(text: String): Boolean = regex.containsMatchIn(text)
+    }
+
+    data class AllOf(override val rawRule: String, val parts: List<String>) : CompiledContentKeywordRule {
+        override fun matches(text: String): Boolean = parts.all { text.contains(it, ignoreCase = true) }
+    }
+
+    data class Pattern(override val rawRule: String, val regex: Regex) : CompiledContentKeywordRule {
+        override fun matches(text: String): Boolean = regex.containsMatchIn(text)
+    }
+}
+
+/**
+ * 共享屏蔽词支持四种写法（均忽略大小写）：
+ * - 普通词：包含即屏蔽
+ * - `=词`：精准匹配（仅在词边界/标点/括注处命中，避免误杀长词）
+ * - `词1+词2`：同时包含所有词才屏蔽
+ * - `regex:表达式`：正则匹配
+ */
+internal fun compileSharedContentKeywordRules(rawKeywords: List<String>): List<CompiledContentKeywordRule> {
+    if (rawKeywords.isEmpty()) return emptyList()
+    return rawKeywords.mapNotNull { raw ->
+        val token = raw.trim()
+        if (token.isEmpty()) return@mapNotNull null
+        when {
+            token.startsWith("regex:", ignoreCase = true) -> {
+                val pattern = token.substringAfter(':').trim()
+                if (pattern.isEmpty()) null
+                else runCatching { CompiledContentKeywordRule.Pattern(token, Regex(pattern, RegexOption.IGNORE_CASE)) }.getOrNull()
+            }
+            token.startsWith("=") -> {
+                val word = token.drop(1).trim()
+                if (word.isEmpty()) null
+                else {
+                    val escaped = Regex.escape(word)
+                    val boundaryRegex = Regex(
+                        "(?:^|[\\s,，。！？!?、/|｜·:：;；()（）\\[\\]【】《》「」\"'“”~～\\-—#])$escaped(?=$|[\\s,，。！？!?、/|｜·:：;；()（）\\[\\]【】《》「」\"'“”~～\\-—#])",
+                        RegexOption.IGNORE_CASE,
+                    )
+                    CompiledContentKeywordRule.ExactWord(token, boundaryRegex)
+                }
+            }
+            '+' in token -> {
+                val parts = token.split('+').map(String::trim).filter(String::isNotEmpty)
+                when {
+                    parts.isEmpty() -> null
+                    parts.size == 1 -> CompiledContentKeywordRule.Contains(token, parts.first())
+                    else -> CompiledContentKeywordRule.AllOf(token, parts)
+                }
+            }
+            else -> CompiledContentKeywordRule.Contains(token, token)
+        }
+    }
 }

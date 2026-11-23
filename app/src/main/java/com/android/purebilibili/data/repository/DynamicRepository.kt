@@ -229,8 +229,12 @@ object DynamicRepository {
                 hasMore = data.has_more
                 receivedItemCount += data.items.size
                 // 折叠卡片仍保留在时间线中，供展开操作恢复对应内容。
-                items += data.items.filterNot {
-                    blockGoods && isGoodsDynamic(it)
+                items += data.items.filterNot { item ->
+                    val blocked = blockGoods && isGoodsDynamic(item)
+                    if (blocked) {
+                        recordFilteredDynamic(item, com.android.purebilibili.core.store.ContentFilterReason.GOODS_DYNAMIC)
+                    }
+                    blocked
                 }
                 pagesFetched += 1
                 val fetchNext = if (useBaseline) {

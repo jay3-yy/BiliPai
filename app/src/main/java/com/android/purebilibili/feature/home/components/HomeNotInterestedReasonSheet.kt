@@ -33,6 +33,7 @@ fun HomeNotInterestedReasonSheet(
     video: VideoItem,
     reasons: List<RecommendationFeedbackReason>,
     onReasonSelected: (RecommendationFeedbackReason) -> Unit,
+    onQuickFilterClick: (() -> Unit)? = null,
     onDismissRequest: () -> Unit
 ) {
     AppModalBottomSheet(onDismissRequest = onDismissRequest) {
@@ -79,6 +80,39 @@ fun HomeNotInterestedReasonSheet(
                 reasons = reasons.filter { it.type == RecommendationFeedbackType.FEEDBACK },
                 onReasonSelected = onReasonSelected
             )
+            if (onQuickFilterClick != null) {
+                AppHorizontalDivider(
+                    modifier = Modifier.padding(
+                        horizontal = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall,
+                        vertical = AppSpacingTokens.Small,
+                    ),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.ExtraSmall)
+                        .clickable { onQuickFilterClick() }
+                        .padding(
+                            horizontal = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall,
+                            vertical = AppSpacingTokens.Medium,
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppText(
+                        text = "按关键词 / UP 主精细屏蔽…",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = AppContentColors.accent(),
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    AppText(
+                        text = "立即编辑",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = AppContentColors.accent(),
+                    )
+                }
+            }
         }
     }
 }

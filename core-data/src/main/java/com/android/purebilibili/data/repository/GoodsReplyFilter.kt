@@ -98,6 +98,11 @@ class ReplyContentFilter(
 
     private fun record(reply: ReplyItem, reason: ContentFilterReason) {
         if (!recordHits || reply.rpid <= 0L) return
+        val matchedRule = if (reason == ContentFilterReason.KEYWORD) {
+            rules.firstMatchingSharedKeyword(reply.content.message).orEmpty()
+        } else {
+            ""
+        }
         ContentFilterHistory.record(
             FilteredContentKind.COMMENT,
             ContentFilterHit(
@@ -105,6 +110,8 @@ class ReplyContentFilter(
                 text = reply.content.message,
                 author = reply.member.uname,
                 reason = reason,
+                authorMid = reply.authorMid(),
+                matchedRule = matchedRule,
             ),
             session = historySession,
         )

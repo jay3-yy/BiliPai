@@ -61,7 +61,7 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
     override val id = BuiltinPluginIds.FEED_FILTER
     override val name = "内容过滤"
-    override val description = "管理视频、评论、弹幕共享屏蔽词，以及视频时长、播放量、点赞率与过滤范围"
+    override val description = "管理视频、评论、弹幕、动态共享屏蔽词，以及视频时长、播放量、点赞率与过滤范围"
     override val version = "1.0.0"
     override val author = "qyo123oyq"
     override val icon: ImageVector = Icons.Outlined.FilterList

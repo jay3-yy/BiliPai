@@ -69,7 +69,15 @@ object TopicRepository {
             var pagesFetched = 1
             var previousOffset = offset
             var visibleItems = page.items.mapNotNull { it.dynamicCardItem }
-                .filter { it.visible && (!blockGoods || !isGoodsDynamic(it)) }
+                .filter { item ->
+                    if (!item.visible) return@filter false
+                    if (blockGoods && isGoodsDynamic(item)) {
+                        recordFilteredDynamic(item, com.android.purebilibili.core.store.ContentFilterReason.GOODS_DYNAMIC)
+                        false
+                    } else {
+                        true
+                    }
+                }
             while (blockGoods && shouldContinueDynamicFetchAfterFilter(
                 visibleItems.size, page.hasMore, previousOffset, page.offset, pagesFetched
             )) {
@@ -81,7 +89,15 @@ object TopicRepository {
                 page = response.data?.topicCardList ?: page.copy(hasMore = false)
                 pagesFetched += 1
                 visibleItems = page.items.mapNotNull { it.dynamicCardItem }
-                    .filter { it.visible && !isGoodsDynamic(it) }
+                    .filter { item ->
+                        if (!item.visible) return@filter false
+                        if (isGoodsDynamic(item)) {
+                            recordFilteredDynamic(item, com.android.purebilibili.core.store.ContentFilterReason.GOODS_DYNAMIC)
+                            false
+                        } else {
+                            true
+                        }
+                    }
             }
             Result.success(
                 TopicFeedPage(

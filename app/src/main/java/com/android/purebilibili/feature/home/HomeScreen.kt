@@ -833,6 +833,12 @@ internal fun HomeScreen(
             }
         }
     }
+    var pendingQuickFilterFeedback by remember {
+        mutableStateOf<com.android.purebilibili.feature.plugin.QuickContentFilterTarget?>(null)
+    }
+    var editingQuickFilterTarget by remember {
+        mutableStateOf<com.android.purebilibili.feature.plugin.QuickContentFilterTarget?>(null)
+    }
     val confirmNotInterested: (VideoItem, RecommendationFeedbackReason) -> Unit = { video, reason ->
         pendingNotInterestedVideo = null
         val dissolveEnabled = homeSettings.cardRemovalDissolveMode != CardRemovalDissolveMode.OFF &&
@@ -843,6 +849,7 @@ internal fun HomeScreen(
             reason = reason,
             dissolveAnimationEnabled = dissolveEnabled,
         )
+        pendingQuickFilterFeedback = com.android.purebilibili.feature.plugin.QuickContentFilterTarget.fromVideo(video)
     }
     LaunchedEffect(dissolvingNotInterestedVideo) {
         val video = dissolvingNotInterestedVideo ?: return@LaunchedEffect
@@ -1915,7 +1922,16 @@ internal fun HomeScreen(
                             visualWorkActive = homeVisualWorkActive,
                             unobscured = homeFeedUnobscured,
                         )
+                        val pageScrollBarAllowed = remember(pagerState, page) {
+                            derivedStateOf {
+                                pagerState.settledPage == page && !pagerState.isScrollInProgress
+                            }
+                        }
                         CompositionLocalProvider(
+                            com.android.purebilibili.core.ui.components.LocalScrollBarAllowed provides (
+                                com.android.purebilibili.core.ui.components.LocalScrollBarAllowed.current &&
+                                    pageScrollBarAllowed.value
+                            ),
                             // 横滑曝光仅允许显示内容；预加载、遮挡和未落位页不启动装饰任务。
                             com.android.purebilibili.core.ui.LocalVisualWorkAllowed provides (
                                 com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current &&
@@ -2796,16 +2812,35 @@ internal fun HomeScreen(
         scaffoldContent()
         val video = pendingNotInterestedVideo
         if (video != null) {
+            val reasons = resolveHomeNotInterestedReasons(video)
             HomeNotInterestedReasonSheet(
                 video = video,
-                reasons = resolveHomeNotInterestedReasons(video),
+                reasons = reasons,
                 onReasonSelected = { reason ->
                     confirmNotInterested(video, reason)
+                },
+                onQuickFilterClick = {
+                    val defaultReason = reasons.firstOrNull()
+                    if (defaultReason != null) {
+                        confirmNotInterested(video, defaultReason)
+                    } else {
+                        pendingNotInterestedVideo = null
+                    }
+                    pendingQuickFilterFeedback = null
+                    editingQuickFilterTarget = com.android.purebilibili.feature.plugin.QuickContentFilterTarget.fromVideo(video)
                 },
                 onDismissRequest = {
                     pendingNotInterestedVideo = null
                 }
             )
         }
+        com.android.purebilibili.feature.plugin.QuickContentFilterHost(
+            pendingFeedback = pendingQuickFilterFeedback,
+            onDismissFeedback = { pendingQuickFilterFeedback = null },
+            editingTarget = editingQuickFilterTarget,
+            onOpenEditor = { editingQuickFilterTarget = it },
+            onDismissEditor = { editingQuickFilterTarget = null },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }

@@ -30,16 +30,32 @@ internal fun ContentFilterSnapshot.keepsVideo(
     surface: ContentVideoSurface, followed: Boolean = false,
 ): Boolean {
     val reason = videoFilterReason(title, mid, followed, surface) ?: return true
-    recordFilteredVideo(bvid, aid, title, author, reason)
+    val matchedRule = if (reason == ContentFilterReason.KEYWORD) firstMatchingSharedKeyword(title).orEmpty() else ""
+    recordFilteredVideo(bvid, aid, title, author, reason, authorMid = mid, matchedRule = matchedRule)
     return false
 }
 
 internal fun recordFilteredVideo(item: VideoItem, reason: ContentFilterReason, pluginName: String = "") {
-    recordFilteredVideo(item.bvid, item.aid.takeIf { it > 0L } ?: item.id, item.title, item.owner.name, reason, pluginName)
+    recordFilteredVideo(
+        bvid = item.bvid,
+        aid = item.aid.takeIf { it > 0L } ?: item.id,
+        title = item.title,
+        author = item.owner.name,
+        reason = reason,
+        pluginName = pluginName,
+        authorMid = item.owner.mid,
+    )
 }
 
 private fun recordFilteredVideo(
-    bvid: String, aid: Long, title: String, author: String, reason: ContentFilterReason, pluginName: String = "",
+    bvid: String,
+    aid: Long,
+    title: String,
+    author: String,
+    reason: ContentFilterReason,
+    pluginName: String = "",
+    authorMid: Long = 0L,
+    matchedRule: String = "",
 ) {
     val id = when {
         bvid.isNotBlank() -> bvid
@@ -47,5 +63,16 @@ private fun recordFilteredVideo(
         title.isBlank() -> return
         else -> "$author\u0000$title"
     }
-    ContentFilterHistory.record(FilteredContentKind.VIDEO, ContentFilterHit(id, title, author, reason, pluginName))
+    ContentFilterHistory.record(
+        FilteredContentKind.VIDEO,
+        ContentFilterHit(
+            id = id,
+            text = title,
+            author = author,
+            reason = reason,
+            pluginName = pluginName,
+            authorMid = authorMid,
+            matchedRule = matchedRule,
+        ),
+    )
 }

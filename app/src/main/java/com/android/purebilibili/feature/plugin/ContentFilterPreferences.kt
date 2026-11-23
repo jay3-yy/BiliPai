@@ -27,6 +27,7 @@ internal fun SharedContentFilterPreferences() {
     var video by rememberSaveable { mutableStateOf(false) }
     var comment by rememberSaveable { mutableStateOf(true) }
     var danmaku by rememberSaveable { mutableStateOf(false) }
+    var dynamic by rememberSaveable { mutableStateOf(false) }
     AppPreference(
         title = "共享屏蔽词",
         subtitle = "一处编辑，按所选范围应用；已有标题正则和弹幕规则继续生效",
@@ -37,6 +38,7 @@ internal fun SharedContentFilterPreferences() {
             video = ContentFilterScope.VIDEO in current.scopes
             comment = ContentFilterScope.COMMENT in current.scopes
             danmaku = ContentFilterScope.DANMAKU in current.scopes
+            dynamic = ContentFilterScope.DYNAMIC in current.scopes
             editing = true
         } },
     )
@@ -46,7 +48,7 @@ internal fun SharedContentFilterPreferences() {
         title = { AppText("共享屏蔽词") },
         text = {
             Column {
-                AppText("每行一个普通文本关键词，不区分大小写。保存后更新已加载内容，解除屏蔽后恢复原内容。关闭内容过滤插件后暂停共享关键词过滤。")
+                AppText("每行一条规则（忽略大小写）：普通词包含即屏蔽；=词精准匹配；词1+词2同时包含才屏蔽；regex:支持正则。保存后立即更新已加载内容，关闭内容过滤插件后暂停。")
                 AppTextField(value = text, onValueChange = { text = it }, label = "屏蔽词",
                     singleLine = false, minLines = 3, maxLines = 5)
                 AppSwitchPreference(title = "视频标题", checked = video, onCheckedChange = { video = it },
@@ -55,6 +57,8 @@ internal fun SharedContentFilterPreferences() {
                     icon = rememberSettingsSemanticIcon(SettingsIconRole.INTERACTION_COMMENT))
                 AppSwitchPreference(title = "弹幕内容", checked = danmaku, onCheckedChange = { danmaku = it },
                     icon = rememberSettingsSemanticIcon(SettingsIconRole.PIP_DANMAKU))
+                AppSwitchPreference(title = "动态内容", checked = dynamic, onCheckedChange = { dynamic = it },
+                    icon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_PREVIEW_TEXT))
             }
         },
         confirmButton = { AppTextButton(onClick = {
@@ -63,10 +67,11 @@ internal fun SharedContentFilterPreferences() {
                     if (video) add(ContentFilterScope.VIDEO)
                     if (comment) add(ContentFilterScope.COMMENT)
                     if (danmaku) add(ContentFilterScope.DANMAKU)
+                    if (dynamic) add(ContentFilterScope.DYNAMIC)
                 })
                 editing = false
             }
-        }, enabled = video || comment || danmaku || text.isBlank()) { AppText("保存") } },
+        }, enabled = video || comment || danmaku || dynamic || text.isBlank()) { AppText("保存") } },
         dismissButton = { AppTextButton(onClick = { editing = false }) { AppText("取消") } },
     )
 }
