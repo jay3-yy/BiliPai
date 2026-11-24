@@ -319,7 +319,8 @@ class TodayWatchPlugin : BuiltinPlugin, RecommendationPluginApi<VideoItem>, Toda
             updateConfig { next }
         }
 
-        val settingsBackdrop = rememberLayerBackdrop()
+        val settingsBackdropSource = com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+        val settingsBackdrop = settingsBackdropSource.backdrop
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -328,7 +329,7 @@ class TodayWatchPlugin : BuiltinPlugin, RecommendationPluginApi<VideoItem>, Toda
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .layerBackdrop(settingsBackdrop)
+                    .then(settingsBackdropSource.modifier)
                     .background(MaterialTheme.colorScheme.background),
             )
             Column(

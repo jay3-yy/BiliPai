@@ -160,6 +160,12 @@ private val pluginCenterCommonOrder = listOf(
     BuiltinPluginIds.TODAY_WATCH,
 )
 
+private val pluginCenterStarterRecommendedIds = listOf(
+    BuiltinPluginIds.SPONSOR_BLOCK,
+    BuiltinPluginIds.AD_FILTER,
+    BuiltinPluginIds.DANMAKU_ENHANCE,
+)
+
 @Composable
 private fun PluginCenterSectionTitle(title: String, modifier: Modifier = Modifier) {
     AppText(
@@ -537,6 +543,10 @@ fun PluginsContent(
         }
     }
 
+    val missingRecommendedPlugins = remember(plugins) {
+        plugins.filter { it.plugin.id in pluginCenterStarterRecommendedIds && !it.enabled }
+    }
+
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),
@@ -545,6 +555,46 @@ fun PluginsContent(
             extraBottom = contentBottomPadding,
         )
     ) {
+            if (missingRecommendedPlugins.isNotEmpty()) {
+                item(key = "starter-recommended-bundle") {
+                    AppSurface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp)
+                            .clip(AppShapes.container(ContainerLevel.Card)),
+                        color = com.android.purebilibili.core.ui.AppSurfaceTokens.cardContainer(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            AppText(
+                                text = "新手推荐组合",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AppContentColors.primaryText(),
+                            )
+                            AppText(
+                                text = "一键开启空降助手、广告净化与弹幕增强，自动跳过片头恰饭片段并优化观感；随时可在下方单独开关。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppContentColors.secondaryText(),
+                            )
+                            com.android.purebilibili.core.ui.components.AppButton(
+                                onClick = {
+                                    scope.launch {
+                                        missingRecommendedPlugins.forEach { info ->
+                                            PluginManager.setEnabled(info.plugin.id, true)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                AppText("一键开启推荐插件（${missingRecommendedPlugins.size} 项）")
+                            }
+                        }
+                    }
+                }
+            }
 
             builtInSection("常用插件", commonPlugins)
 
