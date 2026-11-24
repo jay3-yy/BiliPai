@@ -16,7 +16,8 @@ internal data class StoryFeedContinuation(
     val watchedKeys: List<String> = emptyList(),
     val source: StoryFeedSource = StoryFeedSource.STORY,
     val nextDisplayId: Int = 1,
-    val nextHomePage: Int = 0
+    val nextHomePage: Int = 0,
+    val onlyVertical: Boolean = false
 )
 
 /** One process-local, account-scoped continuation, not a persistent watch history. */
@@ -66,13 +67,15 @@ internal class StoryFeedSession(
     private val loadStory: suspend (String, Int) -> Result<List<StoryItem>>,
     private val loadHome: suspend (Int) -> Result<List<StoryItem>>,
     private val store: StoryContinuationStore,
-    private val accountKey: () -> String
+    private val accountKey: () -> String,
+    private val filterVerticalItems: suspend (List<StoryItem>) -> List<StoryItem> = { it }
 ) {
     private val mutableState = MutableStateFlow(StoryUiState(isLoading = true))
     val state = mutableState.asStateFlow()
     private var active = false
     private var seed = ""
     private var account = ""
+    private var onlyVertical = false
     private var lease = 0L
     private var source = StoryFeedSource.STORY
     private var nextDisplayId = 1
@@ -82,12 +85,13 @@ internal class StoryFeedSession(
     private var loadJob: Job? = null
     private val watchedKeys = linkedSetOf<String>()
 
-    fun startFeed(bvid: String = "") {
+    fun startFeed(bvid: String = "", onlyVertical: Boolean = false) {
         val normalized = bvid.trim()
-        if (active && seed == normalized && account == accountKey()) return
+        if (active && seed == normalized && account == accountKey() && this.onlyVertical == onlyVertical) return
         stopFeed()
         seed = normalized
         account = accountKey()
+        this.onlyVertical = onlyVertical
         active = true
         generation += 1
         val restored = if (seed.isEmpty()) {
@@ -95,13 +99,17 @@ internal class StoryFeedSession(
             lease = newLease
             continuation
         } else null
+        val canReuseRestoredItems = restored != null && (!onlyVertical || restored.onlyVertical)
         source = restored?.source ?: StoryFeedSource.STORY
         nextDisplayId = restored?.nextDisplayId ?: 1
         nextHomePage = restored?.nextHomePage ?: 0
         furthestVisitedIndex = -1
         watchedKeys.clear()
         watchedKeys.addAll(restored?.watchedKeys.orEmpty())
-        mutableState.value = StoryUiState(items = restored?.items.orEmpty(), sessionId = generation)
+        mutableState.value = StoryUiState(
+            items = if (canReuseRestoredItems) restored.items else emptyList(),
+            sessionId = generation
+        )
         if (mutableState.value.items.isEmpty()) loadMoreStories()
     }
 
@@ -116,7 +124,8 @@ internal class StoryFeedSession(
                 watchedKeys = watchedKeys.toList(),
                 source = source,
                 nextDisplayId = nextDisplayId,
-                nextHomePage = nextHomePage
+                nextHomePage = nextHomePage,
+                onlyVertical = onlyVertical
             ))
         }
         mutableState.value = StoryUiState(isLoading = true)
@@ -134,11 +143,13 @@ internal class StoryFeedSession(
     fun loadMoreStories() {
         if (!active) return
         if (account != accountKey()) {
-            startFeed(seed)
+            startFeed(seed, onlyVertical)
             return
         }
         if (mutableState.value.isLoading) return
         val requestGeneration = generation
+        val requestOnlyVertical = onlyVertical
+        val emptyPageLimit = if (requestOnlyVertical) MAX_VERTICAL_EMPTY_PAGES else MAX_EMPTY_PAGES
         mutableState.value = mutableState.value.copy(isLoading = true, error = null)
         loadJob = scope.launch {
             var emptyPages = 0
@@ -150,7 +161,7 @@ internal class StoryFeedSession(
 
                 if (!active || requestGeneration != generation) return@launch
                 if (account != accountKey()) {
-                    startFeed(seed)
+                    startFeed(seed, requestOnlyVertical)
                     return@launch
                 }
                 // A failed/unavailable Story endpoint falls back once, without resetting HOME.
@@ -167,8 +178,20 @@ internal class StoryFeedSession(
                     return@launch
                 }
                 if (source == StoryFeedSource.STORY) nextDisplayId += 1 else nextHomePage += 1
-                val incoming = result.getOrThrow()
+                val rawItems = result.getOrThrow()
+                val playable = rawItems
                     .filter { storyItemToRelatedVideo(it) != null && !wasWatched(it) }
+                val incoming = if (requestOnlyVertical) {
+                    filterVerticalItems(playable)
+                } else {
+                    playable
+                }
+                currentCoroutineContext().ensureActive()
+                if (!active || requestGeneration != generation) return@launch
+                if (account != accountKey()) {
+                    startFeed(seed, requestOnlyVertical)
+                    return@launch
+                }
                 val previous = mutableState.value.items
                 val merged = mergeStoryFeedItems(previous, incoming)
                 if (merged.size > previous.size) {
@@ -177,10 +200,10 @@ internal class StoryFeedSession(
                 }
                 emptyPages += 1
                 // Bound requests even when an endpoint repeats the same successful response.
-                if (source == StoryFeedSource.STORY && (result.getOrThrow().isEmpty() || emptyPages >= MAX_EMPTY_PAGES)) {
+                if (source == StoryFeedSource.STORY && (rawItems.isEmpty() || emptyPages >= emptyPageLimit)) {
                     source = StoryFeedSource.HOME
                     emptyPages = 0
-                } else if (emptyPages >= MAX_EMPTY_PAGES) {
+                } else if (emptyPages >= emptyPageLimit) {
                     mutableState.value = mutableState.value.copy(isLoading = false, error = "暂时没有新的推荐视频，请重试")
                     return@launch
                 }
@@ -191,7 +214,7 @@ internal class StoryFeedSession(
     fun updateCurrentVideo(bvid: String) {
         if (!active) return
         if (account != accountKey()) {
-            startFeed(seed)
+            startFeed(seed, onlyVertical)
             return
         }
         val index = resolveStoryPortraitIndexForBvid(bvid, mutableState.value.items)
@@ -216,5 +239,6 @@ internal class StoryFeedSession(
 
     private companion object {
         const val MAX_EMPTY_PAGES = 3
+        const val MAX_VERTICAL_EMPTY_PAGES = 6
     }
 }

@@ -12,17 +12,23 @@ import com.android.purebilibili.data.model.response.ViewInfo
  */
 internal fun resolvePortraitCollectionFollowUps(
     info: ViewInfo,
-    currentCid: Long = info.cid
+    currentCid: Long = info.cid,
+    onlyVertical: Boolean = false,
+    minVerticalRatio: Float = 1.0f,
 ): List<RelatedVideo> {
     return resolvePortraitMultiPageFollowUps(
         info = info,
-        currentCid = currentCid
+        currentCid = currentCid,
+        onlyVertical = onlyVertical,
+        minVerticalRatio = minVerticalRatio,
     )
 }
 
 internal fun resolvePortraitMultiPageFollowUps(
     info: ViewInfo,
-    currentCid: Long = info.cid
+    currentCid: Long = info.cid,
+    onlyVertical: Boolean = false,
+    minVerticalRatio: Float = 1.0f,
 ): List<RelatedVideo> {
     val pages = info.pages.filter { it.cid > 0L }
     if (pages.size <= 1) return emptyList()
@@ -31,7 +37,11 @@ internal fun resolvePortraitMultiPageFollowUps(
         .takeIf { it >= 0 }
         ?: pages.indexOfFirst { it.cid == info.cid }.coerceAtLeast(0)
 
-    return pages.drop(currentIndex + 1).map { page ->
+    return pages.drop(currentIndex + 1).mapNotNull { page ->
+        val effectiveDimension = page.dimension?.takeIf { it.width > 0 && it.height > 0 } ?: info.dimension
+        val pageIsVertical = effectiveDimension?.takeIf { it.width > 0 && it.height > 0 }
+            ?.isVerticalAtRatio(minVerticalRatio)
+        if (onlyVertical && pageIsVertical != true) return@mapNotNull null
         RelatedVideo(
             aid = info.aid,
             bvid = info.bvid,
@@ -42,6 +52,7 @@ internal fun resolvePortraitMultiPageFollowUps(
             stat = info.stat,
             duration = page.duration.toInt().coerceAtLeast(0),
             pubdate = info.pubdate,
+            isVertical = pageIsVertical,
         )
     }
 }

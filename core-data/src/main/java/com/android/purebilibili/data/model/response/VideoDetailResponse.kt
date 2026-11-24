@@ -22,16 +22,20 @@ data class Dimension(
     val height: Int = 0,
     val rotate: Int = 0
 ) {
-    /** 是否为竖屏视频（考虑 rotate=90/270 的场景） */
+    /** 是否为竖屏视频（兼容 B 站 rotate=1 标记与 90/270 度旋转） */
     val isVertical: Boolean
-        get() {
-            if (width <= 0 || height <= 0) return false
-            val normalizedRotate = ((rotate % 360) + 360) % 360
-            val shouldSwap = normalizedRotate == 90 || normalizedRotate == 270
-            val effectiveWidth = if (shouldSwap) height else width
-            val effectiveHeight = if (shouldSwap) width else height
-            return effectiveHeight > effectiveWidth
-        }
+        get() = isVerticalAtRatio(1.0f)
+
+    /** 按指定高宽比阈值判定是否为真竖屏视频（高度 / 宽度 > minVerticalRatio）。 */
+    fun isVerticalAtRatio(minVerticalRatio: Float = 1.0f): Boolean {
+        if (width <= 0 || height <= 0) return false
+        val normalizedRotate = ((rotate % 360) + 360) % 360
+        val shouldSwap = rotate == 1 || normalizedRotate == 90 || normalizedRotate == 270
+        val effectiveWidth = if (shouldSwap) height else width
+        val effectiveHeight = if (shouldSwap) width else height
+        val threshold = minVerticalRatio.coerceIn(0.8f, 1.5f)
+        return effectiveHeight.toFloat() / effectiveWidth.toFloat() > threshold
+    }
 }
 
 @Serializable

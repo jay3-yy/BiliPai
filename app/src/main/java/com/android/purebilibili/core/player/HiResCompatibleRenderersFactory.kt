@@ -1,7 +1,9 @@
 package com.android.purebilibili.core.player
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Handler
+import java.util.concurrent.atomic.AtomicBoolean
 import androidx.annotation.OptIn
 import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
@@ -54,11 +56,12 @@ internal open class HiResCompatibleRenderersFactory(
     ) {
         // 普通视频、竖屏连播、番剧和迷你条复用同一入口；关闭律动只做原样转发，
         // 不修改各播放器原有处理器和格式支持，PCM 会话内切换开关无需重建播放器。
-        val preferences = context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+        // 音频缓冲热路径禁止每次拿 SharedPreferences 锁，改为进程内 @Volatile 镜像 + 变更监听同步。
+        ensureAudioSpectrumCacheBound(context.applicationContext)
         val waveformAudioSink = com.android.purebilibili.core.player.waveform.WaveformAudioSink(
             delegate = audioSink,
             enabled = {
-                preferences.getBoolean("audio_spectrum_enabled", false) &&
+                cachedAudioSpectrumEnabled &&
                     com.android.purebilibili.core.player.waveform.AudioWaveformSource.isAnalysisRequested()
             },
         )
@@ -85,6 +88,30 @@ internal open class HiResCompatibleRenderersFactory(
             eventListener = eventListener,
             audioSink = waveformAudioSink
         )
+    }
+
+    private companion object {
+        private const val MINI_PLAYER_PREFS = "mini_player"
+        private const val KEY_AUDIO_SPECTRUM_ENABLED = "audio_spectrum_enabled"
+
+        @Volatile
+        private var cachedAudioSpectrumEnabled: Boolean = false
+        private val spectrumListenerRegistered = AtomicBoolean(false)
+
+        // Strong reference required because Android SharedPreferences stores listeners weakly.
+        private val spectrumPreferenceListener =
+            SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+                if (key == null || key == KEY_AUDIO_SPECTRUM_ENABLED) {
+                    cachedAudioSpectrumEnabled = prefs.getBoolean(KEY_AUDIO_SPECTRUM_ENABLED, false)
+                }
+            }
+
+        private fun ensureAudioSpectrumCacheBound(appContext: Context) {
+            if (!spectrumListenerRegistered.compareAndSet(false, true)) return
+            val prefs = appContext.getSharedPreferences(MINI_PLAYER_PREFS, Context.MODE_PRIVATE)
+            cachedAudioSpectrumEnabled = prefs.getBoolean(KEY_AUDIO_SPECTRUM_ENABLED, false)
+            prefs.registerOnSharedPreferenceChangeListener(spectrumPreferenceListener)
+        }
     }
 }
 

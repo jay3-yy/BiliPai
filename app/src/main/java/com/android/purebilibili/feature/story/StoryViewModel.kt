@@ -24,12 +24,19 @@ class StoryViewModel(application: Application) : AndroidViewModel(application) {
         loadStory = { seed, page -> StoryRepository.getStoryFeed(bvid = seed, displayId = page) },
         loadHome = { page -> VideoRepository.getHomeVideos(idx = page).map(::videoItemsToStoryItems) },
         store = StoryContinuationStore.shared,
-        accountKey = { "${videoMetadataAccountScope()}:${recommendationAccountScope()}" }
+        accountKey = { "${videoMetadataAccountScope()}:${recommendationAccountScope()}" },
+        filterVerticalItems = { items ->
+            filterVerticalStoryItems(
+                items = items,
+                minVerticalRatio = com.android.purebilibili.core.store.SettingsManager.getCurrentVerticalVideoRatio()
+            )
+        }
     )
 
     val uiState = session.state
 
-    fun startFeed(bvid: String = "") = session.startFeed(bvid)
+    fun startFeed(bvid: String = "", onlyVertical: Boolean = false) =
+        session.startFeed(bvid = bvid, onlyVertical = onlyVertical)
 
     fun stopFeed() = session.stopFeed()
 

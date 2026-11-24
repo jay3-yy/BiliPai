@@ -10,6 +10,12 @@ import com.android.purebilibili.data.model.response.StoryPlayerArgs
 import com.android.purebilibili.data.model.response.StoryStat
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.ViewInfo
+import com.android.purebilibili.data.repository.VideoRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+
+private const val STORY_VERTICAL_FILTER_CONCURRENCY = 8
 
 internal data class StoryPortraitFeed(
     val initialInfo: ViewInfo,
@@ -174,6 +180,39 @@ private data class PlayableStoryItem(
  */
 internal fun storyItemToRelatedVideo(item: StoryItem): RelatedVideo? =
     toPlayableStoryItem(item)?.toRelatedVideo()
+
+/**
+ * 过滤出真竖屏视频：优先信任有效的 dimension，缺失尺寸时通过详情接口校验。
+ */
+internal suspend fun filterVerticalStoryItems(
+    items: List<StoryItem>,
+    minVerticalRatio: Float = 1.0f,
+    isVerticalLookup: suspend (bvid: String, aid: Long) -> Boolean = { bvid, aid ->
+        VideoRepository.isVerticalVideo(bvid = bvid, aid = aid, minVerticalRatio = minVerticalRatio)
+    },
+): List<StoryItem> {
+    if (items.isEmpty()) return emptyList()
+    return items.chunked(STORY_VERTICAL_FILTER_CONCURRENCY).flatMap { batch ->
+        coroutineScope {
+            batch.map { item ->
+                async {
+                    val knownVertical = item.dimension
+                        ?.takeIf { it.width > 0 && it.height > 0 }
+                        ?.isVerticalAtRatio(minVerticalRatio)
+                    val isVertical = when (knownVertical) {
+                        true -> true
+                        false -> false
+                        null -> {
+                            val playable = toPlayableStoryItem(item) ?: return@async null
+                            isVerticalLookup(playable.playbackId, playable.aid)
+                        }
+                    }
+                    if (isVertical) item else null
+                }
+            }.awaitAll().filterNotNull()
+        }
+    }
+}
 
 /**
  * Map home-recommend [VideoItem] into Story feed shape so the portrait pager can reuse

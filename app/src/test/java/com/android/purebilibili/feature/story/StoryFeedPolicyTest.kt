@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.story
 
+import com.android.purebilibili.data.model.response.Dimension
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.StoryItem
@@ -198,5 +199,28 @@ class StoryFeedPolicyTest {
             StoryItem(id = 2, title = "no args", playerArgs = null)
         )
         assertNull(unplayable)
+    }
+
+    @Test
+    fun `filterVerticalStoryItems respects rotated dimensions and falls back to lookup when dimension missing`() = kotlinx.coroutines.test.runTest {
+        val lookedUp = mutableListOf<String>()
+        val items = listOf(
+            storyItem(id = 1, aid = 101L, bvid = "BV_VERT").copy(dimension = Dimension(1080, 1920, rotate = 0)),
+            storyItem(id = 2, aid = 102L, bvid = "BV_ROTATED_LANDSCAPE").copy(dimension = Dimension(1080, 1920, rotate = 1)),
+            storyItem(id = 3, aid = 103L, bvid = "BV_ROTATED_PORTRAIT").copy(dimension = Dimension(1920, 1080, rotate = 1)),
+            storyItem(id = 4, aid = 104L, bvid = "BV_UNKNOWN_VERT").copy(dimension = null),
+            storyItem(id = 5, aid = 105L, bvid = "BV_ZERO_DIM_LAND").copy(dimension = Dimension(0, 0, rotate = 0)),
+        )
+
+        val result = filterVerticalStoryItems(items) { bvid, _ ->
+            lookedUp += bvid
+            bvid == "BV_UNKNOWN_VERT"
+        }
+
+        assertEquals(
+            listOf("BV_VERT", "BV_ROTATED_PORTRAIT", "BV_UNKNOWN_VERT"),
+            result.map { it.playerArgs?.bvid }
+        )
+        assertEquals(listOf("BV_UNKNOWN_VERT", "BV_ZERO_DIM_LAND"), lookedUp)
     }
 }

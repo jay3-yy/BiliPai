@@ -148,6 +148,22 @@ import com.android.purebilibili.core.theme.LocalAppUiStyle
 internal fun shouldShowDanmakuSendInput(isPlayerCollapsed: Boolean): Boolean = !isPlayerCollapsed
 
 /** Trailing send/toggle chrome stays on both 简介 and 评论. */
+internal const val VIDEO_CONTENT_TAB_DOUBLE_TAP_WINDOW_MS = 350L
+
+internal fun isVideoContentTabDoubleTap(
+    selectedTabIndex: Int,
+    tappedTabIndex: Int,
+    lastTappedTabIndex: Int,
+    lastTapAtMs: Long,
+    nowMs: Long,
+    windowMs: Long = VIDEO_CONTENT_TAB_DOUBLE_TAP_WINDOW_MS,
+): Boolean {
+    if (selectedTabIndex != tappedTabIndex) return false
+    if (lastTappedTabIndex != tappedTabIndex || lastTapAtMs <= 0L) return false
+    val delta = nowMs - lastTapAtMs
+    return delta in 0L..windowMs
+}
+
 internal fun shouldShowVideoContentTabBarDanmakuActions(
     selectedTabIndex: Int,
 ): Boolean = selectedTabIndex == 0 || selectedTabIndex == 1
@@ -786,17 +802,49 @@ internal fun VideoContentSection(
     }
     val tabSelectionAnimationSpec = rememberVideoContentTabSelectionAnimationSpec()
     val latestOnSelectedTabChange by rememberUpdatedState(onSelectedTabChange)
+    var lastTabTapIndex by remember { mutableIntStateOf(-1) }
+    var lastTabTapAtMs by remember { mutableLongStateOf(0L) }
+
+    // 评论 Tab：「简介|评论」分段 nestedScroll 跟手折叠/展开，反向滑动立即打断。
+    // 「最热评论」标题文字不设开关、下滑必隐回顶出现，排序/搜索行由设置开关控制。
+    val commentHeaderCollapseState = remember(commentListState) { mutableFloatStateOf(0f) }
+    var commentHeaderCollapsePx by commentHeaderCollapseState
 
     val onTabSelected: (Int) -> Unit = { index ->
-        scope.launch {
-            // Continue from the live page offset when a tap interrupts a swipe or another
-            // tap. The helper takes over the scroll mutation without resetting the offset.
-            // Native and glass retain their own timing and fling behavior above.
-            animatePagerSelection(
-                pagerState = pagerState,
-                targetPage = index,
-                animationSpec = tabSelectionAnimationSpec,
-            )
+        val nowMs = android.os.SystemClock.uptimeMillis()
+        val isDoubleTap = isVideoContentTabDoubleTap(
+            selectedTabIndex = pagerState.currentPage,
+            tappedTabIndex = index,
+            lastTappedTabIndex = lastTabTapIndex,
+            lastTapAtMs = lastTabTapAtMs,
+            nowMs = nowMs,
+        )
+        if (isDoubleTap) {
+            lastTabTapIndex = -1
+            lastTabTapAtMs = 0L
+            scope.launch {
+                if (index == 0) {
+                    introListState.animateScrollToTop()
+                } else {
+                    commentListState.animateScrollToTop()
+                }
+                commentHeaderCollapsePx = 0f
+            }
+        } else {
+            lastTabTapIndex = index
+            lastTabTapAtMs = nowMs
+            if (index != pagerState.currentPage) {
+                scope.launch {
+                    // Continue from the live page offset when a tap interrupts a swipe or another
+                    // tap. The helper takes over the scroll mutation without resetting the offset.
+                    // Native and glass retain their own timing and fling behavior above.
+                    animatePagerSelection(
+                        pagerState = pagerState,
+                        targetPage = index,
+                        animationSpec = tabSelectionAnimationSpec,
+                    )
+                }
+            }
         }
     }
     LaunchedEffect(pagerState) {
@@ -836,10 +884,6 @@ internal fun VideoContentSection(
     val commentHeaderHeightProvider = remember(chromeMeasurements) {
         { chromeMeasurements.commentHeightPx.toFloat() }
     }
-    // 标签栏不再随滚动收起；滚动折叠机制整体转移到浮动评论栏：
-    // 「最热评论」标题文字不设开关、下滑必隐回顶出现，排序/搜索行由设置开关控制。
-    val commentHeaderCollapseState = remember(commentListState) { mutableFloatStateOf(0f) }
-    var commentHeaderCollapsePx by commentHeaderCollapseState
     val commentListAtTop by remember(commentListState) {
         derivedStateOf {
             isVideoContentCommentListAtTop(

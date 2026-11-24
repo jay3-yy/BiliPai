@@ -924,25 +924,47 @@ private fun VideoPlayerSectionContent(
             return@LaunchedEffect
         }
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            while (true) {
-                val player = playerState.player
-                val duration = player.duration
-                val pos = player.currentPosition
-                val nextSeconds = if (player.isPlaying) {
-                    com.android.purebilibili.feature.video.ui.components.resolveEndScreenCountdownSeconds(
-                        positionMs = pos,
-                        durationMs = duration,
-                    )
-                } else {
-                    null
+            val player = playerState.player
+            val events = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+            val listener = object : Player.Listener {
+                override fun onEvents(player: Player, playerEvents: Player.Events) {
+                    events.trySend(Unit)
                 }
-                endScreenCountdownSeconds = nextSeconds
-                val sleepMs = when {
-                    nextSeconds != null -> 500L
-                    duration > 0L && duration - pos > 12_000L -> minOf(duration - pos - 9_000L, 4_000L)
-                    else -> 1_000L
+            }
+            player.addListener(listener)
+            try {
+                while (true) {
+                    val duration = player.duration
+                    val pos = player.currentPosition
+                    val playing = player.isPlaying
+                    val nextSeconds = if (playing) {
+                        com.android.purebilibili.feature.video.ui.components.resolveEndScreenCountdownSeconds(
+                            positionMs = pos,
+                            durationMs = duration,
+                        )
+                    } else {
+                        null
+                    }
+                    endScreenCountdownSeconds = nextSeconds
+                    val sleepMs = when {
+                        !playing || duration <= 0L -> null
+                        nextSeconds != null -> 500L
+                        else -> {
+                            val remaining = (duration - pos.coerceAtLeast(0L)).coerceAtLeast(0L)
+                            val speed = player.playbackParameters.speed
+                                .takeIf { it.isFinite() && it > 0f }?.coerceIn(0.25f, 4f) ?: 1f
+                            ((remaining - 10_000L) / speed).toLong().coerceIn(500L, 60_000L)
+                        }
+                    }
+                    if (sleepMs == null) {
+                        events.receive()
+                    } else {
+                        kotlinx.coroutines.withTimeoutOrNull(sleepMs) { events.receive() }
+                    }
                 }
-                delay(sleepMs)
+            } finally {
+                player.removeListener(listener)
+                events.close()
             }
         }
     }
@@ -2373,222 +2395,60 @@ private fun VideoPlayerSectionContent(
                     "playWhenReady=${playerState.player.playWhenReady} playbackState=${playerState.player.playbackState}"
             }
             //  [新增] 处理双指缩放/平移，并在全屏时支持双指调倍速
-            .pointerInput(
-                currentPlaybackIdentity,
-                playerState.player,
-                isFullscreen,
-                isInPipMode,
-                isScreenLocked,
-                twoFingerSpeedMode,
-                playbackSpeedOptions,
-                isPortraitFullscreen,
-            ) {
-                if (!shouldEnableInlinePlayerGestures(isPortraitFullscreen)) {
-                    return@pointerInput
-                }
-                try {
-                    var lastTwoFingerTapAtMs = 0L
-                    var lastTwoFingerTapForward: Boolean? = null
-                    awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    var totalPanX = 0f
-                    var totalPanY = 0f
-                    var lockedAxis: LockedTwoFingerSpeedAxis? = null
-                    var gestureStartSpeed = playerState.player.playbackParameters.speed
-                    val directionThresholdPx = viewConfiguration.touchSlop * 1.5f
-                    var observedMultiTouch = false
-                    var viewportTransformObserved = false
-                    var twoFingerStartedAtMs = 0L
-                    var twoFingerCentroidX = -1f
-
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val pressedCount = event.changes.count { it.pressed }
-                        if (pressedCount == 0) {
-                            isMultiTouchActive = false
-                            break
-                        }
-                        if (pressedCount < 2) {
-                            if (observedMultiTouch) {
-                                isMultiTouchActive = false
-                                break
-                            }
-                            continue
-                        }
-                        if (!observedMultiTouch && pressedCount == 2) {
-                            twoFingerStartedAtMs = android.os.SystemClock.uptimeMillis()
-                            val active = event.changes.filter { it.pressed }
-                            twoFingerCentroidX = active.map { it.position.x }.average().toFloat()
-                        }
-                        observedMultiTouch = true
-                        isMultiTouchActive = true
-
-                        if (isLongPressing) {
-                            finishLongPressSpeedGesture(gestureEnded = true)
-                        }
-
-                        val pan = event.calculatePan()
-                        val zoom = event.calculateZoom()
-                        if (kotlin.math.abs(zoom - 1f) > 0.005f) {
-                            viewportTransformObserved = true
-                        }
-                        totalPanX += pan.x
-                        totalPanY += pan.y
-
-                        val speedModeAllowed = isFullscreen &&
-                            !isInPipMode &&
-                            !isScreenLocked &&
-                            !viewportTransformObserved &&
-                            twoFingerSpeedMode != TwoFingerSpeedGestureMode.Off
-
-                        if (speedModeAllowed && lockedAxis == null) {
-                            lockedAxis = resolveLockedTwoFingerSpeedAxis(
-                                mode = twoFingerSpeedMode,
-                                totalDragX = totalPanX,
-                                totalDragY = totalPanY,
-                                thresholdPx = directionThresholdPx
-                            )
-                            if (lockedAxis != null) {
-                                gestureStartSpeed = playerState.player.playbackParameters.speed
-                                showControls = false
-                                isGestureVisible = false
-                            }
-                        }
-
-                        if (speedModeAllowed && lockedAxis != null) {
-                            val resolvedSpeed = resolveTwoFingerGesturePlaybackSpeed(
-                                startSpeed = gestureStartSpeed,
-                                mode = twoFingerSpeedMode,
-                                totalDragX = totalPanX,
-                                totalDragY = totalPanY,
-                                containerWidthPx = size.width.toFloat(),
-                                containerHeightPx = size.height.toFloat(),
-                                supportedSpeeds = playbackSpeedOptions
-                            )
-                            val effectiveSpeed = resolveEffectivePlaybackSpeed(
-                                requestedSpeed = resolvedSpeed,
-                                currentAudioQuality = currentAudioQuality
-                            )
-                            if (abs(playerState.player.playbackParameters.speed - effectiveSpeed) > 0.001f) {
-                                applyExplicitPlaybackSpeedChange(resolvedSpeed)
-                            }
+            .videoPlayerMultiTouchGestures(
+                currentPlaybackIdentity = currentPlaybackIdentity,
+                player = playerState.player,
+                isFullscreen = isFullscreen,
+                isInPipMode = isInPipMode,
+                isScreenLocked = isScreenLocked,
+                twoFingerSpeedMode = twoFingerSpeedMode,
+                playbackSpeedOptions = playbackSpeedOptions,
+                isPortraitFullscreen = isPortraitFullscreen,
+                callbacks = remember(playerState.player, currentPlaybackIdentity) {
+                    VideoPlayerMultiTouchCallbacks(
+                        getScale = { scale },
+                        setScale = { scale = it },
+                        getPanX = { panX },
+                        setPanX = { panX = it },
+                        getPanY = { panY },
+                        setPanY = { panY = it },
+                        setMultiTouchActive = { isMultiTouchActive = it },
+                        isLongPressing = { isLongPressing },
+                        onFinishLongPress = { finishLongPressSpeedGesture(gestureEnded = true) },
+                        isVerticalVideo = { isVerticalVideo },
+                        getCurrentAudioQuality = { currentAudioQuality },
+                        onHideControlsAndGesture = {
+                            showControls = false
+                            isGestureVisible = false
+                        },
+                        onApplyPlaybackSpeed = { applyExplicitPlaybackSpeedChange(it) },
+                        onShowTwoFingerSpeedFeedback = { effectiveSpeed ->
                             twoFingerFeedbackSpeed = effectiveSpeed
                             twoFingerSpeedFeedbackVisible = true
                             twoFingerSpeedFeedbackRevision++
-                            event.changes.forEach { change ->
-                                if (change.position != change.previousPosition) {
-                                    change.consume()
-                                }
-                            }
-                            continue
-                        }
-
-                        if (
-                            shouldEnableViewportTransformGesture(
-                                isScreenLocked = isScreenLocked,
-                                isFullscreen = isFullscreen,
-                                isPortraitFullscreen = isPortraitFullscreen,
-                                isVerticalVideo = isVerticalVideo,
-                            ) && (zoom != 1f || pan != Offset.Zero)
-                        ) {
-                            scale = (scale * zoom).coerceIn(1f, 5f)
-
-                            if (scale > 1f) {
-                                val maxPanX = (size.width * scale - size.width) / 2
-                                val maxPanY = (size.height * scale - size.height) / 2
-                                panX = (panX + pan.x * scale).coerceIn(-maxPanX, maxPanX)
-                                panY = (panY + pan.y * scale).coerceIn(-maxPanY, maxPanY)
-                                isGestureVisible = false
-                                showControls = false
-                            } else {
-                                panX = 0f
-                                panY = 0f
-                            }
-
-                            event.changes.forEach { change ->
-                                if (change.position != change.previousPosition) {
-                                    change.consume()
-                                }
-                            }
-                        }
-                    }
-                    if (
-                        observedMultiTouch &&
-                        !viewportTransformObserved &&
-                        lockedAxis == null &&
-                        currentTwoFingerChapterSkipEnabled &&
-                        !isScreenLocked &&
-                        !isInPipMode &&
-                        twoFingerStartedAtMs > 0L &&
-                        twoFingerCentroidX >= 0f &&
-                        size.width > 0
-                    ) {
-                        val nowMs = android.os.SystemClock.uptimeMillis()
-                        val tapDurationMs = nowMs - twoFingerStartedAtMs
-                        val movedDist = kotlin.math.hypot(totalPanX.toDouble(), totalPanY.toDouble())
-                        if (tapDurationMs <= 260L && movedDist < directionThresholdPx) {
-                            val relativeX = twoFingerCentroidX / size.width.toFloat()
-                            val sideForward = when {
-                                relativeX > 0.55f -> true
-                                relativeX < 0.45f -> false
-                                else -> null
-                            }
-                            if (sideForward != null) {
-                                if (lastTwoFingerTapForward == sideForward && nowMs - lastTwoFingerTapAtMs <= 420L) {
-                                    lastTwoFingerTapAtMs = 0L
-                                    lastTwoFingerTapForward = null
-                                    val target = resolveAdjacentChapterTarget(
-                                        currentPositionMs = playerState.player.currentPosition,
-                                        viewPoints = currentViewPoints,
-                                        forward = sideForward,
-                                    )
-                                    if (target != null) {
-                                        seekSceneHaptic.performHapticFeedback(
-                                            androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
-                                        )
-                                        commitExplicitSeek(target.positionMs)
-                                        seekFeedbackGeneration += 1L
-                                        seekFeedbackText = "${if (target.isNext) "下一章" else "上一章"} · ${target.title.take(12)}"
-                                        seekFeedbackVisible = true
-                                    }
-                                } else {
-                                    lastTwoFingerTapAtMs = nowMs
-                                    lastTwoFingerTapForward = sideForward
-                                }
-                            }
-                        }
-                    }
-                    if (viewportTransformObserved) {
-                        val videoSize = playerState.player.videoSize
-                        val fillScale = resolveFillZoomScale(
-                            containerWidth = size.width,
-                            containerHeight = size.height,
-                            videoWidth = videoSize.width,
-                            videoHeight = videoSize.height,
-                        )
-                        val releaseResult = resolvePinchZoomReleaseScale(
-                            currentScale = scale,
-                            fillScale = fillScale,
-                            snapEnabled = currentPinchZoomSnapAndBadgeEnabled,
-                        )
-                        scale = releaseResult.scale
-                        if (releaseResult.resetPan) {
-                            panX = 0f
-                            panY = 0f
-                        }
-                        if (releaseResult.snappedToFill) {
+                        },
+                        isTwoFingerChapterSkipEnabled = { currentTwoFingerChapterSkipEnabled },
+                        getViewPoints = { currentViewPoints },
+                        onChapterSeek = { positionMs, feedbackText ->
+                            seekSceneHaptic.performHapticFeedback(
+                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+                            )
+                            commitExplicitSeek(positionMs)
+                            seekFeedbackGeneration += 1L
+                            seekFeedbackText = feedbackText
+                            seekFeedbackVisible = true
+                        },
+                        isPinchZoomSnapAndBadgeEnabled = { currentPinchZoomSnapAndBadgeEnabled },
+                        onZoomSnappedToFill = {
                             haptic.performHapticFeedback(
                                 androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
                             )
                             zoomSnapHintText = "已缩放至铺满画面"
                             zoomSnapHintGeneration += 1L
-                        }
-                    }
-                    }
-                } finally {
-                    isMultiTouchActive = false
-                }
-            }
+                        },
+                    )
+                },
+            )
             //  先处理拖拽手势 (音量/亮度/进度)
             .pointerInput(
                 currentPlaybackIdentity,
@@ -2597,7 +2457,6 @@ private fun VideoPlayerSectionContent(
                 isScreenLocked,
                 isFullscreen,
                 isVerticalVideo,
-                showControls,
                 portraitSwipeToFullscreenEnabled,
                 centerSwipeToFullscreenEnabled,
                 slideVolumeBrightnessEnabled,
@@ -3109,9 +2968,6 @@ private fun VideoPlayerSectionContent(
                 longPressSpeed,
                 isScreenLocked,
                 currentAudioQuality,
-                hasShownHiResCompatHint,
-                scale,
-                isMultiTouchActive,
                 isFullscreen,
                 longPressSpeedLockEnabled,
                 longPressSpeedSlideAdjustEnabled,
@@ -3259,6 +3115,13 @@ private fun VideoPlayerSectionContent(
                         }
                         // 🔒 锁定时禁用双击
                         if (isScreenLocked) return@detectPlayerTapGestures
+                        // 放大状态下双击直接复位画幅，避免锁在缩放态
+                        if (scale > 1.01f) {
+                            scale = 1f
+                            panX = 0f
+                            panY = 0f
+                            return@detectPlayerTapGestures
+                        }
 
                         val screenWidth = size.width.toFloat()
                         val player = playerState.player
@@ -4297,6 +4160,9 @@ private fun VideoPlayerSectionContent(
                 }
 
                 if (isPlayerSurfaceReady && shouldUseAnime4kPipeline) {
+                    val lastAnime4kDisplayState = remember(playerState.player) {
+                        arrayOfNulls<Any>(6)
+                    }
                     AndroidView(
                         factory = { ctx ->
                             Anime4KGLSurfaceView(ctx, initialConfig = anime4kConfig).apply {
@@ -4317,37 +4183,53 @@ private fun VideoPlayerSectionContent(
                                         anime4kInputSurface = null
                                     }
                                 }
+                                val displayScaleMode = viewportAspectRatio.toAnime4KDisplayScaleMode()
                                 updateConfig(anime4kConfig)
                                 updateInputSize(videoSizeState.first, videoSizeState.second)
                                 updateFlip(effectiveFlippedHorizontal, effectiveFlippedVertical)
-                                updateDisplayScaleMode(viewportAspectRatio.toAnime4KDisplayScaleMode())
+                                updateDisplayScaleMode(displayScaleMode)
+                                lastAnime4kDisplayState[0] = anime4kConfig
+                                lastAnime4kDisplayState[1] = videoSizeState.first
+                                lastAnime4kDisplayState[2] = videoSizeState.second
+                                lastAnime4kDisplayState[3] = effectiveFlippedHorizontal
+                                lastAnime4kDisplayState[4] = effectiveFlippedVertical
+                                lastAnime4kDisplayState[5] = displayScaleMode
                                 visibility = View.VISIBLE
                             }
                         },
                         update = { surfaceView ->
                             anime4kSurfaceViewRef = surfaceView
-                            surfaceView.onInputSurfaceChanged = { surface ->
-                                if (anime4kSurfaceViewRef === surfaceView) {
-                                    anime4kInputSurface = surface
-                                    if (surface == null) anime4kDisplayedFirstFrame = false
-                                }
+                            val displayScaleMode = viewportAspectRatio.toAnime4KDisplayScaleMode()
+                            if (lastAnime4kDisplayState[0] != anime4kConfig) {
+                                surfaceView.updateConfig(anime4kConfig)
+                                lastAnime4kDisplayState[0] = anime4kConfig
                             }
-                            surfaceView.onFirstFrameRendered = {
-                                if (anime4kSurfaceViewRef === surfaceView) anime4kDisplayedFirstFrame = true
+                            if (lastAnime4kDisplayState[1] != videoSizeState.first ||
+                                lastAnime4kDisplayState[2] != videoSizeState.second
+                            ) {
+                                surfaceView.updateInputSize(videoSizeState.first, videoSizeState.second)
+                                lastAnime4kDisplayState[1] = videoSizeState.first
+                                lastAnime4kDisplayState[2] = videoSizeState.second
                             }
-                            surfaceView.onPipelineError = { error ->
-                                if (anime4kSurfaceViewRef === surfaceView) {
-                                    Logger.e("VideoPlayerSection", "Anime4K 管线不可用，已回退原始视频输出", error)
-                                    anime4kPipelineFailed = true
-                                    anime4kInputSurface = null
-                                }
+                            if (lastAnime4kDisplayState[3] != effectiveFlippedHorizontal ||
+                                lastAnime4kDisplayState[4] != effectiveFlippedVertical
+                            ) {
+                                surfaceView.updateFlip(effectiveFlippedHorizontal, effectiveFlippedVertical)
+                                lastAnime4kDisplayState[3] = effectiveFlippedHorizontal
+                                lastAnime4kDisplayState[4] = effectiveFlippedVertical
                             }
-                            surfaceView.updateConfig(anime4kConfig)
-                            surfaceView.updateInputSize(videoSizeState.first, videoSizeState.second)
-                            surfaceView.updateFlip(effectiveFlippedHorizontal, effectiveFlippedVertical)
-                            surfaceView.updateDisplayScaleMode(viewportAspectRatio.toAnime4KDisplayScaleMode())
-                            surfaceView.visibility = if (sharedSurfaceVisible) View.VISIBLE else View.INVISIBLE
-                            surfaceView.alpha = if (sharedSurfaceVisible) 1f else 0f
+                            if (lastAnime4kDisplayState[5] != displayScaleMode) {
+                                surfaceView.updateDisplayScaleMode(displayScaleMode)
+                                lastAnime4kDisplayState[5] = displayScaleMode
+                            }
+                            val targetVisibility = if (sharedSurfaceVisible) View.VISIBLE else View.INVISIBLE
+                            if (surfaceView.visibility != targetVisibility) {
+                                surfaceView.visibility = targetVisibility
+                            }
+                            val targetAlpha = if (sharedSurfaceVisible) 1f else 0f
+                            if (surfaceView.alpha != targetAlpha) {
+                                surfaceView.alpha = targetAlpha
+                            }
                         },
                         onRelease = { surfaceView ->
                             surfaceView.onInputSurfaceChanged = {}

@@ -95,6 +95,7 @@ internal fun rememberVideoPlayerOverlayProgress(
             hasPendingSeekResume, highFrequencyProgressActive,
         ) {
             if (!samplingActive) return@produceState
+            var lastEmitted: PlayerProgress? = null
             observeVideoPlayerProgress(
                 player = player,
                 videoDuration = videoDuration,
@@ -106,8 +107,11 @@ internal fun rememberVideoPlayerOverlayProgress(
                     highFrequencyProgressActive = highFrequencyProgressActive,
                 ),
             ) { progress ->
-                value = progress
-                currentOnProgress.value(progress)
+                if (progress != lastEmitted) {
+                    lastEmitted = progress
+                    value = progress
+                    currentOnProgress.value(progress)
+                }
             }
         }
     }

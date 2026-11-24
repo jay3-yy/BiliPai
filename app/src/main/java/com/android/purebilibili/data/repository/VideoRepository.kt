@@ -1036,10 +1036,16 @@ object VideoRepository {
     suspend fun getCreatorCardStats(mid: Long): Result<CreatorCardStats> = VideoCatalogRepository.getCreatorCardStats(mid)
     fun getCachedCreatorCardStats(mid: Long): CreatorCardStats? = VideoCatalogRepository.getCachedCreatorCardStats(mid)
 
-    suspend fun isVerticalVideo(bvid: String, aid: Long = 0L): Boolean = withContext(Dispatchers.IO) {
+    suspend fun isVerticalVideo(
+        bvid: String,
+        aid: Long = 0L,
+        minVerticalRatio: Float = 1.0f,
+    ): Boolean = withContext(Dispatchers.IO) {
         val normalizedBvid = bvid.trim()
         if (normalizedBvid.isEmpty() && aid <= 0L) return@withContext false
-        val cacheKey = normalizedBvid.ifEmpty { "av$aid" }
+        val threshold = minVerticalRatio.coerceIn(0.8f, 1.5f)
+        val baseKey = normalizedBvid.ifEmpty { "av$aid" }
+        val cacheKey = if (threshold == 1.0f) baseKey else "$baseKey@r${(threshold * 100f).toInt()}"
         verticalVideoCache[cacheKey]?.let { return@withContext it }
         try {
             val lookup = resolveVideoInfoLookupInput(rawBvid = normalizedBvid, aid = aid)
@@ -1053,18 +1059,19 @@ object VideoRepository {
                     ?.data
                     ?.firstOrNull()
                     ?.dimension
+                    ?.takeIf { it.width > 0 && it.height > 0 }
             } else {
                 null
             }
             val isVertical = if (pageDimension != null) {
-                pageDimension.isVertical
+                pageDimension.isVerticalAtRatio(threshold)
             } else {
                 val viewResp = if (lookup.bvid.isNotEmpty()) {
                     api.getVideoInfo(lookup.bvid)
                 } else {
                     api.getVideoInfoByAid(lookup.aid)
                 }
-                viewResp.data?.dimension?.isVertical == true
+                viewResp.data?.dimension?.isVerticalAtRatio(threshold) == true
             }
             verticalVideoCache.put(cacheKey, isVertical)
             isVertical

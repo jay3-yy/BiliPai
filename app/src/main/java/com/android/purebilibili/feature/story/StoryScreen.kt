@@ -65,9 +65,23 @@ fun StoryScreen(
 
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val onlyVerticalRecommendations by com.android.purebilibili.core.store.SettingsManager
-        .getPortraitOnlyVerticalRecommendations(context)
-        .collectAsStateWithLifecycle(initialValue = false)
+    val onlyVerticalRecommendations by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager
+            .getPortraitOnlyVerticalRecommendations(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = remember(context) {
+            com.android.purebilibili.core.store.SettingsManager
+                .peekPortraitOnlyVerticalRecommendations()
+        }
+    )
+    // Keep verticalVideoRatio synchronized for StoryFeedSession's filterVerticalStoryItems.
+    val verticalVideoRatio by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getVerticalVideoRatio(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.SettingsManager.getCurrentVerticalVideoRatio()
+    )
+    @Suppress("UNUSED_VARIABLE")
+    val observedVerticalVideoRatio = verticalVideoRatio
     LaunchedEffect(context) {
         engagementViewModel.initWithContext(context)
     }
@@ -107,16 +121,22 @@ fun StoryScreen(
     val accountIdentity by com.android.purebilibili.core.store.TokenManager.accountIdentity
         .collectAsStateWithLifecycle()
     // 队列归属跟随已落定的标签页；转场暂时停工不能丢弃当前播放位置。
-    DisposableEffect(viewModel, seedBvid, isFeedEntrySelected, accountIdentity) {
-        if (isFeedEntrySelected) viewModel.startFeed(seedBvid)
+    DisposableEffect(viewModel, seedBvid, isFeedEntrySelected, accountIdentity, onlyVerticalRecommendations) {
+        val resolvedOnlyVertical = onlyVerticalRecommendations
+        if (isFeedEntrySelected && resolvedOnlyVertical != null) {
+            viewModel.startFeed(seedBvid, onlyVertical = resolvedOnlyVertical)
+        }
         onDispose { viewModel.stopFeed() }
     }
     // 从账号用途设置等覆盖页返回时，重新核对推荐账号，未变化时保留当前队列。
-    LaunchedEffect(viewModel, seedBvid, isActive, isFeedEntrySelected, accountIdentity) {
-        if (isActive && isFeedEntrySelected) viewModel.startFeed(seedBvid)
+    LaunchedEffect(viewModel, seedBvid, isActive, isFeedEntrySelected, accountIdentity, onlyVerticalRecommendations) {
+        val resolvedOnlyVertical = onlyVerticalRecommendations
+        if (isActive && isFeedEntrySelected && resolvedOnlyVertical != null) {
+            viewModel.startFeed(seedBvid, onlyVertical = resolvedOnlyVertical)
+        }
     }
-    val portraitFeed = remember(uiState.items, seed) {
-        buildStoryPortraitFeed(uiState.items, seed = seed)
+    val portraitFeed = remember(uiState.items, seed, onlyVerticalRecommendations) {
+        if (onlyVerticalRecommendations == null) null else buildStoryPortraitFeed(uiState.items, seed = seed)
     }
     var latestExitSnapshot by remember(uiState.sessionId) { mutableStateOf<StoryPortraitExitSnapshot?>(null) }
 
@@ -126,11 +146,22 @@ fun StoryScreen(
             .background(Color.Black)
     ) {
         when {
-            portraitFeed == null && uiState.isLoading -> {
-                com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
+            onlyVerticalRecommendations == null || (portraitFeed == null && uiState.isLoading) -> {
+                Column(
                     modifier = Modifier.align(Alignment.Center),
-                    color = Color.White
-                )
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    com.android.purebilibili.core.ui.CutePersonLoadingIndicator(
+                        color = Color.White
+                    )
+                    if (onlyVerticalRecommendations == true) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        AppText(
+                            text = "正在筛选竖屏视频…",
+                            color = Color.White.copy(alpha = 0.78f)
+                        )
+                    }
+                }
             }
 
             portraitFeed == null && uiState.error != null -> {
@@ -160,7 +191,7 @@ fun StoryScreen(
                             recommendationLoadInProgress = uiState.isLoading,
                             recommendationLoadError = uiState.error,
                             onLoadMoreRecommendations = viewModel::loadMoreStories,
-                            onlyVerticalRecommendations = onlyVerticalRecommendations,
+                            onlyVerticalRecommendations = onlyVerticalRecommendations == true,
                             isActive = isActive,
                             onBack = onBack,
                             onHomeClick = onBack,

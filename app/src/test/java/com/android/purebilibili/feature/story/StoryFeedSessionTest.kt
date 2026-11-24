@@ -383,6 +383,56 @@ class StoryFeedSessionTest {
         session.stopFeed()
     }
 
+    @Test
+    fun `onlyVertical filters out horizontal items and continues fetching until vertical videos arrive`() = runTest {
+        val verticalIds = setOf(4L, 5L)
+        val pages = mapOf(
+            1 to clips(1, 2),
+            2 to clips(3, 4, 5)
+        )
+        val session = StoryFeedSession(
+            this,
+            loadStory = { _, page -> Result.success(pages[page].orEmpty()) },
+            loadHome = { error("HOME should not be requested when Story yields vertical videos") },
+            store = StoryContinuationStore(),
+            accountKey = { "a" },
+            filterVerticalItems = { items -> items.filter { it.id in verticalIds } }
+        )
+        session.startFeed(onlyVertical = true)
+        runCurrent()
+
+        assertEquals(listOf(4L, 5L), session.state.value.items.map { it.id })
+        assertFalse(session.state.value.isLoading)
+        session.stopFeed()
+    }
+
+    @Test
+    fun `enabling onlyVertical discards unfiltered continuation items while preserving watched history`() = runTest {
+        val store = StoryContinuationStore()
+        val verticalIds = setOf(4L)
+        val pages = mapOf(
+            1 to clips(1, 2, 3),
+            2 to clips(2, 4)
+        )
+        val session = StoryFeedSession(
+            this,
+            loadStory = { _, page -> Result.success(pages[page].orEmpty()) },
+            loadHome = { error("HOME should not be requested") },
+            store = store,
+            accountKey = { "a" },
+            filterVerticalItems = { items -> items.filter { it.id in verticalIds } }
+        )
+        session.startFeed(onlyVertical = false)
+        runCurrent()
+        session.updateCurrentVideo("BV1")
+        session.stopFeed()
+
+        session.startFeed(onlyVertical = true)
+        runCurrent()
+        assertEquals(listOf(4L), session.state.value.items.map { it.id })
+        session.stopFeed()
+    }
+
     private fun clips(vararg ids: Int): List<StoryItem> = ids.map(::clip)
 
     private fun clip(id: Int) = StoryItem(

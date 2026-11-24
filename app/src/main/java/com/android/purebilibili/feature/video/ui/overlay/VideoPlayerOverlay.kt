@@ -462,7 +462,10 @@ fun VideoPlayerOverlay(
     androidx.compose.runtime.CompositionLocalProvider(
         com.android.purebilibili.core.ui.LocalAppThemeConfig provides config.copy(liquidGlassEnabled = config.playerGlassEnabled),
     ) {
-        PlayerControlsBackdropHost(enabled = true, modifier = Modifier.fillMaxSize()) {
+        PlayerControlsBackdropHost(
+            enabled = com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current,
+            modifier = Modifier.fillMaxSize(),
+        ) {
             VideoPlayerOverlayContent(state, actions, topBarExtraActions)
         }
     }

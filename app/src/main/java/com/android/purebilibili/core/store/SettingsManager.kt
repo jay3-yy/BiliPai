@@ -6608,9 +6608,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_LAUNCH_TO_PORTRAIT_FEED_ON_STARTUP = booleanPreferencesKey("launch_to_portrait_feed_on_startup")
     private val KEY_PORTRAIT_ONLY_VERTICAL_RECOMMENDATIONS =
         booleanPreferencesKey("portrait_only_vertical_recommendations")
+    @Volatile
+    private var cachedPortraitOnlyVerticalRecommendations: Boolean? = null
     private const val PORTRAIT_STARTUP_CACHE_PREFS = "portrait_startup_cache"
     private const val CACHE_KEY_LAUNCH_TO_PORTRAIT_FEED = "enabled"
     private val KEY_VERTICAL_VIDEO_RATIO = floatPreferencesKey("vertical_video_ratio")
+    @Volatile
+    private var cachedVerticalVideoRatio: Float = 1.0f
     
     // --- 竖屏全屏功能开关 (默认开启) ---
     // [New] Easter Egg: Enable Auto Jump after Triple Action
@@ -6688,13 +6692,20 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences -> preferences[KEY_AUTO_PORTRAIT_FULLSCREEN] = value }
     }
 
+    /** Last observed value in this process; null before DataStore emits so callers wait instead of assuming false. */
+    fun peekPortraitOnlyVerticalRecommendations(): Boolean? =
+        cachedPortraitOnlyVerticalRecommendations
+
     /** Whether the portrait pager should exclude landscape recommendations (default disabled). */
     fun getPortraitOnlyVerticalRecommendations(context: Context): Flow<Boolean> =
         context.settingsDataStore.data.map { preferences ->
-            preferences[KEY_PORTRAIT_ONLY_VERTICAL_RECOMMENDATIONS] ?: false
+            (preferences[KEY_PORTRAIT_ONLY_VERTICAL_RECOMMENDATIONS] ?: false).also {
+                cachedPortraitOnlyVerticalRecommendations = it
+            }
         }
 
     suspend fun setPortraitOnlyVerticalRecommendations(context: Context, value: Boolean) {
+        cachedPortraitOnlyVerticalRecommendations = value
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_PORTRAIT_ONLY_VERTICAL_RECOMMENDATIONS] = value
         }
@@ -6733,13 +6744,21 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
     
+    fun getCurrentVerticalVideoRatio(): Float = cachedVerticalVideoRatio
+
     // --- 竖屏视频判断比例 (高度/宽度 > ratio 视为竖屏，默认 1.0) ---
     fun getVerticalVideoRatio(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_VERTICAL_VIDEO_RATIO] ?: 1.0f }
+        .map { preferences ->
+            (preferences[KEY_VERTICAL_VIDEO_RATIO] ?: 1.0f).coerceIn(0.8f, 1.5f).also {
+                cachedVerticalVideoRatio = it
+            }
+        }
 
     suspend fun setVerticalVideoRatio(context: Context, value: Float) {
+        val clamped = value.coerceIn(0.8f, 1.5f)
+        cachedVerticalVideoRatio = clamped
         context.settingsDataStore.edit { preferences -> 
-            preferences[KEY_VERTICAL_VIDEO_RATIO] = value.coerceIn(0.8f, 1.5f)  // 合理范围
+            preferences[KEY_VERTICAL_VIDEO_RATIO] = clamped  // 合理范围
         }
     }
     

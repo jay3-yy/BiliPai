@@ -470,7 +470,7 @@ fun VideoPlayerOverlay(
     // Keep the non-inline backdrop slot small. Capturing this screen's locals
     // here exceeds DEX's 255 argument-register limit in synthetic constructors.
     PlayerControlsBackdropHost(
-        enabled = true,
+        enabled = com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current,
         modifier = Modifier.fillMaxSize(),
     ) {
         VideoPlayerOverlayContent(state, actions)

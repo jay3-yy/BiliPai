@@ -9,12 +9,28 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import com.android.purebilibili.core.store.PlayerSettingsCache
 import com.android.purebilibili.data.model.response.DashVideo
+import java.util.concurrent.ConcurrentHashMap
 
 internal data class VideoTrackDecoderSupport(
     val supported: Boolean,
     val hardware: Boolean,
     val software: Boolean,
 )
+
+internal data class VideoTrackCapabilityCacheKey(
+    val codecs: String,
+    val width: Int,
+    val height: Int,
+    val frameRate: String,
+)
+
+internal fun resolveVideoTrackCapabilityCacheKey(track: DashVideo): VideoTrackCapabilityCacheKey =
+    VideoTrackCapabilityCacheKey(
+        codecs = track.codecs.trim(),
+        width = track.width.coerceAtLeast(0),
+        height = track.height.coerceAtLeast(0),
+        frameRate = track.frameRate.trim(),
+    )
 
 /** 仅在同画质内优先匹配解码偏好，避免用低画质硬解替代用户选择的高画质。 */
 internal fun selectPlayableVideoTracks(
@@ -53,20 +69,45 @@ internal fun buildVideoTrackCapabilityFormat(track: DashVideo): Format {
 }
 
 internal object VideoTrackCapabilities {
-    fun filterForPlayback(context: Context, tracks: List<DashVideo>): List<DashVideo> =
-        selectPlayableVideoTracks(tracks, PlayerSettingsCache.isHwDecodeEnabled(context)) { track ->
-            val format = buildVideoTrackCapabilityFormat(track)
-            if (format.sampleMimeType == null) {
-                VideoTrackDecoderSupport(supported = false, hardware = false, software = false)
-            } else {
-                val decoders = MediaCodecUtil.getDecoderInfosSoftMatch(
-                    MediaCodecSelector.DEFAULT, format, false, false,
-                ).filter { it.isFormatSupported(context, format) }
-                VideoTrackDecoderSupport(
-                    supported = decoders.isNotEmpty(),
-                    hardware = decoders.any { it.hardwareAccelerated },
-                    software = decoders.any { it.softwareOnly },
-                )
+    private const val MAX_CACHE_ENTRIES = 256
+    private val supportCache = ConcurrentHashMap<VideoTrackCapabilityCacheKey, VideoTrackDecoderSupport>()
+
+    internal fun getOrQuerySupport(
+        track: DashVideo,
+        query: (DashVideo) -> VideoTrackDecoderSupport,
+    ): VideoTrackDecoderSupport {
+        val key = resolveVideoTrackCapabilityCacheKey(track)
+        supportCache[key]?.let { return it }
+        val resolved = query(track)
+        if (supportCache.size >= MAX_CACHE_ENTRIES) {
+            supportCache.clear()
+        }
+        supportCache[key] = resolved
+        return resolved
+    }
+
+    internal fun clearCacheForTest() {
+        supportCache.clear()
+    }
+
+    fun filterForPlayback(context: Context, tracks: List<DashVideo>): List<DashVideo> {
+        val appContext = context.applicationContext
+        return selectPlayableVideoTracks(tracks, PlayerSettingsCache.isHwDecodeEnabled(appContext)) { track ->
+            getOrQuerySupport(track) { candidate ->
+                val format = buildVideoTrackCapabilityFormat(candidate)
+                if (format.sampleMimeType == null) {
+                    VideoTrackDecoderSupport(supported = false, hardware = false, software = false)
+                } else {
+                    val decoders = MediaCodecUtil.getDecoderInfosSoftMatch(
+                        MediaCodecSelector.DEFAULT, format, false, false,
+                    ).filter { it.isFormatSupported(appContext, format) }
+                    VideoTrackDecoderSupport(
+                        supported = decoders.isNotEmpty(),
+                        hardware = decoders.any { it.hardwareAccelerated },
+                        software = decoders.any { it.softwareOnly },
+                    )
+                }
             }
         }
+    }
 }

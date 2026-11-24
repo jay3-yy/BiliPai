@@ -316,8 +316,10 @@ internal fun shufflePortraitRecommendations(
 internal suspend fun filterPortraitOnlyVerticalRecommendations(
     recommendations: List<RelatedVideo>,
     enabled: Boolean,
+    minVerticalRatio: Float = 1.0f,
 ): List<RelatedVideo> {
     if (!enabled || recommendations.isEmpty()) return recommendations
+    val strictRatio = minVerticalRatio.coerceIn(0.8f, 1.5f) > 1.0f
     // Detail lookup is required because lightweight recommendation cards do not consistently
     // carry dimensions. Bound concurrency so filtering finishes before insertion without
     // turning a feed page into an unbounded request burst.
@@ -325,13 +327,15 @@ internal suspend fun filterPortraitOnlyVerticalRecommendations(
         coroutineScope {
             batch.map { candidate ->
                 async {
-                    when (candidate.isVertical) {
-                        true -> candidate
-                        false -> null
-                        null -> candidate.takeIf {
+                    val trustPositiveFlag = !strictRatio
+                    when {
+                        candidate.isVertical == false -> null
+                        candidate.isVertical == true && trustPositiveFlag -> candidate
+                        else -> candidate.takeIf {
                             VideoRepository.isVerticalVideo(
                                 bvid = candidate.bvid,
                                 aid = candidate.aid,
+                                minVerticalRatio = minVerticalRatio,
                             )
                         }
                     }

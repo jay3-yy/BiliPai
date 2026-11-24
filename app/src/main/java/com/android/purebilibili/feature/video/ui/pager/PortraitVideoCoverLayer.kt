@@ -6,19 +6,24 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.media3.ui.AspectRatioFrameLayout
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.overlay.BiliTvAnimatedBufferingIndicator
+import kotlin.math.roundToInt
 
 /** Match the video's content rectangle even when its poster has a different aspect ratio. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -56,14 +61,29 @@ internal fun PortraitVideoCoverLayer(
             modifier = Modifier.fillMaxSize(),
         ) {
             BoxWithConstraints(Modifier.fillMaxSize().clipToBounds(), contentAlignment = Alignment.Center) {
+                val context = LocalContext.current
                 val density = LocalDensity.current
+                val imageLoadingAllowed = LocalPageImageLoadingAllowed.current
                 val imageSize = with(density) {
                     resolvePortraitCoverImageSize(
                         Size(maxWidth.toPx(), maxHeight.toPx()), currentVideoAspect, resizeMode,
                     )
                 }
+                val targetWidthPx = imageSize.width.roundToInt().coerceAtLeast(1)
+                val targetHeightPx = imageSize.height.roundToInt().coerceAtLeast(1)
+                val coverUrl = remember(cover) { FormatUtils.fixImageUrl(cover) }
+                val imageModel = remember(context, coverUrl, imageLoadingAllowed, targetWidthPx, targetHeightPx) {
+                    if (!imageLoadingAllowed || coverUrl.isBlank()) {
+                        null
+                    } else {
+                        ImageRequest.Builder(context)
+                            .data(coverUrl)
+                            .size(targetWidthPx, targetHeightPx)
+                            .build()
+                    }
+                }
                 AsyncImage(
-                    model = FormatUtils.fixImageUrl(cover),
+                    model = imageModel,
                     contentDescription = null,
                     modifier = Modifier.requiredSize(
                         with(density) { imageSize.width.toDp() },

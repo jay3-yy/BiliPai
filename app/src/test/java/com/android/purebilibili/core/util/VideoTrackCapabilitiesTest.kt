@@ -76,4 +76,31 @@ class VideoTrackCapabilitiesTest {
         assertEquals(Format.NO_VALUE, format.height)
         assertEquals(Format.NO_VALUE.toFloat(), format.frameRate)
     }
+
+    @Test
+    fun getOrQuerySupportCachesRepeatedTrackCapabilitiesByFormatSignature() {
+        VideoTrackCapabilities.clearCacheForTest()
+        var queryCount = 0
+        val hevc4k = track(120, "hev1.2.4.L153.B0").copy(width = 3840, height = 2160, frameRate = "60")
+        val sameSignatureDifferentUrl = hevc4k.copy(baseUrl = "https://other.example/120")
+        val av1Track = track(120, "av01.0.12M.10").copy(width = 3840, height = 2160, frameRate = "60")
+
+        val first = VideoTrackCapabilities.getOrQuerySupport(hevc4k) {
+            queryCount += 1
+            VideoTrackDecoderSupport(supported = true, hardware = true, software = false)
+        }
+        val second = VideoTrackCapabilities.getOrQuerySupport(sameSignatureDifferentUrl) {
+            queryCount += 1
+            VideoTrackDecoderSupport(supported = false, hardware = false, software = false)
+        }
+        val third = VideoTrackCapabilities.getOrQuerySupport(av1Track) {
+            queryCount += 1
+            VideoTrackDecoderSupport(supported = true, hardware = false, software = true)
+        }
+
+        assertEquals(2, queryCount)
+        assertEquals(first, second)
+        assertEquals(VideoTrackDecoderSupport(supported = true, hardware = false, software = true), third)
+        VideoTrackCapabilities.clearCacheForTest()
+    }
 }

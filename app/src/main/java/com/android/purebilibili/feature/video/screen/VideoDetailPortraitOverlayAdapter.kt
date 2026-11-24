@@ -120,11 +120,20 @@ internal fun VideoDetailPortraitOverlayAdapter(
             targetOffsetY = { -(it * motionSpec.exitTranslateUpFraction).roundToInt() },
         )
     }
-    val portraitOnlyVerticalRecommendations by com.android.purebilibili.core.store.SettingsManager
-        .getPortraitOnlyVerticalRecommendations(context)
-        .collectAsStateWithLifecycle(initialValue = false)
+    val portraitOnlyVerticalRecommendations by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager
+            .getPortraitOnlyVerticalRecommendations(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = remember(context) {
+            com.android.purebilibili.core.store.SettingsManager
+                .peekPortraitOnlyVerticalRecommendations()
+        }
+    )
     AnimatedVisibility(
-        visible = entryTransitionFinished && showPortraitFullscreen && success != null,
+        visible = entryTransitionFinished &&
+            showPortraitFullscreen &&
+            success != null &&
+            portraitOnlyVerticalRecommendations != null,
         enter = if (shouldAnimatePortraitPager) {
             fadeIn(emphasizedEnterTween(motionSpec.enterDurationMillis))
         } else {
@@ -158,7 +167,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
                 initialBvid = initialBvidOverride ?: info.bvid,
                 initialInfo = info,
                 recommendations = portraitRecommendations,
-                onlyVerticalRecommendations = portraitOnlyVerticalRecommendations,
+                onlyVerticalRecommendations = portraitOnlyVerticalRecommendations == true,
                 isInPipMode = isInPipMode,
                 ownsSystemBars = false,
                 onBack = onExitFullscreen,

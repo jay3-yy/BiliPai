@@ -38,9 +38,28 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.feature.video.playback.next.NextWatchSuggestion
 import com.android.purebilibili.feature.video.playback.next.isNextWatchWindow
 import com.android.purebilibili.feature.video.playback.next.nextWatchRemainingSeconds
-import kotlinx.coroutines.delay
 
-/** Poll only while the player host is composed; no callback is tied to a countdown timer. */
+/**
+ * 计算「接下来观看」浮层的下一次唤醒间隔：
+ * - 暂停或时长未知时返回 null（完全挂起等待 Player.Listener 事件，零轮询）；
+ * - 距离片尾窗口较远时按当前倍速一次休眠到窗口前（上限 60s），避免全程高频空转；
+ * - 进入片尾最后 6.5 秒后按 250ms 精度刷新倒计时。
+ */
+internal fun resolveNextWatchPollDelayMs(
+    durationMs: Long,
+    positionMs: Long,
+    isPlaying: Boolean,
+    playbackSpeed: Float = 1f,
+): Long? {
+    if (!isPlaying || durationMs <= 0L) return null
+    val remainingMs = (durationMs - positionMs.coerceAtLeast(0L)).coerceAtLeast(0L)
+    if (remainingMs <= 6_500L) return 250L
+    val speed = playbackSpeed.takeIf { it.isFinite() && it > 0f }?.coerceIn(0.25f, 4f) ?: 1f
+    val untilWindowMs = ((remainingMs - 6_000L) / speed).toLong()
+    return untilWindowMs.coerceIn(500L, 60_000L)
+}
+
+/** Event-driven while paused or far from end; polls at 250ms only inside the final 6.5s window. */
 @Composable
 internal fun BoxScope.NextWatchOverlay(
     player: Player,
@@ -69,24 +88,47 @@ internal fun BoxScope.NextWatchOverlay(
             visible = false
             return@LaunchedEffect
         }
-        while (true) {
-            val duration = player.duration
-            val position = player.currentPosition
-            val seconds = nextWatchRemainingSeconds(duration, position)
-            val inWindow = eligible && !dismissed && activity?.isInPictureInPictureMode != true &&
-                lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
-                player.isPlaying && seconds != null
-            if (inWindow && seconds != null) remainingSeconds = seconds
-            if (suggestion != null && !isNextWatchWindow(duration, position)) {
-                dismissed = true
+        val events = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+        val listener = object : Player.Listener {
+            override fun onEvents(player: Player, playerEvents: Player.Events) {
+                events.trySend(Unit)
             }
-            if (inWindow && suggestion == null) suggestion = latestResolve()
-            if (inWindow && suggestion != null && latestResolve() != suggestion) {
-                // Queue, mode or exclusions changed: retire this offer instead of swapping its card.
-                dismissed = true
+        }
+        player.addListener(listener)
+        try {
+            while (true) {
+                val duration = player.duration
+                val position = player.currentPosition
+                val isPlaying = player.isPlaying
+                val seconds = nextWatchRemainingSeconds(duration, position)
+                val inWindow = eligible && !dismissed && activity?.isInPictureInPictureMode != true &&
+                    lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
+                    isPlaying && seconds != null
+                if (inWindow && seconds != null) remainingSeconds = seconds
+                if (suggestion != null && !isNextWatchWindow(duration, position)) {
+                    dismissed = true
+                }
+                if (inWindow && suggestion == null) suggestion = latestResolve()
+                if (inWindow && suggestion != null && latestResolve() != suggestion) {
+                    // Queue, mode or exclusions changed: retire this offer instead of swapping its card.
+                    dismissed = true
+                }
+                visible = inWindow && !dismissed && suggestion != null
+                val sleepMs = resolveNextWatchPollDelayMs(
+                    durationMs = duration,
+                    positionMs = position,
+                    isPlaying = isPlaying,
+                    playbackSpeed = player.playbackParameters.speed,
+                )
+                if (sleepMs == null) {
+                    events.receive()
+                } else {
+                    kotlinx.coroutines.withTimeoutOrNull(sleepMs) { events.receive() }
+                }
             }
-            visible = inWindow && !dismissed && suggestion != null
-            delay(200)
+        } finally {
+            player.removeListener(listener)
+            events.close()
         }
     }
     val target = suggestion
