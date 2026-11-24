@@ -1,13 +1,20 @@
 package com.android.purebilibili.feature.settings
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -22,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,7 +45,6 @@ import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppDropdownMenu
 import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
 import com.android.purebilibili.core.ui.components.AppIcon
-import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
@@ -151,6 +159,8 @@ private fun <T> AppUpdateDownloadChannelButton(
     onClick: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val titleColor = if (enabled) AppContentColors.primaryText() else AppContentColors.disabled()
+    val subtitleColor = if (enabled) AppContentColors.secondaryText() else AppContentColors.disabled()
     Box(modifier = modifier) {
         AppSurface(
             shape = AppShapes.container(ContainerLevel.Pill),
@@ -160,17 +170,26 @@ private fun <T> AppUpdateDownloadChannelButton(
                 AppSurfaceTokens.outline().copy(alpha = 0.45f),
             ),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AppTextButton(
-                    onClick = onClick,
-                    modifier = Modifier.weight(1f).heightIn(min = 56.dp),
-                    enabled = enabled,
-                    contentPadding = PaddingValues(start = 8.dp, end = 0.dp),
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 52.dp)
+                        .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+                        .padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         AppText(
                             text = actionTitle,
                             fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = titleColor,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis,
@@ -178,7 +197,8 @@ private fun <T> AppUpdateDownloadChannelButton(
                         )
                         AppText(
                             text = actionSubtitle,
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
+                            color = subtitleColor,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis,
@@ -186,8 +206,25 @@ private fun <T> AppUpdateDownloadChannelButton(
                         )
                     }
                 }
-                AppIconButton(onClick = { expanded = true }, enabled = enabled) {
-                    AppIcon(Icons.Filled.KeyboardArrowDown, contentDescription = menuLabel)
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight(0.5f)
+                        .width(AppSurfaceTokens.OutlineWidth)
+                        .background(AppSurfaceTokens.outline().copy(alpha = 0.30f)),
+                )
+                Box(
+                    modifier = Modifier
+                        .width(40.dp)
+                        .fillMaxHeight()
+                        .clickable(enabled = enabled, role = Role.Button, onClick = { expanded = true }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIcon(
+                        imageVector = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = menuLabel,
+                        tint = subtitleColor,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
         }

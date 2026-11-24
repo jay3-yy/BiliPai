@@ -30,7 +30,7 @@ private const val TAG = "GamepadControlPlugin"
 /**
  * 多型号手柄全局操控内置插件。
  *
- * 配置同时同步到「设置 → 手柄控制」独立模块与「插件中心」，支持 Xbox / PlayStation / Switch / 通用手柄、
+ * 在「插件中心」中统一管理，支持 Xbox / PlayStation / Switch / 通用手柄、
  * 隐藏底部键位显示、虚拟光标外观与自定义键位映射。
  */
 class GamepadControlPlugin : BuiltinPlugin {
@@ -39,7 +39,7 @@ class GamepadControlPlugin : BuiltinPlugin {
     override val name: String = "手柄控制"
     override val description: String = "支持 Xbox / PlayStation / Switch 等手柄双摇杆操控、隐藏底部键位与自定义键位"
     override val version: String = "2.0.0"
-    override val author: String = "BiliPai项目组"
+    override val author: String = "longdaydream40"
     override val icon: ImageVector = Icons.Outlined.SportsEsports
 
     override suspend fun onEnable() {

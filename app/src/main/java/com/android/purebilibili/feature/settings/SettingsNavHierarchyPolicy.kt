@@ -89,7 +89,6 @@ internal fun resolveSettingsCategoryDirectTargetKey(
     SettingsRootCategory.APPEARANCE_THEME -> BiliPaiNavKey.AppearanceSettings
     SettingsRootCategory.ANIMATION_HAPTICS -> BiliPaiNavKey.AnimationSettings
     SettingsRootCategory.PLUGINS_EXTENSIONS -> BiliPaiNavKey.PluginsSettings()
-    SettingsRootCategory.GAMEPAD_CONTROL -> BiliPaiNavKey.GamepadControlSettings
     SettingsRootCategory.NAVIGATION_INTERACTION -> BiliPaiNavKey.BottomBarSettings
     SettingsRootCategory.HOME_RECOMMENDATION -> BiliPaiNavKey.HomeSettings
     SettingsRootCategory.MESSAGE_NOTIFICATION -> BiliPaiNavKey.MessageNotificationSettings
@@ -123,7 +122,7 @@ private val ROUTE_TO_CATEGORY: Map<String, SettingsRootCategory> = mapOf(
     "content_filter_history" to SettingsRootCategory.PLUGINS_EXTENSIONS,
     "js_plugin" to SettingsRootCategory.PLUGINS_EXTENSIONS,
     "external_media" to SettingsRootCategory.PLUGINS_EXTENSIONS,
-    "gamepad_control_settings" to SettingsRootCategory.GAMEPAD_CONTROL,
+    "gamepad_control_settings" to SettingsRootCategory.PLUGINS_EXTENSIONS,
     "tips_settings" to SettingsRootCategory.SYSTEM_ABOUT,
     "open_source_licenses" to SettingsRootCategory.SYSTEM_ABOUT,
     "process_memory" to SettingsRootCategory.SYSTEM_ABOUT,

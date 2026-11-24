@@ -176,13 +176,19 @@ fun rememberHapticFeedback(
         { type: HapticType ->
             val feedbackConstant = when (type) {
                 HapticType.LIGHT -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        HapticFeedbackConstants.SEGMENT_TICK
+                    } else {
+                        HapticFeedbackConstants.KEYBOARD_TAP
+                    }
+                }
+                HapticType.MEDIUM -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         HapticFeedbackConstants.CONFIRM
                     } else {
                         HapticFeedbackConstants.KEYBOARD_TAP
                     }
                 }
-                HapticType.MEDIUM -> HapticFeedbackConstants.LONG_PRESS
                 HapticType.HEAVY -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         HapticFeedbackConstants.REJECT

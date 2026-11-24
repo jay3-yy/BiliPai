@@ -10,5 +10,5 @@ import com.android.purebilibili.core.util.rememberVisibleHapticFeedback
 @Composable
 internal fun rememberVideoActionSuccessHaptic(isVisible: Boolean = true): () -> Unit {
     val haptic = rememberVisibleHapticFeedback(AppHapticScene.VIDEO_ACTIONS, isVisible)
-    return remember(haptic) { { haptic(HapticType.LIGHT) } }
+    return remember(haptic) { { haptic(HapticType.MEDIUM) } }
 }

@@ -11,6 +11,16 @@ internal fun isAudioNowPlayingPlayerDestination(route: String?): Boolean {
         routeBase.startsWith("native_music")
 }
 
+/** 自带底部评论输入条、聊天输入框或底部固定操作栏的独立页，独立悬浮听视频横条应避让隐藏。 */
+internal fun hasAudioNowPlayingConflictingBottomBarDestination(route: String?): Boolean {
+    val routeBase = route?.substringBefore("?") ?: return false
+    return routeBase.startsWith("dynamic_detail/") ||
+        routeBase.startsWith("article/") ||
+        routeBase.startsWith("comment_detail/") ||
+        routeBase.startsWith("chat/") ||
+        routeBase.startsWith("bangumi/")
+}
+
 internal fun resolveAudioNowPlayingVisible(
     sessionActive: Boolean,
     isOnAudioModeScreen: Boolean,
@@ -22,6 +32,7 @@ internal fun resolveAudioNowPlayingVisible(
     isLandscape: Boolean = false,
     isPlayerDestination: Boolean = false,
     isTabletLayout: Boolean = false,
+    hasOwnBottomBar: Boolean = false,
 ): Boolean {
     return barEnabled &&
         sessionActive &&
@@ -31,5 +42,6 @@ internal fun resolveAudioNowPlayingVisible(
         hasCurrentItem &&
         !isVideoDetailDestination &&
         (!isLandscape || isTabletLayout) &&
-        !isPlayerDestination
+        !isPlayerDestination &&
+        !hasOwnBottomBar
 }

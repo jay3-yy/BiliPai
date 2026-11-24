@@ -171,4 +171,27 @@ class AudioNowPlayingVisibilityPolicyTest {
             )
         )
     }
+
+    @Test
+    fun hiddenOnIndependentDestinationsWithOwnBottomInteractiveBar() {
+        assertTrue(hasAudioNowPlayingConflictingBottomBarDestination("dynamic_detail/12345?openComments=true"))
+        assertTrue(hasAudioNowPlayingConflictingBottomBarDestination("article/6789?title=test"))
+        assertTrue(hasAudioNowPlayingConflictingBottomBarDestination("comment_detail/1/2?type=1"))
+        assertTrue(hasAudioNowPlayingConflictingBottomBarDestination("chat/100/1?name=up"))
+        assertTrue(hasAudioNowPlayingConflictingBottomBarDestination("bangumi/456?epId=1"))
+        assertFalse(hasAudioNowPlayingConflictingBottomBarDestination("bangumi?type=1"))
+        assertFalse(hasAudioNowPlayingConflictingBottomBarDestination("main_host"))
+        assertFalse(hasAudioNowPlayingConflictingBottomBarDestination("space/123"))
+
+        assertFalse(
+            resolveAudioNowPlayingVisible(
+                sessionActive = true,
+                isOnAudioModeScreen = false,
+                isInPipMode = false,
+                hasCurrentItem = true,
+                barEnabled = true,
+                hasOwnBottomBar = true,
+            )
+        )
+    }
 }

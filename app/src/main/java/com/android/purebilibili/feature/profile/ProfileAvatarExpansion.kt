@@ -178,15 +178,17 @@ internal fun rememberProfileAvatarExpansionConnection(
     val latestRange = rememberUpdatedState(rangeProvider)
     val latestPhotoUrl = rememberUpdatedState(photoUrl)
     val density = LocalDensity.current.density
-    val view = LocalView.current
-    val haptics = LocalAppThemeConfig.current.let { it.hapticFeedbackEnabled && it.hapticSettings.isEnabled(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION) }
+    val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(
+        com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION,
+    )
     val motion = LocalComponentMotionEnabled.current && !rememberSystemReduceMotion() &&
         !com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced()
-    return remember(state, listState, enabled, density, motion, scope, view, haptics) {
+    return remember(state, listState, enabled, density, motion, scope, haptic) {
         object : NestedScrollConnection {
             private fun settle(expanded: Boolean) {
-                if (haptics) view.performHapticFeedback(
-                    if (expanded) android.view.HapticFeedbackConstants.LONG_PRESS else android.view.HapticFeedbackConstants.KEYBOARD_TAP,
+                haptic.performHapticFeedback(
+                    if (expanded) androidx.compose.ui.hapticfeedback.HapticFeedbackType.GestureThresholdActivate
+                    else androidx.compose.ui.hapticfeedback.HapticFeedbackType.GestureEnd,
                 )
                 scope.launch(start = CoroutineStart.UNDISPATCHED) {
                     state.settle(expanded, latestRange.value(), 0f, density, motion)

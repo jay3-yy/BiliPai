@@ -140,7 +140,7 @@ private fun ThemeTimeWheelColumn(
                 latestChange(index % count)
                 val now = SystemClock.uptimeMillis()
                 if (index != previousIndex && state.isScrollInProgress && hapticEnabled && now - lastHapticTime >= 40L) {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
                     lastHapticTime = now
                 }
                 previousIndex = index

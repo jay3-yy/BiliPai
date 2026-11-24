@@ -69,11 +69,13 @@ fun AppPrimaryButton(
     val elasticFeedbackEnabled = enabled && !isLoading && LocalAppUiStyle.current == AppUiStyle.MIUIX &&
         LocalAppThemeConfig.current.liquidGlassEnabled
     ProvideAppElasticFeedback(enabled = elasticFeedbackEnabled) {
-        val haptic = LocalHapticFeedback.current
+        val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(
+            com.android.purebilibili.core.ui.AppHapticScene.CONTROLS
+        )
         val hapticEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
         val feedbackClick = appActionWithFeedback {
             onClick()
-            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.Confirm)
         }
         val interactionSource = remember { MutableInteractionSource() }
         val primaryContentColor = resolveButtonContentColor(

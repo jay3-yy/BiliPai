@@ -16,7 +16,6 @@ class SettingsRootCategoryPolicyTest {
             SettingsRootCategory.PRIVACY_PERMISSION,
             SettingsRootCategory.STORAGE_BACKUP,
             SettingsRootCategory.PLUGINS_EXTENSIONS,
-            SettingsRootCategory.GAMEPAD_CONTROL,
             SettingsRootCategory.SYSTEM_ABOUT,
         )
 
@@ -70,7 +69,7 @@ class SettingsRootCategoryPolicyTest {
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.PLUGINS),
         )
         assertEquals(
-            SettingsRootCategory.GAMEPAD_CONTROL,
+            SettingsRootCategory.PLUGINS_EXTENSIONS,
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.GAMEPAD_CONTROL),
         )
         assertEquals(

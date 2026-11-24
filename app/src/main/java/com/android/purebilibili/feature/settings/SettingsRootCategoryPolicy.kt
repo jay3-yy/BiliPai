@@ -97,6 +97,7 @@ internal fun canonicalSettingsRootCategory(category: SettingsRootCategory): Sett
         SettingsRootCategory.COMMENTS_CONTENT,
         SettingsRootCategory.VIDEO_DECODER -> SettingsRootCategory.PLAYBACK_QUALITY
         SettingsRootCategory.MESSAGE_NOTIFICATION -> SettingsRootCategory.PRIVACY_PERMISSION
+        SettingsRootCategory.GAMEPAD_CONTROL -> SettingsRootCategory.PLUGINS_EXTENSIONS
         SettingsRootCategory.PLAYER_DIAGNOSTICS -> SettingsRootCategory.SYSTEM_ABOUT
         SettingsRootCategory.GLASS_ADVANCED -> SettingsRootCategory.ANIMATION_HAPTICS
         else -> category
@@ -111,7 +112,6 @@ internal fun resolveSettingsRootCategoryOrder(): List<SettingsRootCategory> = li
     SettingsRootCategory.PRIVACY_PERMISSION,
     SettingsRootCategory.STORAGE_BACKUP,
     SettingsRootCategory.PLUGINS_EXTENSIONS,
-    SettingsRootCategory.GAMEPAD_CONTROL,
     SettingsRootCategory.SYSTEM_ABOUT,
 )
 
@@ -150,8 +150,8 @@ internal fun resolveSettingsRootCategoryForSearchTarget(
     SettingsSearchTarget.IMAGE_SAVE_PATH,
     SettingsSearchTarget.CLEAR_CACHE -> SettingsRootCategory.STORAGE_BACKUP
 
-    SettingsSearchTarget.PLUGINS -> SettingsRootCategory.PLUGINS_EXTENSIONS
-    SettingsSearchTarget.GAMEPAD_CONTROL -> SettingsRootCategory.GAMEPAD_CONTROL
+    SettingsSearchTarget.PLUGINS,
+    SettingsSearchTarget.GAMEPAD_CONTROL -> SettingsRootCategory.PLUGINS_EXTENSIONS
     SettingsSearchTarget.NEARBY_HANDOFF -> SettingsRootCategory.PLAYBACK_QUALITY
 
     SettingsSearchTarget.DIAGNOSTICS,

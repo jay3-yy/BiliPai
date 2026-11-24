@@ -35,17 +35,22 @@ internal fun ListenVideoCollectionPlayer(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(mediaId, seasonId) { viewModel.open(mediaId, seasonId) }
+    val fallbackBackground = com.android.purebilibili.feature.audio.lyrics.halcyon.PlayerPalette.Default.middle
     Box(modifier = modifier.fillMaxSize()) {
         state.firstTrack?.let { track -> player(track.bvid, track.cid) }
         if (state.firstTrack == null && state.error == null) {
-            AppSurface(modifier = Modifier.fillMaxSize(), color = com.android.purebilibili.feature.audio.lyrics.halcyon.PlayerPalette.Default.middle) {
+            AppSurface(modifier = Modifier.fillMaxSize(), color = fallbackBackground) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    AppTextButton(
+                    MusicBackButton(
                         onClick = onBack,
-                        modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 8.dp, start = 8.dp)
-                    ) {
-                        AppText("返回", color = androidx.compose.ui.graphics.Color.White)
-                    }
+                        glassTintColor = fallbackBackground,
+                        isDarkEnvironment = true,
+                        iconTint = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .statusBarsPadding()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
                     Column(
                         modifier = Modifier.align(Alignment.Center).padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -59,14 +64,18 @@ internal fun ListenVideoCollectionPlayer(
             }
         }
         if (state.firstTrack == null && state.error != null) {
-            AppSurface(modifier = Modifier.fillMaxSize(), color = com.android.purebilibili.feature.audio.lyrics.halcyon.PlayerPalette.Default.middle) {
+            AppSurface(modifier = Modifier.fillMaxSize(), color = fallbackBackground) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    AppTextButton(
+                    MusicBackButton(
                         onClick = onBack,
-                        modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(top = 8.dp, start = 8.dp)
-                    ) {
-                        AppText("返回", color = androidx.compose.ui.graphics.Color.White)
-                    }
+                        glassTintColor = fallbackBackground,
+                        isDarkEnvironment = true,
+                        iconTint = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .statusBarsPadding()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                    )
                     Column(
                         modifier = Modifier.align(Alignment.Center).padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,

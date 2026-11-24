@@ -64,7 +64,7 @@ fun AppSlider(
         val nextBucket = hapticBucket(nextValue)
         val nowMs = SystemClock.elapsedRealtime()
         if (enabled && nextBucket != lastHapticBucket && nowMs - lastHapticTimeMs >= 55L) {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
             lastHapticTimeMs = nowMs
             lastHapticBucket = nextBucket
         } else if (nextBucket != lastHapticBucket) {

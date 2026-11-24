@@ -112,6 +112,7 @@ import com.android.purebilibili.feature.home.components.resolveBiliPaiBottomBarC
 import com.android.purebilibili.core.ui.components.AppLinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.AppModalBottomSheet
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
@@ -4744,15 +4745,13 @@ private fun MusicTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        GlassIconButton(
-            icon = Icons.Outlined.KeyboardArrowDown,
-            description = "返回",
+        MusicBackButton(
+            onClick = onBack,
             glassEnabled = glassEnabled,
             miuixBackdrop = miuixBackdrop,
             liquidGlassTuning = liquidGlassTuning,
             glassTintColor = glassTintColor,
             isDarkEnvironment = isDarkEnvironment,
-            onClick = onBack
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -4794,6 +4793,31 @@ private fun MusicTopBar(
 }
 
 @Composable
+internal fun MusicBackButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    glassEnabled: Boolean = false,
+    miuixBackdrop: MiuixBackdrop? = null,
+    liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f),
+    glassTintColor: Color = Color.Unspecified,
+    isDarkEnvironment: Boolean = true,
+    iconTint: Color = Color.Unspecified,
+) {
+    GlassIconButton(
+        icon = rememberAppBackIcon(),
+        description = "返回",
+        glassEnabled = glassEnabled,
+        miuixBackdrop = miuixBackdrop,
+        liquidGlassTuning = liquidGlassTuning,
+        glassTintColor = glassTintColor,
+        isDarkEnvironment = isDarkEnvironment,
+        iconTint = iconTint,
+        modifier = modifier,
+        onClick = onClick,
+    )
+}
+
+@Composable
 private fun GlassIconButton(
     icon: ImageVector,
     description: String,
@@ -4802,10 +4826,13 @@ private fun GlassIconButton(
     liquidGlassTuning: LiquidGlassTuning,
     glassTintColor: Color = Color.Unspecified,
     isDarkEnvironment: Boolean = true,
+    iconTint: Color = Color.Unspecified,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val elasticState = rememberAppElasticPressState(visualSize = 48.dp)
     val useLiquidGlass = glassEnabled && miuixBackdrop != null
+    val resolvedIconTint = if (iconTint != Color.Unspecified) iconTint else MusicContentColor
     // This control owns its backdrop and press transform; native chrome must stay transparent.
     CompositionLocalProvider(
         LocalAppTopBarIconDecorationEnabled provides false,
@@ -4816,7 +4843,7 @@ private fun GlassIconButton(
                 containerColor = Color.Transparent,
                 disabledContainerColor = Color.Transparent,
             ),
-            modifier = Modifier
+            modifier = modifier
                 .size(48.dp)
                 .appElasticPress(state = elasticState, transformInBackdrop = useLiquidGlass)
                 .biliPaiFloatingDockShell(
@@ -4844,7 +4871,7 @@ private fun GlassIconButton(
             AppIcon(
                 icon,
                 contentDescription = description,
-                tint = MusicContentColor,
+                tint = resolvedIconTint,
             )
         }
     }

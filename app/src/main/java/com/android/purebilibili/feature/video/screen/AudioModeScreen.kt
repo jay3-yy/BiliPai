@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
+import com.android.purebilibili.feature.audio.screen.MusicBackButton
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -389,16 +391,18 @@ private fun AudioModeInitialState(
     onBack: () -> Unit,
     onRetry: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxSize().background(com.android.purebilibili.feature.audio.lyrics.halcyon.PlayerPalette.Default.middle)) {
-        AppTextButton(
+    val fallbackBackground = com.android.purebilibili.feature.audio.lyrics.halcyon.PlayerPalette.Default.middle
+    Box(modifier = Modifier.fillMaxSize().background(fallbackBackground)) {
+        MusicBackButton(
             onClick = onBack,
+            glassTintColor = fallbackBackground,
+            isDarkEnvironment = true,
+            iconTint = Color.White,
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .padding(top = 40.dp, start = 12.dp)
-                .height(48.dp)
-        ) {
-            AppText("返回", color = Color.White)
-        }
+                .statusBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+        )
         Column(
             modifier = Modifier.align(Alignment.Center).padding(horizontal = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

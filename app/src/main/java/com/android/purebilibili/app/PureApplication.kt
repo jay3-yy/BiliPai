@@ -101,6 +101,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     //  保存 ImageLoader 引用以便在 onTrimMemory 中使用
     private var _imageLoader: ImageLoader? = null
     private var imageMemoryBudget: BackgroundImageCacheBudget? = null
+    private var deepBackgroundTrimJob: kotlinx.coroutines.Job? = null
     private var fairMemoryTrimReceiver: android.content.BroadcastReceiver? = null
     private var launcherIconUiModeSnapshot: Int? = null
     private val telemetryInitialized = AtomicBoolean(false)
@@ -113,11 +114,42 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             releaseTransitionVisualCaches()
             if (!releaseBackgroundPageImages()) return
             releaseRebuildableMemoryCaches()
+            scheduleDeepBackgroundMemoryTrim()
         }
 
         override fun onEnterForeground() {
+            deepBackgroundTrimJob?.cancel()
+            deepBackgroundTrimJob = null
             imageMemoryBudget?.foreground()
             AppPageImageMemory.resume()
+        }
+    }
+
+    private fun scheduleDeepBackgroundMemoryTrim() {
+        deepBackgroundTrimJob?.cancel()
+        // 持续驻留后台超过 15 秒后进一步清空图片强缓存、闲置播放器缓冲与空闲连接，
+        // 避免大内存设备上系统迟迟不发 TRIM_MEMORY_BACKGROUND 导致后台体积长期居高不下。
+        deepBackgroundTrimJob = AppScope.ioScope.launch {
+            delay(15_000L)
+            if (!BackgroundManager.isInBackground) return@launch
+            val miniPlayer = com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstanceOrNull()
+            if (miniPlayer?.shouldKeepPlaybackForPipTransition() == true) return@launch
+            kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
+                if (!BackgroundManager.isInBackground) return@withContext
+                releaseTransitionVisualCaches()
+                com.android.purebilibili.core.util.CardPositionManager.clear()
+                _imageLoader?.memoryCache?.clear()
+                com.android.purebilibili.core.plugin.feed.PublicContentImageLoader.clearMemoryCache()
+                releaseRebuildableMemoryCaches()
+                miniPlayer?.onMemoryPressureTrim(
+                    level = ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
+                    requestIdlePlaybackRelease = true,
+                )
+            }
+            val isAudioPlaying = miniPlayer?.let { it.isActive && it.player?.isPlaying == true } ?: false
+            if (!isAudioPlaying) {
+                NetworkModule.evictIdleConnections()
+            }
         }
     }
 

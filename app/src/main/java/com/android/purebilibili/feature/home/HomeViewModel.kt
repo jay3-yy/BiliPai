@@ -195,6 +195,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val feedbackEvents = _feedbackEvents.receiveAsFlow()
     private var todayWatchPluginObserverJob: Job? = null
     private var observedTodayWatchPlugin: TodayWatchControls? = null
+    private var backgroundCategoryTrimJob: Job? = null
+    private val backgroundCategoryTrimListener =
+        object : com.android.purebilibili.core.lifecycle.BackgroundManager.BackgroundStateListener {
+            override fun onEnterBackground() {
+                backgroundCategoryTrimJob?.cancel()
+                backgroundCategoryTrimJob = viewModelScope.launch {
+                    delay(15_000L)
+                    if (!com.android.purebilibili.core.lifecycle.BackgroundManager.isInBackground) return@launch
+                    _undoSnapshot = null
+                    expandedCandidateCache = null
+                    _uiState.update(::trimInactiveHomeCategoryStatesForBackground)
+                }
+            }
+
+            override fun onEnterForeground() {
+                backgroundCategoryTrimJob?.cancel()
+                backgroundCategoryTrimJob = null
+            }
+        }
 
     private suspend fun ensureAccountCurrent(identity: AccountSessionIdentity) {
         currentCoroutineContext().ensureActive()
@@ -241,6 +260,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
+        com.android.purebilibili.core.lifecycle.BackgroundManager.addListener(backgroundCategoryTrimListener)
         viewModelScope.launch {
             SettingsManager.getIncrementalTimelineRefresh(getApplication()).collect { enabled ->
                 incrementalTimelineRefreshEnabled = enabled
@@ -1890,4 +1910,43 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             null
         }
     }
+
+    override fun onCleared() {
+        backgroundCategoryTrimJob?.cancel()
+        com.android.purebilibili.core.lifecycle.BackgroundManager.removeListener(backgroundCategoryTrimListener)
+        super.onCleared()
+    }
 }
+
+internal fun trimInactiveHomeCategoryStatesForBackground(state: HomeUiState): HomeUiState {
+    var changed = false
+    val trimmedCategories = state.categoryStates.mapValues { (category, content) ->
+        if (category == state.currentCategory || content.isEffectivelyEmptyForBackgroundTrim()) {
+            content
+        } else {
+            changed = true
+            CategoryContent()
+        }
+    }
+    val trimmedPopular = state.popularCategoryStates.mapValues { (subCategory, content) ->
+        val keepActivePopular = state.currentCategory == HomeCategory.POPULAR &&
+            subCategory == state.popularSubCategory
+        if (keepActivePopular || content.isEffectivelyEmptyForBackgroundTrim()) {
+            content
+        } else {
+            changed = true
+            CategoryContent()
+        }
+    }
+    return if (changed) {
+        state.copy(
+            categoryStates = trimmedCategories.toImmutableMap(),
+            popularCategoryStates = trimmedPopular.toImmutableMap(),
+        )
+    } else {
+        state
+    }
+}
+
+private fun CategoryContent.isEffectivelyEmptyForBackgroundTrim(): Boolean =
+    videos.isEmpty() && liveRooms.isEmpty() && followedLiveRooms.isEmpty() && !isLoading && error == null
