@@ -42,9 +42,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -851,13 +853,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     //  [新增] 添加到稍后再看
+    private val _watchLaterAddedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    val watchLaterAddedEvents = _watchLaterAddedEvents.asSharedFlow()
+
     fun addToWatchLater(bvid: String, aid: Long) {
         accountRequests.launch {
             val identity = accountRequests.identity
             val result = com.android.purebilibili.data.repository.ActionRepository.toggleWatchLater(aid, true)
             ensureAccountCurrent(identity)
             result.onSuccess {
-                android.widget.Toast.makeText(getApplication(), "已添加到稍后再看", android.widget.Toast.LENGTH_SHORT).show()
+                _watchLaterAddedEvents.tryEmit(Unit)
             }.onFailure { e ->
                 android.widget.Toast.makeText(getApplication(), e.message ?: "添加失败", android.widget.Toast.LENGTH_SHORT).show()
             }

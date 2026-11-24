@@ -172,6 +172,7 @@ private val BOTTOM_BAR_LABEL_MODE_LABELS = listOf("图标+文字", "仅图标", 
 @Composable
 fun FirstLaunchSetupScreen(
     onFinished: () -> Unit,
+    onFinishedAndLogin: (() -> Unit)? = null,
     isReplay: Boolean = false,
 ) {
     val context = LocalContext.current
@@ -252,23 +253,25 @@ fun FirstLaunchSetupScreen(
         }
     }
 
-    fun persistAndFinish() {
+    fun persistAndFinish(openLogin: Boolean = false) {
         if (isSaving) return
         isSaving = true
         scope.launch {
             try {
-                SettingsManager.setUiStyle(context, draft.uiStyle)
+                if (shouldPersistLiquidGlassChoice(sdkInt)) {
+                    SettingsManager.setThemePresentation(
+                        context = context,
+                        uiStyle = draft.uiStyle,
+                        liquidGlassEnabled = draft.liquidGlassEnabled,
+                    )
+                } else {
+                    SettingsManager.setUiStyle(context, draft.uiStyle)
+                }
                 SettingsManager.setThemeMode(context, draft.themeMode)
                 if (shouldOfferDynamicColorOption(sdkInt) && draft.dynamicColor) {
                     SettingsManager.setDynamicColor(context, true)
                 } else {
                     SettingsManager.setThemeColorIndex(context, draft.themeColorIndex)
-                }
-                if (shouldPersistLiquidGlassChoice(sdkInt)) {
-                    SettingsManager.setAndroidNativeLiquidGlassEnabled(
-                        context,
-                        draft.liquidGlassEnabled,
-                    )
                 }
                 context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE)
                     .edit()
@@ -280,7 +283,11 @@ fun FirstLaunchSetupScreen(
                 if (!isReplay) {
                     FirstLaunchSetupStore.markCompleted(context)
                 }
-                onFinished()
+                if (openLogin && onFinishedAndLogin != null) {
+                    onFinishedAndLogin()
+                } else {
+                    onFinished()
+                }
             } finally {
                 isSaving = false
             }
@@ -353,6 +360,9 @@ fun FirstLaunchSetupScreen(
                         persistAndFinish()
                     }
                 },
+                onFinishAndLogin = if (!isReplay && onFinishedAndLogin != null) {
+                    { persistAndFinish(openLogin = true) }
+                } else null,
                 onSkip = if (!isReplay) ::skipOnboarding else null,
                 onCloseReplay = if (isReplay) onFinished else null,
             )
@@ -382,6 +392,7 @@ private fun FirstLaunchSetupContent(
     onPreviousStep: () -> Unit,
     onSelectStepIndex: (Int) -> Unit,
     onNextOrFinish: () -> Unit,
+    onFinishAndLogin: (() -> Unit)? = null,
     onSkip: (() -> Unit)?,
     onCloseReplay: (() -> Unit)?,
 ) {
@@ -740,6 +751,25 @@ private fun FirstLaunchSetupContent(
                         text = label,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            if (!hasNext && !isReplay && onFinishAndLogin != null) {
+                AppTextButton(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onFinishAndLogin()
+                    },
+                    enabled = !isSaving,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 360.dp)
+                        .padding(top = 4.dp),
+                ) {
+                    AppText(
+                        text = "完成并立即登录（解锁高画质与推荐）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppContentColors.secondaryText(),
                     )
                 }
             }

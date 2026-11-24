@@ -316,7 +316,11 @@ internal fun LoginPage(
                     }
                     item {
                         when (selectedMethod) {
-                            LoginMethod.TV_QR -> TvQrLoginContent(state, onRefreshQr)
+                            LoginMethod.TV_QR -> TvQrLoginContent(
+                                state = state,
+                                onRefresh = onRefreshQr,
+                                onSwitchToSms = { onMethodSelected(LoginMethod.SMS) }
+                            )
                             LoginMethod.OFFICIAL_TV_SCAN -> AppCard(modifier = Modifier.fillMaxWidth()) {
                                 qrAuthorizationContent()
                             }
@@ -788,13 +792,30 @@ private fun HighQualityAuthorizationCard(
 private fun TvQrLoginContent(
     state: LoginState,
     onRefresh: () -> Unit,
+    onSwitchToSms: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var isSavingQr by remember { mutableStateOf(false) }
+    var saveFeedback by remember { mutableStateOf<String?>(null) }
+    var qrSavedToGallery by remember { mutableStateOf(false) }
+
+    val qrBitmap = when (state) {
+        is LoginState.QrCode -> state.bitmap
+        is LoginState.Scanned -> state.bitmap
+        else -> null
+    }
+    LaunchedEffect(qrBitmap) {
+        qrSavedToGallery = false
+        saveFeedback = null
+    }
+
     AppCard(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             AppText(text = "扫码登录", style = MaterialTheme.typography.titleLarge)
             AppText(
@@ -805,10 +826,7 @@ private fun TvQrLoginContent(
             )
             when (state) {
                 is LoginState.QrCode, is LoginState.Scanned -> {
-                    val bitmap = when (state) {
-                        is LoginState.QrCode -> state.bitmap
-                        is LoginState.Scanned -> state.bitmap
-                    }
+                    val bitmap = qrBitmap!!
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = "登录二维码",
@@ -821,6 +839,13 @@ private fun TvQrLoginContent(
                             style = MaterialTheme.typography.bodyMedium,
                             textAlign = TextAlign.Center
                         )
+                    } else {
+                        AppText(
+                            text = "单台手机登录：保存二维码到相册后，在哔哩哔哩「扫一扫」中从相册选取即可。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppContentColors.secondaryText(),
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
                 LoginState.Loading -> AdaptiveLoadingIndicator(size = 48.dp)
@@ -831,13 +856,106 @@ private fun TvQrLoginContent(
                     tint = AppContentColors.secondaryText()
                 )
             }
+            if (saveFeedback != null) {
+                AppText(
+                    text = saveFeedback!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (qrSavedToGallery) AppContentColors.accent() else AppContentColors.error(),
+                    textAlign = TextAlign.Center
+                )
+            }
+            if (qrBitmap != null) {
+                if (qrSavedToGallery) {
+                    AppButton(
+                        onClick = {
+                            if (!launchOfficialBilibiliApp(context)) {
+                                saveFeedback = "未检测到哔哩哔哩官方客户端，请手动打开并从相册扫码。"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        AppText("打开哔哩哔哩去扫码")
+                    }
+                } else {
+                    AppButton(
+                        onClick = {
+                            if (isSavingQr) return@AppButton
+                            isSavingQr = true
+                            scope.launch {
+                                val saved = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    saveLoginQrBitmapToGallery(context, qrBitmap)
+                                }
+                                isSavingQr = false
+                                qrSavedToGallery = saved
+                                saveFeedback = if (saved) {
+                                    "二维码已保存到相册，点击下方打开哔哩哔哩从相册扫码。"
+                                } else {
+                                    "保存失败，可直接截屏后用哔哩哔哩扫一扫识别。"
+                                }
+                            }
+                        },
+                        enabled = !isSavingQr,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        AppText(if (isSavingQr) "正在保存二维码…" else "保存二维码到相册")
+                    }
+                }
+            }
             AppOutlinedButton(onClick = onRefresh, modifier = Modifier.fillMaxWidth()) {
                 AppIcon(Icons.Outlined.Refresh, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
                 AppText("刷新二维码")
             }
+            AppTextButton(onClick = onSwitchToSms, modifier = Modifier.fillMaxWidth()) {
+                AppText(
+                    text = "不想扫码？改用短信验证码登录",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppContentColors.secondaryText()
+                )
+            }
         }
     }
+}
+
+private fun saveLoginQrBitmapToGallery(context: android.content.Context, bitmap: Bitmap): Boolean {
+    return runCatching {
+        val resolver = context.contentResolver
+        val fileName = "BiliPai_Login_QR_${System.currentTimeMillis()}.png"
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName)
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/BiliPai")
+                put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+        val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: return false
+        val wrote = resolver.openOutputStream(uri)?.use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+        } == true
+        if (!wrote) {
+            resolver.delete(uri, null, null)
+            return false
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            values.clear()
+            values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        }
+        true
+    }.getOrDefault(false)
+}
+
+private fun launchOfficialBilibiliApp(context: android.content.Context): Boolean {
+    val packages = listOf("tv.danmaku.bili", "com.bilibili.app.in")
+    for (pkg in packages) {
+        val intent = context.packageManager.getLaunchIntentForPackage(pkg) ?: continue
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+        return true
+    }
+    return false
 }
 
 @Composable

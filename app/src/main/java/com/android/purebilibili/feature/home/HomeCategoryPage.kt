@@ -15,6 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Refresh
@@ -300,6 +301,9 @@ internal fun HomeCategoryPageContent(
         )
     },
     firstGridItemModifier: Modifier = Modifier,
+    showGuestLoginBanner: Boolean = false,
+    onGuestLoginClick: () -> Unit = {},
+    onGuestLoginDismiss: () -> Unit = {},
     /**
      * 首屏骨架 item 提供者。非空时网格只铺骨架，与真实卡片共用同一个 LazyLayout 与同一个
      * gridState；数据到达后由真实卡片原地替换，不会整屏重建、也不丢滚动锚点。
@@ -816,6 +820,57 @@ internal fun HomeCategoryPageContent(
         } else {
             // Video Category Content
             if (category == HomeCategory.RECOMMEND) {
+                if (showGuestLoginBanner) {
+                    item(
+                        key = "home_guest_login_banner",
+                        contentType = "home_guest_login_banner",
+                        fullLine = true
+                    ) {
+                        com.android.purebilibili.core.ui.components.AppSurface(
+                            shape = com.android.purebilibili.core.ui.AppShapes.container(
+                                com.android.purebilibili.core.ui.ContainerLevel.Card
+                            ),
+                            color = com.android.purebilibili.core.ui.AppSurfaceTokens.cardContainer(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                AppText(
+                                    text = "登录解锁个性化推荐与 1080P60/4K 高画质",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AppContentColors.secondaryText(),
+                                    maxLines = 2,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                AppTextButton(onClick = onGuestLoginClick) {
+                                    AppText(
+                                        text = "去登录",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = AppContentColors.accent(),
+                                    )
+                                }
+                                com.android.purebilibili.core.ui.components.AppIconButton(
+                                    onClick = onGuestLoginDismiss,
+                                    modifier = Modifier.size(32.dp),
+                                ) {
+                                    com.android.purebilibili.core.ui.components.AppIcon(
+                                        imageVector = androidx.compose.material.icons.Icons.Rounded.Close,
+                                        contentDescription = "关闭登录提示",
+                                        tint = AppContentColors.secondaryText(),
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 if (showHeroCarousel) {
                     item(
                         key = "home_hero_carousel",
@@ -1182,7 +1237,8 @@ private fun TodayWatchPlanCard(
     onUpClick: (Long) -> Unit,
     onVideoClick: (VideoItem) -> Unit
 ) {
-    val todayWatchBackdrop = rememberLayerBackdrop()
+    val todayWatchBackdropSource = com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+    val todayWatchBackdrop = todayWatchBackdropSource.backdrop
     var revealContent by remember(plan?.generatedAt, isLoading, cardConfig.enableWaterfallAnimation) {
         mutableStateOf(!cardConfig.enableWaterfallAnimation)
     }
@@ -1212,11 +1268,7 @@ private fun TodayWatchPlanCard(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .then(
-                        if (com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current) {
-                            Modifier.layerBackdrop(todayWatchBackdrop)
-                        } else Modifier
-                    )
+                    .then(todayWatchBackdropSource.modifier)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
             )
             Column(

@@ -1784,6 +1784,10 @@ class MainActivity : AppCompatActivity() {
                                     if (showingSetup) {
                                         com.android.purebilibili.feature.onboarding.FirstLaunchSetupScreen(
                                             onFinished = { showFirstLaunchSetup = false },
+                                            onFinishedAndLogin = {
+                                                pendingNavigationRoute = ScreenRoutes.Login.route
+                                                showFirstLaunchSetup = false
+                                            },
                                         )
                                     } else {
                                 var isExternalDropActive by remember { mutableStateOf(false) }

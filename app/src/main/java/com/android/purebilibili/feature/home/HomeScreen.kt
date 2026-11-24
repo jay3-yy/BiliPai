@@ -592,6 +592,19 @@ internal fun HomeScreen(
 
     //  [新增] JSON 插件过滤提示
     val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(viewModel) {
+        viewModel.watchLaterAddedEvents.collect {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val result = snackbarHostState.showSnackbar(
+                message = "已添加到稍后再看",
+                actionLabel = "去查看",
+                duration = SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                onWatchLaterClick()
+            }
+        }
+    }
     //  [埋点] 页面浏览追踪
     LaunchedEffect(Unit) {
         com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("HomeScreen")
@@ -2361,9 +2374,20 @@ internal fun HomeScreen(
                                          showHeroCarousel = pageShowsHeroCarousel
                                      ).dp
                                  )
+                                 var guestLoginBannerDismissed by rememberSaveable { mutableStateOf(false) }
                                  HomeTodayWatchContentHost(viewModel, category, pageWork.collectUpdates) { todayWatch ->
                                      HomeCategoryPageContent(
                                          category = category,
+                                         showGuestLoginBanner = category == HomeCategory.RECOMMEND &&
+                                             !user.isLogin &&
+                                             !guestLoginBannerDismissed,
+                                         onGuestLoginClick = {
+                                             onHeaderNavigate(
+                                                 com.android.purebilibili.navigation3.BiliPaiNavKey.Login,
+                                                 HomeHeaderControl.AVATAR,
+                                             ) { false }
+                                         },
+                                         onGuestLoginDismiss = { guestLoginBannerDismissed = true },
                                          categoryState = pageCategoryState,
                                          memoryRecovery = pendingMemoryRecovery,
                                          onMemoryRecoveryConsumed = { id, located ->
