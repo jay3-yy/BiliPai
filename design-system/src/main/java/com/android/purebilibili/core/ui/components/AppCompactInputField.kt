@@ -1,6 +1,7 @@
 package com.android.purebilibili.core.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -79,6 +80,19 @@ fun AppCompactInputField(
         }
         return
     }
+    val isGlass = com.android.purebilibili.core.ui.rememberAppThemeRenderer() ==
+        com.android.purebilibili.core.ui.AppThemeRenderer.LIQUID_GLASS
+    val effectiveShape = if (isGlass) CircleShape else shape
+    val effectiveContainerColor = if (isGlass && containerColor == AppSurfaceTokens.searchContainer()) {
+        com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.neutralPillFill()
+    } else containerColor
+    val glassBorderModifier = if (isGlass) {
+        Modifier.border(
+            com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.SpecularBorderWidth,
+            com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.cardRimColor(),
+            effectiveShape,
+        )
+    } else Modifier
     val textColor = AppContentColors.primaryText()
     com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
         BasicTextField(
@@ -86,8 +100,9 @@ fun AppCompactInputField(
             onValueChange = onValueChange,
             modifier = modifier
                 .heightIn(min = height)
-                .clip(shape)
-                .background(containerColor)
+                .clip(effectiveShape)
+                .background(effectiveContainerColor)
+                .then(glassBorderModifier)
                 .focusRequester(requester),
             readOnly = readOnly,
             singleLine = singleLine,
@@ -132,12 +147,25 @@ fun AppCompactSearchInputField(
                 ),
             )
         } else {
+            val isGlass = com.android.purebilibili.core.ui.rememberAppThemeRenderer() ==
+                com.android.purebilibili.core.ui.AppThemeRenderer.LIQUID_GLASS
+            val bgColor = if (isGlass) {
+                com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.neutralPillFill()
+            } else AppSurfaceTokens.searchContainer()
+            val glassBorder = if (isGlass) {
+                Modifier.border(
+                    com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.SpecularBorderWidth,
+                    com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.cardRimColor(),
+                    CircleShape,
+                )
+            } else Modifier
             BasicTextField(
                 state = state,
                 modifier = modifier
                     .heightIn(min = height)
                     .clip(CircleShape)
-                    .background(AppSurfaceTokens.searchContainer()),
+                    .background(bgColor)
+                    .then(glassBorder),
                 lineLimits = TextFieldLineLimits.SingleLine,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(color = AppContentColors.primaryText()),
                 cursorBrush = SolidColor(AppContentColors.accent()),
@@ -244,6 +272,19 @@ fun AppCompactInputField(
         }
         return
     }
+    val isGlass = com.android.purebilibili.core.ui.rememberAppThemeRenderer() ==
+        com.android.purebilibili.core.ui.AppThemeRenderer.LIQUID_GLASS
+    val effectiveShape = if (isGlass) CircleShape else shape
+    val effectiveContainerColor = if (isGlass && containerColor == AppSurfaceTokens.searchContainer()) {
+        com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.neutralPillFill()
+    } else containerColor
+    val glassBorderModifier = if (isGlass) {
+        Modifier.border(
+            com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.SpecularBorderWidth,
+            com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.cardRimColor(),
+            effectiveShape,
+        )
+    } else Modifier
     val textColor = AppContentColors.primaryText()
     com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
         BasicTextField(
@@ -251,8 +292,9 @@ fun AppCompactInputField(
             onValueChange = onValueChange,
             modifier = modifier
                 .heightIn(min = height)
-                .clip(shape)
-                .background(containerColor)
+                .clip(effectiveShape)
+                .background(effectiveContainerColor)
+                .then(glassBorderModifier)
                 .focusRequester(requester),
             readOnly = readOnly,
             singleLine = singleLine,

@@ -123,7 +123,10 @@ fun TopicDetailScreen(
     // 骨架与真实卡片共用同一个 LazyColumn、同一个 contentType，色块因此用固定色：
     // 呼吸中的灰块叠在卡片淡入之下，观感上就是「闪」。
     val skeletonBlockColor = rememberStaticSkeletonBlockColor()
-    val topicBackdrop = if (liquidGlassEnabled && !showInitialSkeleton) rememberLayerBackdrop() else null
+    val topicBackdropSource = if (liquidGlassEnabled && !showInitialSkeleton) {
+        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+    } else null
+    val topicBackdrop = topicBackdropSource?.backdrop
     var showPublishComposer by remember { mutableStateOf(false) }
     var composerAccountId by remember { mutableStateOf(0L) }
     var clearingDraft by remember { mutableStateOf(false) }
@@ -163,7 +166,7 @@ fun TopicDetailScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (topicBackdrop != null) Modifier.layerBackdrop(topicBackdrop) else Modifier)
+                .then(topicBackdropSource?.modifier ?: Modifier)
                 .globalWallpaperAwareBackground()
         ) {
             // 骨架与真实内容共用同一个 LazyColumn 与同一个 contentType：数据到达时

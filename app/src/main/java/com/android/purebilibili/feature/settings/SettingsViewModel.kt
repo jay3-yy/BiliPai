@@ -871,6 +871,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             SettingsManager.setUiStyle(context, selection)
         }
     }
+
+    fun setThemePresentation(selection: AppUiStyle, liquidGlassEnabled: Boolean) {
+        viewModelScope.launch {
+            SettingsManager.setThemePresentation(context, selection, liquidGlassEnabled)
+        }
+    }
+
+    fun setThemeSwitchTransitionStyle(style: com.android.purebilibili.core.theme.ThemeSwitchTransitionStyle) {
+        viewModelScope.launch {
+            SettingsManager.setThemeSwitchTransitionStyle(context, style)
+        }
+    }
     fun setDarkThemeSchedule(schedule: DarkThemeSchedule) {
         viewModelScope.launch { SettingsManager.setDarkThemeSchedule(context, schedule) }
     }
@@ -1147,10 +1159,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleAndroidNativeLiquidGlass(enabled: Boolean) {
         viewModelScope.launch {
             SettingsManager.setAndroidNativeLiquidGlassEnabled(context, enabled)
-            if (enabled) {
-                SettingsManager.setBottomBarBlurEnabled(context, false)
-                SettingsManager.setHeaderBlurEnabled(context, false)
-            }
         }
     }
 

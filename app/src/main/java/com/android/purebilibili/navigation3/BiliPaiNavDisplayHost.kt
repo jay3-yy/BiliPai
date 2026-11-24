@@ -130,12 +130,15 @@ internal fun BiliPaiNavDisplayHost(
     activeMainHostRoute: String? = null,
     cardTransitionEnabled: Boolean = true,
     videoCardTransitionEnabled: Boolean = cardTransitionEnabled,
+    sharedContainerFallbackEnabled: Boolean = false,
+    providedNavigationSharedSources: SettingsSharedContainerSources? = null,
     systemVideoCardCaptureEnabled: Boolean = false,
     systemWindowEntry: BiliPaiNavKey? = null,
     videoMiniPlayerDeparture: Boolean = false,
     videoTransitionRealtimeBlurEnabled: Boolean = false,
     isLightBackground: Boolean = false,
     reduceMotion: Boolean = false,
+    wrapInSharedTransitionLayout: Boolean = true,
     videoSharedTransitionDurationMillis: Int,
     videoCardClock: VideoCardTransitionClock,
     predictiveBackAnimationStyle: BiliPaiPredictiveBackAnimationStyle =
@@ -229,8 +232,50 @@ internal fun BiliPaiNavDisplayHost(
             )
         }
     LaunchedEffect(stackSnapshot, settingsContainerSnapshot.keys) {
-        // 离场 entry 保留自己的转场对象；目录中清除旧来源，搜索直达不能复用上次点击。
-        settingsContainerSources.sources.keys.retainAll(stackSnapshot.toSet())
+        // 离场 entry 保留自己的转场对象；返回动画结束后再清除来源，避免返回途中丢失重挂载复用。
+        val activeKeys = stackSnapshot.toSet()
+        settingsContainerSources.sources.entries.removeAll { (target, origin) ->
+            target !in activeKeys && origin.sharedBounds == null
+        }
+    }
+    val navigationSharedEnabled = sharedContainerFallbackEnabled && !reduceMotion &&
+        com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+    // 列表卡片被底栏/顶栏部分遮挡时，sharedBounds 仍按完整未裁切尺寸抬入 Overlay 展开。
+    val navigationSharedSources = providedNavigationSharedSources ?: remember(navigationSharedEnabled) {
+        SettingsSharedContainerSources(allowPartial = true)
+    }
+    val navigationSharedStiffnessScale = remember(videoSharedTransitionDurationMillis) {
+        val ratio = 360f / videoSharedTransitionDurationMillis.coerceAtLeast(180).toFloat()
+        (ratio * ratio).coerceIn(0.45f, 1.5f)
+    }
+    val navigationSharedSnapshot = navigationSharedSources.sources.toMap()
+    val navigationContainerTransitions = remember(
+        navigationSharedEnabled, navigationSharedSnapshot, stackSnapshot,
+        settingsPersistentPanes, activeMainHostRoute, videoTransitionRealtimeBlurEnabled,
+        navBlurMotionTierProvider, navigationSharedStiffnessScale,
+    ) {
+        if (!navigationSharedEnabled) emptyMap() else
+            navigationSharedSnapshot.filter { (target, origin) ->
+                isSettingsContainerBoundary(true, stackSnapshot, target, origin.owner) &&
+                    !isSettingsPaneNavigation(settingsPersistentPanes, origin.owner, target, activeMainHostRoute)
+            }.mapValues { (target, origin) ->
+                SettingsSharedContainerTransition(
+                    origin = origin,
+                    destinationZIndex = stackSnapshot.indexOf(target).toFloat(),
+                    pageColor = { settingsContainerPageColor.value },
+                    realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
+                    blurMotionTier = navBlurMotionTierProvider,
+                    navigationControlFallback = true,
+                    stiffnessScale = navigationSharedStiffnessScale,
+                )
+            }
+    }
+    LaunchedEffect(stackSnapshot, navigationSharedSnapshot.keys) {
+        // 离场返回期间保留仍在参与 sharedBounds 的 origin，让返回时重建的源节点（如底部小横条）能够重新接回。
+        val activeKeys = stackSnapshot.toSet()
+        navigationSharedSources.sources.entries.removeAll { (target, origin) ->
+            target !in activeKeys && origin.sharedBounds == null
+        }
     }
     val liveContainerSources = remember { com.android.purebilibili.feature.settings.SettingsContainerSources() }
     val liveContainerEnabled = cardTransitionEnabled && !reduceMotion &&
@@ -839,13 +884,30 @@ internal fun BiliPaiNavDisplayHost(
             }
         }
     }
-    LaunchedEffect(effectiveVideoCardExposure) {
+    LaunchedEffect(effectiveVideoCardExposure, videoCardClock.phase) {
         // 新点击可在旧 Idle effect 执行前同步开启会话，不能清空刚接手的背景层。
+        // 必须同时监听 videoCardClock.phase：端点帧 exposure 会先于 clock.phase 落到 Idle，
+        // 若只以 exposure 为 key，clock.phase 晚一拍归位后将永久漏调 releaseSession。
         if (shouldReleaseHostOwnedDepthLayer(effectiveVideoCardExposure) &&
             shouldReleaseHostOwnedDepthLayer(videoCardExposureProvider()) &&
             videoCardClock.phase == VideoCardTransitionBackgroundPhase.IDLE
         ) {
             videoCardSnapshotHandle.releaseSession()
+            return@LaunchedEffect
+        }
+        // 详情页稳态停留超过短时快速返回窗口后，主动释放整屏 Offscreen 离屏缓存与
+        // 被 RenderNode 钉住的首页封面；后续返回手势由源页按 needsSourceRefresh 重录。
+        if (effectiveVideoCardExposure == VideoCardTransitionExposure.SettledHidden &&
+            videoCardClock.phase == VideoCardTransitionBackgroundPhase.HELD &&
+            videoCardSnapshotHandle.state.hasRecordedContent
+        ) {
+            kotlinx.coroutines.delay(5_000L)
+            if (videoCardExposureProvider() == VideoCardTransitionExposure.SettledHidden &&
+                videoCardClock.phase == VideoCardTransitionBackgroundPhase.HELD
+            ) {
+                videoCardSnapshotHandle.releaseSession()
+                videoCardSnapshotHandle.state.markSourceDetachedForRefresh()
+            }
         }
     }
     val currentBackTarget = stackSnapshot.getOrNull(stackSnapshot.lastIndex - 1)
@@ -1012,6 +1074,8 @@ internal fun BiliPaiNavDisplayHost(
             .onGloballyPositioned { coordinates ->
                 settingsContainerSources.hostOrigin = coordinates.positionInRoot()
                 settingsContainerSources.hostSize = coordinates.size
+                navigationSharedSources.hostOrigin = coordinates.positionInRoot()
+                navigationSharedSources.hostSize = coordinates.size
                 liveContainerSources.hostOrigin = coordinates.positionInRoot()
                 liveContainerSources.hostSize = coordinates.size
             }
@@ -1068,6 +1132,8 @@ internal fun BiliPaiNavDisplayHost(
             settingsContainerEnabled,
             settingsContainerMorphEnabled,
             settingsContainerSources,
+            navigationSharedSources,
+            navigationSharedEnabled,
             settingsContainerPageColor,
             liveContainerSources,
             latestLiveContainerTransitions,
@@ -1134,6 +1200,8 @@ internal fun BiliPaiNavDisplayHost(
                         LocalSettingsContainerSources provides
                             (if (settingsContainerEnabled) settingsContainerSources else null),
                         LocalSettingsContainerOwner provides key,
+                        LocalNavigationSharedContainerSources provides
+                            (if (navigationSharedEnabled) navigationSharedSources else null),
                         LocalGlobalWallpaperBackdropVisible provides entryWallpaperVisible,
                         LocalVideoCardSharedElementSourceRoute provides key.toLegacyRoute(),
                         LocalVideoCardTransitionClock provides videoCardClock,
@@ -1150,11 +1218,38 @@ internal fun BiliPaiNavDisplayHost(
                             val settingsTransition = LocalNavEntryTransition.current as? SettingsSharedContainerTransition
                             // 只在共享匹配真正可用时接管内容交接；来源失效的降级淡入
                             // 仍保留内容入场节奏，避免页面既无容器也无入场动画。
-                            val useSettingsContainer = settingsTransition != null && settingsContainerEnabled &&
+                            val sharedContainerEnabled = if (settingsTransition?.navigationControlFallback == true) {
+                                navigationSharedEnabled
+                            } else settingsContainerEnabled
+                            val useSettingsContainer = settingsTransition != null && sharedContainerEnabled &&
                                 settingsTransition.origin.available
+                            val navScope = LocalNavTransitionScope.current
+                            val sharedContainerMoving = navScope.isRunning ||
+                                settingsTransition?.origin?.sharedBounds?.let {
+                                    it.transition.currentState != it.transition.targetState
+                                } == true
+                            val coveredBySharedContainer = navigationSharedEnabled &&
+                                navigationSharedSnapshot.values.any { origin ->
+                                    origin.owner == key && (
+                                        navScope.relativeDepth > 0.02f ||
+                                            (navScope.isRunning && navScope.relativeDepth > 0f) ||
+                                            origin.sharedBounds?.let {
+                                                it.transition.currentState != it.transition.targetState
+                                            } == true
+                                        )
+                                }
+                            // 展开已贴近全屏（>=98%）且非返回/手势时提前交还播放器 Surface，避免末段微调拖慢出画；
+                            // 返回与预测手势全程隐藏原生 Surface，由共享封面承接；被子共享容器遮挡的父详情同步隐藏原生 Surface。
+                            val sharedSurfaceBlocked = coveredBySharedContainer || (
+                                useSettingsContainer && (
+                                    navScope.isRemoving ||
+                                        navScope.gesture != null ||
+                                        (sharedContainerMoving && navScope.relativeDepth <= -0.02f)
+                                    )
+                                )
                             val replayWallpaperInsideContainer =
                                 useSettingsContainer && entryWallpaperVisible && hasSharedWallpaperBacking
-                            val containerBounds = if (settingsTransition != null && settingsContainerEnabled) {
+                            val containerBounds = if (settingsTransition != null && sharedContainerEnabled) {
                                 settingsSharedContainerDestination(
                                     origin = settingsTransition.origin,
                                     navScope = LocalNavTransitionScope.current,
@@ -1165,6 +1260,7 @@ internal fun BiliPaiNavDisplayHost(
                                         settingsContainerPageColor.value
                                     },
                                     destinationZIndex = settingsTransition.destinationZIndex,
+                                    scaleDestinationToWidth = settingsTransition.scaleDestinationToWidth,
                                     wallpaperBacking = if (replayWallpaperInsideContainer) {
                                         Modifier.sharedGlobalWallpaperBackground(settingsContainerPageColor.value)
                                     } else Modifier,
@@ -1185,6 +1281,7 @@ internal fun BiliPaiNavDisplayHost(
                                 CompositionLocalProvider(
                                     com.android.purebilibili.core.ui.animation.LocalNavigationOwnsContentEntrance
                                         provides (useSettingsContainer || key == systemWindowEntry),
+                                    LocalNavigationSharedSurfaceVisible provides !sharedSurfaceBlocked,
                                 ) {
                                     stableNavEntryContent(key)
                                 }
@@ -1199,6 +1296,7 @@ internal fun BiliPaiNavDisplayHost(
             stackSnapshot,
             settingsPersistentPanes,
             settingsContainerTransitions,
+            navigationContainerTransitions,
             liveContainerTransitions,
             settingsContainerEnabled,
             activeMainHostRoute,
@@ -1213,6 +1311,7 @@ internal fun BiliPaiNavDisplayHost(
                     settingsBackStack = stackSnapshot,
                     settingsPersistentPanes = settingsPersistentPanes,
                     settingsContainerTransitions = settingsContainerTransitions,
+                    navigationContainerTransitions = navigationContainerTransitions,
                     settingsMorphFallback = if (settingsContainerEnabled) {
                         top.yukonga.miuix.kmp.nav.transition.NavTransitions.MiuixDefault
                     } else null,
@@ -1225,7 +1324,7 @@ internal fun BiliPaiNavDisplayHost(
                 )
             }
         }
-        SettingsSharedTransitionLayout(enabled = settingsContainerEnabled) {
+        val navDisplayContent: @Composable () -> Unit = {
             BiliPaiAndroidXNavDisplay(
                 backStack = backStack,
                 onBack = performBack,
@@ -1247,6 +1346,15 @@ internal fun BiliPaiNavDisplayHost(
                 motion = routeMotion,
                 content = navEntryContent,
             )
+        }
+        if (wrapInSharedTransitionLayout) {
+            SettingsSharedTransitionLayout(
+                enabled = settingsContainerEnabled || navigationSharedEnabled,
+            ) {
+                navDisplayContent()
+            }
+        } else {
+            navDisplayContent()
         }
     }
 }

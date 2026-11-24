@@ -2319,6 +2319,11 @@ private fun SpaceContent(
                             title = "最近投币的视频",
                             count = state.homeCoinVideoCount.takeIf { it > 0 } ?: state.homeCoinVideos.size,
                             actionLabel = "查看全部",
+                            actionTarget = com.android.purebilibili.navigation3.BiliPaiNavKey.LikedVideos(
+                                mid = state.userInfo.mid,
+                                ownerName = state.userInfo.name,
+                                isCoinArchive = true,
+                            ),
                             onActionClick = {
                                 onViewAllClick(
                                     "coin",
@@ -2379,6 +2384,20 @@ private fun SpaceContent(
                             title = "最近点赞的视频",
                             count = state.homeLikeVideoCount.takeIf { it > 0 } ?: state.homeLikeVideos.size,
                             actionLabel = "查看全部",
+                            actionTarget = if (onLikedVideosClick != null) {
+                                com.android.purebilibili.navigation3.BiliPaiNavKey.LikedVideos(
+                                    mid = state.userInfo.mid,
+                                    ownerName = state.userInfo.name,
+                                )
+                            } else {
+                                com.android.purebilibili.navigation3.BiliPaiNavKey.SeasonSeriesDetail(
+                                    type = "like",
+                                    id = 0L,
+                                    mid = state.userInfo.mid,
+                                    title = "最近点赞的视频",
+                                    ownerName = state.userInfo.name,
+                                )
+                            },
                             onActionClick = {
                                 if (onLikedVideosClick != null) {
                                     onLikedVideosClick(state.userInfo.mid, state.userInfo.name)
@@ -3941,6 +3960,16 @@ private fun SpaceHeader(
         SpaceChargeGuardRow(
             chargeGroup = chargeGroup,
             guardGroup = guardGroup,
+            upowerTarget = com.android.purebilibili.navigation3.BiliPaiNavKey.UpowerRank(
+                mid = userInfo.mid,
+                name = userInfo.name,
+                count = chargeGroup?.count ?: 0L,
+            ),
+            guardTarget = com.android.purebilibili.navigation3.BiliPaiNavKey.MemberGuard(
+                mid = userInfo.mid,
+                name = userInfo.name,
+                count = guardGroup?.count ?: 0L,
+            ),
             onUpowerRankClick = {
                 onUpowerRankClick(userInfo.mid, userInfo.name, chargeGroup?.count ?: 0L)
             },
@@ -4395,6 +4424,8 @@ private fun SpaceContributionVideoSummaryBar(
 private fun SpaceChargeGuardRow(
     chargeGroup: SpaceSupporterGroup?,
     guardGroup: SpaceSupporterGroup?,
+    upowerTarget: com.android.purebilibili.navigation3.BiliPaiNavKey? = null,
+    guardTarget: com.android.purebilibili.navigation3.BiliPaiNavKey? = null,
     onUpowerRankClick: () -> Unit,
     onMemberGuardClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -4406,8 +4437,13 @@ private fun SpaceChargeGuardRow(
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         chargeGroup?.let { group ->
+            val chargeControl = com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl(
+                target = upowerTarget,
+                shape = RoundedCornerShape(50),
+                onClick = onUpowerRankClick,
+            )
             Row(
-                modifier = Modifier.appActionClickable(onClick = onUpowerRankClick),
+                modifier = chargeControl.modifier.appActionClickable(onClick = chargeControl.onClick),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -4426,8 +4462,13 @@ private fun SpaceChargeGuardRow(
             }
         }
         guardGroup?.let { group ->
+            val guardControl = com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl(
+                target = guardTarget,
+                shape = RoundedCornerShape(50),
+                onClick = onMemberGuardClick,
+            )
             Row(
-                modifier = Modifier.appActionClickable(onClick = onMemberGuardClick),
+                modifier = guardControl.modifier.appActionClickable(onClick = guardControl.onClick),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
@@ -4474,7 +4515,8 @@ private fun SpaceSectionHeader(
     title: String,
     count: Int,
     onActionClick: (() -> Unit)? = null,
-    actionLabel: String? = "查看更多"
+    actionLabel: String? = "查看更多",
+    actionTarget: com.android.purebilibili.navigation3.BiliPaiNavKey? = null,
 ) {
     Row(
         modifier = Modifier
@@ -4495,7 +4537,15 @@ private fun SpaceSectionHeader(
         )
         Spacer(modifier = Modifier.weight(1f))
         if (onActionClick != null && !actionLabel.isNullOrBlank()) {
-            AppTextButton(onClick = onActionClick) {
+            val actionControl = com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl(
+                target = actionTarget,
+                shape = RoundedCornerShape(50),
+                onClick = onActionClick,
+            )
+            AppTextButton(
+                modifier = actionControl.modifier,
+                onClick = actionControl.onClick,
+            ) {
                 AppText(actionLabel)
             }
         }

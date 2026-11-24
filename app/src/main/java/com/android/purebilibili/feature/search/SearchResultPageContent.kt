@@ -19,8 +19,10 @@ import com.android.purebilibili.feature.home.resolveHomeFeedPinchColumnBounds
 import com.android.purebilibili.feature.home.GridPinchColumnHudPill
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.clip
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
@@ -114,6 +116,7 @@ internal fun SearchResultPageContent(
     resultBottomPadding: androidx.compose.ui.unit.Dp,
     onLoadMore: () -> Unit,
     onRetrySearch: (String) -> Unit,
+    onSwitchSearchType: ((SearchType) -> Unit)? = null,
     onWatchLater: (String, Long) -> Unit,
     onNavigateSearchTarget: (BilibiliNavigationTarget) -> Boolean,
     onVideoClick: (String, Long, String, Boolean) -> Unit,
@@ -307,15 +310,64 @@ internal fun SearchResultPageContent(
                     .padding(resultPadding),
                 contentAlignment = Alignment.Center
             ) {
-                com.android.purebilibili.core.ui.EmptyState(
-                    message = copy.title,
-                    subtitle = copy.subtitle,
-                    animation = com.android.purebilibili.core.ui.MaidAnimation.SEARCH_EMPTY,
-                    actionText = stringResource(R.string.search_again),
-                    onAction = { onRetrySearch(pageResultState.query) },
-                    enableEasterEgg = false,
-                    isVisible = isPageVisible()
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    com.android.purebilibili.core.ui.EmptyState(
+                        message = copy.title,
+                        subtitle = copy.subtitle,
+                        animation = com.android.purebilibili.core.ui.MaidAnimation.SEARCH_EMPTY,
+                        actionText = stringResource(R.string.search_again),
+                        onAction = { onRetrySearch(pageResultState.query) },
+                        enableEasterEgg = false,
+                        isVisible = isPageVisible()
+                    )
+                    if (onSwitchSearchType != null) {
+                        val alternativeTypes = remember(targetSearchType) {
+                            listOf(
+                                SearchType.ALL to "综合",
+                                SearchType.UP to "UP主",
+                                SearchType.BANGUMI to "番剧",
+                                SearchType.LIVE to "直播",
+                            ).filterNot { (type, _) ->
+                                type == targetSearchType ||
+                                    (targetSearchType == SearchType.VIDEO && type == SearchType.ALL)
+                            }
+                        }
+                        if (alternativeTypes.isNotEmpty()) {
+                            val chipShape = com.android.purebilibili.core.ui.AppShapes.container(
+                                com.android.purebilibili.core.ui.ContainerLevel.Tag
+                            )
+                            AppText(
+                                text = "换个分区试试",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = AppContentColors.secondaryText(),
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                alternativeTypes.forEach { (type, label) ->
+                                    com.android.purebilibili.core.ui.components.AppSurface(
+                                        shape = chipShape,
+                                        color = com.android.purebilibili.core.ui.AppSurfaceTokens.cardContainer(),
+                                        modifier = Modifier
+                                            .clip(chipShape)
+                                            .clickable { onSwitchSearchType(type) },
+                                    ) {
+                                        AppText(
+                                            text = label,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = AppContentColors.primaryText(),
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     } else {

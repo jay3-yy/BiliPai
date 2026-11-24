@@ -145,6 +145,7 @@ class BottomBarScrollHideConnection(
     private val isActivePage: () -> Boolean,
     private val onVisibilityIntent: (BottomBarScrollHideIntent) -> Unit,
     private val hideState: MutableState<BottomBarScrollHideState>,
+    private val feedScrollInProgress: MutableState<Boolean>? = null,
 ) : NestedScrollConnection {
 
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -156,6 +157,8 @@ class BottomBarScrollHideConnection(
             liquidGlassEnabled = false,
         )
         if (nextOffset != null) {
+            // 与偏移更新在同一快照周期标记正在滚动，避免 SideEffect 滞后或子网格未监听导致小横条合体丢帧。
+            feedScrollInProgress?.value = true
             chromeScrollOffset.floatValue = nextOffset
         }
         if (!autoHideEnabled()) return Offset.Zero
@@ -173,6 +176,16 @@ class BottomBarScrollHideConnection(
         }
         return Offset.Zero
     }
+
+    override suspend fun onPostFling(
+        consumed: androidx.compose.ui.unit.Velocity,
+        available: androidx.compose.ui.unit.Velocity,
+    ): androidx.compose.ui.unit.Velocity {
+        if (isActivePage()) {
+            feedScrollInProgress?.value = false
+        }
+        return androidx.compose.ui.unit.Velocity.Zero
+    }
 }
 
 /**
@@ -186,12 +199,13 @@ fun rememberBottomBarScrollHideConnection(
     isActivePage: Boolean,
     onVisibilityIntent: (BottomBarScrollHideIntent) -> Unit,
     hideState: MutableState<BottomBarScrollHideState> = remember { mutableStateOf(BottomBarScrollHideState()) },
+    feedScrollInProgress: MutableState<Boolean>? = null,
 ): NestedScrollConnection {
     val currentAutoHideEnabled by rememberUpdatedState(autoHideEnabled)
     val currentIsAtTop by rememberUpdatedState(isAtTop)
     val currentIsActivePage by rememberUpdatedState(isActivePage)
     val currentOnVisibilityIntent by rememberUpdatedState(onVisibilityIntent)
-    return remember(chromeScrollOffset, hideState) {
+    return remember(chromeScrollOffset, hideState, feedScrollInProgress) {
         BottomBarScrollHideConnection(
             chromeScrollOffset = chromeScrollOffset,
             autoHideEnabled = { currentAutoHideEnabled },
@@ -199,6 +213,7 @@ fun rememberBottomBarScrollHideConnection(
             isActivePage = { currentIsActivePage },
             onVisibilityIntent = { currentOnVisibilityIntent(it) },
             hideState = hideState,
+            feedScrollInProgress = feedScrollInProgress,
         )
     }
 }

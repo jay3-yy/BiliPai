@@ -60,11 +60,13 @@ private class WallpaperReplayNode(var source: ChromeBackdropSource) :
 
     override fun ContentDrawScope.draw() {
         val replayCoordinates = coordinates
-        clipRect {
-            // 导航只缩放页面及圆角裁剪，回放的壁纸仍与根层像素对齐。
-            scale(1f / rootScale.x, 1f / rootScale.y, pivot = Offset.Zero) {
-                with(source.backdrop) {
-                    drawBackdrop(density = this@scale, coordinates = replayCoordinates)
+        if (replayCoordinates != null && replayCoordinates.isAttached) {
+            clipRect {
+                // 导航只缩放页面及圆角裁剪，回放的壁纸仍与根层像素对齐。
+                scale(1f / rootScale.x, 1f / rootScale.y, pivot = Offset.Zero) {
+                    with(source.backdrop) {
+                        drawBackdrop(density = this@scale, coordinates = replayCoordinates)
+                    }
                 }
             }
         }

@@ -131,7 +131,17 @@ internal fun WallpaperMedia(
                         importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     }
                 },
-                update = { it.player = player },
+                update = { view ->
+                    view.player = player
+                    val expectedResizeMode = if (transformProvider == null) {
+                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    } else {
+                        AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    }
+                    if (view.resizeMode != expectedResizeMode) {
+                        view.resizeMode = expectedResizeMode
+                    }
+                },
                 onRelease = { it.player = null },
             )
         } else {

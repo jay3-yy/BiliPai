@@ -243,4 +243,13 @@ class SettingsContainerMotionPolicyTest {
         assertFalse(isSettingsContainerBoundary(true, listOf(target), target, owner))
         assertFalse(isSettingsContainerBoundary(true, listOf(owner), target, owner))
     }
+
+    @Test
+    fun relatedVideoDetailSupportsSharedContainerTransitionFromParentDetail() {
+        val parent = BiliPaiNavKey.VideoDetail(bvid = "BV_PARENT", openId = 1L)
+        val child = BiliPaiNavKey.VideoDetail(bvid = "BV_CHILD", openId = 2L)
+        assertTrue(supportsNavigationSharedContainer(target = child, owner = parent))
+        assertTrue(isSettingsContainerBoundary(true, listOf(BiliPaiNavKey.MainHost, parent, child), child, parent))
+        assertFalse(isSettingsContainerBoundary(true, listOf(BiliPaiNavKey.MainHost, parent, child), child, BiliPaiNavKey.MainHost))
+    }
 }

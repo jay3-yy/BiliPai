@@ -5,6 +5,7 @@ import com.android.purebilibili.core.util.animateScrollToTop
 
 import com.android.purebilibili.core.util.responsiveContentWidth
 
+import com.android.purebilibili.navigation.isTabSelectionInProgress
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.data.model.AccountLedgerKind
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
@@ -219,7 +220,6 @@ import com.android.purebilibili.feature.space.resolveSpaceBannerColorFilter
 import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.core.ui.common.contentTabPagerGestures
 import com.android.purebilibili.core.ui.common.rememberContentTabPager
-import com.android.purebilibili.core.ui.common.stationaryPagerHeader
 import com.android.purebilibili.core.ui.components.AppHorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import com.android.purebilibili.feature.settings.AppThemeMode
@@ -1532,29 +1532,14 @@ private fun ProfileSpaceContent(
     }
     val tabletRailScrollState = rememberScrollState()
     val profileTabs = remember { defaultProfileSpaceTabs() }
-    val mobilePageListStates = profileTabs.associate { it.tab to rememberLazyListState() }
-    val tabletPageListStates = profileTabs.associate { it.tab to rememberLazyListState() }
-    val tabletFeedListState = tabletPageListStates.getValue(space.selectedTab)
-    val mobileListState = mobilePageListStates.getValue(space.selectedTab)
+    val tabletFeedListState = rememberLazyListState()
+    val mobileListState = rememberLazyListState()
     val selectedPage = profileTabs.indexOfFirst { it.tab == space.selectedTab }.coerceAtLeast(0)
     val pagerState = rememberContentTabPager(
         pageCount = profileTabs.size,
         selectedPage = selectedPage,
         onPageSelected = { onTabSelected(profileTabs[it].tab) },
-        prepareNeighbors = { sourcePage ->
-            val states = if (isTablet) tabletPageListStates else mobilePageListStates
-            val source = states.getValue(profileTabs[sourcePage].tab)
-            profileTabs.forEachIndexed { index, tab ->
-                if (index != sourcePage) {
-                    // Phone content is one existing sheet item after the hero. Its pixel
-                    // offset must match across pages so the dashboard/rail stay stationary.
-                    states.getValue(tab.tab).requestScrollToItem(
-                        source.firstVisibleItemIndex,
-                        source.firstVisibleItemScrollOffset,
-                    )
-                }
-            }
-        },
+        prepareNeighbors = {},
     )
     val density = LocalDensity.current
     var identityStatsTopPx by remember(density, statusBarTopPadding) {
@@ -1720,7 +1705,6 @@ private fun ProfileSpaceContent(
                         bottom = maxOf(48.dp, bottomDockClearance)
                     ),
                     listState = tabletFeedListState,
-                    pageListStates = tabletPageListStates,
                     pagerState = pagerState,
                 )
             }
@@ -1743,25 +1727,7 @@ private fun ProfileSpaceContent(
                         captureBackground()
                     }
                 }
-                ProfileSpaceTabsHost(
-                    sharedGlassTabs = LocalAppThemeConfig.current.liquidGlassEnabled,
-                    currentPage = { pagerState.currentPage },
-                    tabsVisible = {
-                        mobilePageListStates.getValue(profileTabs[pagerState.currentPage].tab)
-                            .firstVisibleItemIndex <= 1
-                    },
-                    tabs = { tabModifier ->
-                        ProfileSpaceTabs(space.selectedTab, onTabSelected, tabModifier, pagerState)
-                    },
-                    nativeTabs = { page, tabModifier ->
-                        ProfileSpaceTabs(profileTabs[page].tab, onTabSelected, tabModifier, pagerState)
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                ) { tabSlot ->
-                AppHorizontalPager(
-                    state = pagerState,
-                    userScrollEnabled = false,
-                    key = { profileTabs[it].tab },
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .contentTabPagerGestures(
@@ -1769,104 +1735,111 @@ private fun ProfileSpaceContent(
                             enabled = true,
                             contentTopPx = { mobileTabsRootBottomPx - mobileFeedRootTopPx },
                         ),
-                ) { page ->
-                val mobileListState = mobilePageListStates.getValue(profileTabs[page].tab)
-                val space = space.copy(selectedTab = profileTabs[page].tab)
-                val profileHeaderFling = rememberProfileHeaderFlingBehavior(mobileListState, profileCollapseRangeProvider)
-                LazyColumn(
-                    state = mobileListState,
-                    flingBehavior = profileHeaderFling,
-                    showScrollBar = false,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .onGloballyPositioned {
-                            if (page == selectedPage) mobileFeedRootTopPx = it.boundsInRoot().top
-                        },
-                    contentPadding = PaddingValues(bottom = paddingValues.calculateBottomPadding() + 120.dp)
                 ) {
-                item {
-                    Box(
-                        Modifier
-                            .stationaryPagerHeader(pagerState, page)
-                            .layout { measurable, constraints ->
-                                val extra = photoState.visualOffsetPx.toInt()
-                                val child = measurable.measure(constraints)
-                                layout(child.width, child.height + extra) { child.placeRelative(0, extra) }
-                            },
+                    LazyColumn(
+                        state = mobileListState,
+                        flingBehavior = profileHeaderFling,
+                        showScrollBar = false,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .onGloballyPositioned { mobileFeedRootTopPx = it.boundsInRoot().top },
+                        contentPadding = PaddingValues(bottom = paddingValues.calculateBottomPadding() + 120.dp),
                     ) {
-                    ProfileSpaceHeroHeader(
-                        user = user,
-                        editableAccount = editableAccount,
-                        onAvatarClick = openAvatarPreview,
-                        avatarSourceRect = avatarSourceRect,
-                        heroChrome = heroChrome,
-                        layoutTokens = layoutTokens,
-                        showWallpaperAction = false,
-                        showEditProfileButton = showProfileEditButton,
-                        onEditClick = { showEditDialog = true },
-                        onWallpaperActionClick = { showWallpaperActionSheet = true },
-                        onFollowingClick = onFollowingClick,
-                        onFansClick = onFansClick,
-                        onDynamicsClick = { onTabSelected(ProfileSpaceMainTab.DYNAMIC) },
-                        showIdentity = false,
-                        identityReserve = with(density) { profileStatsTopProvider().toDp() },
-                        topClipProvider = {
-                            with(density) { (statusBarTopPadding + 56.dp).toPx() } +
-                                mobileListState.firstVisibleItemScrollOffset.toFloat() - photoState.visualOffsetPx
-                        },
-                    )
-                }
-                }
-                item {
-                    ProfileContentSheet(
-                        contentChrome = contentChrome,
-                        layoutTokens = layoutTokens
-                    ) {
-                        Box(Modifier.stationaryPagerHeader(pagerState, page)) {
-                        ProfileQuickAccessDashboard(
-                            favoriteFolderShortcuts = favoriteFolderShortcuts,
-                            onDownloadClick = onDownloadClick,
-                            onHistoryClick = onHistoryClick,
-                            onSubscriptionClick = onSubscriptionClick,
-                            onWatchLaterClick = onWatchLaterClick,
-                            onFavoriteClick = onFavoriteClick,
-                            onFavoriteFolderClick = onFavoriteFolderClick,
-                            contentColor = contentChrome.onSurfaceColor,
-                        )
+                        item(key = "hero", contentType = "profile_hero") {
+                            Box(
+                                Modifier.layout { measurable, constraints ->
+                                    val extra = photoState.visualOffsetPx.toInt()
+                                    val child = measurable.measure(constraints)
+                                    layout(child.width, child.height + extra) { child.placeRelative(0, extra) }
+                                },
+                            ) {
+                                ProfileSpaceHeroHeader(
+                                    user = user,
+                                    editableAccount = editableAccount,
+                                    onAvatarClick = openAvatarPreview,
+                                    avatarSourceRect = avatarSourceRect,
+                                    heroChrome = heroChrome,
+                                    layoutTokens = layoutTokens,
+                                    showWallpaperAction = false,
+                                    showEditProfileButton = showProfileEditButton,
+                                    onEditClick = { showEditDialog = true },
+                                    onWallpaperActionClick = { showWallpaperActionSheet = true },
+                                    onFollowingClick = onFollowingClick,
+                                    onFansClick = onFansClick,
+                                    onDynamicsClick = { onTabSelected(ProfileSpaceMainTab.DYNAMIC) },
+                                    showIdentity = false,
+                                    identityReserve = with(density) { profileStatsTopProvider().toDp() },
+                                    topClipProvider = {
+                                        with(density) { (statusBarTopPadding + 56.dp).toPx() } +
+                                            mobileListState.firstVisibleItemScrollOffset.toFloat() - photoState.visualOffsetPx
+                                    },
+                                )
+                            }
                         }
-                        tabSlot(
-                            page,
-                            Modifier.stationaryPagerHeader(pagerState, page).onGloballyPositioned {
-                                if (page == selectedPage) mobileTabsRootBottomPx = it.boundsInRoot().bottom
-                            },
-                        )
-                        ProfileSpaceTabBody(
-                            user = user,
-                            space = space,
-                            showServicesInHome = true,
-                            favoriteFolderShortcuts = favoriteFolderShortcuts,
-                            onFavoriteClick = onFavoriteClick,
-                            onFavoriteFolderClick = onFavoriteFolderClick,
-                            onBangumiClick = onBangumiClick,
-                            onBangumiMoreClick = onBangumiMoreClick,
-                            onVideoClick = onVideoClick,
-                            onContentRetry = onContentRetry,
-                            onHistoryClick = onHistoryClick,
-                            showHistoryService = showHistoryService,
-                            onDownloadClick = onDownloadClick,
-                            onWatchLaterClick = onWatchLaterClick,
-                            onInboxClick = onInboxClick,
-                            onAccountManageClick = onAccountManageClick,
-                            onLogout = onLogout,
-                            onDynamicDeleteClick = onDynamicDeleteClick,
-                            contentChrome = contentChrome,
-                            embeddedInPanel = true
-                        )
+                        item(key = "sheet", contentType = "profile_sheet") {
+                            ProfileContentSheet(
+                                contentChrome = contentChrome,
+                                layoutTokens = layoutTokens,
+                            ) {
+                                ProfileQuickAccessDashboard(
+                                    favoriteFolderShortcuts = favoriteFolderShortcuts,
+                                    onDownloadClick = onDownloadClick,
+                                    onHistoryClick = onHistoryClick,
+                                    onSubscriptionClick = onSubscriptionClick,
+                                    onWatchLaterClick = onWatchLaterClick,
+                                    onFavoriteClick = onFavoriteClick,
+                                    onFavoriteFolderClick = onFavoriteFolderClick,
+                                    contentColor = contentChrome.onSurfaceColor,
+                                )
+                                ProfileSpaceTabs(
+                                    selectedTab = space.selectedTab,
+                                    onTabSelected = onTabSelected,
+                                    modifier = Modifier.onGloballyPositioned {
+                                        mobileTabsRootBottomPx = it.boundsInRoot().bottom
+                                    },
+                                    pagerState = pagerState,
+                                )
+                                AppHorizontalPager(
+                                    state = pagerState,
+                                    userScrollEnabled = false,
+                                    verticalAlignment = Alignment.Top,
+                                    key = { profileTabs[it].tab },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { page ->
+                                    val pageSpace = space.copy(selectedTab = profileTabs[page].tab)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 240.dp),
+                                    ) {
+                                        ProfileSpaceTabBody(
+                                            user = user,
+                                            space = pageSpace,
+                                            showServicesInHome = true,
+                                            favoriteFolderShortcuts = favoriteFolderShortcuts,
+                                            onFavoriteClick = onFavoriteClick,
+                                            onFavoriteFolderClick = onFavoriteFolderClick,
+                                            onBangumiClick = onBangumiClick,
+                                            onBangumiMoreClick = onBangumiMoreClick,
+                                            onVideoClick = onVideoClick,
+                                            onContentRetry = onContentRetry,
+                                            onHistoryClick = onHistoryClick,
+                                            showHistoryService = showHistoryService,
+                                            onDownloadClick = onDownloadClick,
+                                            onWatchLaterClick = onWatchLaterClick,
+                                            onInboxClick = onInboxClick,
+                                            onAccountManageClick = onAccountManageClick,
+                                            onLogout = onLogout,
+                                            onDynamicDeleteClick = onDynamicDeleteClick,
+                                            contentChrome = contentChrome,
+                                            embeddedInPanel = true,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                }
-                } // AppHorizontalPager
-                } // ProfileSpaceTabsHost
 
             }
             ProfilePinnedSpaceTopBarBackground(
@@ -2085,83 +2058,80 @@ private fun ProfileSpaceFeedColumn(
     modifier: Modifier,
     contentPadding: PaddingValues,
     listState: LazyListState,
-    pageListStates: Map<ProfileSpaceMainTab, LazyListState>,
     pagerState: PagerState,
 ) {
     var feedRootTopPx by remember { mutableStateOf(0f) }
     var tabsRootBottomPx by remember { mutableStateOf(Float.POSITIVE_INFINITY) }
     val tabs = remember { defaultProfileSpaceTabs() }
-    ProfileSpaceTabsHost(
-        sharedGlassTabs = LocalAppThemeConfig.current.liquidGlassEnabled,
-        currentPage = { pagerState.currentPage },
-        tabsVisible = {
-            pageListStates.getValue(tabs[pagerState.currentPage].tab).firstVisibleItemIndex == 0
-        },
-        tabs = { tabModifier ->
-            ProfileSpaceTabs(space.selectedTab, onTabSelected, tabModifier, pagerState)
-        },
-        nativeTabs = { page, tabModifier ->
-            ProfileSpaceTabs(tabs[page].tab, onTabSelected, tabModifier, pagerState)
-        },
-        modifier = modifier.fillMaxHeight(),
-    ) { tabSlot ->
-    AppHorizontalPager(
-        state = pagerState,
-        userScrollEnabled = false,
-        key = { tabs[it].tab },
-        modifier = Modifier.fillMaxSize().contentTabPagerGestures(
-            pager = pagerState,
-            enabled = true,
-            contentTopPx = {
-                if (listState.firstVisibleItemIndex > 0) 0f else tabsRootBottomPx - feedRootTopPx
-            },
-        ),
-    ) { page ->
-    val isPageActive = tabs[page].tab == space.selectedTab
-    val space = space.copy(selectedTab = tabs[page].tab)
-    val listState = pageListStates.getValue(space.selectedTab)
-    LazyColumn(
-        state = listState,
-        showScrollBar = false,
-        modifier = Modifier
-            .fillMaxSize()
-            .onGloballyPositioned { if (isPageActive) feedRootTopPx = it.boundsInRoot().top },
-        contentPadding = contentPadding
-    ) {
-        item {
-            tabSlot(
-                page,
-                Modifier.stationaryPagerHeader(pagerState, page).onGloballyPositioned {
-                    if (isPageActive) tabsRootBottomPx = it.boundsInRoot().bottom
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .contentTabPagerGestures(
+                pager = pagerState,
+                enabled = true,
+                contentTopPx = {
+                    if (listState.firstVisibleItemIndex > 0) 0f else tabsRootBottomPx - feedRootTopPx
                 },
-            )
-        }
-        item {
-            ProfileSpaceTabBody(
-                user = user,
-                space = space,
-                showServicesInHome = showServicesInHome,
-                favoriteFolderShortcuts = favoriteFolderShortcuts,
-                onFavoriteClick = onFavoriteClick,
-                onFavoriteFolderClick = onFavoriteFolderClick,
-                onBangumiClick = onBangumiClick,
-                onBangumiMoreClick = onBangumiMoreClick,
-                onVideoClick = onVideoClick,
-                onContentRetry = onContentRetry,
-                onHistoryClick = onHistoryClick,
-                showHistoryService = showHistoryService,
-                onDownloadClick = onDownloadClick,
-                onWatchLaterClick = onWatchLaterClick,
-                onInboxClick = onInboxClick,
-                onAccountManageClick = onAccountManageClick,
-                onLogout = onLogout,
-                onDynamicDeleteClick = onDynamicDeleteClick,
-                contentChrome = contentChrome
-            )
+            ),
+    ) {
+        LazyColumn(
+            state = listState,
+            showScrollBar = false,
+            modifier = Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { feedRootTopPx = it.boundsInRoot().top },
+            contentPadding = contentPadding,
+        ) {
+            item(key = "tabs", contentType = "profile_tabs") {
+                ProfileSpaceTabs(
+                    selectedTab = space.selectedTab,
+                    onTabSelected = onTabSelected,
+                    modifier = Modifier.onGloballyPositioned {
+                        tabsRootBottomPx = it.boundsInRoot().bottom
+                    },
+                    pagerState = pagerState,
+                )
+            }
+            item(key = "body", contentType = "profile_tab_body") {
+                AppHorizontalPager(
+                    state = pagerState,
+                    userScrollEnabled = false,
+                    verticalAlignment = Alignment.Top,
+                    key = { tabs[it].tab },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { page ->
+                    val pageSpace = space.copy(selectedTab = tabs[page].tab)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 240.dp),
+                    ) {
+                        ProfileSpaceTabBody(
+                            user = user,
+                            space = pageSpace,
+                            showServicesInHome = showServicesInHome,
+                            favoriteFolderShortcuts = favoriteFolderShortcuts,
+                            onFavoriteClick = onFavoriteClick,
+                            onFavoriteFolderClick = onFavoriteFolderClick,
+                            onBangumiClick = onBangumiClick,
+                            onBangumiMoreClick = onBangumiMoreClick,
+                            onVideoClick = onVideoClick,
+                            onContentRetry = onContentRetry,
+                            onHistoryClick = onHistoryClick,
+                            showHistoryService = showHistoryService,
+                            onDownloadClick = onDownloadClick,
+                            onWatchLaterClick = onWatchLaterClick,
+                            onInboxClick = onInboxClick,
+                            onAccountManageClick = onAccountManageClick,
+                            onLogout = onLogout,
+                            onDynamicDeleteClick = onDynamicDeleteClick,
+                            contentChrome = contentChrome,
+                        )
+                    }
+                }
+            }
         }
     }
-    } // AppHorizontalPager
-    } // ProfileSpaceTabsHost
 }
 
 @Composable
@@ -2568,15 +2538,25 @@ private fun ProfileSpaceHeader(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val coinsControl = rememberSystemWindowNavigationControl(
+                    target = if (openLedger != null) BiliPaiNavKey.AccountLedger(AccountLedgerKind.COINS) else null,
+                    shape = AppShapes.container(ContainerLevel.Pill),
+                    onClick = { openLedger?.invoke(AccountLedgerKind.COINS) },
+                )
+                val expControl = rememberSystemWindowNavigationControl(
+                    target = if (openLedger != null) BiliPaiNavKey.AccountLedger(AccountLedgerKind.EXPERIENCE) else null,
+                    shape = AppShapes.container(ContainerLevel.Pill),
+                    onClick = { openLedger?.invoke(AccountLedgerKind.EXPERIENCE) },
+                )
                 AppText(
                     text = "硬币 ${FormatUtils.formatStat(user.coin.toLong())}",
-                    modifier = if (openLedger != null) Modifier.clickable { openLedger(AccountLedgerKind.COINS) } else Modifier,
+                    modifier = if (openLedger != null) coinsControl.modifier.clickable(onClick = coinsControl.onClick) else Modifier,
                     style = MaterialTheme.typography.labelMedium,
                     color = secondaryColor,
                 )
                 AppText(
                     text = "经验 ${levelProgress.currentExp}/${levelProgress.nextExp}",
-                    modifier = if (openLedger != null) Modifier.clickable { openLedger(AccountLedgerKind.EXPERIENCE) } else Modifier,
+                    modifier = if (openLedger != null) expControl.modifier.clickable(onClick = expControl.onClick) else Modifier,
                     style = MaterialTheme.typography.labelMedium,
                     color = secondaryColor,
                 )
@@ -2766,7 +2746,7 @@ private fun ProfileSpaceTabs(
         selectedValue = tabs[selectedIndex].tab,
         onSelectionChange = onTabSelected,
         indicatorPositionProvider = { pagerState.tabIndicatorPosition },
-        isScrollInProgressProvider = { pagerState.isScrollInProgress },
+        isScrollInProgressProvider = { pagerState.isScrollInProgress || pagerState.isTabSelectionInProgress },
         scrollable = false,
         dragSelectionEnabled = tabs.size > 1,
         tapPressRefractionEnabled = true,
@@ -5257,14 +5237,25 @@ fun ServicesSection(
     )
 
     if (isTablet) {
+        val tabletServiceShape = AppShapes.container(ContainerLevel.Card)
+        val downloadControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.DownloadList, tabletServiceShape, onDownloadClick)
+        val historyControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.History, tabletServiceShape, onHistoryClick)
+        val favoriteControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.Favorite, tabletServiceShape, onFavoriteClick)
+        val watchLaterControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.WatchLater, tabletServiceShape, onWatchLaterClick)
+        val inboxControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.Inbox, tabletServiceShape, onInboxClick)
+        val aicuControl = rememberSystemWindowNavigationControl(
+            BiliPaiNavKey.AicuQuery(),
+            tabletServiceShape,
+            onClick = { queryAicu?.invoke(null) },
+        )
         val items = buildList {
-            add(Triple("离线缓存", downloadIcon, onDownloadClick))
-            if (showHistoryService) add(Triple("历史记录", historyIcon, onHistoryClick))
-            if (showFavoriteService) add(Triple("我的收藏", bookmarkIcon, onFavoriteClick))
-            add(Triple("稍后再看", watchLaterIcon, onWatchLaterClick))
-            add(Triple("消息中心", inboxIcon, onInboxClick))
-            if (queryAicu != null) add(Triple("评论与弹幕查询", historyIcon) { queryAicu(null) })
-            add(Triple("账号切换", accountIcon, onAccountManageClick))
+            add(Triple("离线缓存", downloadIcon, downloadControl))
+            if (showHistoryService) add(Triple("历史记录", historyIcon, historyControl))
+            if (showFavoriteService) add(Triple("我的收藏", bookmarkIcon, favoriteControl))
+            add(Triple("稍后再看", watchLaterIcon, watchLaterControl))
+            add(Triple("消息中心", inboxIcon, inboxControl))
+            if (queryAicu != null) add(Triple("评论与弹幕查询", historyIcon, aicuControl))
+            add(Triple("账号切换", accountIcon, null))
         }
 
         Column(modifier = modifier) {
@@ -5278,16 +5269,16 @@ fun ServicesSection(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        rowItems.forEach { (title, icon, onClick) ->
+                        rowItems.forEach { (title, icon, control) ->
                             AppPreferenceGridItem(
                                 icon = icon,
                                 title = title,
-                                onClick = if (title == "账号切换") accountAction.onClick else onClick,
+                                onClick = if (title == "账号切换") accountAction.onClick else (control?.onClick ?: {}),
                                 iconTint = contentColor,
                                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
                                 contentColor = contentColor,
                                 modifier = Modifier.weight(1f).then(
-                                    if (title == "账号切换") accountAction.modifier else Modifier
+                                    if (title == "账号切换") accountAction.modifier else (control?.modifier ?: Modifier)
                                 )
                             )
                         }
@@ -5314,6 +5305,11 @@ fun ServicesSection(
         val favoriteControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.Favorite, serviceShape, onFavoriteClick)
         val watchLaterControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.WatchLater, serviceShape, onWatchLaterClick)
         val inboxControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.Inbox, serviceShape, onInboxClick)
+        val aicuControl = rememberSystemWindowNavigationControl(
+            BiliPaiNavKey.AicuQuery(),
+            serviceShape,
+            onClick = { queryAicu?.invoke(null) },
+        )
         val useImmersiveServiceLayout = borderColor != null || embeddedInPanel
         if (useImmersiveServiceLayout) {
             Column(
@@ -5327,7 +5323,8 @@ fun ServicesSection(
                         ProfileServiceRow(
                             icon = historyIcon,
                             title = "评论与弹幕查询",
-                            onClick = { queryAicu(null) },
+                            onClick = aicuControl.onClick,
+                            modifier = aicuControl.modifier,
                             iconTint = secondaryAccent,
                             textColor = contentColor,
                         )

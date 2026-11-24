@@ -10,11 +10,66 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.android.purebilibili.R
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.*
+
+private val SETTINGS_SEARCH_QUICK_TOPICS = listOf(
+    "小窗",
+    "后台播放",
+    "空降助手",
+    "液态玻璃",
+    "画质",
+    "双击点赞",
+    "弹幕",
+    "底栏",
+    "主题色",
+    "自动连播",
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun SettingsSearchQuickTopicsSection(
+    onTopicClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val chipShape = AppShapes.container(ContainerLevel.Tag)
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        AppText(
+            text = "大家常找",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 12.dp),
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SETTINGS_SEARCH_QUICK_TOPICS.forEach { topic ->
+                AppSurface(
+                    shape = chipShape,
+                    color = AppSurfaceTokens.cardContainer(),
+                    modifier = Modifier
+                        .clip(chipShape)
+                        .clickable { onTopicClick(topic) },
+                ) {
+                    AppText(
+                        text = topic,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = AppContentColors.primaryText(),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun SettingsSearchHistorySection(

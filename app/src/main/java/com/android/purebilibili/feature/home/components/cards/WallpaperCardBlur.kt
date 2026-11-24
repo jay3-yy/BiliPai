@@ -63,11 +63,24 @@ private class WallpaperCardBlurNode(
     override fun onDetach() {
         coordinates = null
         position = Offset.Unspecified
+        radiusPx = 0f
+        if (!layer.isReleased) {
+            layer.renderEffect = null
+            if (layer.size.width > 1 || layer.size.height > 1) {
+                layer.record(
+                    density = androidx.compose.ui.unit.Density(1f),
+                    layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
+                    size = IntSize(1, 1),
+                ) {}
+            }
+        }
     }
 
     override fun ContentDrawScope.draw() {
         val target = coordinates
-        if (target != null && target.isAttached && drawContext.canvas.nativeCanvas.isHardwareAccelerated) {
+        if (target != null && target.isAttached && size.width > 0f && size.height > 0f &&
+            drawContext.canvas.nativeCanvas.isHardwareAccelerated
+        ) {
             val radius = WallpaperBlurRadius.toPx() * WallpaperBlurSampleScale
             if (radiusPx != radius || layer.renderEffect == null) {
                 layer.renderEffect = BlurEffect(radius, radius, TileMode.Clamp)

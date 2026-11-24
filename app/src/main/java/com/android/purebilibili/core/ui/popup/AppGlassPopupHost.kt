@@ -325,13 +325,14 @@ internal fun AppGlassPopupHost(
     glassAvailable: Boolean,
     tuning: LiquidGlassTuning,
     bottomInset: Dp = 0.dp,
+    backdropBackground: Color = Color.Unspecified,
     content: @Composable () -> Unit,
 ) {
     // 结构不随玻璃开关切换：内容保持在同一组合位置，玻璃关闭时仅撤销 presenter。
     // 若按 glassAvailable 分支拆装内容树，共享的 SaveableStateHolder 会在新旧两份
     // SaveableStateProvider 交接帧里以同一键注册两次（Key was used multiple times）。
     AppRetainedDialogHost {
-        AppGlassPopupContentHost(tuning, bottomInset, glassAvailable, content)
+        AppGlassPopupContentHost(tuning, bottomInset, glassAvailable, backdropBackground, content)
     }
 }
 
@@ -340,6 +341,7 @@ private fun AppGlassPopupContentHost(
     tuning: LiquidGlassTuning,
     bottomInset: Dp,
     glassAvailable: Boolean,
+    backdropBackground: Color,
     content: @Composable () -> Unit,
 ) {
     val backgroundFocus = remember { FocusRequester() }
@@ -386,13 +388,20 @@ private fun AppGlassPopupContentHost(
         if (!glassAvailable) null else object : com.android.purebilibili.core.ui.AppPopupWindowHostRenderer {
             @Composable
             override fun Render(content: @Composable () -> Unit) {
+                // 嵌在弹窗表面内的宿主采样不到表面本身，由表面提供不透明采样底。
+                val backdropBase = com.android.purebilibili.core.ui.LocalAppPopupBackdropBase.current
                 CompositionLocalProvider(
                     com.android.purebilibili.core.ui.components.LocalAppGlassMenuBackdrop provides null,
                     com.android.purebilibili.core.ui.components.LocalAppGlassMenuSource provides null,
                     com.android.purebilibili.core.ui.components.LocalAppGlassMenuScope provides null,
                     com.android.purebilibili.core.ui.blur.LocalAppGlassContainer provides null,
                 ) {
-                    AppGlassPopupHost(glassAvailable = true, tuning = tuning, content = content)
+                    AppGlassPopupHost(
+                        glassAvailable = true,
+                        tuning = tuning,
+                        backdropBackground = backdropBase,
+                        content = content,
+                    )
                 }
             }
         }
@@ -414,7 +423,9 @@ private fun AppGlassPopupContentHost(
         }
     }
     val request = controller.request
-    val source = key(controller, controller.morph.presentation) { rememberChromeBackdropSource() }
+    val source = key(controller, controller.morph.presentation) {
+        rememberChromeBackdropSource(backdropBackground = backdropBackground)
+    }
     // 播放器背景只覆盖媒体视口；先铺完整页面，再叠加排除控件的视频层，
     // 让越过播放器边界的菜单继续采样详情、列表及窄窗口中的实际内容。
     val playerBackdrop = request?.menu?.backdrop

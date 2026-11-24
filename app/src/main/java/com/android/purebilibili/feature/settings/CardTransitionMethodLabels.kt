@@ -13,5 +13,6 @@ internal fun cardTransitionMethodLabel(method: CardTransitionMethod): Int = when
     CardTransitionMethod.OPLUS_LEGACY -> R.string.animation_card_transition_method_oplus
     CardTransitionMethod.VIVO_ONESHOT -> R.string.animation_card_transition_method_vivo
     CardTransitionMethod.XIAOMI_ROUNDED -> R.string.animation_card_transition_method_xiaomi
+    CardTransitionMethod.ANDROID_SHARED -> R.string.animation_card_transition_method_android_shared
     CardTransitionMethod.STANDARD -> R.string.animation_card_transition_method_standard
 }

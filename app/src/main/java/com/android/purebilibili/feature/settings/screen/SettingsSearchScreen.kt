@@ -15,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.feature.settings.SettingsSearchHistorySection
+import com.android.purebilibili.feature.settings.SettingsSearchQuickTopicsSection
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -118,18 +119,32 @@ fun SettingsSearchScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             when {
-                searchQuery.isBlank() -> item(key = "history") {
-                    EntranceGroup(startWhen = rootEntranceStartWhen) {
-                        SettingsRootCategoryEntranceSection {
-                            SettingsSearchHistorySection(
-                                history = searchHistory,
-                                onQueryClick = {
-                                    searchInput.setTextAndPlaceCursorAtEnd(it)
-                                    viewModel.recordSearchQuery(it)
-                                },
-                                onDelete = viewModel::deleteSearchHistory,
-                                onClear = viewModel::clearSearchHistory,
-                            )
+                searchQuery.isBlank() -> {
+                    item(key = "quick_topics") {
+                        EntranceGroup(startWhen = rootEntranceStartWhen) {
+                            SettingsRootCategoryEntranceSection {
+                                SettingsSearchQuickTopicsSection(
+                                    onTopicClick = { topic ->
+                                        searchInput.setTextAndPlaceCursorAtEnd(topic)
+                                        viewModel.recordSearchQuery(topic)
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    item(key = "history") {
+                        EntranceGroup(startWhen = rootEntranceStartWhen) {
+                            SettingsRootCategoryEntranceSection {
+                                SettingsSearchHistorySection(
+                                    history = searchHistory,
+                                    onQueryClick = {
+                                        searchInput.setTextAndPlaceCursorAtEnd(it)
+                                        viewModel.recordSearchQuery(it)
+                                    },
+                                    onDelete = viewModel::deleteSearchHistory,
+                                    onClear = viewModel::clearSearchHistory,
+                                )
+                            }
                         }
                     }
                 }

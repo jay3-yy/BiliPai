@@ -64,8 +64,10 @@ internal fun resolveSettingsContainerFrame(
 }
 
 internal fun resolveSettingsContainerContentAlpha(open: Float, returning: Boolean): Float {
-    val fadeStart = if (returning) 0.6f else 0.2f
-    return ((open - fadeStart) / 0.2f).coerceIn(0f, 1f)
+    val start = if (returning) 0.45f else 0.22f
+    val span = if (returning) 0.30f else 0.28f
+    val u = ((open - start) / span).coerceIn(0f, 1f)
+    return u * u * (3f - 2f * u)
 }
 
 /** 来源必须属于紧邻的父 entry，防止搜索或其他页面复用同名目的地的旧来源。 */
@@ -80,9 +82,10 @@ internal fun isSettingsContainerBoundary(
     return index > 0 && backStack[index - 1] == owner
 }
 
-/** 父页深度从 0 到 1 时逐渐模糊，前景页及非有限输入不参与。 */
+/** 父页深度从 0 到 1 时快速建立模糊，前景页及非有限输入不参与。 */
 internal fun resolveSettingsContainerBlurProgress(relativeDepth: Float): Float {
     if (!relativeDepth.isFinite()) return 0f
     val covered = relativeDepth.coerceIn(0f, 1f)
-    return covered * covered
+    val remaining = 1f - covered
+    return 1f - remaining * remaining
 }

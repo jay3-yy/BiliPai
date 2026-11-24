@@ -16,8 +16,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.platform.LocalGraphicsContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
@@ -126,10 +127,33 @@ internal fun LiveSuperChatCard(
 ) {
     val palette = rememberLiveChromePalette()
     val scope = rememberCoroutineScope()
-    val cardLayer = rememberGraphicsLayer()
+    val graphicsContext = LocalGraphicsContext.current
+    var cardLayer by remember(item.superChatId, graphicsContext) { mutableStateOf<GraphicsLayer?>(null) }
     var saving by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var menuExpanded by remember(item.superChatId) { mutableStateOf(false) }
+    val needsCaptureLayer = menuExpanded || saving
+    androidx.compose.runtime.DisposableEffect(needsCaptureLayer, item.superChatId, graphicsContext) {
+        if (needsCaptureLayer) {
+            val layer = graphicsContext.createGraphicsLayer()
+            cardLayer = layer
+            onDispose {
+                if (cardLayer === layer) cardLayer = null
+                if (!layer.isReleased) {
+                    if (layer.size.width > 1 || layer.size.height > 1) {
+                        layer.record(
+                            density = androidx.compose.ui.unit.Density(1f),
+                            layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
+                            size = androidx.compose.ui.unit.IntSize(1, 1),
+                        ) {}
+                    }
+                    graphicsContext.releaseGraphicsLayer(layer)
+                }
+            }
+        } else {
+            onDispose {}
+        }
+    }
     var previewFiles by remember(item.superChatId) { mutableStateOf<List<java.io.File>>(emptyList()) }
     if (previewFiles.isNotEmpty()) {
         com.android.purebilibili.feature.share.ShareImagePreviewSheet(
@@ -178,8 +202,13 @@ internal fun LiveSuperChatCard(
           color = bottom,
           border = BorderStroke(1.dp, bottom),
           modifier = Modifier.fillMaxWidth().drawWithContent {
-              cardLayer.record { this@drawWithContent.drawContent() }
-              drawLayer(cardLayer)
+              val activeLayer = cardLayer
+              if (activeLayer != null && !activeLayer.isReleased) {
+                  activeLayer.record { this@drawWithContent.drawContent() }
+                  drawLayer(activeLayer)
+              } else {
+                  drawContent()
+              }
           },
       ) {
           Column {
@@ -257,7 +286,8 @@ internal fun LiveSuperChatCard(
                   saving = true
                   scope.launch {
                       try {
-                          val bitmap = cardLayer.toImageBitmap().asAndroidBitmap()
+                          val activeLayer = cardLayer ?: throw IllegalStateException("Capture layer unavailable")
+                          val bitmap = activeLayer.toImageBitmap().asAndroidBitmap()
                           val saved = com.android.purebilibili.feature.screenshot.saveAppScreenshotBitmapToGallery(
                               context, bitmap, "SC_${item.superChatId}_${System.currentTimeMillis()}.png",
                           )
@@ -277,7 +307,8 @@ internal fun LiveSuperChatCard(
                   saving = true
                   scope.launch {
                       try {
-                          val bitmap = cardLayer.toImageBitmap().asAndroidBitmap()
+                          val activeLayer = cardLayer ?: throw IllegalStateException("Capture layer unavailable")
+                          val bitmap = activeLayer.toImageBitmap().asAndroidBitmap()
                           previewFiles = listOf(com.android.purebilibili.feature.share.cacheCapturedShareImage(context, bitmap))
                           menuExpanded = false
                       } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (_: Exception) { Toast.makeText(context, "生成图片失败，请重试", Toast.LENGTH_SHORT).show() } finally { saving = false }

@@ -1499,47 +1499,55 @@ private fun HomeTopRightActionButton(
     modifier: Modifier = Modifier,
     returnMotion: Modifier = Modifier,
     surfaceModifier: Modifier = Modifier,
+    anchor: Modifier = Modifier,
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val descriptionModifier = Modifier.semantics { this.contentDescription = contentDescription }
     // 顶栏场景关闭玻璃时由原生按钮处理按压；其余材质保留既有形变。
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        if (nativeMiuix) {
-            top.yukonga.miuix.kmp.basic.IconButton(
-                onClick = com.android.purebilibili.core.ui.components.appActionWithFeedback(onClick),
-                modifier = Modifier
-                    .matchParentSize()
-                    .then(returnMotion)
-                    .then(descriptionModifier)
-                    .then(surfaceModifier),
-                backgroundColor = Color.Transparent,
-                content = content,
-            )
+        val innerModifier = if (anchor != Modifier) {
+            Modifier.size(visualSize).then(anchor)
         } else {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .appElasticPress(
-                        visualSize = visualSize,
-                        state = elasticState,
-                        transformInBackdrop = transformInBackdrop,
-                    )
-                    .then(returnMotion)
-                    .then(surfaceModifier)
-                    .appActionClickable(
-                        interactionSource = null,
-                        indication = null,
-                        role = Role.Button,
-                        onClick = onClick,
-                    )
-                    .then(descriptionModifier),
-                contentAlignment = Alignment.Center,
-            ) {
-                content()
+            Modifier.matchParentSize()
+        }
+        Box(modifier = innerModifier, contentAlignment = Alignment.Center) {
+            if (nativeMiuix) {
+                top.yukonga.miuix.kmp.basic.IconButton(
+                    onClick = com.android.purebilibili.core.ui.components.appActionWithFeedback(onClick),
+                    modifier = Modifier
+                        .matchParentSize()
+                        .then(returnMotion)
+                        .then(descriptionModifier)
+                        .then(surfaceModifier),
+                    backgroundColor = Color.Transparent,
+                    content = content,
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .appElasticPress(
+                            visualSize = visualSize,
+                            state = elasticState,
+                            transformInBackdrop = transformInBackdrop,
+                        )
+                        .then(returnMotion)
+                        .then(surfaceModifier)
+                        .appActionClickable(
+                            interactionSource = null,
+                            indication = null,
+                            role = Role.Button,
+                            onClick = onClick,
+                        )
+                        .then(descriptionModifier),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    content()
+                }
             }
         }
-        // 落点和角标在按压变形的按钮之外。
+        // 角标在按压变形的按钮之外。
         overlay()
     }
 }
@@ -1558,8 +1566,10 @@ internal fun HomeTopAvatarButton(
             .semantics { contentDescription = "个人中心" },
         contentAlignment = Alignment.Center,
     ) {
+        // 共享元素锚点必须包裹可见头像内容（并留在按压缩放外层），
+        // 否则安卓共享容器返回时只采样到空容器底色，会缩回一个纯黑圆。
         Box(
-            modifier = Modifier.size(visualSize).then(returnMotion),
+            modifier = Modifier.size(visualSize).then(returnMotion).then(anchor),
             contentAlignment = Alignment.Center,
         ) {
             Box(
@@ -1568,7 +1578,6 @@ internal fun HomeTopAvatarButton(
                 contentAlignment = Alignment.Center,
             ) { content() }
         }
-        if (anchor != Modifier) Box(Modifier.size(visualSize).then(anchor))
     }
 }
 
@@ -2742,15 +2751,8 @@ internal fun HomeHeader(
                     transformInBackdrop = topActionGlassActive,
                     modifier = Modifier.size(48.dp).then(endActionLandingMotion),
                     returnMotion = endActionLinkedMotion,
+                    anchor = topRightActionSourceModifier,
                     overlay = {
-                        if (endSource != null) {
-                            // 转场从 36dp 可见按钮展开，按压形变和 48dp 点击区保留各自的尺寸。
-                            Box(
-                                Modifier.align(Alignment.Center)
-                                    .size(topRightActionSize)
-                                    .then(topRightActionSourceModifier)
-                            )
-                        }
                         if (topRightUnreadBadge != null) {
                             HomeTopUnreadBadge(
                                 text = topRightUnreadBadge,

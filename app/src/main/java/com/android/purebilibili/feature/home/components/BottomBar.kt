@@ -4657,6 +4657,12 @@ internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(
     val gravityGate = if (glassEnabled) {
         com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
     } else null
+    val latestOpticalProgress = rememberUpdatedState(opticalProgressProvider)
+    val highlightActive = if (glassEnabled) {
+        remember {
+            derivedStateOf { latestOpticalProgress.value() > 0.001f }
+        }.value
+    } else false
     val pillHighlight = if (glassEnabled) {
         rememberBiliPaiGravityHighlight(
             iosIndicatorSpecular,
@@ -4666,7 +4672,7 @@ internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(
                 indicatorHeightDp = if (swapMotionAxes) indicatorWidth.value else indicatorHeight.value,
             ).dp,
             active = indicatorBackdrop != null && dockContentAlpha > 0f &&
-                effectivePressProgress > 0.001f && gravityGate?.active == true,
+                highlightActive && gravityGate?.active == true,
         )
     } else {
         null
@@ -4716,7 +4722,7 @@ internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(
                         gapOnlyDispersion = !glassEnabled,
                         highlightProvider = { pillHighlight?.value },
                         highlightAlphaProvider = {
-                            if (glassEnabled) effectivePressProgress else if (isDragging) opticalProgress else 0f
+                            if (glassEnabled) opticalProgressProvider() else if (isDragging) opticalProgress else 0f
                         },
                         idleColor = indicatorIdleSurfaceColor,
                     )

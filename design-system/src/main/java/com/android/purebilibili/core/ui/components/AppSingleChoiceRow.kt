@@ -46,7 +46,7 @@ fun AppSingleChoiceRow(
         role = Role.RadioButton
         if (!enabled) disabled()
     }
-    if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+    if (com.android.purebilibili.core.theme.LocalAppUiStyle.current == com.android.purebilibili.core.theme.AppUiStyle.MIUIX) {
         val scheme = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
         val rowContentColor = when {
             !enabled -> scheme.disabledOnSecondaryVariant

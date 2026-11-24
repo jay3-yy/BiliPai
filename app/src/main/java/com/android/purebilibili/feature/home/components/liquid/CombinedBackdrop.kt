@@ -18,13 +18,14 @@ import com.android.purebilibili.core.ui.blur.ContinuousBackdrop
 class CombinedBackdrop(
     val first: Backdrop,
     val second: Backdrop,
+    private val includeFirst: () -> Boolean = { true },
 ) : Backdrop {
 
     override val isCoordinatesDependent: Boolean = first.isCoordinatesDependent || second.isCoordinatesDependent
 
-    // 每个源使用相同的连续采样，不借用第一层余量补偿其余图层。
-    private val firstSampling = ContinuousBackdrop(first)
-    private val secondSampling = ContinuousBackdrop(second)
+    // 每个源使用相同的连续采样，不重复包裹已是 ContinuousBackdrop 的源。
+    private val firstSampling = if (first is ContinuousBackdrop) first else ContinuousBackdrop(first)
+    private val secondSampling = if (second is ContinuousBackdrop) second else ContinuousBackdrop(second)
 
     override fun DrawScope.drawBackdrop(
         density: Density,
@@ -32,11 +33,19 @@ class CombinedBackdrop(
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
         downscaleFactor: Float,
     ) {
-        with(firstSampling) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
+        if (includeFirst()) {
+            with(firstSampling) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
+        }
         with(secondSampling) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
     }
 }
 
 @Composable
-fun rememberCombinedBackdrop(first: Backdrop, second: Backdrop): Backdrop =
-    remember(first, second) { CombinedBackdrop(first, second) }
+fun rememberCombinedBackdrop(
+    first: Backdrop,
+    second: Backdrop,
+    includeFirst: () -> Boolean = { true },
+): Backdrop {
+    val latestIncludeFirst = androidx.compose.runtime.rememberUpdatedState(includeFirst)
+    return remember(first, second) { CombinedBackdrop(first, second) { latestIncludeFirst.value() } }
+}

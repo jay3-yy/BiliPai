@@ -293,18 +293,18 @@ fun ChatScreen(
         null
     }
 
-    val chatWallpaperBackdrop = if (chatThemeConfig.liquidGlassEnabled) {
-        rememberLayerBackdrop()
+    val chatWallpaperBackdropSource = if (chatThemeConfig.liquidGlassEnabled) {
+        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
     } else {
         null
     }
-    val chatContentBackdrop = if (chatThemeConfig.liquidGlassEnabled) {
-        rememberLayerBackdrop()
+    val chatContentBackdropSource = if (chatThemeConfig.liquidGlassEnabled) {
+        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
     } else {
         null
     }
-    val chatInputBackdrop = if (chatWallpaperBackdrop != null && chatContentBackdrop != null) {
-        rememberCombinedBackdrop(chatWallpaperBackdrop, chatContentBackdrop)
+    val chatInputBackdrop = if (chatWallpaperBackdropSource != null && chatContentBackdropSource != null) {
+        rememberCombinedBackdrop(chatWallpaperBackdropSource.backdrop, chatContentBackdropSource.backdrop)
     } else {
         null
     }
@@ -313,7 +313,7 @@ fun ChatScreen(
     val emoteBottomAvoidance = if (showEmotes) emotePanelHeight else 0.dp
 
     ChatWallpaperHost(
-        wallpaperBackdrop = chatWallpaperBackdrop,
+        wallpaperBackdropSource = chatWallpaperBackdropSource,
     ) { wallpaperContent ->
     AppScaffold(
         containerColor = Color.Transparent,
@@ -416,7 +416,7 @@ fun ChatScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(chatContentBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier)
+                        .then(chatContentBackdropSource?.modifier ?: Modifier)
                 ) {
                     when {
                         uiState.isLoading -> {
@@ -634,7 +634,7 @@ fun ChatScreen(
  */
 @Composable
 private fun ChatWallpaperHost(
-    wallpaperBackdrop: LayerBackdrop?,
+    wallpaperBackdropSource: com.android.purebilibili.core.ui.blur.ChromeBackdropSource?,
     content: @Composable (@Composable () -> Unit) -> Unit,
 ) {
     val wallpaperAllowed = LocalGlobalWallpaperBackdropVisible.current
@@ -683,7 +683,7 @@ private fun ChatWallpaperHost(
             content {
                 Box(
                     Modifier.fillMaxSize()
-                        .then(wallpaperBackdrop?.let { Modifier.layerBackdrop(it) } ?: Modifier)
+                        .then(wallpaperBackdropSource?.modifier ?: Modifier)
                 ) {
                     if (rootOwnsMovingWallpaper) {
                         Box(Modifier.fillMaxSize().background(baseColor.copy(alpha = if (isLightBackground) 0.16f else 0.22f)))

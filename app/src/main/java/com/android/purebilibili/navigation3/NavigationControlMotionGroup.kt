@@ -12,6 +12,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import com.android.purebilibili.core.ui.LocalVideoDetailNavigationTransitionScope
+import com.android.purebilibili.feature.settings.SettingsSharedContainerOrigin
 import kotlinx.coroutines.flow.first
 
 internal class ControlGroupLandingDelivery(private val deliver: () -> Unit) {
@@ -24,6 +25,11 @@ internal class ControlGroupLandingDelivery(private val deliver: () -> Unit) {
 }
 
 internal class NavigationControlMotionGroupState(val landAdjacentOnly: Boolean) {
+    class SharedReturn(val origin: SettingsSharedContainerOrigin, deliver: () -> Unit) {
+        private val delivery = ControlGroupLandingDelivery(deliver)
+        fun land() = delivery.land()
+    }
+    var sharedReturn by mutableStateOf<SharedReturn?>(null)
     var systemReturn by mutableStateOf<ControlGroupLandingDelivery?>(null)
 }
 
@@ -48,6 +54,17 @@ internal fun rememberNavigationControlMotionGroup(
 ): NavigationControlMotionGroupState {
     val group = remember(landAdjacentOnly) { NavigationControlMotionGroupState(landAdjacentOnly) }
     val entry = rememberUpdatedState(LocalVideoDetailNavigationTransitionScope.current)
+    val sharedReturn = group.sharedReturn
+    LaunchedEffect(group, sharedReturn) {
+        if (sharedReturn == null) return@LaunchedEffect
+        // 来源在导航提交时登记。等一次布局交接后检查当前状态，快速往返也不会漏掉。
+        withFrameNanos { }
+        snapshotFlow {
+            entry.value?.isTop != false && entry.value?.isRunning != true &&
+                sharedReturn.origin.sharedBounds == null && SystemWindowControlNeighbors.isGroupRestored(group)
+        }.first { it }
+        sharedReturn.land()
+    }
     val systemReturn = group.systemReturn
     LaunchedEffect(group, systemReturn) {
         if (systemReturn == null) return@LaunchedEffect

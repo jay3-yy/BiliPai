@@ -1985,7 +1985,22 @@ fun CommonListScreen(
                             ) {
                                 if (!isBatchActionMode) {
                                     onOpenSearchDestination?.let { openSearch ->
-                                        AppIconButton(onClick = { openSearch(searchQuery, isSubscribedBrowse) }) {
+                                        val searchControl = com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl(
+                                            target = if (favoriteViewModel != null) {
+                                                com.android.purebilibili.navigation3.BiliPaiNavKey.FavoriteSearch(
+                                                    query = searchQuery,
+                                                    subscribed = isSubscribedBrowse,
+                                                )
+                                            } else {
+                                                com.android.purebilibili.navigation3.BiliPaiNavKey.HistorySearch(searchQuery)
+                                            },
+                                            shape = CircleShape,
+                                            onClick = { openSearch(searchQuery, isSubscribedBrowse) },
+                                        )
+                                        AppIconButton(
+                                            modifier = searchControl.modifier,
+                                            onClick = searchControl.onClick,
+                                        ) {
                                             AppIcon(Icons.Rounded.Search, contentDescription = "搜索")
                                         }
                                     }

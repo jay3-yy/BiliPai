@@ -66,29 +66,47 @@ internal fun resolveSystemWindowCardIdentity(target: BiliPaiNavKey?): String? = 
     BiliPaiNavKey.SettingsSearch -> "settings_search"
     BiliPaiNavKey.Inbox -> "inbox"
     BiliPaiNavKey.Profile -> "profile"
+    BiliPaiNavKey.ProfileAccountEdit -> "profile_account_edit"
+    BiliPaiNavKey.Login -> "login"
+    is BiliPaiNavKey.AccountLedger -> "account_ledger_${target.kind.name}"
+    is BiliPaiNavKey.AicuQuery -> "aicu_${target.uid}_${target.category}"
     is BiliPaiNavKey.Search -> "search"
     BiliPaiNavKey.SearchTrending -> "search_trending"
     is BiliPaiNavKey.WeeklySeries -> "weekly_series_${target.number ?: 0}"
+    BiliPaiNavKey.LiveList -> "live_list"
+    BiliPaiNavKey.LiveMatch -> "live_match"
     BiliPaiNavKey.LiveSearch -> "live_search"
     BiliPaiNavKey.LiveArea -> "live_area"
     BiliPaiNavKey.LiveFollowing -> "live_following"
     BiliPaiNavKey.History -> "history"
+    is BiliPaiNavKey.PersonalRecapUps -> "personal_recap_ups_${target.window.name}"
+    is BiliPaiNavKey.HistorySearch -> "history_search"
     BiliPaiNavKey.Favorite -> "favorite"
+    is BiliPaiNavKey.FavoritePgc -> "favorite_pgc_${target.cinema}"
     BiliPaiNavKey.FavoriteSubscribed -> "favorite_subscribed"
+    is BiliPaiNavKey.FavoriteSearch -> "favorite_search_${target.subscribed}"
+    is BiliPaiNavKey.LikedVideos -> "liked_videos_${target.mid}_${target.isCoinArchive}"
     BiliPaiNavKey.WatchLater -> "watch_later"
+    is BiliPaiNavKey.WatchLaterSearch -> "watch_later_search"
     BiliPaiNavKey.DownloadList -> "download_list"
     is BiliPaiNavKey.OfflineVideoPlayer -> "offline_video_${target.taskId}"
     BiliPaiNavKey.Partition -> "partition"
+    is BiliPaiNavKey.Category -> "category_${target.tid}"
     BiliPaiNavKey.ReplyMe -> "reply_me"
     BiliPaiNavKey.AtMe -> "at_me"
     BiliPaiNavKey.LikeMe -> "like_me"
     BiliPaiNavKey.SystemNotice -> "system_notice"
     is BiliPaiNavKey.Chat -> target.talkerId.takeIf { it > 0L }?.let { "chat_${target.sessionType}_$it" }
     is BiliPaiNavKey.Following -> target.mid.takeIf { it > 0L }?.let { "following_${it}_${target.fans}" }
+    is BiliPaiNavKey.UpowerRank -> target.mid.takeIf { it > 0L }?.let { "upower_rank_$it" }
+    is BiliPaiNavKey.MemberGuard -> target.mid.takeIf { it > 0L }?.let { "member_guard_$it" }
     is BiliPaiNavKey.TopicDetail -> target.topicId.takeIf { it > 0L }?.let { "topic_$it" }
     is BiliPaiNavKey.MatchInfo -> target.cid.takeIf { it > 0L }?.let { "match_$it" }
     is BiliPaiNavKey.SeasonSeriesDetail -> "series_${target.type}_${target.id}_${target.mid}"
     is BiliPaiNavKey.AudioMode -> target.sourceBvid.takeIf(String::isNotBlank)
+    is BiliPaiNavKey.BgmDetail -> target.musicId.takeIf(String::isNotBlank)?.let { "bgm_$it" }
+    is BiliPaiNavKey.MusicDetail -> target.sid.takeIf { it > 0L }?.let { "music_$it" }
+    is BiliPaiNavKey.NativeMusic -> target.bvid.takeIf(String::isNotBlank)?.let { "native_music_${it}_${target.cid}" }
     is BiliPaiNavKey.VideoDetail -> target.bvid.takeIf(String::isNotBlank)
     is BiliPaiNavKey.Live -> "live_${target.roomId}"
     is BiliPaiNavKey.BangumiPlayer -> "bangumi_${target.seasonId}"
@@ -98,7 +116,9 @@ internal fun resolveSystemWindowCardIdentity(target: BiliPaiNavKey?): String? = 
     is BiliPaiNavKey.ArticleDetail -> "article_${target.articleId}"
     is BiliPaiNavKey.ArticleCollection -> target.collectionId.takeIf { it > 0L }?.let { "article_collection_$it" }
     is BiliPaiNavKey.DynamicDetail -> "dynamic_${target.dynamicId}"
+    is BiliPaiNavKey.CommentDetail -> "comment_detail_${target.oid}_${target.rootId}"
     is BiliPaiNavKey.Space -> target.mid.takeIf { it > 0L }?.let { "space_$it" }
+    is BiliPaiNavKey.SpaceWebVideos -> target.mid.takeIf { it > 0L }?.let { "space_web_videos_${it}_${target.collectionType}_${target.collectionId}" }
     is BiliPaiNavKey.LiveAreaDetail -> "live_area_${target.parentAreaId}_${target.areaId}"
     is BiliPaiNavKey.Web -> if (com.android.purebilibili.feature.web.shouldOpenWebUrlExternally(target.url)) {
         null

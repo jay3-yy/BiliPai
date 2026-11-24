@@ -352,6 +352,8 @@ internal fun LinkedBottomDock(
             val controlHeight: Int
             val gap: Int
             val verticalGap: Int
+            val fusedDockCapable = glassEnabled && searchEnabled && backdrop != null &&
+                !hasUiSkinDecoration
             with(density) {
                 maximumWidth = constraints.maxWidth.coerceAtMost(600.dp.roundToPx())
                 button = resolveBiliPaiBottomBarSearchCircleSize().roundToPx()
@@ -361,6 +363,7 @@ internal fun LinkedBottomDock(
                     nativeMiuixNavigation = nativeMiuixNavigation,
                 ).roundToPx()
                 controlHeight = barHeight
+                // 静止态保持 8.dp 清晰分离，仅在搜索框与底栏相互靠近（点击展开/收起或弹性拖动）时动态触发吸附融合。
                 gap = 8.dp.roundToPx()
                 verticalGap = 4.dp.roundToPx()
             }
@@ -414,6 +417,89 @@ internal fun LinkedBottomDock(
             // endpoint skip placement so the hidden row neither draws nor intercepts touches.
             // Native toolbars retain their original composition and motion behavior.
             val collapsedAtRest = phase != LinkedDockPhase.Expanded && !transition.isRunning
+            val isNavCompacted = useNavigationCompact && compactNavigation
+            val searchElasticState = rememberAppElasticPressState(
+                feedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
+            )
+            // 实时读取可打断弹簧进度与搜索圆钮弹性形变，仅在两胶囊实际靠近（边间距 < 阈值）时动态形成融合凹颈。
+            val fusionThresholdPx = with(density) { 6.5.dp.toPx() }
+            val maxFusionRadiusPx = with(density) { 14.dp.toPx() }
+            val liveDockGeometry = if (fusedDockCapable && !isNavCompacted) {
+                resolveLinkedDockGeometry(
+                    width = maximumWidth,
+                    button = button,
+                    barHeight = barHeight,
+                    gap = gap,
+                    hasAudio = hasAudio,
+                    searchEnabled = searchEnabled,
+                    mergeProgress = merge.value,
+                    searchProgress = search.value,
+                    verticalGap = verticalGap,
+                )
+            } else null
+            val liveSearchVisualWidth = if (liveDockGeometry != null) {
+                (compactControlSize() +
+                    (liveDockGeometry.searchWidth - compactControlSize()) *
+                    search.value.coerceIn(0f, 1f)).roundToInt().coerceAtMost(liveDockGeometry.searchWidth)
+            } else button
+            val liveSearchVisualHeight = if (liveDockGeometry != null) searchVisualHeight() else button
+            val liveSearchBaseX = if (liveDockGeometry != null) {
+                resolveLinkedDockSearchX(
+                    maximumWidth = maximumWidth,
+                    navigationWidth = navWidth,
+                    searchWidth = liveDockGeometry.searchWidth,
+                    button = button,
+                    gap = gap,
+                    mergeProgress = merge.value,
+                    searchProgress = search.value,
+                ) + (liveDockGeometry.searchWidth - liveSearchVisualWidth) / 2
+            } else navigationX + navWidth + gap
+            val liveSearchBaseY = controlRowY + (controlHeight - liveSearchVisualHeight) / 2
+            val liveSearchRect = searchElasticState.transformedBounds(
+                androidx.compose.ui.geometry.Rect(
+                    left = liveSearchBaseX.toFloat(),
+                    top = liveSearchBaseY.toFloat(),
+                    right = (liveSearchBaseX + liveSearchVisualWidth).toFloat(),
+                    bottom = (liveSearchBaseY + liveSearchVisualHeight).toFloat(),
+                )
+            )
+            val navCollapseScale = 1f - 0.10f * EaseOutCubic.transform(merge.value.coerceIn(0f, 1f))
+            val leftHeightPx = barHeight * navCollapseScale
+            val leftWidthPx = (navWidth * navCollapseScale).coerceAtLeast(leftHeightPx)
+            val leftRadiusPx = leftHeightPx / 2f
+            val leftCenterYInDock = navRowY + barHeight / 2f
+            val leftRightCenterXInDock = navigationX + leftWidthPx - leftRadiusPx
+
+            // 搜索圆钮在垂直拖拽时保持正圆直径（不拉成长椭圆），并按真实二维圆心距计算边间距。
+            val searchIsCircle = search.value <= 0.01f
+            val rightDiameterPx = if (searchIsCircle) {
+                minOf(liveSearchRect.width, liveSearchRect.height).coerceAtLeast(1f)
+            } else {
+                liveSearchRect.height.coerceAtLeast(1f)
+            }
+            val rightWidthPx = if (searchIsCircle) rightDiameterPx else liveSearchRect.width.coerceAtLeast(rightDiameterPx)
+            val rightHeightPx = rightDiameterPx
+            val rightRadiusPx = rightHeightPx / 2f
+            val rightCenterYInDock = liveSearchRect.center.y
+            val rightLeftInDock = if (searchIsCircle) {
+                liveSearchRect.center.x - rightRadiusPx
+            } else {
+                liveSearchRect.left
+            }
+            val rightLeftCenterXInDock = rightLeftInDock + rightRadiusPx
+            val centerDistance2D = kotlin.math.hypot(
+                rightLeftCenterXInDock - leftRightCenterXInDock,
+                rightCenterYInDock - leftCenterYInDock,
+            )
+            val liveEdgeGapPx = centerDistance2D - leftRadiusPx - rightRadiusPx
+            val navVisibilityWeight = (1f - resolveLinkedDockGlassHandoffProgress(merge.value)).coerceIn(0f, 1f)
+            val liveFusionAmount = if (fusedDockCapable && !isNavCompacted && navWidth > 0 && rightWidthPx > 1f &&
+                navVisibilityWeight > 0.05f && liveEdgeGapPx < fusionThresholdPx && liveEdgeGapPx > -barHeight * 0.25f &&
+                rightLeftCenterXInDock > leftRightCenterXInDock + 1f
+            ) {
+                ((fusionThresholdPx - liveEdgeGapPx) / fusionThresholdPx).coerceIn(0f, 1f) * navVisibilityWeight
+            } else 0f
+            val fusedDockActive = liveFusionAmount > 0.02f
 
             Box(
                 modifier = Modifier.size(
@@ -421,6 +507,39 @@ internal fun LinkedBottomDock(
                     with(density) { containerHeight.toDp() },
                 )
             ) {
+                if (fusedDockActive && backdrop != null) {
+                    val leftTopInDock = leftCenterYInDock - leftRadiusPx
+                    val leftBottomInDock = leftCenterYInDock + leftRadiusPx
+                    val rightTopInDock = rightCenterYInDock - rightRadiusPx
+                    val rightBottomInDock = rightCenterYInDock + rightRadiusPx
+                    val fusedTopInDock = minOf(leftTopInDock, rightTopInDock)
+                    val fusedBottomInDock = maxOf(leftBottomInDock, rightBottomInDock)
+                    val rightLeftLocal = (rightLeftInDock - navigationX).coerceAtLeast(0f)
+                    val fusedWidthPx = maxOf(leftWidthPx, rightLeftLocal + rightWidthPx).roundToInt().coerceAtLeast(1)
+                    val fusedHeightPx = (fusedBottomInDock - fusedTopInDock).roundToInt().coerceAtLeast(1)
+                    val fusionRadiusPx = (maxFusionRadiusPx * liveFusionAmount).coerceAtLeast(1f)
+                    Box(
+                        modifier = Modifier
+                            .offset { IntOffset(navigationX, fusedTopInDock.roundToInt()) }
+                            .size(
+                                with(density) { fusedWidthPx.toDp() },
+                                with(density) { fusedHeightPx.toDp() },
+                            )
+                            .biliPaiFusedDockShell(
+                                backdrop = backdrop,
+                                containerColor = containerColor,
+                                leftWidthPx = leftWidthPx,
+                                leftHeightPx = leftHeightPx,
+                                leftCenterYPx = leftCenterYInDock - fusedTopInDock,
+                                rightLeftPx = rightLeftLocal,
+                                rightWidthPx = rightWidthPx,
+                                rightHeightPx = rightHeightPx,
+                                rightCenterYPx = rightCenterYInDock - fusedTopInDock,
+                                fusionRadiusPx = fusionRadiusPx,
+                                liquidGlassTuning = liquidGlassTuning,
+                            )
+                    )
+                }
                 if (glassEnabled || !collapsedAtRest) {
                     Box(
                         modifier = Modifier
@@ -485,9 +604,15 @@ internal fun LinkedBottomDock(
                                 hazeState = hazeState,
                                 liquidGlassTuning = liquidGlassTuning,
                                 onExpand = { compactNavigation = false },
-                                content = { navigationContent(allocatedNavigationWidth) },
+                                content = {
+                                    CompositionLocalProvider(LocalLinkedDockFusedGlassActive provides fusedDockActive) {
+                                        navigationContent(allocatedNavigationWidth)
+                                    }
+                                },
                             )
-                        } else navigationContent(allocatedNavigationWidth)
+                        } else CompositionLocalProvider(LocalLinkedDockFusedGlassActive provides fusedDockActive) {
+                            navigationContent(allocatedNavigationWidth)
+                        }
                     }
                 }
                 val homeElasticState = rememberAppElasticPressState(
@@ -735,9 +860,6 @@ internal fun LinkedBottomDock(
                         },
                 ) {
                     if (searchEnabled) {
-                        val searchElasticState = rememberAppElasticPressState(
-                            feedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
-                        )
                         val searchGlassMotion = glassEnabled && backdrop != null
                         // The shell and hit target are siblings. Deform their common
                         // parent so glass, icon and pointer feedback stay together.
@@ -750,22 +872,24 @@ internal fun LinkedBottomDock(
                                     transformInBackdrop = searchGlassMotion,
                                 )
                         ) {
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .biliPaiFloatingDockShell(
-                                        backdrop = backdrop,
-                                        interactionLayerBlock = searchElasticState.layerBlock.takeIf { searchGlassMotion },
-                                        interactionState = searchElasticState.takeIf { searchGlassMotion },
-                                        containerColor = containerColor,
-                                        pressProgress = 0f,
-                                        shape = shape,
-                                        enabled = glassEnabled,
-                                        blurEnabled = blurEnabled,
-                                        hazeState = hazeState,
-                                        liquidGlassTuning = liquidGlassTuning,
-                                    )
-                            )
+                            if (!fusedDockActive) {
+                                Box(
+                                    Modifier
+                                        .fillMaxSize()
+                                        .biliPaiFloatingDockShell(
+                                            backdrop = backdrop,
+                                            interactionLayerBlock = searchElasticState.layerBlock.takeIf { searchGlassMotion },
+                                            interactionState = searchElasticState.takeIf { searchGlassMotion },
+                                            containerColor = containerColor,
+                                            pressProgress = 0f,
+                                            shape = shape,
+                                            enabled = glassEnabled,
+                                            blurEnabled = blurEnabled,
+                                            hazeState = hazeState,
+                                            liquidGlassTuning = liquidGlassTuning,
+                                        )
+                                )
+                            }
                             Box(
                                 Modifier
                                     .fillMaxSize()

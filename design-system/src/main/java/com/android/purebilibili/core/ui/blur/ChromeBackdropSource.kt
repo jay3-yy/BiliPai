@@ -63,6 +63,7 @@ fun rememberChromeBackdropSource(
     isolateContentDrawing: Boolean = false,
     recordingEnabled: Boolean = LocalChromeBackdropRecordingAllowed.current,
     rasterizeContent: Boolean = false,
+    backdropBackground: Color = Color.Unspecified,
 ): ChromeBackdropSource {
     val contentLayer = rememberGraphicsLayer()
     SideEffect {
@@ -86,7 +87,11 @@ fun rememberChromeBackdropSource(
         firstRecording.await()
         recorded.value = true
     }
+    val backdropBackgroundState = rememberUpdatedState(backdropBackground)
     val backdrop = rememberLayerBackdrop(onDraw = {
+        // 仅采样底色：透明内容源下的玻璃不会把模糊后的半透明文字放大成色块，屏幕画面不受影响。
+        val base = backdropBackgroundState.value
+        if (base != Color.Unspecified) drawRect(base)
         drawLayer(contentLayer)
         // Publish once, after the source has actually recorded; never guess using a delay.
         firstRecording.complete(Unit)

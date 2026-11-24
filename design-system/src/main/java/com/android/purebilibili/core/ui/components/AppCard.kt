@@ -6,9 +6,10 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
-import com.android.purebilibili.core.theme.AppUiStyle
-import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.AppThemeRenderer
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.rememberAppThemeRenderer
+import com.android.purebilibili.core.ui.renderer.glass.AppGlassCard
 import com.android.purebilibili.core.ui.renderer.material3.AppMaterial3Card
 import com.android.purebilibili.core.ui.renderer.miuix.AppMiuixCard
 
@@ -56,8 +57,8 @@ fun AppCard(
         containerColor = com.android.purebilibili.core.ui.AppSurfaceTokens.cardContainer(),
         contentColor = com.android.purebilibili.core.ui.AppContentColors.primaryText(),
     )
-    when (LocalAppUiStyle.current) {
-        AppUiStyle.MATERIAL3 -> AppMaterial3Card(
+    when (rememberAppThemeRenderer()) {
+        AppThemeRenderer.MATERIAL3 -> AppMaterial3Card(
             modifier = modifier,
             shape = shape,
             colors = resolvedColors,
@@ -66,8 +67,16 @@ fun AppCard(
             onLongClick = onLongClick,
             content = content,
         )
-        AppUiStyle.MIUIX -> AppMiuixCard(
+        AppThemeRenderer.MIUIX -> AppMiuixCard(
             // Miuix exposes one native Card variant; both app variants map to that component.
+            modifier = modifier,
+            shape = shape,
+            colors = resolvedColors,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            content = content,
+        )
+        AppThemeRenderer.LIQUID_GLASS -> AppGlassCard(
             modifier = modifier,
             shape = shape,
             colors = resolvedColors,

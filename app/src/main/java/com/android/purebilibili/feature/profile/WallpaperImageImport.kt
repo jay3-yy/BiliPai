@@ -107,9 +107,12 @@ internal suspend fun importWallpaperMedia(
             val input = context.contentResolver.openInputStream(source)
                 ?: throw IOException("无法读取所选视频")
             input.use { stream -> file.outputStream().use { stream.copyTo(it) } }
+            if (file.length() == 0L) throw IOException("视频文件为空，请选择其他视频")
             val metadata = android.media.MediaMetadataRetriever()
             try {
-                metadata.setDataSource(file.absolutePath)
+                runCatching { metadata.setDataSource(file.absolutePath) }.getOrElse {
+                    throw IOException("视频损坏或格式不受支持", it)
+                }
                 val width = metadata.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
                     ?.toIntOrNull() ?: 0
                 if (width <= 0) throw IOException("视频损坏或格式不受支持")

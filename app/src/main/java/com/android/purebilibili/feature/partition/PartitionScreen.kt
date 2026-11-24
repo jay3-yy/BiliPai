@@ -1052,8 +1052,6 @@ private fun PartitionSideRail(
                 )
                 .then(railHighlight?.gestureModifier ?: Modifier),
         ) {
-            val railPageBackdrop = rememberLayerBackdrop()
-            val railContentBackdrop = rememberLayerBackdrop()
             val glassPageSource = if (liquidGlassIndicatorEnabled) {
                 rememberChromeBackdropSource(drawContentToScreen = false)
             } else null
@@ -1069,25 +1067,23 @@ private fun PartitionSideRail(
             } else null
             // Only wallpaper/background siblings are safe sources: the enclosing page records
             // this indicator too. Keep the original native capture path when glass is disabled.
-            val sampledPageBackdrop = wallpaperBackdrop ?: glassPageSource?.backdrop ?: railPageBackdrop
-            val sampledContentBackdrop = glassContentSource?.backdrop ?: railContentBackdrop
-            val combinedBackdrop = rememberCombinedBackdrop(sampledPageBackdrop, sampledContentBackdrop)
+            val sampledPageBackdrop = wallpaperBackdrop ?: glassPageSource?.backdrop
+            val sampledContentBackdrop = glassContentSource?.backdrop
+            val combinedBackdrop = if (sampledPageBackdrop != null && sampledContentBackdrop != null) {
+                rememberCombinedBackdrop(sampledPageBackdrop, sampledContentBackdrop)
+            } else null
             // Reserve the same overflow as the home dock so the indicator lens can
             // sample pixels just outside the rail bounds without clipping.
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .bottomBarMatchedCaptureOverflow(captureSafeInset)
-                    .then(
-                        glassPageSource?.modifier ?: Modifier.alpha(0f).then(
-                            if (com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current) {
-                                Modifier.layerBackdrop(railPageBackdrop)
-                            } else Modifier
-                        )
-                    )
-                    .background(AppSurfaceTokens.background())
-                    .then(railHighlight?.modifier ?: Modifier)
-            )
+            if (glassPageSource != null) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .bottomBarMatchedCaptureOverflow(captureSafeInset)
+                        .then(glassPageSource.modifier)
+                        .background(AppSurfaceTokens.background())
+                        .then(railHighlight?.modifier ?: Modifier)
+                )
+            }
 
             if (liquidGlassIndicatorEnabled) {
                 val darkTheme = com.android.purebilibili.core.ui.isAppInDarkTheme()
@@ -1131,7 +1127,7 @@ private fun PartitionSideRail(
                         }
                         .then(requireNotNull(glassContentSource).modifier)
                         .biliPaiFloatingDockCaptureSurface(
-                            backdrop = sampledPageBackdrop,
+                            backdrop = requireNotNull(sampledPageBackdrop),
                             containerColor = dockContainerColor,
                             shape = resolveSharedBottomBarCapsuleShape(),
                             liquidGlassTuning = liquidGlassTuning,
@@ -1255,8 +1251,8 @@ private fun PartitionSideRailMovingIndicator(
     liquidGlassIndicatorEnabled: Boolean,
     liquidGlassPreset: BottomBarLiquidGlassPreset,
     liquidGlassTuning: LiquidGlassTuning,
-    contentBackdrop: top.yukonga.miuix.kmp.blur.Backdrop,
-    backdrop: top.yukonga.miuix.kmp.blur.Backdrop,
+    contentBackdrop: top.yukonga.miuix.kmp.blur.Backdrop?,
+    backdrop: top.yukonga.miuix.kmp.blur.Backdrop?,
     maxVideoPushPx: Float,
     horizontalPadding: PartitionSideRailIndicatorHorizontalPadding,
     onVideoListPushChanged: (Float) -> Unit,

@@ -181,8 +181,8 @@ float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {
     if (cornerCoord.x > 0.0 || cornerCoord.y > 0.0) {
         return sign(coord) * normalize(max(cornerCoord, 0.0));
     } else {
-        float gradX = step(cornerCoord.y, cornerCoord.x);
-        return sign(coord) * float2(gradX, 1.0 - gradX);
+        float blend = smoothstep(-1.0, 1.0, cornerCoord.x - cornerCoord.y);
+        return sign(coord) * normalize(float2(blend, 1.0 - blend));
     }
 }
 

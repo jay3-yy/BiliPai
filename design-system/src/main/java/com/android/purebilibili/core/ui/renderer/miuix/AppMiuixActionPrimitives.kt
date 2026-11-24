@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppSpacingTokens
-import com.android.purebilibili.core.ui.isMiuixNonGlassEnabled
 import com.android.purebilibili.core.ui.components.AppMiuixActionTone
 import com.android.purebilibili.core.ui.components.appDesktopInteractionVisuals
 import com.android.purebilibili.core.ui.components.resolveMiuixChipActionTone
@@ -127,10 +126,7 @@ internal fun AppMiuixChip(
         AppMiuixActionTone.PRIMARY -> MiuixButtonDefaults.buttonColorsPrimary()
         AppMiuixActionTone.SECONDARY -> MiuixButtonDefaults.buttonColors()
     }
-    val scheme = androidx.compose.material3.MaterialTheme.colorScheme
-    val selectedContainer = colors.color
-    val selectedContent = colors.contentColor
-    val navigation = if (navigationColors && selected && isMiuixNonGlassEnabled()) {
+    val navigation = if (navigationColors && selected) {
         com.android.purebilibili.core.ui.AppInteractionColors.nativeNavigation()
     } else null
     val readableColors = if (navigation != null) MiuixButtonColors(
@@ -138,25 +134,17 @@ internal fun AppMiuixChip(
         contentColor = navigation.selectedContent,
         disabledColor = colors.disabledColor,
         disabledContentColor = colors.disabledContentColor,
-    ) else if (isMiuixNonGlassEnabled()) colors else MiuixButtonColors(
-        color = selectedContainer,
-        contentColor = com.android.purebilibili.core.ui.resolveButtonContentColor(selectedContainer, selectedContent, scheme),
-        disabledColor = colors.disabledColor,
-        disabledContentColor = colors.disabledContentColor,
-    )
+    ) else colors
     val metrics = resolveMiuixNonGlassChipMetrics()
     MiuixButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
         colors = readableColors,
-        insideMargin = if (isMiuixNonGlassEnabled()) MiuixButtonDefaults.InsideMargin else PaddingValues(
-            horizontal = metrics.horizontalPaddingDp.dp,
-            vertical = AppSpacingTokens.None,
-        ),
-        minHeight = if (isMiuixNonGlassEnabled()) MiuixButtonDefaults.MinHeight else metrics.minHeightDp.dp,
-        minWidth = if (isMiuixNonGlassEnabled()) MiuixButtonDefaults.MinWidth else metrics.minWidthDp.dp,
-        cornerRadius = if (isMiuixNonGlassEnabled()) MiuixButtonDefaults.CornerRadius else metrics.cornerRadiusDp.dp,
+        insideMargin = MiuixButtonDefaults.InsideMargin,
+        minHeight = MiuixButtonDefaults.MinHeight,
+        minWidth = MiuixButtonDefaults.MinWidth,
+        cornerRadius = MiuixButtonDefaults.CornerRadius,
         interactionSource = interactionSource,
     ) {
         CompositionLocalProvider(

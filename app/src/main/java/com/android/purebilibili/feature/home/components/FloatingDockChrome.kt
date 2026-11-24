@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
@@ -37,6 +38,8 @@ import androidx.compose.ui.util.fastCoerceIn
 import kotlin.math.abs
 import androidx.compose.ui.util.lerp
 import androidx.compose.ui.zIndex
+import com.android.purebilibili.core.ui.effect.FusedCapsulesShape
+import com.android.purebilibili.core.ui.effect.fusedCapsulesLens
 import com.android.purebilibili.feature.home.components.liquid.InnerShadow
 import com.android.purebilibili.feature.home.components.liquid.innerShadow
 import com.android.purebilibili.feature.home.components.liquid.lens
@@ -90,6 +93,122 @@ internal fun rememberBiliPaiGravityHighlight(
             )
         }
     }
+}
+
+/** 当 LinkedBottomDock 已绘制双胶囊融合玻璃外壳时，子胶囊跳过各自独立外壳避免双重模糊与接缝。 */
+internal val LocalLinkedDockFusedGlassActive = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/**
+ * 液态玻璃专属：将底栏导航胶囊与相邻搜索圆钮融合为同一块连续液态玻璃外壳（SDF 凹颈桥接 + 连续折射 + 统一高光与阴影）。
+ */
+@Composable
+internal fun Modifier.biliPaiFusedDockShell(
+    backdrop: Backdrop,
+    containerColor: Color,
+    leftWidthPx: Float,
+    leftHeightPx: Float,
+    leftCenterYPx: Float,
+    rightLeftPx: Float,
+    rightWidthPx: Float,
+    rightHeightPx: Float,
+    rightCenterYPx: Float,
+    fusionRadiusPx: Float,
+    liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f),
+    darkTheme: Boolean? = null,
+): Modifier {
+    val isDark = darkTheme ?: com.android.purebilibili.core.ui.isAppInDarkTheme()
+    val density = LocalDensity.current
+    val materialBlur = rememberMaterialBackdropBlur(liquidGlassTuning)
+    val samplingBackdrop = com.android.purebilibili.core.ui.blur.rememberContinuousBackdrop(backdrop)
+    val fusedShape = remember(
+        leftWidthPx, leftHeightPx, leftCenterYPx,
+        rightLeftPx, rightWidthPx, rightHeightPx, rightCenterYPx,
+        fusionRadiusPx,
+    ) {
+        FusedCapsulesShape(
+            leftWidthPx = leftWidthPx,
+            leftHeightPx = leftHeightPx,
+            leftCenterYPx = leftCenterYPx,
+            rightLeftPx = rightLeftPx,
+            rightWidthPx = rightWidthPx,
+            rightHeightPx = rightHeightPx,
+            rightCenterYPx = rightCenterYPx,
+            fusionRadiusPx = fusionRadiusPx,
+        )
+    }
+    val shapeBlock = remember(fusedShape) { { fusedShape } }
+    val surfaceColor = containerColor.copy(alpha = liquidGlassTuning.surfaceAlpha)
+    val readabilityScrimColor = if (isDark) Color.Black else Color.White
+    val scrimAlpha = liquidGlassTuning.contentReadabilityScrimAlpha
+    val distortionScale = liquidGlassTuning.contentDistortionScale.coerceIn(0f, 1.8f)
+    val blurRadiusPx = with(density) { liquidGlassTuning.backdropBlurRadius.dp.toPx() }
+    val refractionHeightPx = with(density) { (liquidGlassTuning.refractionHeight * distortionScale).dp.toPx() }
+    val refractionAmountPx = with(density) { (liquidGlassTuning.refractionAmount * distortionScale).dp.toPx() }
+    val smoothK = (fusionRadiusPx * 1.15f).coerceAtLeast(with(density) { 10.dp.toPx() })
+
+    return this
+        .dropShadow(
+            shape = fusedShape,
+            shadow = Shadow(
+                radius = 10.dp,
+                color = Color.Black,
+                alpha = if (isDark) 0.2f else 0.1f,
+            ),
+        )
+        .drawBackdrop(
+            backdrop = samplingBackdrop,
+            shape = shapeBlock,
+            effects = {
+                if (top.yukonga.miuix.kmp.material.isRuntimeShaderSupported() &&
+                    refractionHeightPx > 0f && refractionAmountPx > 0f
+                ) {
+                    padding = maxOf(padding, refractionAmountPx)
+                }
+                vibrancy(liquidGlassTuning.saturation)
+                materialBlur(blurRadiusPx)
+                fusedCapsulesLens(
+                    leftWidthPx = leftWidthPx,
+                    leftHeightPx = leftHeightPx,
+                    leftCenterYPx = leftCenterYPx,
+                    rightLeftPx = rightLeftPx,
+                    rightWidthPx = rightWidthPx,
+                    rightHeightPx = rightHeightPx,
+                    rightCenterYPx = rightCenterYPx,
+                    smoothK = smoothK,
+                    refractionHeight = refractionHeightPx,
+                    refractionAmount = refractionAmountPx,
+                    chromaticAberration = liquidGlassTuning.shellChromaticAberrationAmount,
+                )
+            },
+            onDrawFront = {
+                val rimOutline = fusedShape.createOutline(size, layoutDirection, this)
+                drawOutline(
+                    outline = rimOutline,
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = if (isDark) {
+                            listOf(
+                                Color.White.copy(alpha = 0.34f),
+                                Color.White.copy(alpha = 0.08f),
+                                Color.White.copy(alpha = 0.22f),
+                            )
+                        } else {
+                            listOf(
+                                Color.White.copy(alpha = 0.72f),
+                                Color.Black.copy(alpha = 0.08f),
+                                Color.White.copy(alpha = 0.45f),
+                            )
+                        }
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.9.dp.toPx()),
+                )
+            },
+            onDrawSurface = {
+                drawRect(surfaceColor)
+                if (scrimAlpha > 0f) {
+                    drawRect(readabilityScrimColor.copy(alpha = scrimAlpha))
+                }
+            },
+        )
 }
 
 /**
@@ -429,35 +548,68 @@ internal fun Modifier.floatingDockIndicatorOptics(
     gapOnlyDispersion: Boolean = true,
 ): Modifier {
     val thickness = if (vertical) width.value else height.value
-    return drawBackdrop(
-        backdrop = backdrop,
-        shape = { shape },
-        effects = {
+    val latestProgress = androidx.compose.runtime.rememberUpdatedState(progressProvider)
+    val latestScaleX = androidx.compose.runtime.rememberUpdatedState(scaleXProvider)
+    val latestScaleY = androidx.compose.runtime.rememberUpdatedState(scaleYProvider)
+    val latestHighlight = androidx.compose.runtime.rememberUpdatedState(highlightProvider)
+    val latestHighlightAlpha = androidx.compose.runtime.rememberUpdatedState(highlightAlphaProvider)
+    val latestShellScale = androidx.compose.runtime.rememberUpdatedState(shellScaleProvider)
+    val shapeBlock = remember(shape) { { shape } }
+    val effects = remember(thickness, tuning, shellExtent, vertical, gapOnlyDispersion) {
+        val block: BackdropEffectScope.() -> Unit = {
             homeIndicatorLens(
                 restHeightDp = thickness,
-                progress = progressProvider(),
+                progress = latestProgress.value(),
                 tuning = tuning,
                 shellHeightDp = shellExtent.value,
-                indicatorScaleY = if (vertical) scaleXProvider() else scaleYProvider(),
-                shellScaleY = shellScaleProvider(),
+                indicatorScaleY = if (vertical) latestScaleX.value() else latestScaleY.value(),
+                shellScaleY = latestShellScale.value(),
                 chromaticBandHorizontal = vertical,
                 gapOnlyDispersion = gapOnlyDispersion,
             )
-        },
-        onDrawFront = { highlightProvider()?.let { drawEdgeStroke(shape, it, highlightAlphaProvider()) } },
-        layerBlock = {
-            this.scaleX = scaleXProvider()
-            this.scaleY = scaleYProvider()
-        },
-        onDrawSurface = { drawHomeIndicatorSurface(progressProvider(), darkTheme, idleColor) },
-    ).innerShadow(shape = shape) {
-        InnerShadow(
-            offset = androidx.compose.ui.unit.DpOffset.Zero,
-            radius = 8.dp * homeIndicatorOpticalScale(thickness) * progressProvider(),
-            color = Color.Black.copy(alpha = 0.15f),
-            alpha = progressProvider(),
-        )
+        }
+        block
     }
+    val onDrawFront = remember(shape) {
+        val block: DrawScope.() -> Unit = {
+            latestHighlight.value()?.let { drawEdgeStroke(shape, it, latestHighlightAlpha.value()) }
+        }
+        block
+    }
+    val layerBlock = remember {
+        val block: GraphicsLayerScope.() -> Unit = {
+            this.scaleX = latestScaleX.value()
+            this.scaleY = latestScaleY.value()
+        }
+        block
+    }
+    val onDrawSurface = remember(darkTheme, idleColor) {
+        val block: DrawScope.() -> Unit = {
+            drawHomeIndicatorSurface(latestProgress.value(), darkTheme, idleColor)
+        }
+        block
+    }
+    val shadowBlock = remember(thickness) {
+        val opticalScale = homeIndicatorOpticalScale(thickness)
+        val block: () -> InnerShadow? = {
+            val progress = latestProgress.value()
+            if (progress <= 0.001f) null else InnerShadow(
+                offset = androidx.compose.ui.unit.DpOffset.Zero,
+                radius = 8.dp * opticalScale * progress,
+                color = Color.Black.copy(alpha = 0.15f),
+                alpha = progress,
+            )
+        }
+        block
+    }
+    return drawBackdrop(
+        backdrop = backdrop,
+        shape = shapeBlock,
+        effects = effects,
+        onDrawFront = onDrawFront,
+        layerBlock = layerBlock,
+        onDrawSurface = onDrawSurface,
+    ).innerShadow(shape = shape, shadow = shadowBlock)
 }
 
 /**
@@ -529,48 +681,31 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
             .then(gravityGate.modifier)
             .then(
                 if (combinedBackdrop != null) {
-                    Modifier
-                        .drawBackdrop(
-                            backdrop = combinedBackdrop,
-                            shape = { shape },
-                            effects = {
-                                val progress = pressProgress
-                                homeIndicatorLens(
-                                    restHeightDp = height.value,
-                                    progress = progress,
-                                    tuning = liquidGlassTuning,
-                                    shellHeightDp = dockHeight.value,
-                                    gapOnlyDispersion = gapOnlyDispersion,
-                                    // Match the exact layer transform used below, including
-                                    // velocity compression, so the rim follows the visible pill.
-                                    indicatorScaleY = liquidWobbleScaleY(
-                                        resolveFloatingDockIndicatorLayerScaleY(scaleY, velocity), recoilStretch(),
-                                    ),
-                                )
-                            },
-                            onDrawFront = {
-                                if (highlightEnabled) drawEdgeStroke(shape, pillHighlight.value, pressProgress)
-                            },
-                            layerBlock = {
-                                this.scaleX = liquidWobbleScaleX(
-                                    com.android.purebilibili.core.ui.animation.LiquidIndicatorMotion.scaleX(scaleX, velocity), recoilStretch(),
-                                )
-                                this.scaleY = liquidWobbleScaleY(
-                                    com.android.purebilibili.core.ui.animation.LiquidIndicatorMotion.scaleY(scaleY, velocity), recoilStretch(),
-                                )
-                            },
-                            onDrawSurface = {
-                                drawHomeIndicatorSurface(pressProgress, isDark)
-                            },
-                        )
-                        .innerShadow(shape = shape) {
-                            InnerShadow(
-                                offset = androidx.compose.ui.unit.DpOffset.Zero,
-                                radius = 8.dp * homeIndicatorOpticalScale(height.value) * pressProgress,
-                                color = Color.Black.copy(alpha = 0.15f),
-                                alpha = pressProgress,
+                    Modifier.floatingDockIndicatorOptics(
+                        backdrop = combinedBackdrop,
+                        shape = shape,
+                        width = width,
+                        height = height,
+                        shellExtent = dockHeight,
+                        tuning = liquidGlassTuning,
+                        darkTheme = isDark,
+                        progressProvider = { pressProgress },
+                        scaleXProvider = {
+                            liquidWobbleScaleX(
+                                com.android.purebilibili.core.ui.animation.LiquidIndicatorMotion.scaleX(scaleX, velocity),
+                                recoilStretch(),
                             )
-                        }
+                        },
+                        scaleYProvider = {
+                            liquidWobbleScaleY(
+                                resolveFloatingDockIndicatorLayerScaleY(scaleY, velocity),
+                                recoilStretch(),
+                            )
+                        },
+                        highlightProvider = { if (highlightEnabled) pillHighlight.value else null },
+                        highlightAlphaProvider = { pressProgress },
+                        gapOnlyDispersion = gapOnlyDispersion,
+                    )
                 } else {
                     val solidCapsuleColor = if (!isDark) {
                         AppSurfaceTokens.surfaceContainer()

@@ -32,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.feature.settings.settingItemTitle
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import com.android.purebilibili.R
 import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.ui.blur.BlurIntensity
@@ -261,6 +263,8 @@ fun AnimationSettingsContent(
     val transitionBlurDescription = stringResource(
         when {
             !videoTransitionCapability.available -> R.string.animation_transition_blur_summary
+            videoTransitionCapability.method == CardTransitionMethod.ANDROID_SHARED ->
+                R.string.animation_transition_blur_shared_supported
             videoTransitionCapability.configurableBlur -> R.string.animation_transition_blur_official_supported
             else -> R.string.animation_transition_blur_official_system
         },
@@ -343,22 +347,40 @@ fun AnimationSettingsContent(
                     .collectAsStateWithLifecycle(initialValue = themeConfiguration.liquidControlsUseThemeColor)
                 val switchThumbMode by remember(context) { SettingsManager.getLiquidSwitchThumbMode(context) }
                     .collectAsStateWithLifecycle(initialValue = themeConfiguration.liquidSwitchThumbMode)
+                val themeSwitchTransitionController = com.android.purebilibili.core.theme.LocalThemeSwitchTransitionController.current
+                var liquidGlassSwitchAnchorCenter by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Unspecified) }
                 AppPreferenceGroup(segment = AppPreferenceGroupSegment.FIRST) {
-                    // 玻璃家族总开关与材质条目统一收口在本分组;设备不支持时以提示替代开关。
+                    // 液态玻璃总开关唯一入口：独立于 Material 3 / Miuix 底层风格。
                     SettingsItemAnchor("appearance.effective_liquid_glass_enabled") {
-                        AppSwitchPreference(
-                            icon = rememberSettingsSemanticIcon(SettingsIconRole.ANDROID_LIQUID_GLASS),
-                            title = settingItemTitle("appearance.effective_liquid_glass_enabled"),
-                            subtitle = if (isLiquidGlassAvailable) {
-                                context.getString(R.string.appearance_liquid_glass_summary)
-                            } else {
-                                context.getString(R.string.appearance_liquid_glass_unsupported)
-                            },
-                            checked = state.androidNativeLiquidGlassEnabled,
-                            onCheckedChange = { viewModel.toggleAndroidNativeLiquidGlass(it) },
-                            enabled = isLiquidGlassAvailable,
-                            iconTint = AppContentColors.secondaryText()
-                        )
+                        Box(
+                            modifier = Modifier.onGloballyPositioned { coordinates ->
+                                liquidGlassSwitchAnchorCenter = coordinates.boundsInWindow().center
+                            }
+                        ) {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.ANDROID_LIQUID_GLASS),
+                                title = settingItemTitle("appearance.effective_liquid_glass_enabled"),
+                                subtitle = if (isLiquidGlassAvailable) {
+                                    context.getString(R.string.appearance_liquid_glass_summary)
+                                } else {
+                                    context.getString(R.string.appearance_liquid_glass_unsupported)
+                                },
+                                checked = state.androidNativeLiquidGlassEnabled,
+                                onCheckedChange = { enabled ->
+                                    if (enabled == state.androidNativeLiquidGlassEnabled) return@AppSwitchPreference
+                                    val controller = themeSwitchTransitionController
+                                    if (controller != null) {
+                                        controller.runTransition(anchorInWindow = liquidGlassSwitchAnchorCenter) {
+                                            viewModel.toggleAndroidNativeLiquidGlass(enabled)
+                                        }
+                                    } else {
+                                        viewModel.toggleAndroidNativeLiquidGlass(enabled)
+                                    }
+                                },
+                                enabled = isLiquidGlassAvailable,
+                                iconTint = AppContentColors.secondaryText()
+                            )
+                        }
                     }
                     AppPreferenceDivider()
                     com.android.purebilibili.feature.settings.LiquidGlassScenePreference(
@@ -394,14 +416,7 @@ fun AnimationSettingsContent(
                             },
                         )
                     }
-                    if (!isLiquidGlassAvailable) {
-                        AppPreferenceDivider()
-                        AppText(
-                            text = stringResource(R.string.animation_glass_unavailable),
-                            modifier = Modifier.padding(16.dp),
-                            color = AppContentColors.secondaryText(),
-                        )
-                    }
+                    AppPreferenceDivider()
                     SettingsItemAnchor("animation.app_navigation_settings.liquid_indicator_dynamic_length_enabled") {
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.LIQUID_INDICATOR_DYNAMIC_LENGTH),
@@ -722,6 +737,7 @@ fun AnimationSettingsContent(
                                         description = when (method) {
                                             CardTransitionMethod.AUTO -> stringResource(R.string.animation_card_transition_method_auto_summary)
                                             CardTransitionMethod.XIAOMI_ROUNDED -> stringResource(R.string.animation_card_transition_method_xiaomi_summary)
+                                            CardTransitionMethod.ANDROID_SHARED -> stringResource(R.string.animation_card_transition_method_android_shared_summary)
                                             else -> null
                                         },
                                     )

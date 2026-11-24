@@ -264,6 +264,7 @@ private fun LiveRoomScreen(
     settingsIconStyle: AppIconStyle,
     onOpenWeb: ((String) -> Unit)?,
 ) {
+    val sharedSurfaceVisible = com.android.purebilibili.navigation3.LocalNavigationSharedSurfaceVisible.current
     val bilibiliRoomId = roomId.toLongOrNull() ?: 0L
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -1222,6 +1223,9 @@ private fun LiveRoomScreen(
                         if (playerView.resizeMode != viewportAspectRatio.playerResizeMode) {
                             playerView.resizeMode = viewportAspectRatio.playerResizeMode
                         }
+                        playerView.visibility = if (sharedSurfaceVisible) android.view.View.VISIBLE else android.view.View.INVISIBLE
+                        playerView.alpha = if (sharedSurfaceVisible) 1f else 0f
+                        playerView.videoSurfaceView?.alpha = if (sharedSurfaceVisible) 1f else 0f
                         playerViewRef = playerView
                     },
                     onRelease = { view ->
@@ -1230,6 +1234,14 @@ private fun LiveRoomScreen(
                     },
                     modifier = viewportModifier
                 )
+                }
+                if (!sharedSurfaceVisible && liveCover.isNotBlank()) {
+                    AsyncImage(
+                        model = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(liveCover),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().background(Color.Black),
+                    )
                 }
             }
 
@@ -1243,7 +1255,7 @@ private fun LiveRoomScreen(
             val showLiveDanmakuOverlay =
                 liveLayoutMode != LiveRoomLayoutMode.PortraitVerticalOverlay || isFullscreen || pipPresentation
             val liveDanmakuInPip = pipPresentation
-            if (liveDanmakuLayerEnabled) {
+            if (liveDanmakuLayerEnabled && sharedSurfaceVisible) {
                 // 隐藏时保留渲染器并暂停，恢复后跟随直播时间；画中画沿用弹幕显示偏好。
                 LiveDanmakuOverlay(
                     danmakuFlow = viewModel.danmakuFlow,

@@ -144,11 +144,12 @@ internal fun BottomBarFloatingSegmentedControl(
     // with a local source can make MIUI's native background-blur graph sample itself when
     // nested pages mount another backdrop (for example Bangumi/Film), overflowing RenderThread.
     // Keep the local source strictly as a fallback so visual blur remains real in both paths.
-    val localBackdrop = if (liquidGlassEnabled && suppliedBackdrop == null) {
-        rememberLayerBackdrop()
+    val localBackdropSource = if (liquidGlassEnabled && suppliedBackdrop == null) {
+        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource(drawContentToScreen = false)
     } else {
         null
     }
+    val localBackdrop = localBackdropSource?.backdrop
     val effectiveBackdrop = if (liquidGlassEnabled) {
         (suppliedBackdrop ?: localBackdrop)?.let {
             com.android.purebilibili.feature.home.components.liquid.rememberStableBackdrop(it)
@@ -289,7 +290,7 @@ internal fun BottomBarFloatingSegmentedControl(
             indicatorWidthDp = fittedSegmentedIndicatorWidth.value,
             geometryMode = effectiveGeometryMode,
         )
-        if (effectiveBackdrop != null && suppliedBackdrop == null && localBackdrop != null) {
+        if (effectiveBackdrop != null && suppliedBackdrop == null && localBackdropSource != null) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
@@ -297,12 +298,7 @@ internal fun BottomBarFloatingSegmentedControl(
                         horizontalInset = captureInsets.horizontalDp.dp,
                         verticalInset = captureInsets.verticalDp.dp,
                     )
-                    .alpha(0f)
-                    .then(
-                        if (com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current) {
-                            Modifier.layerBackdrop(localBackdrop)
-                        } else Modifier
-                    )
+                    .then(localBackdropSource.modifier)
                     .background(AppSurfaceTokens.background())
             )
         }

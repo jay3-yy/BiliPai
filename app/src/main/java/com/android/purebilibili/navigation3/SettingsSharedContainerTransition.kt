@@ -72,6 +72,8 @@ import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 
 private const val SETTINGS_SHARED_DRAW_TAG = "SettingsSharedDraw"
+private const val SHARED_CONTAINER_BACKGROUND_ZOOM = 0.10f
+private const val SHARED_CONTAINER_BLUR_QUANTUM_PX = 4f
 
 /** 导航层保留手势和背景模糊，条目与页面的边界由 Compose 共享转场绘制。 */
 internal class SettingsSharedContainerTransition(
@@ -82,24 +84,80 @@ internal class SettingsSharedContainerTransition(
     private val pageColor: () -> Color,
     private val realtimeBlurEnabled: Boolean,
     private val blurMotionTier: () -> MotionTier,
+    val navigationControlFallback: Boolean = false,
+    val scaleDestinationToWidth: Boolean = navigationControlFallback,
+    val stiffnessScale: Float = 1f,
 ) : NavTransition {
     override val preparesEnterFrame = true
     override val handlesOwnClipping = true
-    private val settle = NavSettleSpec.Spring(stiffness = 500f)
-    override val motion = NavMotion(
-        programmatic = settle,
-        commit = settle,
-        cancel = NavSettleSpec.Spring(stiffness = 700f),
-    )
+    private val effectiveScale = stiffnessScale.coerceIn(0.45f, 1.5f)
+    override val motion = if (navigationControlFallback) {
+        // 对齐金标卡片的平滑减速曲线：单调收敛，返回略快于打开，收紧尾部避免播放器 Surface 久等。
+        NavMotion(
+            programmatic = NavSettleSpec.Spring(
+                dampingRatio = 1f,
+                stiffness = 310f * effectiveScale,
+                visibilityThreshold = 0.002f,
+            ),
+            commit = NavSettleSpec.Spring(
+                dampingRatio = 1f,
+                stiffness = 390f * effectiveScale,
+                visibilityThreshold = 0.002f,
+            ),
+            cancel = NavSettleSpec.Spring(
+                dampingRatio = 1f,
+                stiffness = 520f * effectiveScale,
+                visibilityThreshold = 0.002f,
+            ),
+        )
+    } else {
+        val settle = NavSettleSpec.Spring(stiffness = 500f, visibilityThreshold = 0.0005f)
+        NavMotion(
+            programmatic = settle,
+            commit = settle,
+            cancel = NavSettleSpec.Spring(stiffness = 700f, visibilityThreshold = 0.0005f),
+        )
+    }
 
     override fun scrimFraction(scope: NavTransitionScope): Float = 0f
 
     override fun Modifier.transformEntry(scope: NavTransitionScope): Modifier =
-        if (!realtimeBlurEnabled) this else navigationBlurBlend {
+        navigationBlurBlend {
+            val covered = if (scope.relativeDepth.isFinite()) scope.relativeDepth.coerceIn(0f, 1f) else 0f
+            val tier = blurMotionTier()
+            val lightBackground = pageColor().luminance() > 0.5f
+            val density = scope.density.density
+            val maxBlurRadiusPx = (if (lightBackground) 16f else 18f) * density
+            val blurProgress = if (realtimeBlurEnabled && tier != MotionTier.Reduced) {
+                resolveSettingsContainerBlurProgress(covered)
+            } else 0f
+            val rawRadiusPx = maxBlurRadiusPx * blurProgress
+            // 超过最小步长后直接用 alpha=1f 绘制真半径模糊，避免下层清晰文字透过半透明模糊层。
+            val (radiusPx, blurAlpha) = when {
+                rawRadiusPx <= 0.01f -> 0f to 0f
+                rawRadiusPx < SHARED_CONTAINER_BLUR_QUANTUM_PX ->
+                    SHARED_CONTAINER_BLUR_QUANTUM_PX to (rawRadiusPx / SHARED_CONTAINER_BLUR_QUANTUM_PX).coerceIn(0f, 1f)
+                else -> {
+                    val quantized = (kotlin.math.round(rawRadiusPx / SHARED_CONTAINER_BLUR_QUANTUM_PX) *
+                        SHARED_CONTAINER_BLUR_QUANTUM_PX).coerceIn(SHARED_CONTAINER_BLUR_QUANTUM_PX, maxBlurRadiusPx)
+                    quantized to 1f
+                }
+            }
+            val contentScale = if (tier != MotionTier.Reduced) {
+                1f + SHARED_CONTAINER_BACKGROUND_ZOOM * covered
+            } else 1f
+            val maxScrimAlpha = when {
+                tier == MotionTier.Reduced -> if (lightBackground) 0.08f else 0.14f
+                navigationControlFallback -> if (lightBackground) 0.22f else 0.42f
+                else -> if (lightBackground) 0.18f else 0.34f
+            }
             resolveNavigationBlurBlendFrame(
-                progress = resolveSettingsContainerBlurProgress(scope.relativeDepth),
-                motionTier = blurMotionTier(),
-                isLightBackground = pageColor().luminance() > 0.5f,
+                progress = blurAlpha,
+                motionTier = tier,
+                isLightBackground = lightBackground,
+                maxBlurRadiusPx = radiusPx,
+                contentScale = contentScale,
+                scrimAlpha = maxScrimAlpha * covered,
             )
         }
 }
@@ -124,6 +182,7 @@ internal class SettingsSharedContainerBounds(
     val open: State<Float>,
     val navigationScope: State<NavTransitionScope>,
     val transition: Transition<Boolean>,
+    val scaleDestinationToWidth: Boolean = false,
 ) {
     var sourcePlaced by mutableStateOf(false)
     var destinationPlaced by mutableStateOf(false)
@@ -153,6 +212,7 @@ internal fun settingsSharedContainerDestination(
     navScope: NavTransitionScope,
     color: Color,
     destinationZIndex: Float = 0f,
+    scaleDestinationToWidth: Boolean = false,
     wallpaperBacking: Modifier = Modifier,
 ): Modifier {
     val state = remember(origin) { SeekableTransitionState(navScope.relativeDepth >= 0f) }
@@ -164,7 +224,7 @@ internal fun settingsSharedContainerDestination(
         label = "Settings container openness",
     ) { if (it) 1f else 0f }
     val latestScope = rememberUpdatedState(navScope)
-    val bounds = remember(origin, originVisibility, pageVisibility, open, transition) {
+    val bounds = remember(origin, originVisibility, pageVisibility, open, transition, scaleDestinationToWidth) {
         SettingsSharedContainerBounds(
             origin,
             destinationZIndex,
@@ -173,6 +233,7 @@ internal fun settingsSharedContainerDestination(
             open,
             latestScope,
             transition,
+            scaleDestinationToWidth = scaleDestinationToWidth,
         )
     }
     DisposableEffect(bounds) {
@@ -202,7 +263,7 @@ internal fun settingsSharedContainerDestination(
         snapshotFlow {
             latestScope.value.isRemoving && bounds.sourcePlaced && bounds.destinationPlaced
         }.first { it }
-        origin.returnLanding.request()
+        if (!origin.returnLandingHandledByOwner) origin.returnLanding.request()
     }
     val view = LocalView.current
     val activity = LocalActivity.current
@@ -283,8 +344,11 @@ internal fun settingsSharedContainerBounds(
                 exit = ExitTransition.None,
                 // 导航进度已经包含缓动和松手的弹簧，边界只按这个进度取样。
                 boundsTransform = { _, _ -> tween(SETTINGS_CONTAINER_DURATION_MILLIS, easing = LinearEasing) },
-                resizeMode = if (source) RemeasureToBounds else
-                    scaleToBounds(ContentScale.None, Alignment.TopStart),
+                resizeMode = if (source) RemeasureToBounds else if (bounds.scaleDestinationToWidth) {
+                    scaleToBounds(ContentScale.FillWidth, Alignment.TopCenter)
+                } else {
+                    scaleToBounds(ContentScale.None, Alignment.TopStart)
+                },
                 clipInOverlayDuringTransition = overlayClip,
                 // 已落位的父容器留在页面层，避免二级设置转场把父页一同抬入叠层。
                 renderInOverlayDuringTransition = isMorphing,

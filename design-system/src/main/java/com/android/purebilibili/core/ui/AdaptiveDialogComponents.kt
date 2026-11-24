@@ -155,16 +155,23 @@ internal fun AdaptiveAlertDialog(
                                                 .heightIn(max = maxHeight)
                                                 .fillMaxWidth()
                                                 .pointerInput(Unit) { detectTapGestures { } },
-                                            shape = shape ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
-                                                AppShapes.resolveContainerShape(ContainerLevel.Dialog, uiStyle, liquidGlassEnabled = false)
-                                            } else MaterialTheme.shapes.extraLarge,
+                                            shape = shape ?: com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.containerShape(
+                                                ContainerLevel.Dialog
+                                            ),
                                             containerColor = baseActionBackground,
-                                            tonalElevation = tonalElevation ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
-                                                0.dp
-                                            } else AlertDialogDefaults.TonalElevation,
+                                            tonalElevation = tonalElevation ?: 0.dp,
                                         ) {
-                                            MiuixAlertDialogBody(icon, title, text, confirmButton, dismissButton,
-                                                confirmContentColor, dismissContentColor, constrainText = true)
+                                            // 液态玻璃渲染线：使用独立的 iOS Liquid Glass 居中对话框与胶囊操作按钮。
+                                            com.android.purebilibili.core.ui.renderer.glass.AppGlassAlertDialogBody(
+                                                icon = icon,
+                                                title = title,
+                                                text = text,
+                                                confirmButton = confirmButton,
+                                                dismissButton = dismissButton,
+                                                confirmContentColor = confirmContentColor,
+                                                dismissContentColor = dismissContentColor,
+                                                constrainText = true,
+                                            )
                                         }
                                     }
                                 }
@@ -511,7 +518,16 @@ internal fun AdaptiveDialogAction(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    if (isMiuixNonGlassEnabled()) {
+    if (com.android.purebilibili.core.ui.renderer.glass.LocalGlassDialogActionRow.current) {
+        com.android.purebilibili.core.ui.renderer.glass.AppGlassDialogPillAction(
+            onClick = onClick,
+            isConfirm = com.android.purebilibili.core.ui.renderer.glass.LocalGlassDialogConfirmAction.current,
+            modifier = modifier,
+            content = content,
+        )
+        return
+    }
+    if (LocalAppUiStyle.current == AppUiStyle.MIUIX) {
         val colors = if (LocalNativeMiuixConfirmAction.current) {
             top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColorsPrimary()
         } else {

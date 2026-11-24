@@ -149,6 +149,7 @@ import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -252,6 +253,9 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
 
     private val _uiState = MutableStateFlow(WatchLaterUiState(isLoading = true))
     val uiState = _uiState.asStateFlow()
+
+    private val _undoRemovedItem = kotlinx.coroutines.flow.MutableSharedFlow<VideoItem>(extraBufferCapacity = 4)
+    val undoRemovedItem: kotlinx.coroutines.flow.SharedFlow<VideoItem> = _undoRemovedItem.asSharedFlow()
 
     private data class WatchLaterManagementSnapshot(
         val state: WatchLaterUiState,
@@ -531,7 +535,7 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
                 if (!accountRequests.isCurrent(identity)) return@launch
                 if (result.isSuccess) {
                     tabCache.clear()
-                    android.widget.Toast.makeText(getApplication(), "已从稍后再看移除", android.widget.Toast.LENGTH_SHORT).show()
+                    _undoRemovedItem.tryEmit(removedItem)
                 } else {
                     restoreRemovedItem()
                     android.widget.Toast.makeText(
@@ -546,6 +550,41 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
                 e.printStackTrace()
                 restoreRemovedItem()
                 android.widget.Toast.makeText(getApplication(), "移除失败: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /**
+     * 撤销移除：将刚移出的视频重新加回稍后再看
+     */
+    fun restoreItem(item: VideoItem) {
+        val current = _uiState.value
+        if (current.items.none { it.id == item.id }) {
+            _uiState.value = current.copy(
+                items = listOf(item) + current.items,
+                totalCount = current.totalCount + 1,
+            )
+        }
+        val identity = accountRequests.identity
+        accountRequests.launch {
+            val result = com.android.purebilibili.data.repository.ActionRepository.toggleWatchLater(
+                aid = item.id,
+                add = true,
+            )
+            if (!accountRequests.isCurrent(identity)) return@launch
+            if (result.isSuccess) {
+                tabCache.clear()
+            } else {
+                val latest = _uiState.value
+                _uiState.value = latest.copy(
+                    items = latest.items.filterNot { it.id == item.id },
+                    totalCount = (latest.totalCount - 1).coerceAtLeast(0),
+                )
+                android.widget.Toast.makeText(
+                    getApplication(),
+                    "撤销失败: ${result.exceptionOrNull()?.message ?: "请稍后重试"}",
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
             }
         }
     }
@@ -1173,10 +1212,28 @@ fun WatchLaterScreen(
         }
     }
 
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    LaunchedEffect(viewModel) {
+        viewModel.undoRemovedItem.collect { removedItem ->
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val result = snackbarHostState.showSnackbar(
+                message = "已从稍后再看移除",
+                actionLabel = "撤销",
+                duration = androidx.compose.material3.SnackbarDuration.Short,
+            )
+            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                viewModel.restoreItem(removedItem)
+            }
+        }
+    }
+
     AppScaffold(
         modifier = Modifier
             .nestedScroll(bottomBarScrollHideConnection)
             .nestedScroll(scrollBehavior.nestedScrollConnection),
+        snackbarHost = {
+            com.android.purebilibili.core.ui.components.AppSnackbarHost(hostState = snackbarHostState)
+        },
         topBar = {
             // 使用 Box 包裹实现毛玻璃背景
             BiliPaiImmersiveTopBar(

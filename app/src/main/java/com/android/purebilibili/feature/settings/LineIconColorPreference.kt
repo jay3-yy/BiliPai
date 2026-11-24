@@ -106,6 +106,7 @@ private fun LineIconColorEditor(
     AppModalBottomSheet(
         onDismissRequest = onDismiss,
         presentationOverride = AppModalPresentation.BottomSheet,
+        useWindowPredictiveBack = true,
     ) {
         Column(
             modifier = modifier

@@ -12,8 +12,8 @@ import top.yukonga.miuix.kmp.utils.pressable
 /**
  * 依据当前系统主题自适应应用 Miuix 官方触控按压反馈。
  *
- * 仅在 Miuix 且液态玻璃关闭时应用 0.94x 下沉微缩与 Folme 回弹。
- * Material 3 与开玻璃路径保持 No-op。
+ * Miuix 底座在液态玻璃开启与关闭时均保留 0.94x 下沉微缩与 Folme 回弹；
+ * Material 3 路径保持 No-op。
  *
  * @param enabled 是否开启按压反馈
  * @param feedbackType 反馈效果类型，默认 [PressFeedbackType.Sink]
@@ -26,7 +26,7 @@ fun Modifier.adaptiveMiuixPressFeedback(
     interactionSource: MutableInteractionSource? = null,
 ): Modifier {
     if (!enabled || feedbackType == PressFeedbackType.None) return this
-    if (!com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) return this
+    if (com.android.purebilibili.core.theme.LocalAppUiStyle.current != com.android.purebilibili.core.theme.AppUiStyle.MIUIX) return this
 
     val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
     val feedback = remember(feedbackType) {

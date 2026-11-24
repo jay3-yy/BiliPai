@@ -145,14 +145,6 @@ class LiquidIndicatorWobbleState internal constructor(val enabled: Boolean) : St
     val velocityWeight: Float get() = 1f
 }
 
-private data class LiquidWobbleInput(
-    val position: Float,
-    val canSettle: Boolean,
-    val selectionKey: Any?,
-    val manual: Boolean,
-    val selectionMotion: Boolean?,
-)
-
 /** Observe input changes only; the spring owns frame work and stops when it settles. */
 @Composable
 fun rememberLiquidIndicatorWobble(
@@ -183,31 +175,71 @@ fun rememberLiquidIndicatorWobble(
     }
     LaunchedEffect(wobble) {
         if (!motionEnabled) return@LaunchedEffect
-        fun input() = LiquidWobbleInput(
-            latestPosition.value(), latestCanSettle.value(), latestSelectionKey.value(),
-            latestInteractionActive.value(), latestSelectionMotion.value(),
-        )
-        var observed = input().copy(selectionMotion = false, manual = false)
+        var observedPosition = latestPosition.value()
+        var observedCanSettle = latestCanSettle.value()
+        var observedSelectionKey = latestSelectionKey.value()
+        var observedManual = false
+        var observedSelectionMotion: Boolean? = false
+        var pendingPosition = observedPosition
+        var pendingCanSettle = observedCanSettle
+        var pendingSelectionKey = observedSelectionKey
+        var pendingManual = observedManual
+        var pendingSelectionMotion = observedSelectionMotion
+        var revision = 0
         var previousNanos = System.nanoTime()
-        snapshotFlow { input() }.collect { next ->
-            if (next != observed) {
+        snapshotFlow {
+            val nextPosition = latestPosition.value()
+            val nextCanSettle = latestCanSettle.value()
+            val nextSelectionKey = latestSelectionKey.value()
+            val nextManual = latestInteractionActive.value()
+            val nextSelectionMotion = latestSelectionMotion.value()
+            if (nextPosition != pendingPosition ||
+                nextCanSettle != pendingCanSettle ||
+                nextSelectionKey != pendingSelectionKey ||
+                nextManual != pendingManual ||
+                nextSelectionMotion != pendingSelectionMotion
+            ) {
+                pendingPosition = nextPosition
+                pendingCanSettle = nextCanSettle
+                pendingSelectionKey = nextSelectionKey
+                pendingManual = nextManual
+                pendingSelectionMotion = nextSelectionMotion
+                revision++
+            }
+            revision
+        }.collect {
+            val nextPosition = pendingPosition
+            val nextCanSettle = pendingCanSettle
+            val nextSelectionKey = pendingSelectionKey
+            val nextManual = pendingManual
+            val nextSelectionMotion = pendingSelectionMotion
+            if (nextPosition != observedPosition ||
+                nextCanSettle != observedCanSettle ||
+                nextSelectionKey != observedSelectionKey ||
+                nextManual != observedManual ||
+                nextSelectionMotion != observedSelectionMotion
+            ) {
                 val now = System.nanoTime()
-                val selectionChanged = next.selectionKey != observed.selectionKey
-                val pressed = !observed.manual && next.manual
-                val released = observed.manual && !next.manual
-                val tapStarted = next.selectionMotion == true && observed.selectionMotion != true
+                val selectionChanged = nextSelectionKey != observedSelectionKey
+                val pressed = !observedManual && nextManual
+                val released = observedManual && !nextManual
+                val tapStarted = nextSelectionMotion == true && observedSelectionMotion != true
                 if (pressed) wobble.onInteractionStarted()
-                else if (released) wobble.onInteractionReleased(next.position)
-                else if (!next.manual && (selectionChanged || tapStarted)) {
+                else if (released) wobble.onInteractionReleased(nextPosition)
+                else if (!nextManual && (selectionChanged || tapStarted)) {
                     wobble.onSelectionChanged(preserveRelease = !tapStarted)
                 }
                 // An idle interval is not a suspended animation: explicit new input still arms recoil.
                 val elapsed = if (selectionChanged || pressed || released || tapStarted) 16_666_667L
                     else (now - previousNanos).coerceIn(1L, 50_000_000L)
-                wobble.advance(next.position, elapsed, next.canSettle, next.manual,
-                    next.selectionMotion == true, landingMotion = next.canSettle)
+                wobble.advance(nextPosition, elapsed, nextCanSettle, nextManual,
+                    nextSelectionMotion == true, landingMotion = nextCanSettle)
                 previousNanos = now
-                observed = next
+                observedPosition = nextPosition
+                observedCanSettle = nextCanSettle
+                observedSelectionKey = nextSelectionKey
+                observedManual = nextManual
+                observedSelectionMotion = nextSelectionMotion
             }
         }
     }

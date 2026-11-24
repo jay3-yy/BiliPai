@@ -47,6 +47,8 @@ internal data class SystemVideoCardCapability(
     val officialSupport: Int? = null,
 ) {
     val available: Boolean get() = method != CardTransitionMethod.STANDARD
+    val usesSystemWindow: Boolean
+        get() = method != CardTransitionMethod.STANDARD && method != CardTransitionMethod.ANDROID_SHARED
 }
 
 /** 系统窗口转场调度：标准协议优先，再尝试旧无缝和 OneShot；不可用时回退普通页面转场。
@@ -134,6 +136,10 @@ internal object SystemVideoCardTransition {
         lastOpenedMethodState.value = CardTransitionMethod.STANDARD
     }
 
+    fun recordAndroidSharedOpen() {
+        lastOpenedMethodState.value = CardTransitionMethod.ANDROID_SHARED
+    }
+
     fun profileAvatarEntrance(token: String?): ProfileAvatarEntrance? = sessions[token]?.profileAvatarEntrance
 
     fun hasSession(token: String?): Boolean = token != null && token in sessions
@@ -147,7 +153,7 @@ internal object SystemVideoCardTransition {
         val hasPixelOwner = source.sourcePixelOwner != null
         val sourceReady = enabled && source.hasUsableSourceGeometry && source.sourceAnchor != null && hasPixelOwner
         val capability = if (sourceReady) deviceCapability(activity, method) else null
-        val supported = capability?.available
+        val supported = capability?.usesSystemWindow
         val allowed = sourceReady && supported == true
         Logger.i("SystemVideoCardTransition", "入口判定: route=${source.sourceRoute} enabled=$enabled geometry=${source.hasUsableSourceGeometry} " +
             "anchor=${source.sourceAnchor != null} pixelOwner=$hasPixelOwner requested=$method " +
@@ -158,6 +164,12 @@ internal object SystemVideoCardTransition {
 
     fun deviceCapability(activity: Activity?, method: CardTransitionMethod): SystemVideoCardCapability {
         if (method == CardTransitionMethod.STANDARD) return SystemVideoCardCapability()
+        if (method == CardTransitionMethod.ANDROID_SHARED) {
+            return SystemVideoCardCapability(
+                method = CardTransitionMethod.ANDROID_SHARED,
+                configurableBlur = true,
+            )
+        }
         val automatic = method == CardTransitionMethod.AUTO
         val checksOfficial = automatic || method == CardTransitionMethod.OFFICIAL
         val checksOplus = automatic || method == CardTransitionMethod.OPLUS_LEGACY
@@ -165,7 +177,15 @@ internal object SystemVideoCardTransition {
         val conditions = if (oplusSystemManager) OplusVideoCardTransition.conditions(activity) else null
         val summary = conditions?.toString()
         if (conditions?.blocked == true) {
-            return SystemVideoCardCapability(systemConditionSummary = summary)
+            return if (automatic) {
+                SystemVideoCardCapability(
+                    method = CardTransitionMethod.ANDROID_SHARED,
+                    configurableBlur = true,
+                    systemConditionSummary = summary,
+                )
+            } else {
+                SystemVideoCardCapability(systemConditionSummary = summary)
+            }
         }
         val officialSupport = if (checksOfficial) ViewAnimationManager.isViewAnimationSupported() else null
         val capability = SystemVideoCardCapability(systemConditionSummary = summary, officialSupport = officialSupport)
@@ -190,6 +210,12 @@ internal object SystemVideoCardTransition {
         // 保留可用的系统卡片展开。旧圆角协议的背景效果由系统控制。
         if ((automatic || method == CardTransitionMethod.XIAOMI_ROUNDED) && RoundedVideoCardTransition.available) {
             return capability.copy(method = CardTransitionMethod.XIAOMI_ROUNDED)
+        }
+        if (automatic) {
+            return capability.copy(
+                method = CardTransitionMethod.ANDROID_SHARED,
+                configurableBlur = true,
+            )
         }
         return capability
     }
@@ -218,7 +244,7 @@ internal object SystemVideoCardTransition {
         if (!CardPositionManager.isActiveVideoCardPixelOwner(owner)) return rejected("pixel_owner_expired")
         val capability = deviceCapability(activity, method)
         Logger.i("SystemVideoCardTransition", "系统条件: ${capability.systemConditionSummary ?: "由标准接口判定"}")
-        if (!capability.available) return rejected("system_protocol_unavailable ${capability.systemConditionSummary.orEmpty()}")
+        if (!capability.usesSystemWindow) return rejected("system_protocol_unavailable ${capability.systemConditionSummary.orEmpty()}")
         val layer = CardPositionManager.nativeCardLayerForOwner(owner)
             ?.takeIf { !it.isReleased && it.size.width > 1 && it.size.height > 1 }
         currentCoroutineContext().ensureActive()
@@ -369,7 +395,10 @@ internal object SystemVideoCardTransition {
             CardTransitionMethod.OFFICIAL -> ViewAnimationManager.makeViewAnimationOptions(
                 thumbnail, bounds, radius, configuration, listener,
             )?.toBundle()
-            CardTransitionMethod.AUTO, CardTransitionMethod.STANDARD -> error("Expected a system card transition")
+            CardTransitionMethod.AUTO,
+            CardTransitionMethod.ANDROID_SHARED,
+            CardTransitionMethod.STANDARD,
+            -> error("Expected a system card transition")
         } ?: return rejected("system_options_null protocol=${capability.method}")
         sessions[token] = session
         var launched = false

@@ -154,4 +154,67 @@ class AdaptiveBottomSheetPolicyTest {
         assertFalse(shown.forceLowBlurBudget)
         assertEquals(1f, shown.surfaceAlphaMultiplier, 0.001f)
     }
+
+    @Test
+    fun `sheet backdrop policy applies glass blur for both themes and subtle blur for non-glass miuix`() {
+        val glassMd3 = resolveAppSheetBackdropSpec(
+            uiStyle = AppUiStyle.MATERIAL3,
+            popupGlassEnabled = true,
+            sdkInt = 33,
+            backgroundBlurBehind = false,
+        )
+        assertTrue(glassMd3.blurBehind)
+        assertEquals(APP_SHEET_GLASS_BLUR_RADIUS_DP, glassMd3.blurRadiusDp)
+        assertTrue(glassMd3.useGlassPopupSurface)
+
+        val glassMiuix = resolveAppSheetBackdropSpec(
+            uiStyle = AppUiStyle.MIUIX,
+            popupGlassEnabled = true,
+            sdkInt = 33,
+            backgroundBlurBehind = false,
+        )
+        assertTrue(glassMiuix.blurBehind)
+        assertEquals(APP_SHEET_GLASS_BLUR_RADIUS_DP, glassMiuix.blurRadiusDp)
+        assertTrue(glassMiuix.useGlassPopupSurface)
+
+        val collectionTimedSlide = resolveAppSheetBackdropSpec(
+            uiStyle = AppUiStyle.MIUIX,
+            popupGlassEnabled = true,
+            sdkInt = 33,
+            backgroundBlurBehind = false,
+            useTimedSlideMotion = true,
+        )
+        assertFalse(collectionTimedSlide.blurBehind)
+        assertTrue(collectionTimedSlide.useGlassPopupSurface)
+
+        val pureMiuix = resolveAppSheetBackdropSpec(
+            uiStyle = AppUiStyle.MIUIX,
+            popupGlassEnabled = false,
+            sdkInt = 33,
+            backgroundBlurBehind = false,
+        )
+        assertTrue(pureMiuix.blurBehind)
+        assertEquals(APP_SHEET_MIUIX_SUBTLE_BLUR_RADIUS_DP, pureMiuix.blurRadiusDp)
+        assertFalse(pureMiuix.useGlassPopupSurface)
+
+        val pureMd3 = resolveAppSheetBackdropSpec(
+            uiStyle = AppUiStyle.MATERIAL3,
+            popupGlassEnabled = false,
+            sdkInt = 33,
+            backgroundBlurBehind = false,
+        )
+        assertFalse(pureMd3.blurBehind)
+        assertEquals(0f, pureMd3.blurRadiusDp)
+        assertFalse(pureMd3.useGlassPopupSurface)
+
+        val forceSharp = resolveAppSheetBackdropSpec(
+            uiStyle = AppUiStyle.MIUIX,
+            popupGlassEnabled = true,
+            sdkInt = 33,
+            backgroundBlurBehind = true,
+            backdropPolicy = AppSheetBackdropPolicy.FORCE_SHARP,
+        )
+        assertFalse(forceSharp.blurBehind)
+        assertEquals(0f, forceSharp.blurRadiusDp)
+    }
 }

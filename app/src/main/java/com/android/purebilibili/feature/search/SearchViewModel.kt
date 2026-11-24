@@ -32,7 +32,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -882,12 +885,15 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
     
+    private val _watchLaterAddedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 4)
+    val watchLaterAddedEvents: SharedFlow<Unit> = _watchLaterAddedEvents.asSharedFlow()
+
     //  [新增] 添加到稍后再看
     fun addToWatchLater(bvid: String, aid: Long) {
         viewModelScope.launch {
             val result = com.android.purebilibili.data.repository.ActionRepository.toggleWatchLater(aid, true)
             result.onSuccess {
-                android.widget.Toast.makeText(getApplication(), "已添加到稍后再看", android.widget.Toast.LENGTH_SHORT).show()
+                _watchLaterAddedEvents.tryEmit(Unit)
             }.onFailure { e ->
                 android.widget.Toast.makeText(getApplication(), e.message ?: "添加失败", android.widget.Toast.LENGTH_SHORT).show()
             }

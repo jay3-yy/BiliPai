@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,7 +66,7 @@ class AppEntranceController internal constructor(
 }
 
 internal val LocalAppEntrance = staticCompositionLocalOf<AppEntranceController?> { null }
-internal val LocalNavigationOwnsContentEntrance = staticCompositionLocalOf { false }
+internal val LocalNavigationOwnsContentEntrance = compositionLocalOf { false }
 
 /**
  * 解析当前生效的入场参数:设备动效档 ⊕ App「界面入场动画」开关 ⊕ 系统 reduce-motion。

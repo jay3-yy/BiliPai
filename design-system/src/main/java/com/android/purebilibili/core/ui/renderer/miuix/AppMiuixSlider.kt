@@ -24,9 +24,7 @@ internal fun AppMiuixSlider(
             backgroundColor = it.inactiveTrackColor,
             thumbColor = it.thumbColor,
         )
-    } ?: if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
-        SliderDefaults.sliderColors()
-    } else SliderDefaults.sliderColors(thumbColor = com.android.purebilibili.core.ui.components.appControlThumbColor())
+    } ?: SliderDefaults.sliderColors()
     ProvideAppMiuixHapticFeedback(scene = com.android.purebilibili.core.ui.AppHapticScene.ADJUSTMENT) {
         Slider(
             value = value,

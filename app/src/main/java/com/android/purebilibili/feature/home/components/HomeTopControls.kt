@@ -51,18 +51,26 @@ internal fun HomeTopAvatarContent(
 ) {
     val displayFace = user.face
     if (user.isLogin && displayFace.isNotEmpty()) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(FormatUtils.fixImageUrl(displayFace))
-                .size(128, 128)
-                .crossfade(true)
-                .build(),
-            contentDescription = "用户头像",
-            contentScale = ContentScale.Crop,
+        val imageFallbackColor = fallbackBackgroundColor.takeIf { it.alpha > 0.01f }
+            ?: MaterialTheme.colorScheme.surfaceVariant
+        androidx.compose.foundation.layout.Box(
             modifier = modifier
                 .fillMaxSize()
                 .clip(shape)
-        )
+                .background(imageFallbackColor),
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(FormatUtils.fixImageUrl(displayFace))
+                    .size(128, 128)
+                    // 共享元素回收时首帧必须直接绘制缓存头像，淡入会露出黑色底。
+                    .crossfade(false)
+                    .build(),
+                contentDescription = "用户头像",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     } else {
         androidx.compose.foundation.layout.Box(
             modifier = modifier

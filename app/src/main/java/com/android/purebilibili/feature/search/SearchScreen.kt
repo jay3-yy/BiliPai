@@ -627,6 +627,7 @@ fun SearchScreen(
     onTopicClick: (Long) -> Unit,
     onArticleClick: (Long, String) -> Unit,
     onAvatarClick: () -> Unit,
+    onWatchLaterClick: (() -> Unit)? = null,
     entryMotionSource: SearchEntryMotionSource = SearchEntryMotionSource.NONE,
     entryMotionKey: Int = 0,
     onEntryMotionConsumed: (Int) -> Unit = {},
@@ -1323,9 +1324,30 @@ fun SearchScreen(
         0.dp
     }
 
+    val searchSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    LaunchedEffect(viewModel) {
+        viewModel.watchLaterAddedEvents.collect {
+            searchSnackbarHostState.currentSnackbarData?.dismiss()
+            val result = searchSnackbarHostState.showSnackbar(
+                message = "已添加到稍后再看",
+                actionLabel = "去查看".takeIf { onWatchLaterClick != null },
+                duration = androidx.compose.material3.SnackbarDuration.Short,
+            )
+            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                onWatchLaterClick?.invoke()
+            }
+        }
+    }
+
     AppScaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = Color.Transparent,
+        snackbarHost = {
+            com.android.purebilibili.core.ui.components.AppSnackbarHost(
+                hostState = searchSnackbarHostState,
+                modifier = Modifier.padding(bottom = resultBottomPadding),
+            )
+        },
         //  移除 bottomBar，搜索栏现在位于顶部 Box 中
     ) { padding ->
         Box(
@@ -1688,6 +1710,7 @@ fun SearchScreen(
                                     resultBottomPadding = resultBottomPadding,
                                     onLoadMore = viewModel::loadMoreResults,
                                     onRetrySearch = { viewModel.search(it, updateDraft = false) },
+                                    onSwitchSearchType = viewModel::setSearchType,
                                     onWatchLater = viewModel::addToWatchLater,
                                     onNavigateSearchTarget = onNavigateSearchTarget,
                                     onVideoClick = onVideoClick,

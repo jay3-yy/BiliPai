@@ -346,37 +346,57 @@ private val liquidValueThumbRim = EdgeStrokes.MiddleLight.copy(
 @Composable
 private fun LiquidValueThumb(
     motion: LiquidValueMotion, track: Backdrop, modifier: Modifier, thumbSize: DpSize,
+    opticsActive: Boolean,
     thumbColor: Color = appControlThumbColor(),
     content: (@Composable () -> Unit)? = null,
 ) {
     val lensScale = (minOf(thumbSize.width, thumbSize.height) / 24.dp).coerceAtMost(1f)
-    Box(modifier
-        .dropShadow(CircleShape, Shadow(radius = 4.dp, color = Color.Black, alpha = 0.05f))
-        .drawBackdrop(
-            backdrop = track,
-            shape = { CircleShape },
-            effects = {
-                val progress = motion.press.value
-                // 静止态（progress == 0f）滑块表面为 100% 不透明，跳过被完全遮挡的 8dp 实时模糊与透镜。
-                if (progress > 0.001f) {
-                    blur(8.dp.toPx() * (1f - progress))
-                    lens(5.dp.toPx() * lensScale * progress, 10.dp.toPx() * lensScale * progress, chromaticAberration = 1f)
-                }
-            },
-            onDrawFront = { drawEdgeStroke(CircleShape, liquidValueThumbRim, motion.press.value.coerceIn(0f, 1f)) },
-            layerBlock = {
+    val surfaceModifier = if (opticsActive) {
+        Modifier
+            .drawBackdrop(
+                backdrop = track,
+                shape = { CircleShape },
+                effects = {
+                    val progress = motion.press.value
+                    if (progress > 0.001f) {
+                        blur(8.dp.toPx() * (1f - progress))
+                        lens(
+                            refractionHeight = 5.dp.toPx() * lensScale * progress,
+                            refractionAmount = 10.dp.toPx() * lensScale * progress,
+                            chromaticAberration = 0.24f,
+                        )
+                    }
+                },
+                onDrawFront = { drawEdgeStroke(CircleShape, liquidValueThumbRim, motion.press.value.coerceIn(0f, 1f)) },
+                layerBlock = {
+                    val velocity = motion.velocity.value
+                    scaleX = LiquidIndicatorMotion.scaleX(motion.scaleX.value, velocity)
+                    scaleY = LiquidIndicatorMotion.scaleY(motion.scaleY.value, velocity)
+                },
+                onDrawSurface = { drawRect(thumbColor.copy(alpha = 1f - motion.press.value.coerceIn(0f, 1f))) },
+            )
+            .innerShadow(CircleShape) {
+                radius = 4.dp.toPx() * motion.press.value
+                alpha = motion.press.value.coerceIn(0f, 1f)
+                color = Color.Black.copy(alpha = 0.15f)
+            }
+    } else {
+        // 静止态圆钮 100% 不透明，直接绘制实色表面，避免空转 drawBackdrop 与内阴影通道。
+        Modifier
+            .graphicsLayer {
                 val velocity = motion.velocity.value
                 scaleX = LiquidIndicatorMotion.scaleX(motion.scaleX.value, velocity)
                 scaleY = LiquidIndicatorMotion.scaleY(motion.scaleY.value, velocity)
-            },
-            onDrawSurface = { drawRect(thumbColor.copy(alpha = 1f - motion.press.value.coerceIn(0f, 1f))) },
-        )
-        .innerShadow(CircleShape) {
-            radius = 4.dp.toPx() * motion.press.value
-            alpha = motion.press.value.coerceIn(0f, 1f)
-            color = Color.Black.copy(alpha = 0.15f)
-        }
-        .size(thumbSize), contentAlignment = Alignment.Center) { content?.invoke() }
+            }
+            .background(thumbColor, CircleShape)
+    }
+    Box(
+        modifier
+            .dropShadow(CircleShape, Shadow(radius = 4.dp, color = Color.Black, alpha = 0.05f))
+            .then(surfaceModifier)
+            .size(thumbSize),
+        contentAlignment = Alignment.Center,
+    ) { content?.invoke() }
 }
 
 @Composable
@@ -405,7 +425,11 @@ internal fun AppLiquidSwitch(
     val latestChange by rememberUpdatedState(onCheckedChange)
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
     val latestLtr by rememberUpdatedState(isLtr)
-    val track = rememberLayerBackdrop()
+    val opticsActive by remember(motion) { derivedStateOf { motion.press.value > 0.001f } }
+    val trackSource = com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource(
+        recordingEnabled = opticsActive && com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current,
+    )
+    val track = trackSource.backdrop
     val active = if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidControlsUseThemeColor) {
         com.android.purebilibili.core.ui.liquidControlThemeColor()
     } else colorResource(R.color.liquid_switch_active)
@@ -470,14 +494,14 @@ internal fun AppLiquidSwitch(
         ) else Modifier), contentAlignment = Alignment.CenterStart) {
         Box(Modifier.align(Alignment.CenterStart).size(geometry.switchTrack)
             .onSizeChanged { trackWidthPx = it.width.toFloat() }
-            .layerBackdrop(track).clip(CircleShape)
+            .then(trackSource.modifier).clip(CircleShape)
             .drawBehind { drawRect(lerp(inactive, active, motion.position.coerceIn(0f, 1f))) })
         Box(Modifier.matchParentSize()) {
             LiquidValueThumb(motion, switchBackdrop, Modifier.align(Alignment.CenterStart).graphicsLayer {
                 val fraction = if (isLtr) motion.position else 1f - motion.position
                 val inset = geometry.switchInset.toPx().coerceAtMost((trackWidthPx - size.width).coerceAtLeast(0f) / 2f)
                 translationX = inset + (trackWidthPx - size.width - inset * 2f).coerceAtLeast(0f) * fraction
-            }, geometry.thumb, thumbColor = switchThumbColor, content = thumbContent)
+            }, geometry.thumb, opticsActive = opticsActive, thumbColor = switchThumbColor, content = thumbContent)
         }
     }
 }
@@ -504,7 +528,11 @@ internal fun AppLiquidSlider(
     val latestFinish by rememberUpdatedState(onValueChangeFinished)
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
     val latestLtr by rememberUpdatedState(isLtr)
-    val track = rememberLayerBackdrop()
+    val opticsActive by remember(motion) { derivedStateOf { motion.press.value > 0.001f } }
+    val trackSource = com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource(
+        recordingEnabled = opticsActive && com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current,
+    )
+    val track = trackSource.backdrop
     val background = AppSurfaceTokens.background()
     val sliderBackdrop = remember(track, background, motion) {
         LiquidValueBackdrop(track, background, { motion.press.value }, compressTrack = false)
@@ -520,8 +548,12 @@ internal fun AppLiquidSlider(
         latestChange(valueRange.start + snapped * span)
     }
     LaunchedEffect(value, valueRange, motion) { motion.update(fraction(value)) }
-    BoxWithConstraints(
+    val trackHeight = geometry.sliderTrackHeight
+    val thumbSize = geometry.thumb
+    var sliderWidthPx by remember(density) { mutableFloatStateOf(with(density) { 144.dp.toPx() }) }
+    Box(
         boundsModifier
+            .onSizeChanged { if (it.width > 0) sliderWidthPx = it.width.toFloat() }
             .graphicsLayer { alpha = if (enabled) 1f else 0.38f }
             .semantics {
                 progressBarRangeInfo = ProgressBarRangeInfo(value.coerceIn(valueRange), valueRange, steps)
@@ -565,12 +597,9 @@ internal fun AppLiquidSlider(
             ) else Modifier),
         contentAlignment = Alignment.CenterStart,
     ) {
-        val width = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else 144.dp.value * androidx.compose.ui.platform.LocalDensity.current.density
-        val trackHeight = geometry.sliderTrackHeight
-        val thumbSize = geometry.thumb
-        Box((if (constraints.hasBoundedWidth) Modifier.fillMaxWidth() else Modifier.width(144.dp))
-            .padding(horizontal = with(density) { sliderInsetPx(width).toDp() })
-            .height(trackHeight).layerBackdrop(track).clip(CircleShape).background(inactive)) {
+        Box(Modifier.fillMaxWidth()
+            .padding(horizontal = with(density) { sliderInsetPx(sliderWidthPx).toDp() })
+            .height(trackHeight).then(trackSource.modifier).clip(CircleShape).background(inactive)) {
             Box(Modifier.fillMaxSize().drawBehind {
                 val progress = motion.position.coerceIn(0f, 1f)
                 val left = if (isLtr) 0f else size.width * (1f - progress)
@@ -579,9 +608,9 @@ internal fun AppLiquidSlider(
         }
         LiquidValueThumb(motion, sliderBackdrop, Modifier.graphicsLayer {
             val progress = if (isLtr) motion.position else 1f - motion.position
-            val insetPx = sliderInsetPx(width)
-            val travel = (width - insetPx * 2f).coerceAtLeast(0f)
+            val insetPx = sliderInsetPx(sliderWidthPx)
+            val travel = (sliderWidthPx - insetPx * 2f).coerceAtLeast(0f)
             translationX = insetPx - size.width / 2f + travel * progress
-        }, thumbSize, thumbColor = colors?.thumbColor ?: appControlThumbColor())
+        }, thumbSize, opticsActive = opticsActive, thumbColor = colors?.thumbColor ?: appControlThumbColor())
     }
 }

@@ -2,6 +2,7 @@ package com.android.purebilibili.core.ui.transition
 
 import android.os.Build
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Offset
@@ -255,8 +256,10 @@ internal class VideoCardTransitionSnapshotHandle(
     }
 
     fun clearRenderEffect() {
-        contentLayer.renderEffect = null
-        contentLayer.shadowElevation = 0f
+        if (!contentLayer.isReleased) {
+            contentLayer.renderEffect = null
+            contentLayer.shadowElevation = 0f
+        }
         state.lastBlurRadiusPx = Float.NaN
         state.lastCornerRadiusPx = Float.NaN
     }
@@ -266,23 +269,29 @@ internal class VideoCardTransitionSnapshotHandle(
         effectRasterScale = Float.NaN
         // 标记失效不会清除 GraphicsLayer 的绘制闭包和子层引用。
         // 会话结束后录入空内容，归还旧列表的封面与离屏图层。
-        contentLayer.record(
-            density = androidx.compose.ui.unit.Density(1f),
-            layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
-            size = androidx.compose.ui.unit.IntSize(1, 1),
-        ) {}
-        sharpLayer.record(
-            density = androidx.compose.ui.unit.Density(1f),
-            layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
-            size = androidx.compose.ui.unit.IntSize(1, 1),
-        ) {}
+        if (!contentLayer.isReleased) {
+            contentLayer.record(
+                density = androidx.compose.ui.unit.Density(1f),
+                layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
+                size = androidx.compose.ui.unit.IntSize(1, 1),
+            ) {}
+        }
+        if (!sharpLayer.isReleased) {
+            sharpLayer.record(
+                density = androidx.compose.ui.unit.Density(1f),
+                layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
+                size = androidx.compose.ui.unit.IntSize(1, 1),
+            ) {}
+        }
         // 同时移除内层的旧内容与离屏缓存；下次会话重新按当前视口尺寸录制。
-        sourceLayer.compositingStrategy = CompositingStrategy.Auto
-        sourceLayer.record(
-            density = androidx.compose.ui.unit.Density(1f),
-            layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
-            size = androidx.compose.ui.unit.IntSize(1, 1),
-        ) {}
+        if (!sourceLayer.isReleased) {
+            sourceLayer.compositingStrategy = CompositingStrategy.Auto
+            sourceLayer.record(
+                density = androidx.compose.ui.unit.Density(1f),
+                layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
+                size = androidx.compose.ui.unit.IntSize(1, 1),
+            ) {}
+        }
         state.reset()
     }
 }
@@ -336,12 +345,32 @@ internal fun applyVideoCardTransitionSnapshotFrame(
     }
 }
 
+/** 主线程登记存活的转场快照句柄，供退后台与内存裁剪主动归还整屏离屏层。 */
+internal object VideoCardTransitionSnapshotRegistry {
+    private val handles = linkedSetOf<VideoCardTransitionSnapshotHandle>()
+
+    fun register(handle: VideoCardTransitionSnapshotHandle) {
+        handles.add(handle)
+    }
+
+    fun unregister(handle: VideoCardTransitionSnapshotHandle) {
+        handles.remove(handle)
+    }
+
+    fun releaseAll() {
+        handles.forEach { handle ->
+            handle.releaseSession()
+            handle.state.markSourceDetachedForRefresh()
+        }
+    }
+}
+
 @Composable
 internal fun rememberVideoCardTransitionSnapshotHandle(): VideoCardTransitionSnapshotHandle {
     val layer = rememberGraphicsLayer()
     val sourceLayer = rememberGraphicsLayer()
     val sharpLayer = rememberGraphicsLayer()
-    return remember(layer, sourceLayer, sharpLayer) {
+    val handle = remember(layer, sourceLayer, sharpLayer) {
         VideoCardTransitionSnapshotHandle(
             contentLayer = layer,
             sourceLayer = sourceLayer,
@@ -349,6 +378,14 @@ internal fun rememberVideoCardTransitionSnapshotHandle(): VideoCardTransitionSna
             state = VideoCardTransitionSnapshotLayerState(),
         )
     }
+    DisposableEffect(handle) {
+        VideoCardTransitionSnapshotRegistry.register(handle)
+        onDispose {
+            VideoCardTransitionSnapshotRegistry.unregister(handle)
+            handle.releaseSession()
+        }
+    }
+    return handle
 }
 
 /** 清晰底与模糊层按 SrcOver 合成后，总覆盖率仍为冻结页的覆盖率，避免透出窗口底色。 */

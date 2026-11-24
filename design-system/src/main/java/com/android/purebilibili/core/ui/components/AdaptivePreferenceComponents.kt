@@ -604,6 +604,27 @@ fun AdaptivePreferenceGroupRenderer(
         return
     }
 
+    if (com.android.purebilibili.core.ui.rememberAppThemeRenderer() == com.android.purebilibili.core.ui.AppThemeRenderer.LIQUID_GLASS) {
+        val glassShape = shape ?: com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.continuousShape(
+            com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.CardCornerRadius
+        )
+        val glassBorder = border ?: androidx.compose.foundation.BorderStroke(
+            com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.SpecularBorderWidth,
+            com.android.purebilibili.core.ui.renderer.glass.AppGlassTokens.cardRimColor(),
+        )
+        Surface(
+            modifier = modifier.padding(horizontal = 16.dp),
+            shape = glassShape,
+            color = resolvedContainerColor,
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp,
+            border = glassBorder,
+        ) {
+            Column(content = content)
+        }
+        return
+    }
+
     if (uiStyle == AppUiStyle.MIUIX) {
         MiuixCard(
             modifier = modifier.padding(horizontal = 16.dp),

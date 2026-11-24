@@ -752,6 +752,7 @@ fun DynamicScreen(
     }
 
     // 瀑布流 lane 会切换首个可见 item，index 不适合判断方向；改用 nested-scroll 增量。
+    val globalFeedScrollInProgress = LocalHomeFeedScrollInProgress.current
     val bottomBarScrollState = remember { mutableStateOf(DynamicBottomBarScrollState()) }
     val currentActiveListState by rememberUpdatedState(activeListState)
     val bottomBarScrollConnection = com.android.purebilibili.core.ui.rememberBottomBarScrollHideConnection(
@@ -773,6 +774,7 @@ fun DynamicScreen(
             }
         },
         hideState = bottomBarScrollState,
+        feedScrollInProgress = globalFeedScrollInProgress,
     )
 
     LaunchedEffect(filteredItems.size, activeLoading, displayedLogicalTab, isSelectedUserTabActive) {
@@ -796,13 +798,20 @@ fun DynamicScreen(
     }
 
     // 与推荐页共用「列表正在滑」信号，驱动底栏搜索胶囊展开/收起。
-    val globalFeedScrollInProgress = LocalHomeFeedScrollInProgress.current
     val isListScrollInProgress by remember(activeListState) {
         derivedStateOf { activeListState?.isScrollInProgress == true }
     }
-    if (isCurrentPage) {
-        SideEffect {
-            globalFeedScrollInProgress.value = isListScrollInProgress
+    LaunchedEffect(isCurrentPage, activeListState) {
+        if (!isCurrentPage) {
+            globalFeedScrollInProgress.value = false
+            return@LaunchedEffect
+        }
+        snapshotFlow { isListScrollInProgress }.collect { scrolling ->
+            if (!scrolling && !isSelectedUserTabActive) {
+                globalFeedScrollInProgress.value = false
+            } else if (scrolling) {
+                globalFeedScrollInProgress.value = true
+            }
         }
     }
     DisposableEffect(isCurrentPage) {

@@ -51,11 +51,26 @@ private class LiveAvatarCompanionCapture(val layer: GraphicsLayer) {
             ?.let { SettingsContainerCompanion(layer, it.translate(-origin)) }
 }
 
+private fun clearLiveTransitionLayer(layer: GraphicsLayer) {
+    if (layer.isReleased) return
+    if (layer.size.width <= 1 && layer.size.height <= 1) return
+    layer.record(
+        density = androidx.compose.ui.unit.Density(1f),
+        layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
+        size = androidx.compose.ui.unit.IntSize(1, 1),
+    ) {}
+}
+
 @Composable
 private fun rememberLiveAvatarCompanionCapture(): LiveAvatarCompanionCapture {
     val layer = rememberGraphicsLayer()
     val capture = remember(layer) { LiveAvatarCompanionCapture(layer) }
-    DisposableEffect(capture) { onDispose { capture.anchor.detach() } }
+    DisposableEffect(capture) {
+        onDispose {
+            capture.anchor.detach()
+            clearLiveTransitionLayer(capture.layer)
+        }
+    }
     return capture
 }
 
@@ -96,6 +111,13 @@ internal fun rememberLiveCardContainerTransition(
             ?: return LiveCardContainerTransition(Modifier, onClick)
         val disabledRadiusPx = with(LocalDensity.current) { cornerRadius.toPx() }
         val disabledLayer = rememberGraphicsLayer()
+        DisposableEffect(disabledLayer) {
+            onDispose {
+                if (!com.android.purebilibili.core.util.CardPositionManager.isNativeVideoCardLayerCurrentOwner(disabledLayer)) {
+                    clearLiveTransitionLayer(disabledLayer)
+                }
+            }
+        }
         // 容器形变关闭时仍登记系统窗口来源，系统一镜到底不受直播容器开关影响。
         return LiveCardContainerTransition(
             modifier = Modifier
@@ -137,8 +159,16 @@ internal fun rememberLiveCardContainerTransition(
             source.color = color
         }
     }
-    DisposableEffect(anchor) {
-        onDispose { anchor.detach() }
+    DisposableEffect(anchor, layer) {
+        onDispose {
+            anchor.detach()
+            val retainedByContainer = sources.sources[target]?.let { it.anchor === anchor && it.layer === layer } == true
+            val retainedByCardManager =
+                com.android.purebilibili.core.util.CardPositionManager.isNativeVideoCardLayerCurrentOwner(layer)
+            if (!retainedByContainer && !retainedByCardManager) {
+                clearLiveTransitionLayer(layer)
+            }
+        }
     }
     return LiveCardContainerTransition(
         modifier = Modifier

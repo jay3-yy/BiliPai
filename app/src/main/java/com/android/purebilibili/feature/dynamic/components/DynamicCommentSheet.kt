@@ -406,7 +406,8 @@ fun DynamicCommentSheet(
                 rootReplyId = subReplyState.threadRootId.takeIf { it > 0L },
                 onDismiss = onCloseSubReply,
             )
-            val commentChromeBackdrop = rememberLayerBackdrop()
+            val commentChromeBackdropSource = com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+            val commentChromeBackdrop = commentChromeBackdropSource.backdrop
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -415,7 +416,7 @@ fun DynamicCommentSheet(
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .layerBackdrop(commentChromeBackdrop)
+                        .then(commentChromeBackdropSource.modifier)
                         .background(AppSurfaceTokens.background())
                 )
                 Column(modifier = Modifier.fillMaxSize()) {

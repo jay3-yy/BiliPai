@@ -56,13 +56,25 @@ object BiliPaiPopupSurfaceRenderer : AppPopupSurfaceRenderer {
         } else {
             content
         }
+        // 面板内嵌的菜单宿主采样不到本表面及其窗口模糊，以表面色的不透明版本作为采样底。
+        val backdropBase = if (type != AppPopupSurfaceType.MENU &&
+            surfaceColor != Color.Unspecified && surfaceColor.alpha > 0f
+        ) {
+            surfaceColor.copy(alpha = 1f)
+        } else {
+            com.android.purebilibili.core.ui.LocalAppPopupBackdropBase.current
+        }
         AppSurface(
             modifier = modifier.then(glassModifier),
             shape = shape,
             color = surfaceColor,
             contentColor = contentColor,
             tonalElevation = tonalElevation,
-            content = contentSlot,
-        )
+        ) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.android.purebilibili.core.ui.LocalAppPopupBackdropBase provides backdropBase,
+                content = contentSlot,
+            )
+        }
     }
 }

@@ -328,10 +328,13 @@ fun InboxScreen(
                                 }
                                 val userInfo = uiState.userInfoMap[session.talker_id]
                                 val imEntry = viewModel.entry(session)
-                                val conversationTarget = if (
+                                val conversationTarget: BiliPaiNavKey? = when {
+                                    imEntry?.systemNotice == true -> BiliPaiNavKey.SystemNotice
                                     conversationWindowEnabled && imEntry?.isPrivate == true &&
-                                    imEntry.folderPage == null && !imEntry.systemNotice && session.talker_id > 0L
-                                ) BiliPaiNavKey.Chat(session.talker_id, sessionType = 1) else null
+                                        imEntry.folderPage == null && session.talker_id > 0L ->
+                                        BiliPaiNavKey.Chat(session.talker_id, sessionType = 1)
+                                    else -> null
+                                }
                                 CompositionLocalProvider(LocalNavigationControlMotionGroup provides conversationMotionGroup) {
                                     SessionListItem(
                                         session = session,
@@ -650,7 +653,7 @@ internal fun SessionListItem(
     vipColor: Boolean = false,
     userLabel: String = "",
     onAvatarClick: (() -> Unit)? = null,
-    conversationTarget: BiliPaiNavKey.Chat? = null,
+    conversationTarget: BiliPaiNavKey? = null,
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val useGroupedListCards = rememberAppSemanticVisualPolicy().prefersGroupedListCards
