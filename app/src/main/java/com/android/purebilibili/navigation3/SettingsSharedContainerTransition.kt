@@ -66,6 +66,7 @@ import com.android.purebilibili.feature.settings.LocalSettingsContainerSharedSco
 import com.android.purebilibili.feature.settings.SettingsSharedContainerOrigin
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import top.yukonga.miuix.kmp.nav.runtime.NavChange
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
 import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
@@ -73,7 +74,7 @@ import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 
 private const val SETTINGS_SHARED_DRAW_TAG = "SettingsSharedDraw"
 private const val SHARED_CONTAINER_BACKGROUND_ZOOM = 0.10f
-private const val SHARED_CONTAINER_BLUR_QUANTUM_PX = 4f
+private const val SHARED_CONTAINER_BLUR_QUANTUM_DP = 4f
 
 /** 导航层保留手势和背景模糊，条目与页面的边界由 Compose 共享转场绘制。 */
 internal class SettingsSharedContainerTransition(
@@ -132,14 +133,16 @@ internal class SettingsSharedContainerTransition(
                 resolveSettingsContainerBlurProgress(covered)
             } else 0f
             val rawRadiusPx = maxBlurRadiusPx * blurProgress
-            // 超过最小步长后直接用 alpha=1f 绘制真半径模糊，避免下层清晰文字透过半透明模糊层。
+            val blurQuantumPx = (SHARED_CONTAINER_BLUR_QUANTUM_DP * density).coerceAtLeast(4f)
+            // 超过最小步长后直接用 alpha=1f 绘制真半径模糊，避免下层清晰文字透过半透明模糊层；
+            // 步长按屏幕密度对齐为 4dp，避免高分屏上频繁切换大半径 RenderEffect。
             val (radiusPx, blurAlpha) = when {
                 rawRadiusPx <= 0.01f -> 0f to 0f
-                rawRadiusPx < SHARED_CONTAINER_BLUR_QUANTUM_PX ->
-                    SHARED_CONTAINER_BLUR_QUANTUM_PX to (rawRadiusPx / SHARED_CONTAINER_BLUR_QUANTUM_PX).coerceIn(0f, 1f)
+                rawRadiusPx < blurQuantumPx ->
+                    blurQuantumPx to (rawRadiusPx / blurQuantumPx).coerceIn(0f, 1f)
                 else -> {
-                    val quantized = (kotlin.math.round(rawRadiusPx / SHARED_CONTAINER_BLUR_QUANTUM_PX) *
-                        SHARED_CONTAINER_BLUR_QUANTUM_PX).coerceIn(SHARED_CONTAINER_BLUR_QUANTUM_PX, maxBlurRadiusPx)
+                    val quantized = (kotlin.math.round(rawRadiusPx / blurQuantumPx) *
+                        blurQuantumPx).coerceIn(blurQuantumPx, maxBlurRadiusPx)
                     quantized to 1f
                 }
             }
@@ -206,6 +209,13 @@ internal class SettingsSharedContainerBounds(
     }
 }
 
+private data class SharedContainerSeekSnapshot(
+    val fraction: Float,
+    val running: Boolean,
+    val removing: Boolean,
+    val destinationPlaced: Boolean,
+)
+
 @Composable
 internal fun settingsSharedContainerDestination(
     origin: SettingsSharedContainerOrigin,
@@ -215,7 +225,10 @@ internal fun settingsSharedContainerDestination(
     scaleDestinationToWidth: Boolean = false,
     wallpaperBacking: Modifier = Modifier,
 ): Modifier {
-    val state = remember(origin) { SeekableTransitionState(navScope.relativeDepth >= 0f) }
+    val state = remember(origin) {
+        val isFreshPush = navScope.change == NavChange.Push && !navScope.isRemoving && navScope.relativeDepth <= 0f
+        SeekableTransitionState(!isFreshPush && navScope.relativeDepth >= 0f)
+    }
     val transition = rememberTransition(state, label = "Settings container")
     val originVisibility = transition.settingsVisibilityScope("Settings row", visibleWhenOpen = false)
     val pageVisibility = transition.settingsVisibilityScope("Settings page", visibleWhenOpen = true)
@@ -247,11 +260,16 @@ internal fun settingsSharedContainerDestination(
         snapshotFlow {
             val scope = latestScope.value
             val fraction = (1f + scope.relativeDepth).coerceIn(0f, 1f)
-            Triple(fraction, scope.isRunning, bounds.destinationPlaced)
-        }.collect { (fraction, running, destinationPlaced) ->
+            SharedContainerSeekSnapshot(
+                fraction = fraction,
+                running = scope.isRunning,
+                removing = scope.isRemoving,
+                destinationPlaced = bounds.destinationPlaced,
+            )
+        }.collect { (fraction, running, removing, destinationPlaced) ->
             when {
-                !running && fraction == 1f -> state.snapTo(true)
-                !running && fraction == 0f && latestScope.value.isRemoving -> state.snapTo(false)
+                !running && fraction == 1f && !removing -> state.snapTo(true)
+                !running && fraction == 0f && removing -> state.snapTo(false)
                 // 两端就位后先让共享转场在来源位置接管绘制，再跟随导航进度展开。
                 destinationPlaced && (fraction < 1f || state.currentState != state.targetState) ->
                     state.seekTo(if (state.currentState) 1f - fraction else fraction, !state.currentState)

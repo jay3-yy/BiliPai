@@ -33,8 +33,8 @@ internal fun supportsNavigationSharedContainer(
     // 视频详情支持从列表页和相关推荐卡片进入；父详情被子共享容器遮挡期间同步隐藏原生 Surface，
     // 避免双播放器表面穿透共享叠层。
     is BiliPaiNavKey.VideoDetail -> true
-    // 独立全屏流、离线播放和 WebView 没有可参与此容器绘制的目标。
-    is BiliPaiNavKey.Story, is BiliPaiNavKey.OfflineVideoPlayer, is BiliPaiNavKey.Web -> false
+    // 独立全屏故事流走全屏过渡，离线播放与应用内网页与其他容器入口统一支持共享容器。
+    is BiliPaiNavKey.Story -> false
     else -> resolveSystemWindowCardIdentity(target) != null
 }
 
@@ -42,6 +42,8 @@ internal class NavigationSharedContainerSource(
     val sources: SettingsSharedContainerSources,
     val origin: SettingsSharedContainerOrigin,
 ) {
+    internal var ownedCoordinates: LayoutCoordinates? = null
+
     fun activate(target: BiliPaiNavKey): Boolean {
         if (!supportsNavigationSharedContainer(target, origin.owner)) return false
         sources.capture(target, origin)
@@ -68,8 +70,13 @@ internal fun rememberNavigationSharedContainerSource(identity: Any): NavigationS
     SideEffect { source.origin.color = color }
     DisposableEffect(source) {
         onDispose {
-            source.origin.coordinates = null
-            source.origin.available = false
+            // 列表项重组复用同一 origin 时，只释放仍属于当前实例的坐标，
+            // 避免旧节点晚一步 dispose 把新节点的 coordinates 与 available 误清导致返回退化为淡出。
+            if (source.origin.coordinates === source.ownedCoordinates) {
+                source.origin.coordinates = null
+                source.origin.available = false
+            }
+            source.ownedCoordinates = null
         }
     }
     return source
@@ -95,6 +102,7 @@ internal fun navigationSharedContainerSourceModifier(
     SideEffect { source.origin.radiusUpdater = updateRadius }
     return Modifier.onGloballyPositioned {
         val origin = source.origin
+        source.ownedCoordinates = it
         origin.coordinates = it
         // 列表静止滚动期不逐帧算可见边界与圆角，仅在点击 capture 与共享转场激活时更新。
         if (origin.sharedBounds != null) {

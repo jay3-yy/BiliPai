@@ -70,6 +70,10 @@ object CardPositionManager {
         lastNavigationGrantedMillis = grantedMillis
     }
 
+    internal fun clearNavigationDebounceGrant() {
+        lastNavigationGrantedMillis = 0L
+    }
+
     fun isVideoNavigationDebounceActive(
         nowMillis: Long = System.currentTimeMillis(),
         debounceWindowMillis: Long = 300L,

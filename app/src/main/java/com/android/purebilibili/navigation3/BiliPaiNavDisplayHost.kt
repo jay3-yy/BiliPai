@@ -231,11 +231,16 @@ internal fun BiliPaiNavDisplayHost(
                 owner = settingsContainerSnapshot[target]?.owner,
             )
         }
-    LaunchedEffect(stackSnapshot, settingsContainerSnapshot.keys) {
-        // 离场 entry 保留自己的转场对象；返回动画结束后再清除来源，避免返回途中丢失重挂载复用。
-        val activeKeys = stackSnapshot.toSet()
-        settingsContainerSources.sources.entries.removeAll { (target, origin) ->
-            target !in activeKeys && origin.sharedBounds == null
+    LaunchedEffect(backStack, settingsContainerSources) {
+        // 离场 entry 保留自己的转场对象；返回动画结束后立即清除来源。
+        // 必须在 snapshotFlow 内读取实时 backStack，避免新点击写入 sources 时被旧 activeKeys 抢跑误删。
+        snapshotFlow {
+            val activeKeys = backStack.toSet()
+            settingsContainerSources.sources.entries
+                .filter { (target, origin) -> target !in activeKeys && origin.sharedBounds == null }
+                .map { it.key }
+        }.collect { staleKeys ->
+            staleKeys.forEach(settingsContainerSources.sources::remove)
         }
     }
     val navigationSharedEnabled = sharedContainerFallbackEnabled && !reduceMotion &&
@@ -270,11 +275,16 @@ internal fun BiliPaiNavDisplayHost(
                 )
             }
     }
-    LaunchedEffect(stackSnapshot, navigationSharedSnapshot.keys) {
-        // 离场返回期间保留仍在参与 sharedBounds 的 origin，让返回时重建的源节点（如底部小横条）能够重新接回。
-        val activeKeys = stackSnapshot.toSet()
-        navigationSharedSources.sources.entries.removeAll { (target, origin) ->
-            target !in activeKeys && origin.sharedBounds == null
+    LaunchedEffect(backStack, navigationSharedSources) {
+        // 离场返回期间保留仍在参与 sharedBounds 的 origin，返回卸载后立即清理。
+        // 必须在 snapshotFlow 内读取实时 backStack，避免新点击写入 sources 时被旧 activeKeys 抢跑误删导致退化侧滑。
+        snapshotFlow {
+            val activeKeys = backStack.toSet()
+            navigationSharedSources.sources.entries
+                .filter { (target, origin) -> target !in activeKeys && origin.sharedBounds == null }
+                .map { it.key }
+        }.collect { staleKeys ->
+            staleKeys.forEach(navigationSharedSources.sources::remove)
         }
     }
     val liveContainerSources = remember { com.android.purebilibili.feature.settings.SettingsContainerSources() }
@@ -1224,29 +1234,38 @@ internal fun BiliPaiNavDisplayHost(
                             val useSettingsContainer = settingsTransition != null && sharedContainerEnabled &&
                                 settingsTransition.origin.available
                             val navScope = LocalNavTransitionScope.current
-                            val sharedContainerMoving = navScope.isRunning ||
-                                settingsTransition?.origin?.sharedBounds?.let {
-                                    it.transition.currentState != it.transition.targetState
-                                } == true
-                            val coveredBySharedContainer = navigationSharedEnabled &&
-                                navigationSharedSnapshot.values.any { origin ->
-                                    origin.owner == key && (
-                                        navScope.relativeDepth > 0.02f ||
-                                            (navScope.isRunning && navScope.relativeDepth > 0f) ||
-                                            origin.sharedBounds?.let {
-                                                it.transition.currentState != it.transition.targetState
-                                            } == true
+                            // 逐帧深度与手势对象必须在 derivedStateOf 内读取，只在布尔边界翻转时通知重组，
+                            // 避免共享元素动画每帧触发整个首页与详情页入口重组。
+                            val sharedSurfaceBlocked by remember(
+                                key,
+                                navScope,
+                                navigationSharedEnabled,
+                                navigationSharedSources,
+                                useSettingsContainer,
+                            ) {
+                                derivedStateOf(structuralEqualityPolicy()) {
+                                    val coveredBySharedContainer = navigationSharedEnabled &&
+                                        navigationSharedSources.sources.values.any { origin ->
+                                            origin.owner == key && (
+                                                navScope.relativeDepth > 0.02f ||
+                                                    (navScope.isRunning && navScope.relativeDepth > 0f) ||
+                                                    origin.sharedBounds?.let {
+                                                        it.transition.currentState != it.transition.targetState
+                                                    } == true
+                                                )
+                                        }
+                                    // 展开首帧（prepareEnterFrame 等待期间）relativeDepth <= -0.02f 时即需隐藏原生 Surface，
+                                    // 避免动画尚未起跑前短暂闪现 SurfaceView 导致黑框与事务卡顿；
+                                    // 展开贴近全屏（>-0.02f）且非返回/手势时提前交还播放器 Surface。
+                                    coveredBySharedContainer || (
+                                        useSettingsContainer && (
+                                            navScope.isRemoving ||
+                                                navScope.gesture != null ||
+                                                navScope.relativeDepth <= -0.02f
+                                            )
                                         )
                                 }
-                            // 展开已贴近全屏（>=98%）且非返回/手势时提前交还播放器 Surface，避免末段微调拖慢出画；
-                            // 返回与预测手势全程隐藏原生 Surface，由共享封面承接；被子共享容器遮挡的父详情同步隐藏原生 Surface。
-                            val sharedSurfaceBlocked = coveredBySharedContainer || (
-                                useSettingsContainer && (
-                                    navScope.isRemoving ||
-                                        navScope.gesture != null ||
-                                        (sharedContainerMoving && navScope.relativeDepth <= -0.02f)
-                                    )
-                                )
+                            }
                             val replayWallpaperInsideContainer =
                                 useSettingsContainer && entryWallpaperVisible && hasSharedWallpaperBacking
                             val containerBounds = if (settingsTransition != null && sharedContainerEnabled) {

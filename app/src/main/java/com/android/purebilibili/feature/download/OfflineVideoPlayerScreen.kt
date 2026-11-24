@@ -1167,6 +1167,7 @@ fun OfflineVideoPlayerScreen(
                         )
                     }
                 }
+                val sharedSurfaceVisible = com.android.purebilibili.navigation3.LocalNavigationSharedSurfaceVisible.current
                 AndroidView(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
@@ -1175,6 +1176,7 @@ fun OfflineVideoPlayerScreen(
                             useController = false
                             this.resizeMode = resizeMode
                             keepScreenOn = true
+                            visibility = if (sharedSurfaceVisible) android.view.View.VISIBLE else android.view.View.INVISIBLE
                             playerView = this
                         }
                     },
@@ -1182,6 +1184,7 @@ fun OfflineVideoPlayerScreen(
                         view.player = player
                         view.resizeMode = resizeMode
                         view.keepScreenOn = playbackFailure == null && isPlaying
+                        view.visibility = if (sharedSurfaceVisible) android.view.View.VISIBLE else android.view.View.INVISIBLE
                     },
                     onRelease = { view ->
                         cancelPlayerViewViewportRefresh(view)
@@ -1192,9 +1195,20 @@ fun OfflineVideoPlayerScreen(
                         Modifier.requiredSize(viewport.width.toDp(), viewport.height.toDp())
                     },
                 )
+                if (!sharedSurfaceVisible && task.cover.isNotBlank()) {
+                    AsyncImage(
+                        model = task.cover,
+                        contentDescription = task.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = with(density) {
+                            Modifier.requiredSize(viewport.width.toDp(), viewport.height.toDp())
+                        },
+                    )
+                }
             }
 
             if (danmakuAvailable) {
+                val sharedDanmakuVisible = com.android.purebilibili.navigation3.LocalNavigationSharedSurfaceVisible.current
                 key(danmakuManager) {
                     AndroidView(
                         factory = { ctx ->
@@ -1207,7 +1221,7 @@ fun OfflineVideoPlayerScreen(
                         },
                         update = { view ->
                             danmakuManager.useFullscreenTextSize = isFullscreen
-                            view.visibility = if (showDanmakuLayer) {
+                            view.visibility = if (showDanmakuLayer && sharedDanmakuVisible) {
                                 android.view.View.VISIBLE
                             } else {
                                 android.view.View.GONE

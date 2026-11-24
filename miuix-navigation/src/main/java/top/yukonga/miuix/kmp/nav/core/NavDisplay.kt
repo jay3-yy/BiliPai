@@ -209,6 +209,14 @@ private fun NavPresentation.animateTopTo(
         // Consume the release velocity exactly once per retarget, whether or not it gets used.
         val released = pendingSettleVelocity
         pendingSettleVelocity = 0f
+        if (prepareEnterFrame && change == NavChange.Push) {
+            val enterStart = (target - 1f).coerceAtLeast(0f)
+            // 上一次返回动画未落回起点时再次推入共享容器页，先归零到来源位置再展开，
+            // 避免新卡片从上一页残留进度闪现或因 animatedTop == target 直接跳过动画。
+            if (animatedTop.value > enterStart) {
+                animatedTop.snapTo(enterStart)
+            }
+        }
         if (animatedTop.value == target) return@LaunchedEffect
         if (prepareEnterFrame && target > animatedTop.value) {
             // The incoming source frame participates in this frame's layout/draw. Start the

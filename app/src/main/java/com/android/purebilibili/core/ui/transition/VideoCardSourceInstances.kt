@@ -83,6 +83,29 @@ internal fun sameVideoCardBounds(first: Rect, second: Rect): Boolean =
     abs(first.left - second.left) <= 1f && abs(first.top - second.top) <= 1f &&
         abs(first.right - second.right) <= 1f && abs(first.bottom - second.bottom) <= 1f
 
+private fun resolveClosestVideoCardSourceCandidate(
+    candidates: List<VideoCardSourceInstance>,
+    clickedBounds: Rect,
+): VideoCardSourceInstance? {
+    if (candidates.isEmpty()) return null
+    val maxDx = maxOf(clickedBounds.width * 0.5f, 24f)
+    val maxDy = maxOf(clickedBounds.height * 0.5f, 24f)
+    var best: VideoCardSourceInstance? = null
+    var bestDistSq = Float.POSITIVE_INFINITY
+    for (candidate in candidates) {
+        val actual = candidate.boundsInRoot() ?: continue
+        val dx = actual.center.x - clickedBounds.center.x
+        val dy = actual.center.y - clickedBounds.center.y
+        if (abs(dx) > maxDx || abs(dy) > maxDy) continue
+        val distSq = dx * dx + dy * dy
+        if (distSq < bestDistSq) {
+            bestDistSq = distSq
+            best = candidate
+        }
+    }
+    return best
+}
+
 /** 返回只测量打开时的实例；同视频的新组合不能接替落点。 */
 internal class VideoCardSourceAnchor(source: VideoCardSourceInstance) {
     private val reference = WeakReference(source)
@@ -141,10 +164,13 @@ internal object VideoCardSourceInstances {
     }
 
     fun recordClick(bvid: String, bounds: Rect) {
-        val candidates = sources.filter { it.bvid == bvid && it.view.hasWindowFocus() }
+        val candidates = sources.filter {
+            it.bvid == bvid && it.view.hasWindowFocus() && it.coordinates?.isAttached == true
+        }
         val matched = candidates.singleOrNull {
             it.boundsInRoot()?.let { actual -> sameVideoCardBounds(actual, bounds) } == true
-        } ?: candidates.singleOrNull { it.coordinates?.isAttached == true }
+        } ?: candidates.singleOrNull()
+            ?: resolveClosestVideoCardSourceCandidate(candidates, bounds)
         clickedSource = matched?.let {
             it.returnLanding?.clear()
             WeakReference(it)

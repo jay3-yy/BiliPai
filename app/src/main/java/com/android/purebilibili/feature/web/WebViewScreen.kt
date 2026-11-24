@@ -622,7 +622,12 @@ private class BrowserWebView(context: Context) : WebView(context) {
         onScrollBoundary = null
         finishReportFileSelection(emptyList())
         (parent as? ViewGroup)?.removeView(this)
-        if (!rendererGone) stopLoading()
+        if (!rendererGone) {
+            stopLoading()
+            onPause()
+            // 仅清 RAM 渲染缓存，不动磁盘缓存与登录 Cookie，减少退出网页后的进程常驻占用。
+            clearCache(false)
+        }
         webViewClient = WebViewClient()
         webChromeClient = null
         destroy()

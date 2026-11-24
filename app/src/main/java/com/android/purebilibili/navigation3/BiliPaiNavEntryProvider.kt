@@ -94,7 +94,7 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     sharedControlEntry<BiliPaiNavKey.MemberGuard>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.MemberGuard.Companion>(swipeDismiss = swipeBackDirection, content = content)
     sharedControlEntry<BiliPaiNavKey.DownloadList>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
-    entry<BiliPaiNavKey.OfflineVideoPlayer>(
+    sharedControlEntry<BiliPaiNavKey.OfflineVideoPlayer>(navigationContainerTransitions,
         transition = predictiveBackExcludedTransition,
         swipeDismiss = NavSwipeDirection.None,
         content = content,
@@ -182,7 +182,7 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     sharedControlEntry<BiliPaiNavKey.BangumiReview>(navigationContainerTransitions, swipeDismiss = NavSwipeDirection.None, content = content)
     val webContainerTransition = settingsBackStack.lastOrNull { it is BiliPaiNavKey.Web }
         ?.let(liveContainerTransitions::get)
-    entry<BiliPaiNavKey.Web>(
+    sharedControlEntry<BiliPaiNavKey.Web>(navigationContainerTransitions,
         transition = webContainerTransition ?: predictiveBackExcludedTransition,
         swipeDismiss = if (webContainerTransition != null) swipeBackDirection else NavSwipeDirection.None,
         content = content,

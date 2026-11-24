@@ -808,6 +808,11 @@ fun AppNavigation(
         fun replaceNavigation3BackStack(keys: List<BiliPaiNavKey>) {
             val replacementStack = keys.ifEmpty { listOf(BiliPaiNavKey.MainHost) }
             if (navigation3BackStack.toList() == replacementStack) return
+            if (replacementStack.size < navigation3BackStack.size) {
+                // 返回上一页后立即释放入场防抖窗口，避免反复打开/关闭首页卡片时再次点击被误吞。
+                lastNavigationTime.longValue = 0L
+                CardPositionManager.clearNavigationDebounceGrant()
+            }
             videoNavigationRequests.invalidate()
             val removedStateKeys = resolveRemovedNavigation3SaveableStateKeys(
                 currentStack = navigation3BackStack,
@@ -3091,6 +3096,8 @@ fun AppNavigation(
             companionVideoDetailVisible ||
                 isAudioNowPlayingPlayerDestination(currentRoute) || isReturningSameAudioVideo
             )
+        val hasOwnBottomBarDestination = !sharedNowPlayingTransitionVisible &&
+            com.android.purebilibili.feature.audio.screen.hasAudioNowPlayingConflictingBottomBarDestination(currentRoute)
         val showAudioNowPlayingIndependent = resolveAudioNowPlayingVisible(
             sessionActive = audioNowPlayingActive,
             isOnAudioModeScreen = !sharedNowPlayingTransitionVisible &&
@@ -3102,7 +3109,8 @@ fun AppNavigation(
             isVideoDetailDestination = !sharedNowPlayingTransitionVisible && isVideoDetailDestination,
             isLandscape = isLandscapeNowPlaying,
             isTabletLayout = isTabletLayout,
-            isPlayerDestination = isPlayerIndependentDestination
+            isPlayerDestination = isPlayerIndependentDestination,
+            hasOwnBottomBar = hasOwnBottomBarDestination,
         )
 
         // [LayerBackdrop] Create backdrop for bottom bar refraction effect.
@@ -5563,7 +5571,7 @@ fun AppNavigation(
                         onBack = { performSystemBackAction() },
                         onVideoClick = { bvid -> navigateToVideoInNavigation3(bvid, 0L, "") },
                         onOfflineVideoClick = { taskId ->
-                            pushNavigation3Key(BiliPaiNavKey.OfflineVideoPlayer(taskId))
+                            pushNavigation3Target(BiliPaiNavKey.OfflineVideoPlayer(taskId))
                         }
                     )
                 }
@@ -7346,8 +7354,11 @@ fun AppNavigation(
                         immersiveBarHidden = false
                     }
                 }
+                val inboxChatBottomBarVisible = currentNavigation3Key == BiliPaiNavKey.Inbox && inboxConversationVisible
                 AudioNowPlayingBarPresenceHost(
-                    visible = showAudioNowPlayingIndependent && !(immersiveBarEnabled && immersiveBarHidden),
+                    visible = showAudioNowPlayingIndependent &&
+                        !inboxChatBottomBarVisible &&
+                        !(immersiveBarEnabled && immersiveBarHidden),
                     animatePresence = !driveBottomBarByProgress && !isReturningSameAudioVideo,
                     modifier = Modifier
                         .then(bottomBarAlignment)
