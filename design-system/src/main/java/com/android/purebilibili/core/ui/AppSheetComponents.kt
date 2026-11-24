@@ -277,14 +277,18 @@ private fun appModalSheetBackModifier(
         targetValue = if (enabled && !reducedMotion && transition != null &&
             transition.direction == NavigationEventTransitionState.TRANSITIONING_BACK
         ) transition.latestEvent.progress.coerceIn(0f, 1f) else 0f,
-        animationSpec = if (transition != null || reducedMotion) snap() else tween(180),
-        label = "centered_sheet_predictive_back",
+        animationSpec = if (transition != null || reducedMotion) snap() else spring(dampingRatio = 0.85f, stiffness = 500f),
+        label = "bottom_sheet_predictive_back",
     )
     return Modifier.graphicsLayer {
-        // Read gesture frames in the layer; keep the surface inside its adaptive region.
+        // 预测性返回：锚定底部中心轻微收窄并下沉，跟手且不触发重组。
         val progress = backProgress.value
-        scaleX = 1f - 0.08f * progress
-        scaleY = 1f - 0.08f * progress
+        if (progress > 0.0001f) {
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+            scaleX = 1f - 0.05f * progress
+            scaleY = 1f - 0.06f * progress
+            translationY = 24.dp.toPx() * progress
+        }
     }
 }
 
@@ -372,7 +376,7 @@ fun AppModalBottomSheet(
     visible: Boolean = true,
     onDismissStarted: () -> Unit = {},
     useTimedSlideMotion: Boolean = false,
-    useWindowPredictiveBack: Boolean = false,
+    useWindowPredictiveBack: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val sceneConfig = LocalAppThemeConfig.current
@@ -752,11 +756,14 @@ fun AppModalBottomSheet(
                 AppModalSheetWindowNavigationScope {
                     NavigationBackHandler(
                         state = windowBackState,
-                        isBackEnabled = dismissOnBackPress && sheetState.isVisible,
+                        isBackEnabled = dismissOnBackPress && (visible || sheetState.isVisible),
                         onBackCompleted = {
                             dismissScope.launch {
-                                sheetState.hide()
-                                if (!sheetState.isVisible) finishDismiss()
+                                try {
+                                    if (sheetState.isVisible) sheetState.hide()
+                                } finally {
+                                    finishDismiss()
+                                }
                             }
                         },
                     )

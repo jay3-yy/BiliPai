@@ -1,19 +1,29 @@
 package com.android.purebilibili.feature.share
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.network.DynamicRepostContentItem
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppModalBottomSheet
+import com.android.purebilibili.core.ui.AppModalPresentation
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.data.repository.VideoDynamicShareRepository
 import kotlinx.coroutines.CancellationException
@@ -47,30 +57,76 @@ internal fun ContentDynamicShareSheet(payload: ContentSharePayload, onDismiss: (
     var selectedTopic by remember(payload.key) { mutableStateOf<com.android.purebilibili.data.model.response.DynamicCreateTopic?>(null) }
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
-    AppModalBottomSheet(modifier = modifier, presentationOverride = presentationOverride, onDismissRequest = { if (!posting) onDismiss() }) {
+    val isSideSheet = presentationOverride == AppModalPresentation.SideSheet
+    AppModalBottomSheet(
+        modifier = modifier,
+        presentationOverride = presentationOverride,
+        dragHandle = if (isSideSheet) null else ({ BottomSheetDefaults.DragHandle() }),
+        onDismissRequest = { if (!posting) onDismiss() },
+    ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .then(if (presentationOverride == com.android.purebilibili.core.ui.AppModalPresentation.SideSheet) {
+                .then(if (isSideSheet) {
                     Modifier.fillMaxHeight()
                 } else {
                     Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.85f).dp)
                 })
-                .imePadding()
-                .navigationBarsPadding()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .imePadding(),
         ) {
-            AppText("分享到动态")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = if (isSideSheet) 12.dp else 2.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(
+                    text = "分享到动态",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                )
+                AppText(
+                    text = "${text.length}/2000",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppContentColors.secondaryText(),
+                )
+            }
             Column(
                 Modifier
-                    .weight(1f, fill = presentationOverride == com.android.purebilibili.core.ui.AppModalPresentation.SideSheet)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                    .weight(1f, fill = isSideSheet)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (payload.cover.isNotBlank()) AsyncImage(payload.cover, null, Modifier.size(56.dp))
-                    AppText(payload.title, maxLines = 2, modifier = Modifier.weight(1f))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerLow)
+                        .padding(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (payload.cover.isNotBlank()) {
+                        AsyncImage(
+                            model = payload.cover,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(width = 76.dp, height = 48.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                        )
+                    }
+                    AppText(
+                        text = payload.title,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                        color = AppContentColors.primaryText(),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
                 AppTextField(value = text, onValueChange = { if (!posting && !published) text = it.take(2000) }, placeholder = "说点什么吧…（可选）", singleLine = false, minLines = 2, maxLines = 5, modifier = Modifier.fillMaxWidth())
                 if (!published) ShareRichTextTools(
@@ -88,12 +144,22 @@ internal fun ContentDynamicShareSheet(payload: ContentSharePayload, onDismiss: (
                 )
                 if (payload.replyOid > 0 || payload.bvid.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
                     AppCheckbox(checked = alsoComment, onCheckedChange = { if (!posting && !published) alsoComment = it })
-                    AppText("同时评论原内容")
+                    AppText("同时评论原内容", style = MaterialTheme.typography.bodyMedium)
                 }
-                error?.let { AppText(it) }
-                AppText("${text.length}/2000")
+                error?.let {
+                    AppText(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(Modifier.height(4.dp))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 AppTextButton(onClick = onDismiss, enabled = !posting, modifier = Modifier.weight(1f)) { AppText(if (published) "完成" else "取消") }
                 AppButton(enabled = !posting, modifier = Modifier.weight(1f), onClick = {
                     if (posting) return@AppButton
