@@ -1812,10 +1812,19 @@ private fun PluginItem(
             ?: kotlinx.coroutines.flow.MutableStateFlow(false)
     }
     val eyeActive by eyeActivityFlow.collectAsStateWithLifecycle()
+    val gamepadConnectedFlow = remember(plugin.id) {
+        if (plugin.id == BuiltinPluginIds.GAMEPAD_CONTROL) {
+            com.android.purebilibili.core.input.gamepad.GamepadControlEngine.connectedFlow
+        } else {
+            kotlinx.coroutines.flow.MutableStateFlow(false)
+        }
+    }
+    val gamepadConnected by gamepadConnectedFlow.collectAsStateWithLifecycle()
     val activityLabel = resolvePluginListActivityLabel(
         enabled = pluginInfo.enabled,
         unavailable = plugin.unavailable,
-        effectActive = plugin.id == BuiltinPluginIds.EYE_PROTECTION && eyeActive
+        effectActive = (plugin.id == BuiltinPluginIds.EYE_PROTECTION && eyeActive) ||
+            (plugin.id == BuiltinPluginIds.GAMEPAD_CONTROL && gamepadConnected)
     )
 
     Column(modifier = modifier) {

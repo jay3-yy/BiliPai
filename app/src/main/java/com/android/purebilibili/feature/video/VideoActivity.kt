@@ -18,6 +18,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.FragmentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -352,6 +354,9 @@ open class VideoActivity : FragmentActivity() {
                         }
                     },
                 ) {
+                Box(
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize()
+                ) {
                 com.android.purebilibili.navigation.AppNavigation(
                     initialVideoRoute = request.toInitialRoute(),
                     onPrivacyAuthenticationRequired = this@VideoActivity::authenticatePrivacyAccess,
@@ -374,6 +379,8 @@ open class VideoActivity : FragmentActivity() {
                     isInPipMode = isInPipMode ||
                         MiniPlayerManager.getInstance(this@VideoActivity).shouldKeepPlaybackForPipTransition(),
                 )
+                com.android.purebilibili.feature.plugin.GamepadOverlayHost()
+                }
                 }
                 }
                 }
@@ -412,6 +419,7 @@ open class VideoActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.attachActivity(this)
         playbackWindowActive = true
         refreshOfficialReturn("on_resume")
         if (!managesPlayback) return
@@ -425,7 +433,20 @@ open class VideoActivity : FragmentActivity() {
         }
     }
 
+    override fun onPause() {
+        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.detachActivity(this)
+        super.onPause()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.onActivityWindowFocusChanged(this, hasFocus)
+    }
+
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (com.android.purebilibili.core.input.gamepad.GamepadControlEngine.handleKeyEvent(event)) {
+            return true
+        }
         if (
             event.keyCode == android.view.KeyEvent.KEYCODE_ESCAPE &&
             !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed
@@ -436,6 +457,18 @@ open class VideoActivity : FragmentActivity() {
             return true
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(ev: android.view.MotionEvent): Boolean {
+        if (com.android.purebilibili.core.input.gamepad.GamepadControlEngine.handleGenericMotionEvent(ev)) {
+            return true
+        }
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.observeActivityTouchEvent(ev)
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onProvideKeyboardShortcuts(
