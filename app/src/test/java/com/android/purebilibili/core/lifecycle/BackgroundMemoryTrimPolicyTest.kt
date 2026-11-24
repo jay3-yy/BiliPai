@@ -32,12 +32,12 @@ class BackgroundMemoryTrimPolicyTest {
     }
 
     @Test
-    fun background_clearsImageCacheAndReleasesDerivedCachesAndConnections() {
+    fun background_clearsImageCacheAndRequestsIdlePlaybackRelease() {
         val plan = resolveBackgroundMemoryTrimPlan(ComponentCallbacks2.TRIM_MEMORY_BACKGROUND)
         assertEquals(ComponentCallbacks2.TRIM_MEMORY_BACKGROUND, plan.imageCacheTrimLevel)
         assertTrue(plan.clearImageMemoryCache)
         assertTrue(plan.notifyPlayerHeavyOptimization)
-        assertFalse(plan.requestIdlePlaybackRelease)
+        assertTrue(plan.requestIdlePlaybackRelease)
         assertTrue(plan.releaseDerivedCaches)
         assertTrue(plan.releaseIdleNetworkConnections)
     }

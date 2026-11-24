@@ -70,4 +70,15 @@ class BiliImageQualityPolicyTest {
         assertEquals(image, BiliImageQualityPolicy.resolvePreviewUrl(image, 40, true))
         assertEquals("$image@40q.webp", BiliImageQualityPolicy.resolvePreviewUrl(image, 40, false))
     }
+
+    @Test
+    fun `target width quantizes to CDN bucket without overriding existing width`() {
+        assertEquals("$image@480w_80q.webp", BiliImageQualityPolicy.resolveUrl(image, 80, targetWidthPx = 412))
+        assertEquals("$image@672w_100q.webp", BiliImageQualityPolicy.resolveUrl(image, 100, targetWidthPx = 540))
+        assertEquals("$image@100q.webp", BiliImageQualityPolicy.resolveUrl(image, 100, targetWidthPx = 1440))
+        assertEquals(
+            "$image@960w_600h_1c_80q.webp",
+            BiliImageQualityPolicy.resolveUrl("$image@960w_600h_1c_100q.webp", 80, targetWidthPx = 400),
+        )
+    }
 }

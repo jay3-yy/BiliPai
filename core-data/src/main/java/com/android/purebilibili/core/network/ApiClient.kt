@@ -9,6 +9,9 @@ import com.android.purebilibili.core.store.AccountSessionStore
 import com.android.purebilibili.core.store.StoredAccountSession
 import com.android.purebilibili.data.model.response.*
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -3262,11 +3265,76 @@ object NetworkModule {
     private var playbackAccountApi: BilibiliApi? = null
     private var playbackAccountBangumiApi: BangumiApi? = null
 
+    private val dnsNetworkCallbackRegistered = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    private val coreWarmupHosts = listOf(
+        "api.bilibili.com",
+        "i0.hdslb.com",
+        "i1.hdslb.com",
+        "app.bilibili.com",
+        "api.live.bilibili.com",
+    )
+
     fun init(context: Context, config: CoreNetworkConfig = CoreNetworkConfig()) {
         CoreNetworkRuntime.config = config
         appContext = context.applicationContext
         com.android.purebilibili.core.store.NetworkProxyStore.init(context.applicationContext)
         com.android.purebilibili.core.store.GithubMirrorStore.init(context.applicationContext)
+        registerDnsInvalidationOnNetworkChange(context.applicationContext)
+    }
+
+    private fun registerDnsInvalidationOnNetworkChange(context: Context) {
+        if (!dnsNetworkCallbackRegistered.compareAndSet(false, true)) return
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            ?: return
+        runCatching {
+            manager.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                @Volatile
+                private var lastNetwork: android.net.Network? = null
+
+                @Volatile
+                private var lastDnsSignature: String? = null
+
+                override fun onAvailable(network: android.net.Network) {
+                    val previous = lastNetwork
+                    lastNetwork = network
+                    // 注册默认网络回调时会立刻回放一次当前网络，避免把刚预热的冷启动 DNS 缓存立刻清空。
+                    if (previous != null && previous != network) {
+                        clearAppDnsCache()
+                    }
+                }
+
+                override fun onLost(network: android.net.Network) {
+                    if (lastNetwork == network) {
+                        lastNetwork = null
+                        lastDnsSignature = null
+                    }
+                    clearAppDnsCache()
+                }
+
+                override fun onLinkPropertiesChanged(
+                    network: android.net.Network,
+                    linkProperties: android.net.LinkProperties,
+                ) {
+                    val signature = linkProperties.dnsServers.joinToString(",") { it.hostAddress.orEmpty() }
+                    val previous = lastDnsSignature
+                    lastDnsSignature = signature
+                    if (previous != null && previous != signature) {
+                        clearAppDnsCache()
+                    }
+                }
+            })
+        }
+    }
+
+    /** 冷启动异步预解析高频 B 站域名，减少首屏接口与封面首次建连 DNS 阻塞。 */
+    suspend fun prewarmCoreHosts() = coroutineScope {
+        val dns = okHttpClient.dns
+        coreWarmupHosts.forEach { host ->
+            launch(Dispatchers.IO) {
+                runCatching { dns.lookup(host) }
+            }
+        }
     }
 
     fun clearRuntimeCookies() {
@@ -3277,6 +3345,7 @@ object NetworkModule {
      * 后台或内存整理时主动释放空闲的 TCP / TLS 连接与底层 Socket 缓冲区。
      */
     fun evictIdleConnections() {
+        clearAppDnsCache()
         runCatching {
             okHttpClient.connectionPool.evictAll()
         }

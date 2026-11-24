@@ -60,14 +60,15 @@ internal fun resolveBackgroundMemoryTrimPlan(level: Int): BackgroundMemoryTrimPl
             releaseIdleNetworkConnections = true
         )
 
-        // 进程已进入后台候选区：此时用户看不到界面，可以放心释放全部可重建资源。
+        // 进程已进入后台候选区：Android 14+ 后台裁剪收敛至 TRIM_MEMORY_BACKGROUND，
+        // 此时用户不可见界面，直接释放可重建资源并允许闲置播放器执行 stop 释放（后台音频仍受保护）。
         ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
         ComponentCallbacks2.TRIM_MEMORY_MODERATE,
         ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> BackgroundMemoryTrimPlan(
             imageCacheTrimLevel = ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
             clearImageMemoryCache = true,
             notifyPlayerHeavyOptimization = true,
-            requestIdlePlaybackRelease = level != ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
+            requestIdlePlaybackRelease = true,
             releaseDerivedCaches = true,
             releaseIdleNetworkConnections = true
         )

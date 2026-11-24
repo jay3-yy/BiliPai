@@ -1,11 +1,20 @@
 package com.android.purebilibili.core.util
 
-/** 列表图片只调整受支持 CDN 的压缩质量，保留尺寸、裁切和查询参数边界。 */
+/** 列表图片按受支持 CDN 的压缩质量与视口宽度桶裁剪，保留已有尺寸与查询参数边界。 */
 object BiliImageQualityPolicy {
     const val HIGH_QUALITY = 100
     const val DATA_SAVER_QUALITY = 10
+    private val cdnWidthBuckets = intArrayOf(240, 320, 480, 672, 960, 1280)
+    private val supportedHosts = arrayOf("hdslb.com", "biliimg.com")
     private val qualityParameter = Regex("(?:^|_)\\d+q(?=_|$)")
+    private val widthParameter = Regex("(?:^|_)\\d+w(?=_|$)")
     private val rasterExtension = Regex("\\.(jpg|jpeg|png|webp)$", RegexOption.IGNORE_CASE)
+
+    /** 将目标像素宽度量化到标准 CDN 边缘缓存桶；超大尺寸返回 null 保留原宽。 */
+    fun resolveCdnWidthBucket(targetWidthPx: Int): Int? {
+        if (targetWidthPx <= 0) return null
+        return cdnWidthBuckets.firstOrNull { it >= targetWidthPx }
+    }
 
     fun resolveUrl(url: String, dataSaver: Boolean): String =
         resolveUrl(url, if (dataSaver) DATA_SAVER_QUALITY else HIGH_QUALITY)
@@ -14,9 +23,9 @@ object BiliImageQualityPolicy {
     fun resolvePreviewUrl(url: String, quality: Int, originalQuality: Boolean): String =
         if (originalQuality || quality <= 0) url else resolveUrl(url, quality)
 
-    fun resolveUrl(url: String, quality: Int): String {
+    fun resolveUrl(url: String, quality: Int, targetWidthPx: Int? = null): String {
         val host = runCatching { java.net.URI(url).host }.getOrNull()?.lowercase() ?: return url
-        if (!listOf("hdslb.com", "biliimg.com").any { host == it || host.endsWith(".$it") }) return url
+        if (!supportedHosts.any { host == it || host.endsWith(".$it") }) return url
         // 签名和查询参数地址、动图与装饰素材保持服务端原有语义。
         if ('?' in url || '#' in url || "/bfs/emote/" in url || "/bfs/garb/" in url) return url
         val original = url.substringBefore('@')
@@ -27,7 +36,15 @@ object BiliImageQualityPolicy {
         if (suffix.startsWith('!')) return url
         val transform = suffix.substringBeforeLast('.', suffix)
             .replace(qualityParameter, "").trim('_')
-        val parameters = if (transform.isEmpty()) "${safeQuality}q" else "${transform}_${safeQuality}q"
+        val widthBucket = targetWidthPx
+            ?.takeUnless { widthParameter.containsMatchIn(transform) }
+            ?.let(::resolveCdnWidthBucket)
+        val sizedTransform = when {
+            widthBucket == null -> transform
+            transform.isEmpty() -> "${widthBucket}w"
+            else -> "${transform}_${widthBucket}w"
+        }
+        val parameters = if (sizedTransform.isEmpty()) "${safeQuality}q" else "${sizedTransform}_${safeQuality}q"
         return "$original@$parameters.webp"
     }
 }

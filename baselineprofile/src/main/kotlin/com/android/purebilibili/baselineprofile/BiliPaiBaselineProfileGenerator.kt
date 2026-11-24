@@ -78,6 +78,7 @@ class BiliPaiBaselineProfileGenerator {
         ) {
             pressHome()
             startActivityAndWait()
+            completeFirstLaunchIfNeeded()
             check(
                 device.wait(Until.hasObject(By.desc("推荐")), 4_000) ||
                     device.wait(Until.hasObject(By.text("推荐")), 4_000) ||
@@ -112,21 +113,23 @@ class BiliPaiBaselineProfileGenerator {
             pressHome()
             startActivityAndWait()
             returnToMainTabs()
-            openSettingsDestination("外观与动画", "外观设置")
-            requireObject(By.text("界面风格"), "界面风格入口").click()
+            openSettingsDestination("界面外观", "界面外观")
+            val styleEntry = device.findObject(By.text("界面风格"))
+                ?: device.findObject(By.text("安卓原生风格"))
+                ?: findTextWithScroll("界面风格")
+            styleEntry.click()
             device.waitForIdle()
             // 弹层和设置行可能同时显示当前选项，选择弹层中的最后一个匹配项。
             requireObject(By.text(themeLabel), "主题选项 $themeLabel")
             device.findObjects(By.text(themeLabel)).last().click()
             device.waitForIdle()
-            requireObject(By.text("界面风格"), "切换主题后的外观页")
             requireObject(By.text(themeLabel), "已选择的界面风格")
+            returnToMainTabs()
+            openSettingsDestination("动效与反馈", "动效与反馈")
             if (Build.VERSION.SDK_INT >= 33) {
                 setPreferenceSwitch("液态玻璃", glassEnabled)
             }
-            returnToMainTabs()
-            openSettingsDestination("导航布局", "动画与触感")
-            setPreferenceSwitch("卡片展开动画", true)
+            setPreferenceSwitch("一镜到底动画", true)
             returnToMainTabs()
 
             cycleMainTabs()
@@ -142,22 +145,71 @@ class BiliPaiBaselineProfileGenerator {
     }
 
     private fun MacrobenchmarkScope.openSettingsDestination(category: String, destination: String) {
+        returnToMainTabs()
         clickBottomTab("我的")
-        requireObject(By.desc("设置"), "设置入口").click()
+        device.waitForIdle()
+        var clickedSettings = false
+        repeat(3) {
+            if (clickedSettings) return@repeat
+            val settingsEntry = device.wait(Until.findObject(By.desc("设置")), 2_000)
+                ?: device.wait(Until.findObject(By.desc("Settings")), 2_000)
+                ?: device.wait(Until.findObject(By.text("设置")), 1_500)
+            if (settingsEntry != null) {
+                try {
+                    settingsEntry.click()
+                    clickedSettings = true
+                } catch (_: androidx.test.uiautomator.StaleObjectException) {
+                    device.waitForIdle()
+                }
+            }
+        }
+        check(clickedSettings) { "采集缺少必要界面：设置入口" }
         device.waitForIdle()
         // 手机直接进入子页；大屏可能先显示分类或同屏详情。
         if (!device.hasObject(By.text(destination))) {
             findTextWithScroll(category).click()
             device.waitForIdle()
+        } else {
+            device.findObject(By.text(destination))?.click()
+            device.waitForIdle()
         }
-        if (!device.hasObject(By.text("界面风格")) &&
-            !device.hasObject(By.text("卡片展开动画"))) {
-            findTextWithScroll(destination).click()
+    }
+
+    private fun MacrobenchmarkScope.completeFirstLaunchIfNeeded() {
+        device.waitForIdle()
+        // 全新测试安装会先展示用户协议（需滑到底解锁“同意并继续”）与首次引导（可点击“跳过”）。
+        if (device.hasObject(By.text("请阅读至协议末尾")) ||
+            device.hasObject(By.text("同意并继续")) ||
+            device.hasObject(By.text("BiliPai 用户协议与隐私政策"))
+        ) {
+            val centerX = device.displayWidth / 2
+            val startY = (device.displayHeight * 0.65f).toInt()
+            val endY = (device.displayHeight * 0.25f).toInt()
+            repeat(8) {
+                val agreeButton = device.findObject(By.text("同意并继续"))
+                if (agreeButton != null && agreeButton.isEnabled) {
+                    agreeButton.click()
+                    device.waitForIdle()
+                    return@repeat
+                }
+                device.swipe(centerX, startY, centerX, endY, 16)
+                device.waitForIdle()
+            }
+            device.findObject(By.text("同意并继续"))?.takeIf { it.isEnabled }?.let {
+                it.click()
+                device.waitForIdle()
+            }
+        }
+        // 协议通过后若进入首次外观引导，点击右上角“跳过”直达首页。
+        val skipButton = device.wait(Until.findObject(By.text("跳过")), 2_000)
+        if (skipButton != null) {
+            skipButton.click()
             device.waitForIdle()
         }
     }
 
     private fun MacrobenchmarkScope.returnToMainTabs() {
+        completeFirstLaunchIfNeeded()
         repeat(8) {
             val hasHome = device.hasObject(By.desc("推荐")) ||
                 device.hasObject(By.text("推荐")) ||
@@ -262,12 +314,11 @@ class BiliPaiBaselineProfileGenerator {
         device.pressEnter()
         SystemClock.sleep(NETWORK_CONTENT_SETTLE_MS)
         repeat(2) { scrollFeedOnce() }
-        device.pressBack()
-        device.waitForIdle()
+        returnToMainTabs()
     }
 
     private fun MacrobenchmarkScope.exerciseAppearanceSettings() {
-        openSettingsDestination("外观与动画", "外观设置")
+        openSettingsDestination("界面外观", "界面外观")
         repeat(2) {
             scrollFeedOnce()
             scrollFeedOnce(reverse = true)
@@ -280,8 +331,7 @@ class BiliPaiBaselineProfileGenerator {
         startExplicitDeepLink("https://space.bilibili.com/${resolveBenchmarkMid()}")
         SystemClock.sleep(NETWORK_CONTENT_SETTLE_MS)
         repeat(2) { scrollFeedOnce() }
-        device.pressBack()
-        device.waitForIdle()
+        returnToMainTabs()
     }
 
     private fun MacrobenchmarkScope.exerciseWebSession() {

@@ -1095,7 +1095,19 @@ object VideoRepository {
         )
         verticalPrefetchScope.launch {
             targets.chunked(VERTICAL_PREFETCH_CONCURRENCY).forEach { chunk ->
-                chunk.map { bvid -> async { runCatching { isVerticalVideo(bvid) } } }.awaitAll()
+                if (com.android.purebilibili.core.lifecycle.BackgroundManager.isInBackground) return@launch
+                if (com.android.purebilibili.core.lifecycle.ForegroundSettleBudget.isSettling.value) {
+                    com.android.purebilibili.core.lifecycle.ForegroundSettleBudget.isSettling.first { !it }
+                }
+                chunk.map { bvid ->
+                    async {
+                        com.android.purebilibili.core.util.AppImageLoadPriority.background(
+                            com.android.purebilibili.core.util.BackgroundLane.FAR
+                        ) {
+                            runCatching { isVerticalVideo(bvid) }
+                        }
+                    }
+                }.awaitAll()
             }
         }
     }

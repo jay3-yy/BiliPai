@@ -108,7 +108,10 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     private val backgroundImageTrimListener = object : BackgroundManager.BackgroundStateListener {
         override fun onEnterBackground() {
             // 系统可能在延迟任务前冻结进程，进入后台时就收紧预算并释放可重建缓存。
-            if (StartupRecovery.isRecoveryMode || !releaseBackgroundPageImages()) return
+            if (StartupRecovery.isRecoveryMode) return
+            // 转场离屏快照与源卡位图仅用于前后台可见时的开合动画，切后台即可释放。
+            releaseTransitionVisualCaches()
+            if (!releaseBackgroundPageImages()) return
             releaseRebuildableMemoryCaches()
         }
 
@@ -116,6 +119,11 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             imageMemoryBudget?.foreground()
             AppPageImageMemory.resume()
         }
+    }
+
+    private fun releaseTransitionVisualCaches() {
+        com.android.purebilibili.core.ui.transition.VideoCardTransitionSnapshotRegistry.releaseAll()
+        com.android.purebilibili.core.util.CardPositionManager.clearNativeVideoCardLayers()
     }
 
     private fun releasePageImageReferences() {
@@ -341,6 +349,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             scope = AppScope.ioScope,
             trim = {
                 kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
+                    releaseTransitionVisualCaches()
                     releaseBackgroundPageImages()
                     _imageLoader?.memoryCache?.clear()
                 }
@@ -457,26 +466,31 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         Logger.recordStartupStage(task.id)
         when (task.id) {
             "plugin_manager_context_init" -> PluginManager.initialize(this)
-            "network_module_init" -> NetworkModule.init(
-                this,
-                com.android.purebilibili.core.network.CoreNetworkConfig(
-                    debug = BuildConfig.DEBUG,
-                    allowHardcodedDnsFallback = BuildConfig.ALLOW_HARDCODED_DNS_FALLBACK,
-                    log = { level, tag, message, error ->
-                        when (level) {
-                            "D" -> com.android.purebilibili.core.util.Logger.d(tag, message)
-                            "W" -> com.android.purebilibili.core.util.Logger.w(tag, message, error)
-                            "E" -> com.android.purebilibili.core.util.Logger.e(tag, message, error)
-                        }
-                    },
-                    reportApiError = { endpoint, code, message ->
-                        com.android.purebilibili.core.util.CrashReporter.reportApiError(
-                            endpoint = endpoint, httpCode = code, errorMessage = message,
-                        )
-                    },
-                    isPrivacyModeEnabled = SettingsManager::isPrivacyModeEnabledSync,
-                ),
-            )
+            "network_module_init" -> {
+                NetworkModule.init(
+                    this,
+                    com.android.purebilibili.core.network.CoreNetworkConfig(
+                        debug = BuildConfig.DEBUG,
+                        allowHardcodedDnsFallback = BuildConfig.ALLOW_HARDCODED_DNS_FALLBACK,
+                        log = { level, tag, message, error ->
+                            when (level) {
+                                "D" -> com.android.purebilibili.core.util.Logger.d(tag, message)
+                                "W" -> com.android.purebilibili.core.util.Logger.w(tag, message, error)
+                                "E" -> com.android.purebilibili.core.util.Logger.e(tag, message, error)
+                            }
+                        },
+                        reportApiError = { endpoint, code, message ->
+                            com.android.purebilibili.core.util.CrashReporter.reportApiError(
+                                endpoint = endpoint, httpCode = code, errorMessage = message,
+                            )
+                        },
+                        isPrivacyModeEnabled = SettingsManager::isPrivacyModeEnabledSync,
+                    ),
+                )
+                AppScope.ioScope.launch {
+                    NetworkModule.prewarmCoreHosts()
+                }
+            }
             "token_manager_init" -> TokenManager.init(this)
             "wbi_key_restore" -> WbiKeyManager.restoreFromStorage(this)
             "video_repository_init" -> com.android.purebilibili.data.repository.VideoRepository.init(this)
@@ -658,6 +672,12 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         if (StartupRecovery.isRecoveryMode) return
         // Android 14 起，前后台生命周期仍会主动回收，系统回调可补充清理。
         val plan = PureApplicationRuntimeConfig.resolveBackgroundMemoryTrimPlan(level)
+        if (level == ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN ||
+            plan.clearImageMemoryCache ||
+            plan.releaseDerivedCaches
+        ) {
+            releaseTransitionVisualCaches()
+        }
         if (plan.clearImageMemoryCache) releaseBackgroundPageImages()
         if (plan.imageCacheTrimLevel != null) {
             _imageLoader?.memoryCache?.apply {
@@ -712,6 +732,8 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         com.android.purebilibili.core.cache.PlayUrlCache.clear()
         com.android.purebilibili.data.repository.VideoRepository.clearVideoDetailCaches()
         com.android.purebilibili.data.repository.VideoRepository.clearSubtitleCueCache()
+        com.android.purebilibili.data.repository.VideoCatalogRepository.clearRelatedVideosCache()
+        com.android.purebilibili.data.repository.VideoCatalogRepository.clearCreatorCardStatsCache()
     }
 
     override fun onLowMemory() {
@@ -721,6 +743,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         val plan = PureApplicationRuntimeConfig.resolveBackgroundMemoryTrimPlan(
             ComponentCallbacks2.TRIM_MEMORY_COMPLETE
         )
+        releaseTransitionVisualCaches()
         releaseBackgroundPageImages()
         _imageLoader?.memoryCache?.clear()
         com.android.purebilibili.core.plugin.feed.PublicContentImageLoader.clearMemoryCache()
@@ -741,6 +764,8 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         com.android.purebilibili.core.cache.PlayUrlCache.clear()
         com.android.purebilibili.data.repository.VideoRepository.clearVideoDetailCaches()
         com.android.purebilibili.data.repository.VideoRepository.clearSubtitleCueCache()
+        com.android.purebilibili.data.repository.VideoCatalogRepository.clearRelatedVideosCache()
+        com.android.purebilibili.data.repository.VideoCatalogRepository.clearCreatorCardStatsCache()
         NetworkModule.evictIdleConnections()
         Logger.d(PureApplicationRuntimeConfig.TAG, "🚨 onLowMemory, cleared all caches")
     }
