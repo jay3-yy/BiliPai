@@ -430,7 +430,13 @@ fun TopControlBar(
                         .then(if (glass) Modifier.padding(top = 6.dp) else Modifier)
                         .horizontalScroll(rememberScrollState())
                         // 角标伸出按钮的部分也必须位于滚动视口内；两种材质共用此边界。
-                        .padding(top = PlayerActionCountTopOverflow, end = PlayerActionCountEndOverflow),
+                        // 弹性按压会向四周撑开玻璃外壳，滚动视口需同时预留起点与底部空间。
+                        .padding(
+                            start = PlayerActionCountStartOverflow,
+                            top = PlayerActionCountTopOverflow,
+                            end = PlayerActionCountEndOverflow,
+                            bottom = PlayerActionCountBottomOverflow,
+                        ),
                     horizontalArrangement = if (glass) Arrangement.spacedBy(buttonSpacing, Alignment.End) else Arrangement.End,
                 ) {
                     if (showCommentBtn) {

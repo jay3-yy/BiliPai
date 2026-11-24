@@ -28,7 +28,9 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.util.FormatUtils
 
 internal val PlayerActionCountTopOverflow = 6.dp
+internal val PlayerActionCountStartOverflow = 4.dp
 internal val PlayerActionCountEndOverflow = 4.dp
+internal val PlayerActionCountBottomOverflow = 8.dp
 
 @Composable
 internal fun rememberVisibleFullscreenCounts(): Set<FullscreenActionCount> {

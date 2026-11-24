@@ -474,11 +474,19 @@ fun TopControlBar(
                         .horizontalScroll(rememberScrollState())
                         // 在固定按钮行高度之外预留角标空间，避免滚动容器裁掉数字顶部与右缘。
                         .padding(
+                            start = com.android.purebilibili.feature.video.ui.overlay.PlayerActionCountStartOverflow,
                             top = com.android.purebilibili.feature.video.ui.overlay.PlayerActionCountTopOverflow,
                             end = com.android.purebilibili.feature.video.ui.overlay.PlayerActionCountEndOverflow,
+                            bottom = com.android.purebilibili.feature.video.ui.overlay.PlayerActionCountBottomOverflow,
                         )
                         .padding(horizontal = 4.dp)
-                        .then(alignedGlassDockHeight?.let { Modifier.height(it) } ?: Modifier)
+                        .then(
+                            alignedGlassDockHeight?.let { height ->
+                                Modifier.height(
+                                    height + com.android.purebilibili.feature.video.ui.overlay.PlayerActionCountBottomOverflow
+                                )
+                            } ?: Modifier
+                        )
                     else Modifier,
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(if (isFullscreen || glassControls) 6.dp else layoutPolicy.actionSpacingDp.dp)
