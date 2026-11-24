@@ -9,6 +9,7 @@ internal data class InputDevicePolicy(
     val enableHoverEffects: Boolean,
     val enableKeyboardNavigation: Boolean,
     val enablePointerFocus: Boolean,
+    val enableGamepadControl: Boolean = false,
 )
 
 internal fun resolveInputDevicePolicy(
@@ -16,10 +17,12 @@ internal fun resolveInputDevicePolicy(
 ): InputDevicePolicy {
     val hasPrecisePointer = adaptiveInfo.precisePointerConnected
     val hasHardwareKeyboard = adaptiveInfo.hardwareKeyboardConnected
+    val hasGamepad = adaptiveInfo.gamepadConnected
 
     return InputDevicePolicy(
-        enableHoverEffects = hasPrecisePointer,
-        enableKeyboardNavigation = hasHardwareKeyboard,
-        enablePointerFocus = hasPrecisePointer || hasHardwareKeyboard,
+        enableHoverEffects = hasPrecisePointer || hasGamepad,
+        enableKeyboardNavigation = hasHardwareKeyboard || hasGamepad,
+        enablePointerFocus = hasPrecisePointer || hasHardwareKeyboard || hasGamepad,
+        enableGamepadControl = hasGamepad,
     )
 }

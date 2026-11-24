@@ -26,6 +26,7 @@ private fun settingsCategoryIconColor(category: SettingsRootCategory): Color =
         SettingsRootCategory.PRIVACY_PERMISSION -> 3
         SettingsRootCategory.STORAGE_BACKUP -> 6
         SettingsRootCategory.PLUGINS_EXTENSIONS -> 4
+        SettingsRootCategory.GAMEPAD_CONTROL -> 5
         else -> 7
     }]
 

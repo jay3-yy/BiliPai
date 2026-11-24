@@ -671,6 +671,105 @@ private fun FullscreenPlayerOverlayContent(
         }
     }
 
+    // 🎮 小窗展开全屏覆层的手柄场景注册与播放快捷动作订阅
+    val gamepadSceneToken = remember { Any() }
+    var gamepadSavedSpeed by remember(player) { mutableStateOf<Float?>(null) }
+    val latestGamepadDanmakuEnabled by rememberUpdatedState(danmakuEnabled)
+    val latestGamepadCloseOrExit by rememberUpdatedState(closeTopLayerOrExit)
+    DisposableEffect(gamepadSceneToken) {
+        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.registerScene(
+            token = gamepadSceneToken,
+            scene = com.android.purebilibili.core.input.gamepad.GamepadScene.VIDEO_FULLSCREEN,
+        )
+        onDispose {
+            gamepadSavedSpeed?.let { saved ->
+                latestPlayer?.setPlaybackSpeed(saved)
+                playbackSpeed = saved
+                gamepadSavedSpeed = null
+            }
+            com.android.purebilibili.core.input.gamepad.GamepadControlEngine.unregisterScene(gamepadSceneToken)
+        }
+    }
+    LaunchedEffect(gamepadSceneToken) {
+        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.playerActions.collect { action ->
+            if (!com.android.purebilibili.core.input.gamepad.GamepadControlEngine.isTopScene(gamepadSceneToken)) {
+                return@collect
+            }
+            val targetPlayer = latestPlayer ?: return@collect
+            when (action) {
+                com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.PlayPause -> {
+                    togglePlayerPlaybackFromUserAction(targetPlayer)
+                    showControls = true
+                    lastInteractionTime = System.currentTimeMillis()
+                }
+                is com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.SeekRelative -> {
+                    val upperBound = targetPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                    val targetPosition = (targetPlayer.currentPosition + action.deltaMs)
+                        .coerceIn(0L, upperBound)
+                    pendingGestureSeekPositionMs = targetPosition
+                    seekPlayerFromUserAction(targetPlayer, targetPosition)
+                    danmakuManager.seekTo(targetPosition)
+                    showControls = true
+                    lastInteractionTime = System.currentTimeMillis()
+                }
+                is com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.AdjustVolume -> {
+                    audioManager.adjustStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        if (action.direction >= 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                        AudioManager.FLAG_SHOW_UI,
+                    )
+                }
+                is com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.AdjustBrightness -> {
+                    val nextBrightness = (currentBrightness + action.deltaFraction).coerceIn(0.02f, 1.0f)
+                    currentBrightness = nextBrightness
+                    context.findHostActivity()?.window?.let { window ->
+                        val params = window.attributes
+                        params.screenBrightness = nextBrightness
+                        window.attributes = params
+                    }
+                }
+                com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.ToggleMute -> {
+                    audioManager.adjustStreamVolume(
+                        AudioManager.STREAM_MUSIC,
+                        AudioManager.ADJUST_TOGGLE_MUTE,
+                        AudioManager.FLAG_SHOW_UI,
+                    )
+                }
+                com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.ToggleDanmaku -> {
+                    val newValue = !latestGamepadDanmakuEnabled
+                    danmakuManager.isEnabled = newValue
+                    if (!newValue) danmakuManager.clear()
+                    scope.launch {
+                        SettingsManager.setDanmakuEnabled(context, newValue, danmakuScope)
+                    }
+                }
+                com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.ToggleFullscreen -> {
+                    latestGamepadCloseOrExit()
+                }
+                com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.ToggleControls -> {
+                    showControls = !showControls
+                    lastInteractionTime = System.currentTimeMillis()
+                }
+                is com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.SpeedBoostChanged -> {
+                    if (action.active) {
+                        if (gamepadSavedSpeed == null) {
+                            gamepadSavedSpeed = targetPlayer.playbackParameters.speed
+                        }
+                        targetPlayer.setPlaybackSpeed(action.speed)
+                        playbackSpeed = action.speed
+                    } else {
+                        gamepadSavedSpeed?.let { saved ->
+                            targetPlayer.setPlaybackSpeed(saved)
+                            playbackSpeed = saved
+                            gamepadSavedSpeed = null
+                        }
+                    }
+                }
+                else -> Unit
+            }
+        }
+    }
+
     val keyboardShortcutOverrides =
         com.android.purebilibili.core.ui.adaptive.LocalKeyboardShortcutOverrides.current
     Box(

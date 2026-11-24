@@ -11,6 +11,7 @@ class SettingsSubpageChromeStructureTest {
         "app/src/main/java/com/android/purebilibili/feature/settings/screen/PermissionSettingsScreen.kt",
         "app/src/main/java/com/android/purebilibili/feature/settings/screen/TipsSettingsScreen.kt",
         "app/src/main/java/com/android/purebilibili/feature/settings/screen/KeyboardShortcutsSettingsScreen.kt",
+        "app/src/main/java/com/android/purebilibili/feature/settings/screen/GamepadControlSettingsScreen.kt",
         "app/src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt",
         "app/src/main/java/com/android/purebilibili/feature/settings/screen/AppearanceSettingsScreen.kt",
         "app/src/main/java/com/android/purebilibili/feature/settings/screen/AnimationSettingsScreen.kt",

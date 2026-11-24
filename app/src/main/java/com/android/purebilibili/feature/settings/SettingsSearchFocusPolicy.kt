@@ -321,6 +321,7 @@ internal fun resolveSettingsSceneDetailFocus(
     SettingsSearchTarget.REPLAY_ONBOARDING,
     SettingsSearchTarget.TIPS,
     SettingsSearchTarget.KEYBOARD_SHORTCUTS,
+    SettingsSearchTarget.GAMEPAD_CONTROL,
     SettingsSearchTarget.OPEN_LINKS,
     SettingsSearchTarget.DONATE,
     SettingsSearchTarget.TELEGRAM,

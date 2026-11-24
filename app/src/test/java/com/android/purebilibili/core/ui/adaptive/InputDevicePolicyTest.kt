@@ -43,5 +43,21 @@ class InputDevicePolicyTest {
         assertFalse(policy.enableHoverEffects)
         assertTrue(policy.enableKeyboardNavigation)
         assertTrue(policy.enablePointerFocus)
+        assertFalse(policy.enableGamepadControl)
+    }
+
+    @Test
+    fun gamepadConnectionEnablesNavigationHoverAndGamepadControl() {
+        val policy = resolveInputDevicePolicy(
+            AppWindowAdaptiveInfo(
+                windowSizeClass = window,
+                gamepadConnected = true,
+            ),
+        )
+
+        assertTrue(policy.enableHoverEffects)
+        assertTrue(policy.enableKeyboardNavigation)
+        assertTrue(policy.enablePointerFocus)
+        assertTrue(policy.enableGamepadControl)
     }
 }

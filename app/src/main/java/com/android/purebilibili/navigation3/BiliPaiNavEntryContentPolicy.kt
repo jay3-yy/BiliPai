@@ -33,6 +33,7 @@ internal enum class BiliPaiNavEntryContentRole {
     WEB_DAV_BACKUP,
     TIPS_SETTINGS,
     KEYBOARD_SHORTCUTS_SETTINGS,
+    GAMEPAD_CONTROL_SETTINGS,
     PROFILE,
     ACCOUNT_LEDGER,
     VIDEO_DETAIL,
@@ -121,6 +122,7 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         BiliPaiNavKey.WebDavBackup -> BiliPaiNavEntryContentRole.WEB_DAV_BACKUP
         BiliPaiNavKey.TipsSettings -> BiliPaiNavEntryContentRole.TIPS_SETTINGS
         BiliPaiNavKey.KeyboardShortcutsSettings -> BiliPaiNavEntryContentRole.KEYBOARD_SHORTCUTS_SETTINGS
+        BiliPaiNavKey.GamepadControlSettings -> BiliPaiNavEntryContentRole.GAMEPAD_CONTROL_SETTINGS
         BiliPaiNavKey.Profile -> BiliPaiNavEntryContentRole.PROFILE
         BiliPaiNavKey.ProfileAccountEdit -> BiliPaiNavEntryContentRole.PROFILE
         is BiliPaiNavKey.AccountLedger -> BiliPaiNavEntryContentRole.ACCOUNT_LEDGER

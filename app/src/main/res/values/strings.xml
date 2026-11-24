@@ -269,6 +269,8 @@
     <string name="settings_category_storage_summary">保存位置、缓存、设置分享和 WebDAV 备份</string>
     <string name="settings_category_plugins_title">插件中心</string>
     <string name="settings_category_plugins_summary">插件、装扮和扩展功能</string>
+    <string name="settings_category_gamepad_title">手柄控制</string>
+    <string name="settings_category_gamepad_summary">Xbox / PlayStation / Switch 手柄适配、提示栏与自定义键位</string>
     <string name="settings_category_support_title">帮助与关于</string>
     <string name="settings_category_support_summary">使用帮助、问题排查、更新和应用信息</string>
     <string name="settings_category_select_hint">选择左侧分类以查看设置</string>

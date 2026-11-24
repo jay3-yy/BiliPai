@@ -292,6 +292,10 @@ class BiliPaiNavKeyMappingPolicyTest {
             BiliPaiNavKey.KeyboardShortcutsSettings,
             legacyRouteToBiliPaiNavKey(ScreenRoutes.KeyboardShortcutsSettings.route)
         )
+        assertEquals(
+            BiliPaiNavKey.GamepadControlSettings,
+            legacyRouteToBiliPaiNavKey(ScreenRoutes.GamepadControlSettings.route)
+        )
     }
 
     @Test

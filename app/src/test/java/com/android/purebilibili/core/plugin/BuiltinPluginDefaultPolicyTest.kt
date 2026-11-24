@@ -10,6 +10,7 @@ class BuiltinPluginDefaultPolicyTest {
     fun castPluginsAreEnabledByDefault() {
         assertTrue(resolvePluginDefaultEnabled(BuiltinPluginIds.DLNA_CAST))
         assertTrue(resolvePluginDefaultEnabled(BuiltinPluginIds.GOOGLE_CAST))
+        assertTrue(resolvePluginDefaultEnabled(BuiltinPluginIds.GAMEPAD_CONTROL))
     }
 
     @Test

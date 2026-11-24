@@ -201,6 +201,7 @@ data class AppWindowAdaptiveInfo(
     ),
     val precisePointerConnected: Boolean = false,
     val hardwareKeyboardConnected: Boolean = false,
+    val gamepadConnected: Boolean = false,
 ) {
     val posture: AppFoldPosture
         get() = foldingFeature.posture
@@ -273,28 +274,28 @@ fun rememberAppWindowAdaptiveInfo(
             )
         )
     }
-    val precisePointerConnected by produceState(
-        initialValue = context.hasPrecisePointer(),
+    val inputConnectionState by produceState(
+        initialValue = context.hasPrecisePointer() to
+            com.android.purebilibili.core.input.gamepad.GamepadControlEngine.hasConnectedGamepad(context),
         key1 = context,
     ) {
         val inputManager = context.getSystemService(InputManager::class.java)
             ?: return@produceState
+        fun refresh() {
+            value = context.hasPrecisePointer() to
+                com.android.purebilibili.core.input.gamepad.GamepadControlEngine.hasConnectedGamepad(context)
+        }
         val listener = object : InputManager.InputDeviceListener {
-            override fun onInputDeviceAdded(deviceId: Int) {
-                value = context.hasPrecisePointer()
-            }
+            override fun onInputDeviceAdded(deviceId: Int) = refresh()
 
-            override fun onInputDeviceRemoved(deviceId: Int) {
-                value = context.hasPrecisePointer()
-            }
+            override fun onInputDeviceRemoved(deviceId: Int) = refresh()
 
-            override fun onInputDeviceChanged(deviceId: Int) {
-                value = context.hasPrecisePointer()
-            }
+            override fun onInputDeviceChanged(deviceId: Int) = refresh()
         }
         inputManager.registerInputDeviceListener(listener, null)
         awaitDispose { inputManager.unregisterInputDeviceListener(listener) }
     }
+    val (precisePointerConnected, gamepadConnected) = inputConnectionState
     val hardwareKeyboardConnected = configuration.keyboard != Configuration.KEYBOARD_NOKEYS
     val adaptiveInfo = remember(
         windowSizeClass,
@@ -302,6 +303,7 @@ fun rememberAppWindowAdaptiveInfo(
         displayContext,
         precisePointerConnected,
         hardwareKeyboardConnected,
+        gamepadConnected,
     ) {
         AppWindowAdaptiveInfo(
             windowSizeClass = windowSizeClass,
@@ -309,6 +311,7 @@ fun rememberAppWindowAdaptiveInfo(
             displayContext = displayContext,
             precisePointerConnected = precisePointerConnected,
             hardwareKeyboardConnected = hardwareKeyboardConnected,
+            gamepadConnected = gamepadConnected,
         )
     }
     val strategySnapshot = remember(adaptiveInfo) {

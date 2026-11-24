@@ -206,6 +206,14 @@ class SettingsNavHierarchyPolicyTest {
             BiliPaiNavKey.PluginsSettings(),
             resolveSettingsCategoryNavKey(SettingsRootCategory.PLUGINS_EXTENSIONS),
         )
+        assertEquals(
+            BiliPaiNavKey.GamepadControlSettings,
+            resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.GAMEPAD_CONTROL),
+        )
+        assertEquals(
+            BiliPaiNavKey.GamepadControlSettings,
+            resolveSettingsCategoryNavKey(SettingsRootCategory.GAMEPAD_CONTROL),
+        )
     }
 
     @Test

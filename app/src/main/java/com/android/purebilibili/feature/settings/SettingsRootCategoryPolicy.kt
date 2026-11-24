@@ -48,6 +48,11 @@ enum class SettingsRootCategory(
         subtitle = "插件、装扮和扩展功能",
         searchTarget = SettingsSearchTarget.PLUGINS,
     ),
+    GAMEPAD_CONTROL(
+        title = "手柄控制",
+        subtitle = "Xbox / PlayStation / Switch 手柄适配、提示栏与自定义键位",
+        searchTarget = SettingsSearchTarget.GAMEPAD_CONTROL,
+    ),
     SYSTEM_ABOUT(
         title = "帮助与关于",
         subtitle = "使用帮助、问题排查、更新和应用信息",
@@ -106,6 +111,7 @@ internal fun resolveSettingsRootCategoryOrder(): List<SettingsRootCategory> = li
     SettingsRootCategory.PRIVACY_PERMISSION,
     SettingsRootCategory.STORAGE_BACKUP,
     SettingsRootCategory.PLUGINS_EXTENSIONS,
+    SettingsRootCategory.GAMEPAD_CONTROL,
     SettingsRootCategory.SYSTEM_ABOUT,
 )
 
@@ -145,6 +151,7 @@ internal fun resolveSettingsRootCategoryForSearchTarget(
     SettingsSearchTarget.CLEAR_CACHE -> SettingsRootCategory.STORAGE_BACKUP
 
     SettingsSearchTarget.PLUGINS -> SettingsRootCategory.PLUGINS_EXTENSIONS
+    SettingsSearchTarget.GAMEPAD_CONTROL -> SettingsRootCategory.GAMEPAD_CONTROL
     SettingsSearchTarget.NEARBY_HANDOFF -> SettingsRootCategory.PLAYBACK_QUALITY
 
     SettingsSearchTarget.DIAGNOSTICS,

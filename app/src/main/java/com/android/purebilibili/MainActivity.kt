@@ -2084,6 +2084,20 @@ class MainActivity : AppCompatActivity() {
                             isPipRenderingActive
                     )
                     PluginEffectHintHost()
+                    com.android.purebilibili.feature.plugin.GamepadOverlayHost()
+                    LaunchedEffect(Unit) {
+                        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.navigationActions.collect { action ->
+                            when (action) {
+                                com.android.purebilibili.core.input.gamepad.GamepadNavigationAction.OpenSearch -> {
+                                    pendingRoute = "search"
+                                }
+                                com.android.purebilibili.core.input.gamepad.GamepadNavigationAction.OpenSettings -> {
+                                    pendingRoute = "settings"
+                                }
+                                else -> Unit
+                            }
+                        }
+                    }
                     
                     // [New] Custom Splash Wallpaper Overlay
                     val readCustomSplashPrefs = remember { shouldReadCustomSplashPreferences() }
@@ -2590,6 +2604,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (com.android.purebilibili.core.input.gamepad.GamepadControlEngine.handleKeyEvent(event)) {
+            return true
+        }
         if (
             event.keyCode == android.view.KeyEvent.KEYCODE_ESCAPE &&
             !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed
@@ -2615,6 +2632,23 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(ev: android.view.MotionEvent): Boolean {
+        if (com.android.purebilibili.core.input.gamepad.GamepadControlEngine.handleGenericMotionEvent(ev)) {
+            return true
+        }
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.observeActivityTouchEvent(ev)
+        return super.dispatchTouchEvent(ev)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.onActivityWindowFocusChanged(this, hasFocus)
     }
 
     override fun onProvideKeyboardShortcuts(
@@ -2727,10 +2761,12 @@ class MainActivity : AppCompatActivity() {
         if (!hasCompletedInitialResume) {
             hasCompletedInitialResume = true
         }
+        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.attachActivity(this)
         StartupRecovery.onMainResumed(this)
     }
 
     override fun onPause() {
+        com.android.purebilibili.core.input.gamepad.GamepadControlEngine.detachActivity(this)
         if (!startupRecoveryRedirected) {
             StartupRecovery.onMainPaused(this)
         }

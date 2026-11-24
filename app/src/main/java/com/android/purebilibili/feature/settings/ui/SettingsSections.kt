@@ -756,6 +756,14 @@ internal fun SettingsRootCategoryContent(
                     onHeroHeightChanged = onAboutHeroHeightChanged,
                 )
             }
+            SettingsRootCategory.GAMEPAD_CONTROL -> {
+                SettingsRootCategoryEntranceSection {
+                    com.android.purebilibili.feature.settings.GamepadControlSettingsBody(
+                        showMasterSwitch = true,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+            }
         }
     }
 }

@@ -91,5 +91,6 @@ internal fun resolveSettingsContainerTarget(target: SettingsSearchTarget): BiliP
         SettingsSearchTarget.OPEN_SOURCE_LICENSES -> BiliPaiNavKey.OpenSourceLicenses
         SettingsSearchTarget.TIPS -> BiliPaiNavKey.TipsSettings
         SettingsSearchTarget.KEYBOARD_SHORTCUTS -> BiliPaiNavKey.KeyboardShortcutsSettings
+        SettingsSearchTarget.GAMEPAD_CONTROL -> BiliPaiNavKey.GamepadControlSettings
         else -> null
     }

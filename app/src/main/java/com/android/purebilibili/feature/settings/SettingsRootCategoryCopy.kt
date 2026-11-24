@@ -13,6 +13,7 @@ internal fun SettingsRootCategory.titleResource(): Int = when (canonicalSettings
     SettingsRootCategory.PRIVACY_PERMISSION -> R.string.settings_category_privacy_title
     SettingsRootCategory.STORAGE_BACKUP -> R.string.settings_category_storage_title
     SettingsRootCategory.PLUGINS_EXTENSIONS -> R.string.settings_category_plugins_title
+    SettingsRootCategory.GAMEPAD_CONTROL -> R.string.settings_category_gamepad_title
     SettingsRootCategory.SYSTEM_ABOUT -> R.string.settings_category_support_title
     else -> R.string.settings_title
 }
@@ -27,6 +28,7 @@ internal fun SettingsRootCategory.subtitleResource(): Int = when (canonicalSetti
     SettingsRootCategory.PRIVACY_PERMISSION -> R.string.settings_category_privacy_summary
     SettingsRootCategory.STORAGE_BACKUP -> R.string.settings_category_storage_summary
     SettingsRootCategory.PLUGINS_EXTENSIONS -> R.string.settings_category_plugins_summary
+    SettingsRootCategory.GAMEPAD_CONTROL -> R.string.settings_category_gamepad_summary
     SettingsRootCategory.SYSTEM_ABOUT -> R.string.settings_category_support_summary
     else -> R.string.settings_title
 }

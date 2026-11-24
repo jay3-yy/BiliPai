@@ -16,6 +16,7 @@ class SettingsRootCategoryPolicyTest {
             SettingsRootCategory.PRIVACY_PERMISSION,
             SettingsRootCategory.STORAGE_BACKUP,
             SettingsRootCategory.PLUGINS_EXTENSIONS,
+            SettingsRootCategory.GAMEPAD_CONTROL,
             SettingsRootCategory.SYSTEM_ABOUT,
         )
 
@@ -35,6 +36,7 @@ class SettingsRootCategoryPolicyTest {
                 "隐私与权限",
                 "下载与备份",
                 "插件中心",
+                "手柄控制",
                 "帮助与关于",
             ),
             resolveSettingsRootCategoryOrder().map { it.title },
@@ -66,6 +68,10 @@ class SettingsRootCategoryPolicyTest {
         assertEquals(
             SettingsRootCategory.PLUGINS_EXTENSIONS,
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.PLUGINS),
+        )
+        assertEquals(
+            SettingsRootCategory.GAMEPAD_CONTROL,
+            resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.GAMEPAD_CONTROL),
         )
         assertEquals(
             SettingsRootCategory.SYSTEM_ABOUT,

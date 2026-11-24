@@ -37,6 +37,7 @@ enum class SettingsSearchTarget {
     REPLAY_ONBOARDING,
     TIPS,
     KEYBOARD_SHORTCUTS,
+    GAMEPAD_CONTROL,
     OPEN_LINKS,
     DONATE,
     TELEGRAM,
@@ -574,6 +575,30 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         subtitle = settingsDestinationCopy(SettingsSearchTarget.KEYBOARD_SHORTCUTS).summary,
         section = "帮助与工具",
         aliases = listOf("快捷键", "键盘", "键鼠", "鼠标右键", "外接键盘", "Ctrl", "touchpad", "keyboard")
+    ),
+    SettingsSearchEntry(
+        target = SettingsSearchTarget.GAMEPAD_CONTROL,
+        title = settingsDestinationCopy(SettingsSearchTarget.GAMEPAD_CONTROL).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.GAMEPAD_CONTROL).summary,
+        section = "设置",
+        aliases = listOf(
+            "手柄", "手柄控制", "手柄操控", "游戏手柄", "外接手柄",
+            "xbox", "playstation", "ps", "ps4", "ps5", "dualsense", "dualshock",
+            "switch", "nintendo", "joycon", "joy-con", "gamepad", "controller",
+            "自定义键位", "键位映射", "提示栏", "隐藏提示栏", "底部提示栏",
+            "隐藏底部键位", "隐藏底部显示键位", "虚拟光标", "摇杆", "死区", "灵敏度", "互换确认返回",
+        )
+    ),
+    SettingsSearchEntry(
+        settingId = "gamepad.hide_bottom_key_hints",
+        target = SettingsSearchTarget.GAMEPAD_CONTROL,
+        title = "隐藏底部键位显示",
+        subtitle = "开启后隐藏屏幕底部的手柄键位提示栏，使用中也可按快捷键随时切换",
+        section = settingsDestinationCopy(SettingsSearchTarget.GAMEPAD_CONTROL).title,
+        aliases = listOf(
+            "隐藏底部显示键位", "隐藏底部键位", "隐藏底部键位提示", "隐藏键位提示",
+            "隐藏提示栏", "关闭底部提示栏", "底部键位", "手柄提示栏", "HUD",
+        ),
     ),
     SettingsSearchEntry(
         settingId = "legacy.032",
