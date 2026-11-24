@@ -13,11 +13,11 @@ import kotlin.test.assertTrue
 class AndroidNativeVariantThemePolicyTest {
 
     @Test
-    fun themeTypographyDoesNotChangeWithGlassMaterial() {
-        for (glassEnabled in listOf(false, true)) {
-            assertSame(BiliMiuixTypography, resolveMaterialTypography(AppUiStyle.MIUIX, glassEnabled))
-            assertSame(Md3Typography, resolveMaterialTypography(AppUiStyle.MATERIAL3, glassEnabled))
-        }
+    fun themeTypographyUsesDedicatedGlassScaleWhenGlassEnabled() {
+        assertSame(BiliMiuixTypography, resolveMaterialTypography(AppUiStyle.MIUIX, false))
+        assertSame(Md3Typography, resolveMaterialTypography(AppUiStyle.MATERIAL3, false))
+        assertSame(BiliMiuixTypography, resolveMaterialTypography(AppUiStyle.MIUIX, true))
+        assertSame(Md3Typography, resolveMaterialTypography(AppUiStyle.MATERIAL3, true))
     }
 
     @Test

@@ -680,6 +680,7 @@ enum class CardTransitionMethod(val storageValue: String) {
     OPLUS_LEGACY("oplus_legacy"),
     VIVO_ONESHOT("vivo_oneshot"),
     XIAOMI_ROUNDED("xiaomi_rounded"),
+    ANDROID_SHARED("android_shared"),
     STANDARD("standard");
 
     companion object {
@@ -745,7 +746,7 @@ data class HomeSettings(
     val refreshLocatorDurationSeconds: Int = 3, // 0 表示不自动收起
     val refreshLocatorPositionX: Float = 1f,
     val refreshLocatorPositionY: Float = 1f,
-    val homeRefreshUndoVisible: Boolean = false, // 刷新后的撤销按钮默认隐藏
+    val homeRefreshUndoVisible: Boolean = true, // 刷新后的撤销按钮默认开启，防止手滑丢失想看的视频
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = false,   // 卡片展开过渡按需开启
     val cardTransitionMethod: CardTransitionMethod = CardTransitionMethod.AUTO,
@@ -856,6 +857,8 @@ data class AppThemeSettings(
     val singleChoicePresentation: AppSingleChoicePresentation =
         AppSingleChoicePresentation.WINDOW_POPUP,
     val settingsIconGlyphs: SettingsIconGlyphs = SettingsIconGlyphs.PHOSPHOR,
+    val themeSwitchTransitionStyle: com.android.purebilibili.core.theme.ThemeSwitchTransitionStyle =
+        com.android.purebilibili.core.theme.ThemeSwitchTransitionStyle.RADIAL_REVEAL,
 )
 
 data class ThemeModeRoleOverrides(
@@ -1272,7 +1275,16 @@ data class PlayerInteractionSettings(
     val twoFingerHorizontalSpeedEnabled: Boolean = false,
     val hiResLongPressCompatHintShown: Boolean = false,
     val directPortraitStoryEntry: Boolean = false,
-    val launchToPortraitFeedOnStartup: Boolean = false
+    val launchToPortraitFeedOnStartup: Boolean = false,
+    val longPressSpeedSlideAdjustEnabled: Boolean = true,
+    val doubleTapJumpAheadEnabled: Boolean = true,
+    val progressFineScrubbingEnabled: Boolean = true,
+    val progressSnapAndOriginCancelEnabled: Boolean = true,
+    val fullscreenSwipeUpMoreEnabled: Boolean = true,
+    val endScreenNextCountdownEnabled: Boolean = true,
+    val pinchZoomSnapAndBadgeEnabled: Boolean = true,
+    val twoFingerChapterSkipEnabled: Boolean = true,
+    val portraitSwipeDownMinimizeEnabled: Boolean = true
 )
 
 private sealed interface ShareablePreferenceDefinition {
@@ -1511,6 +1523,8 @@ object SettingsManager {
     private val KEY_THEME_COLOR_CONTRAST = stringPreferencesKey("theme_color_contrast")
     private val KEY_SINGLE_CHOICE_PRESENTATION =
         stringPreferencesKey("single_choice_presentation")
+    private val KEY_THEME_SWITCH_TRANSITION_STYLE =
+        stringPreferencesKey("theme_switch_transition_style_v1")
     private val KEY_BG_PLAY = booleanPreferencesKey("bg_play")
     //  [新增] 触感反馈 (默认开启)
     private val KEY_LIQUID_GLASS_SCENES_DISABLED = intPreferencesKey("liquid_glass_scenes_disabled")
@@ -2026,7 +2040,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             refreshLocatorDurationSeconds = preferences[KEY_REFRESH_LOCATOR_DURATION] ?: 3,
             refreshLocatorPositionX = preferences[KEY_REFRESH_LOCATOR_POSITION_X] ?: 1f,
             refreshLocatorPositionY = preferences[KEY_REFRESH_LOCATOR_POSITION_Y] ?: 1f,
-            homeRefreshUndoVisible = preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: false,
+            homeRefreshUndoVisible = preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: true,
             cardAnimationEnabled = preferences[KEY_CARD_ANIMATION_ENABLED] ?: false,
             cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: false,
             cardTransitionMethod = CardTransitionMethod.fromStorageValue(preferences[KEY_CARD_TRANSITION_METHOD]),
@@ -2173,7 +2187,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             twoFingerHorizontalSpeedEnabled = preferences[KEY_TWO_FINGER_HORIZONTAL_SPEED_ENABLED] ?: false,
             hiResLongPressCompatHintShown = preferences[KEY_HI_RES_LONG_PRESS_COMPAT_HINT_SHOWN] ?: false,
             directPortraitStoryEntry = preferences[KEY_AUTO_PORTRAIT_FULLSCREEN] ?: false,
-            launchToPortraitFeedOnStartup = preferences[KEY_LAUNCH_TO_PORTRAIT_FEED_ON_STARTUP] ?: false
+            launchToPortraitFeedOnStartup = preferences[KEY_LAUNCH_TO_PORTRAIT_FEED_ON_STARTUP] ?: false,
+            longPressSpeedSlideAdjustEnabled = preferences[KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED] ?: true,
+            doubleTapJumpAheadEnabled = preferences[KEY_DOUBLE_TAP_JUMP_AHEAD_ENABLED] ?: true,
+            progressFineScrubbingEnabled = preferences[KEY_PROGRESS_FINE_SCRUBBING_ENABLED] ?: true,
+            progressSnapAndOriginCancelEnabled = preferences[KEY_PROGRESS_SNAP_AND_ORIGIN_CANCEL_ENABLED] ?: true,
+            fullscreenSwipeUpMoreEnabled = preferences[KEY_FULLSCREEN_SWIPE_UP_MORE_ENABLED] ?: true,
+            endScreenNextCountdownEnabled = preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED] ?: true,
+            pinchZoomSnapAndBadgeEnabled = preferences[KEY_PINCH_ZOOM_SNAP_AND_BADGE_ENABLED] ?: true,
+            twoFingerChapterSkipEnabled = preferences[KEY_TWO_FINGER_CHAPTER_SKIP_ENABLED] ?: true,
+            portraitSwipeDownMinimizeEnabled = preferences[KEY_PORTRAIT_SWIPE_DOWN_MINIMIZE_ENABLED] ?: true
         )
     }
 
@@ -2563,7 +2586,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             appIconStyle = resolveAppIconStylePreference(preferences[KEY_APP_ICON_STYLE]),
             settingsIconGlyphs = SettingsIconGlyphs.fromStorageValue(preferences[KEY_SETTINGS_ICON_GLYPHS]),
             appLineIconColor = preferences[KEY_APP_LINE_ICON_COLOR],
-            appListItemStyle = resolveAppListItemStylePreference(preferences[KEY_APP_LIST_ITEM_STYLE])
+            appListItemStyle = resolveAppListItemStylePreference(preferences[KEY_APP_LIST_ITEM_STYLE]),
+            themeSwitchTransitionStyle = com.android.purebilibili.core.theme.ThemeSwitchTransitionStyle.fromStorageValue(
+                preferences[KEY_THEME_SWITCH_TRANSITION_STYLE]
+            )
         )
     }
 
@@ -2776,6 +2802,45 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             preferences[KEY_THEME_SELECTION] = uiStyle.name
             preferences.remove(KEY_UI_PRESET)
             preferences.remove(KEY_ANDROID_NATIVE_VARIANT)
+        }
+    }
+
+    /** 单事务原子切换主题底座与液态玻璃状态，避免两次写入导致中间态闪烁。 */
+    suspend fun setThemePresentation(
+        context: Context,
+        uiStyle: AppUiStyle,
+        liquidGlassEnabled: Boolean,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_THEME_SELECTION] = uiStyle.name
+            preferences.remove(KEY_UI_PRESET)
+            preferences.remove(KEY_ANDROID_NATIVE_VARIANT)
+            preferences[KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED] = liquidGlassEnabled
+            if (liquidGlassEnabled) {
+                preferences[KEY_BOTTOM_BAR_BLUR_ENABLED] = false
+                preferences[KEY_HEADER_BLUR_ENABLED] = false
+                preferences[KEY_HOME_HEADER_BLUR_MODE] = HomeHeaderBlurMode.ALWAYS_OFF.value
+            }
+        }
+    }
+
+    fun getThemeSwitchTransitionStyle(
+        context: Context,
+    ): Flow<com.android.purebilibili.core.theme.ThemeSwitchTransitionStyle> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                com.android.purebilibili.core.theme.ThemeSwitchTransitionStyle.fromStorageValue(
+                    preferences[KEY_THEME_SWITCH_TRANSITION_STYLE]
+                )
+            }
+            .distinctUntilChanged()
+
+    suspend fun setThemeSwitchTransitionStyle(
+        context: Context,
+        style: com.android.purebilibili.core.theme.ThemeSwitchTransitionStyle,
+    ) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_THEME_SWITCH_TRANSITION_STYLE] = style.storageValue
         }
     }
 
@@ -4062,7 +4127,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     }
 
     fun getHomeRefreshUndoVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: false }
+        .map { preferences -> preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: true }
 
     suspend fun setHomeRefreshUndoVisible(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -7085,9 +7150,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                     uiEntranceAnimationEnabled = preferences[KEY_UI_ENTRANCE_ANIMATION_ENABLED] ?: true,
                     globalDragFeedbackEnabled = preferences[KEY_GLOBAL_DRAG_FEEDBACK_ENABLED] ?: true,
                     runtimeVisualGuardEnabled = preferences[KEY_RUNTIME_VISUAL_GUARD_ENABLED] ?: true,
-                    nativeMiuixPopupsEnabled = preferences[
-                        com.android.purebilibili.core.store.player.PlayerSettingsStore.keyNativeMiuixPlayerPopups
-                    ] ?: true,
+                    nativeMiuixPopupsEnabled = true,
                     liquidGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
                         com.android.purebilibili.core.ui.AppLiquidGlassScene.OTHER_COMPONENTS
                     ),
@@ -7119,6 +7182,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         val progressPlacement: PlayerProgressPlacement = PlayerProgressPlacement.ABOVE_CONTROLS,
         val playbackCompletionBehavior: PlaybackCompletionBehavior = PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC,
         val immersiveVideoPageStatusBar: Boolean = false,
+        val progressFineScrubbingEnabled: Boolean = true,
+        val progressSnapAndOriginCancelEnabled: Boolean = true,
     )
 
     /** 单次映射横屏/全屏播放控制层全部 UI 开关，避免 VideoPlayerOverlay 挂载十余个独立 DataStore 订阅。 */
@@ -7151,6 +7216,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                             ?: PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC.value
                     ),
                     immersiveVideoPageStatusBar = preferences[KEY_HIDE_VIDEO_PAGE_STATUS_BAR] ?: false,
+                    progressFineScrubbingEnabled = preferences[KEY_PROGRESS_FINE_SCRUBBING_ENABLED] ?: true,
+                    progressSnapAndOriginCancelEnabled = preferences[KEY_PROGRESS_SNAP_AND_ORIGIN_CANCEL_ENABLED] ?: true,
                 )
             }
             .distinctUntilChanged()
@@ -8252,6 +8319,24 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_SHOW_FULLSCREEN_BATTERY_LEVEL = booleanPreferencesKey("show_fullscreen_battery_level")
     private val KEY_SHOW_FULLSCREEN_TIME = booleanPreferencesKey("show_fullscreen_time")
     private val KEY_SHOW_FULLSCREEN_ACTION_ITEMS = booleanPreferencesKey("show_fullscreen_action_items")
+    private val KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED =
+        booleanPreferencesKey("long_press_speed_slide_adjust_enabled")
+    private val KEY_DOUBLE_TAP_JUMP_AHEAD_ENABLED =
+        booleanPreferencesKey("double_tap_jump_ahead_enabled")
+    private val KEY_PROGRESS_FINE_SCRUBBING_ENABLED =
+        booleanPreferencesKey("progress_fine_scrubbing_enabled")
+    private val KEY_PROGRESS_SNAP_AND_ORIGIN_CANCEL_ENABLED =
+        booleanPreferencesKey("progress_snap_and_origin_cancel_enabled")
+    private val KEY_FULLSCREEN_SWIPE_UP_MORE_ENABLED =
+        booleanPreferencesKey("fullscreen_swipe_up_more_enabled")
+    private val KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED =
+        booleanPreferencesKey("end_screen_next_countdown_enabled")
+    private val KEY_PINCH_ZOOM_SNAP_AND_BADGE_ENABLED =
+        booleanPreferencesKey("pinch_zoom_snap_and_badge_enabled")
+    private val KEY_TWO_FINGER_CHAPTER_SKIP_ENABLED =
+        booleanPreferencesKey("two_finger_chapter_skip_enabled")
+    private val KEY_PORTRAIT_SWIPE_DOWN_MINIMIZE_ENABLED =
+        booleanPreferencesKey("portrait_swipe_down_minimize_enabled")
     private val KEY_SHOW_CARD_ONLINE_COUNT = booleanPreferencesKey("show_card_online_count")
     private val KEY_SHOW_ONLINE_COUNT = booleanPreferencesKey("show_online_count")
     private val KEY_SHOW_VIDEO_DETAIL_COMMENT_COUNT =
@@ -8656,6 +8741,87 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setShowFullscreenActionItems(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_SHOW_FULLSCREEN_ACTION_ITEMS] = enabled
+        }
+    }
+
+    fun getLongPressSpeedSlideAdjustEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED] ?: true }
+
+    suspend fun setLongPressSpeedSlideAdjustEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED] = enabled
+        }
+    }
+
+    fun getDoubleTapJumpAheadEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DOUBLE_TAP_JUMP_AHEAD_ENABLED] ?: true }
+
+    suspend fun setDoubleTapJumpAheadEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DOUBLE_TAP_JUMP_AHEAD_ENABLED] = enabled
+        }
+    }
+
+    fun getProgressFineScrubbingEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_PROGRESS_FINE_SCRUBBING_ENABLED] ?: true }
+
+    suspend fun setProgressFineScrubbingEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_PROGRESS_FINE_SCRUBBING_ENABLED] = enabled
+        }
+    }
+
+    fun getProgressSnapAndOriginCancelEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_PROGRESS_SNAP_AND_ORIGIN_CANCEL_ENABLED] ?: true }
+
+    suspend fun setProgressSnapAndOriginCancelEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_PROGRESS_SNAP_AND_ORIGIN_CANCEL_ENABLED] = enabled
+        }
+    }
+
+    fun getFullscreenSwipeUpMoreEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_FULLSCREEN_SWIPE_UP_MORE_ENABLED] ?: true }
+
+    suspend fun setFullscreenSwipeUpMoreEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FULLSCREEN_SWIPE_UP_MORE_ENABLED] = enabled
+        }
+    }
+
+    fun getEndScreenNextCountdownEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED] ?: true }
+
+    suspend fun setEndScreenNextCountdownEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED] = enabled
+        }
+    }
+
+    fun getPinchZoomSnapAndBadgeEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_PINCH_ZOOM_SNAP_AND_BADGE_ENABLED] ?: true }
+
+    suspend fun setPinchZoomSnapAndBadgeEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_PINCH_ZOOM_SNAP_AND_BADGE_ENABLED] = enabled
+        }
+    }
+
+    fun getTwoFingerChapterSkipEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_TWO_FINGER_CHAPTER_SKIP_ENABLED] ?: true }
+
+    suspend fun setTwoFingerChapterSkipEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_TWO_FINGER_CHAPTER_SKIP_ENABLED] = enabled
+        }
+    }
+
+    fun getPortraitSwipeDownMinimizeEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_PORTRAIT_SWIPE_DOWN_MINIMIZE_ENABLED] ?: true }
+
+    suspend fun setPortraitSwipeDownMinimizeEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_PORTRAIT_SWIPE_DOWN_MINIMIZE_ENABLED] = enabled
         }
     }
 
@@ -9313,6 +9479,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 KEY_SINGLE_CHOICE_PRESENTATION,
                 SettingsShareSection.APPEARANCE,
             ),
+            StringShareablePreferenceDefinition(
+                KEY_THEME_SWITCH_TRANSITION_STYLE,
+                SettingsShareSection.APPEARANCE,
+            ),
             IntShareablePreferenceDefinition(KEY_THEME_COLOR_INDEX, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_APP_ICON, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_APP_ICON_APPEARANCE, SettingsShareSection.APPEARANCE),
@@ -9604,6 +9774,15 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_SHOW_FULLSCREEN_BATTERY_LEVEL, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_SHOW_FULLSCREEN_TIME, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_SHOW_FULLSCREEN_ACTION_ITEMS, SettingsShareSection.GESTURE),
+            BooleanShareablePreferenceDefinition(KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED, SettingsShareSection.GESTURE),
+            BooleanShareablePreferenceDefinition(KEY_DOUBLE_TAP_JUMP_AHEAD_ENABLED, SettingsShareSection.GESTURE),
+            BooleanShareablePreferenceDefinition(KEY_PROGRESS_FINE_SCRUBBING_ENABLED, SettingsShareSection.GESTURE),
+            BooleanShareablePreferenceDefinition(KEY_PROGRESS_SNAP_AND_ORIGIN_CANCEL_ENABLED, SettingsShareSection.GESTURE),
+            BooleanShareablePreferenceDefinition(KEY_FULLSCREEN_SWIPE_UP_MORE_ENABLED, SettingsShareSection.GESTURE),
+            BooleanShareablePreferenceDefinition(KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED, SettingsShareSection.GESTURE),
+            BooleanShareablePreferenceDefinition(KEY_PINCH_ZOOM_SNAP_AND_BADGE_ENABLED, SettingsShareSection.GESTURE),
+            BooleanShareablePreferenceDefinition(KEY_TWO_FINGER_CHAPTER_SKIP_ENABLED, SettingsShareSection.GESTURE),
+            BooleanShareablePreferenceDefinition(KEY_PORTRAIT_SWIPE_DOWN_MINIMIZE_ENABLED, SettingsShareSection.GESTURE),
 
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_ENABLED, SettingsShareSection.DANMAKU),
             FloatShareablePreferenceDefinition(KEY_DANMAKU_OPACITY, SettingsShareSection.DANMAKU),

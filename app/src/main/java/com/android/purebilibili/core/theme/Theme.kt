@@ -929,12 +929,12 @@ fun PureBiliBiliTheme(
     val materialMotionScheme = remember(uiStyle) {
         resolveMaterialMotionScheme(uiStyle)
     }
-    val miuixTextStyles = remember(uiStyle, liquidGlassEnabled, fontSizePreset, appFontFamily, appFontWeightPreset) {
-        // 材质开关不改变主题字阶；用户字体设置在主题默认样式之上应用。
+    val miuixTextStyles = remember(uiStyle, fontSizePreset, appFontFamily, appFontWeightPreset) {
+        // 液态玻璃仅改光学材质表面；Miuix 与 MD3 在玻璃开启和关闭下均保留各自原生字阶。
         val nativeStyles = if (uiStyle == AppUiStyle.MIUIX) {
             top.yukonga.miuix.kmp.theme.defaultTextStyles()
         } else {
-            resolveMaterialTypography(uiStyle, liquidGlassEnabled).toMiuixTextStyles()
+            resolveMaterialTypography(uiStyle).toMiuixTextStyles()
         }
         nativeStyles.scaled(fontSizePreset.multiplier)
             .withFontFamily(appFontFamily)
@@ -1084,9 +1084,10 @@ fun PureBiliBiliTheme(
         SyncAppThemeLauncherIcon(themeIconPaletteIndex)
     }
     val reduceMotion = com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion()
+    val snapshotTransitionActive = LocalThemeSwitchTransitionController.current?.isTransitionActive == true
     val animatedPalette = rememberAnimatedAppThemePalette(
         target = targetPalette,
-        enabled = themeTransitionEnabled && !reduceMotion,
+        enabled = themeTransitionEnabled && !reduceMotion && !snapshotTransitionActive,
     )
     val materialColorScheme = animatedPalette.material
     val colorSchemeMode = resolveMiuixColorSchemeMode(themeMode, dynamicColor)

@@ -34,6 +34,9 @@ internal sealed interface SettingsOptionPreview {
     /** 界面预设小样:[miuix] 为真示意 Miuix 彩色容器条目,为假示意 MD3 单色条目。 */
     data class UiPreset(val miuix: Boolean) : SettingsOptionPreview
 
+    /** 界面风格小样:[miuix] 为真示意 Miuix 整段底栏指示器,为假示意 MD3 胶囊指示器。 */
+    data class ThemeStyle(val miuix: Boolean) : SettingsOptionPreview
+
     /** 列表条目样式小样:0 跟随预设(双风格)、1 项目自定义、2 原生组件。 */
     data class ListItem(val mode: Int) : SettingsOptionPreview
 
@@ -154,6 +157,26 @@ internal fun SettingsOptionPreviewThumb(
                         }
                         tile(15f, y + 1f, 22f, 2.2f, if (row == 0) foreground.copy(alpha = 0.6f) else muted)
                         tile(15f, y + 5f, 15f, 1.6f, muted)
+                    }
+                }
+                is SettingsOptionPreview.ThemeStyle -> {
+                    // 顶部双列内容卡 + 底栏选中指示,区分 MD3 胶囊与 Miuix 分段底栏。
+                    val cardRadius = if (preview.miuix) 2.4f else 1.6f
+                    tile(3f, 3f, 18f, 10f, surface, cardRadius)
+                    tile(23f, 3f, 18f, 10f, surface, cardRadius)
+                    if (preview.miuix) {
+                        tile(3f, 16f, 38f, 11f, surface, 5.5f)
+                        tile(4.5f, 17.5f, 14f, 8f, accent, 4f)
+                        repeat(2) { index ->
+                            drawCircle(muted, 1.4f * unit, Offset((27f + index * 6f) * unit, 21.5f * unit))
+                        }
+                    } else {
+                        tile(3f, 17f, 38f, 9f, surface, 4.5f)
+                        tile(5f, 18.5f, 12f, 6f, accent.copy(alpha = 0.32f), 3f)
+                        drawCircle(accent, 1.5f * unit, Offset(11f * unit, 21.5f * unit))
+                        repeat(2) { index ->
+                            drawCircle(muted, 1.5f * unit, Offset((24f + index * 7f) * unit, 21.5f * unit))
+                        }
                     }
                 }
                 is SettingsOptionPreview.ListItem -> {

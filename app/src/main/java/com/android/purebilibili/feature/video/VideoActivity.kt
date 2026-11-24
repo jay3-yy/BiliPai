@@ -257,6 +257,11 @@ open class VideoActivity : FragmentActivity() {
             val detailedCommentTimeEnabled = commentDisplaySettings.detailedCommentTimeEnabled
             val liquidGlassEnabled = appThemeConfig.liquidGlassEnabled
             val uiEntranceAnimationEnabled = appThemeConfig.uiEntranceAnimationEnabled
+            com.android.purebilibili.core.theme.ThemeSwitchSnapshotHost(
+                preferredStyle = themeSettings.themeSwitchTransitionStyle,
+                animationsEnabled = uiEntranceAnimationEnabled,
+                systemReduceMotion = com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion(),
+            ) {
             com.android.purebilibili.core.theme.PureBiliBiliTheme(
                 uiStyle = themeSettings.uiStyle,
                 themeMode = themeSettings.themeMode,
@@ -388,6 +393,7 @@ open class VideoActivity : FragmentActivity() {
                 }
                 }
                 }
+            }
             }
             }
         }

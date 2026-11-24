@@ -298,6 +298,10 @@
     <string name="tips_11_content">Turn off “Playful Easter Eggs” to hide playful messages shown after actions such as refreshing or liking.</string>
     <string name="tips_12_title">12. Open Bilibili links directly in the app</string>
     <string name="tips_12_content">Set “Open Links by Default” in Settings to open Bilibili links in the matching page in BiliPai.</string>
+    <string name="tips_13_title">13. Swipe up in landscape for More &amp; Queue</string>
+    <string name="tips_13_content">During landscape fullscreen playback, swipe up from the bottom edge (or tap the bottom hint) to open More Recommendations and the Up Next queue; swipe down to dismiss.</string>
+    <string name="tips_14_title">14. Swipe up while scrubbing for precision timeline</string>
+    <string name="tips_14_content">While dragging the progress bar, slide your finger upward to enter the precision filmstrip timeline for fine scrubbing; slide back down to exit.</string>
     <string name="permission_network_access">Network access</string>
     <string name="permission_network_access_description">Loads videos, images, and user data</string>
     <string name="permission_network_status">Network status</string>
@@ -381,8 +385,10 @@
     <string name="animation_card_transition_method_oplus">OPPO legacy</string>
     <string name="animation_card_transition_method_vivo">vivo OneShot</string>
     <string name="animation_card_transition_method_xiaomi">Xiaomi legacy 103</string>
+    <string name="animation_card_transition_method_android_shared">Android shared element</string>
     <string name="animation_card_transition_method_standard">Standard transition</string>
-    <string name="animation_card_transition_method_auto_summary">Prefer official SharedView, then try compatible system interfaces</string>
+    <string name="animation_card_transition_method_auto_summary">Prefer official SharedView and compatible system interfaces; fall back to Android shared elements when unavailable</string>
+    <string name="animation_card_transition_method_android_shared_summary">Uses Compose shared container transitions on all devices; covers hold continuity for video, live, and bangumi players</string>
     <string name="animation_card_transition_method_xiaomi_summary">The system shrinks the background, which can expose a light border</string>
     <string name="animation_card_transition_method_disabled">One-take transitions are off</string>
     <string name="animation_card_transition_method_current">Matched interface: %1$s</string>
@@ -390,6 +396,7 @@
     <string name="animation_card_transition_source_fallback">The selected interface is unavailable. Pages use standard transitions.</string>
     <string name="animation_card_transition_source_reduced_motion">Reduced motion is enabled in system settings; card transitions are currently inactive</string>
     <string name="animation_transition_blur_official_supported">Control background blur for system card transitions and Settings container transitions</string>
+    <string name="animation_transition_blur_shared_supported">Control background blur for Android shared-element and Settings container transitions</string>
     <string name="animation_transition_blur_official_system">Control Settings container blur. System card transition blur is managed by Android.</string>
     <string name="animation_transition_blur_summary">Control background blur for Settings container transitions</string>
     <string name="animation_predictive_back_title">Predictive back gestures</string>

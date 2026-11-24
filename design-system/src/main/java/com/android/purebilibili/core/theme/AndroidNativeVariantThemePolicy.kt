@@ -66,7 +66,7 @@ fun shouldUseMiuixSmoothRounding(
 
 fun resolveMaterialTypography(
     uiStyle: AppUiStyle,
-    liquidGlassEnabled: Boolean = true,
+    @Suppress("UNUSED_PARAMETER") liquidGlassEnabled: Boolean = false,
 ): Typography = when (uiStyle) {
     AppUiStyle.MIUIX -> BiliMiuixTypography
     AppUiStyle.MATERIAL3 -> Md3Typography

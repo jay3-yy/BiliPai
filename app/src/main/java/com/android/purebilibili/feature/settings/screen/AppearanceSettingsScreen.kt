@@ -274,6 +274,12 @@ fun AppearanceSettingsContent(
         ?: context.getString(R.string.appearance_display_follow_system)
     val singleChoicePresentation = themeConfiguration.singleChoicePresentation
     val pinchToChangeGridColumnsEnabled = homeConfiguration.pinchToChangeGridColumnsEnabled
+    val themeSwitchTransitionOptions = remember {
+        ThemeSwitchTransitionStyle.entries.map { style ->
+            AppSegmentOption(style, style.label, style.description)
+        }
+    }
+    val themeSwitchTransitionController = LocalThemeSwitchTransitionController.current
     val appListItemStyleOptions = remember(context) {
         resolveAppListItemStyleOptions().map { option ->
             option.copy(label = context.getString(when (option.value) {
@@ -344,19 +350,6 @@ fun AppearanceSettingsContent(
     }
     val scope = rememberCoroutineScope()
     val themeSectionTitle = stringResource(R.string.appearance_theme_color_section)
-    val uiPresetTitle = stringResource(R.string.appearance_ui_preset_title)
-    val uiPresetSubtitle = stringResource(R.string.appearance_ui_preset_subtitle)
-    val uiStyleMaterialLabel = stringResource(R.string.appearance_android_native_variant_material3)
-    val uiStyleMiuixLabel = stringResource(R.string.appearance_android_native_variant_miuix)
-    val uiStyleOptions = remember(uiStyleMaterialLabel, uiStyleMiuixLabel) {
-        resolveThemeSelectionOptions(
-            material3Label = uiStyleMaterialLabel,
-            miuixLabel = uiStyleMiuixLabel,
-        )
-    }
-    val selectedUiStyleLabel = uiStyleOptions
-        .first { it.value == state.themeSelection }
-        .label
     val themeModeTitle = stringResource(R.string.appearance_theme_mode_title)
     val themeModeSubtitle = stringResource(R.string.appearance_theme_mode_subtitle)
     val themeModeFollowSystemLabel = stringResource(R.string.theme_mode_follow_system)
@@ -638,17 +631,33 @@ fun AppearanceSettingsContent(
             Box(modifier = Modifier.entrance()) {
                 AppPreferenceGroup {
                     Column {
-                        SettingsSingleChoicePreference(
-                            icon = rememberSettingsSemanticIcon(SettingsIconRole.UI_STYLE),
-                            title = "${uiPresetTitle}：$selectedUiStyleLabel",
-                            subtitle = uiPresetSubtitle,
-                            options = uiStyleOptions,
-                            selectedValue = state.themeSelection,
-                            optionLeading = { value ->
-                                SettingsOptionPreviewThumb(SettingsOptionPreview.UiPreset(miuix = value == AppUiStyle.MIUIX))
+                        ThemePresentationPreference(
+                            currentUiStyle = state.themeSelection,
+                            liquidGlassEnabled = state.androidNativeLiquidGlassEnabled,
+                            onSelect = { targetStyle, targetGlass, anchor ->
+                                val controller = themeSwitchTransitionController
+                                if (controller != null) {
+                                    controller.runTransition(anchorInWindow = anchor) {
+                                        viewModel.setThemePresentation(targetStyle, targetGlass)
+                                    }
+                                } else {
+                                    viewModel.setThemePresentation(targetStyle, targetGlass)
+                                }
                             },
-                            onSelectionChange = viewModel::setThemeSelection,
                         )
+
+                        AppPreferenceDivider()
+
+                        SettingsItemAnchor("appearance.theme_switch_transition_style") {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.THEME_SWITCH_TRANSITION),
+                                title = "主题切换转场",
+                                subtitle = themeConfiguration.themeSwitchTransitionStyle.description,
+                                options = themeSwitchTransitionOptions,
+                                selectedValue = themeConfiguration.themeSwitchTransitionStyle,
+                                onSelectionChange = viewModel::setThemeSwitchTransitionStyle,
+                            )
+                        }
 
                         Column {
                             AppPreferenceDivider()
@@ -985,7 +994,27 @@ fun AppearanceSettingsContent(
                             enter = expandVertically() + fadeIn(),
                             exit = shrinkVertically() + fadeOut()
                         ) {
+                            var advancedColorTuningExpanded by rememberSaveable { mutableStateOf(false) }
                             Column {
+                                AppPreferenceDivider()
+                                AppPreference(
+                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.COLOR_STYLE),
+                                    title = "高级色彩调优",
+                                    subtitle = if (advancedColorTuningExpanded) {
+                                        "点击收起调色盘、色彩风格、标准与对比度"
+                                    } else {
+                                        "展开调整调色盘、色彩风格、标准与对比度"
+                                    },
+                                    onClick = { advancedColorTuningExpanded = !advancedColorTuningExpanded },
+                                    showChevron = true,
+                                    iconTint = AppContentColors.secondaryText(),
+                                )
+                                AnimatedVisibility(
+                                    visible = advancedColorTuningExpanded,
+                                    enter = expandVertically() + fadeIn(),
+                                    exit = shrinkVertically() + fadeOut(),
+                                ) {
+                                    Column {
                                 // 种子已提升到内容顶部计算（themePreviewSeed），此处直接复用。
                                 val seedPreviewColor = themePreviewSeed
                                 val seedPreviewSwatches = rememberSeedStyleSwatches(
@@ -1079,6 +1108,8 @@ fun AppearanceSettingsContent(
                                     configuration = palettePreviewConfiguration,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
+                                    }
+                                }
                             }
                         }
 

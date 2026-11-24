@@ -1566,6 +1566,11 @@ class MainActivity : AppCompatActivity() {
                 .collectAsState(initial = com.android.purebilibili.core.store.KeyboardShortcutStore.current)
 
             // 6. 传入参数
+            com.android.purebilibili.core.theme.ThemeSwitchSnapshotHost(
+                preferredStyle = appThemeSettings.themeSwitchTransitionStyle,
+                animationsEnabled = uiEntranceAnimationEnabled,
+                systemReduceMotion = com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion(),
+            ) {
             PureBiliBiliTheme(
                 syncLauncherIcon = true,
                 themeTransitionEnabled = uiEntranceAnimationEnabled,
@@ -2598,6 +2603,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 }
                 }
+            }
             }
             }
         }
