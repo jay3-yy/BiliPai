@@ -76,10 +76,65 @@ fun RelatedVideoActionSheet(
                 .then(if (glass) Modifier else Modifier.navigationBarsPadding())
                 .padding(bottom = 8.dp)
         ) {
+            val sheetContext = androidx.compose.ui.platform.LocalContext.current
             SheetActionRow(
                 text = "添加至稍后再看",
                 onClick = { dismissWithAction(onWatchLater) }
             )
+            if (video.bvid.isNotBlank()) {
+                AppHorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
+                SheetActionRow(
+                    text = "下一集播放",
+                    onClick = {
+                        dismissWithAction {
+                            val added = com.android.purebilibili.feature.video.player.PlaylistManager.enqueuePlayNext(
+                                com.android.purebilibili.feature.video.player.PlaylistItem(
+                                    bvid = video.bvid,
+                                    cid = video.cid,
+                                    title = video.title,
+                                    cover = video.pic,
+                                    owner = video.owner.name,
+                                    ownerFace = video.owner.face,
+                                    duration = video.duration.toLong(),
+                                )
+                            )
+                            android.widget.Toast.makeText(
+                                sheetContext,
+                                if (added) "已设为下一集播放" else "当前正在播放该视频",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                )
+                AppHorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                )
+                SheetActionRow(
+                    text = "加入待播队列",
+                    onClick = {
+                        dismissWithAction {
+                            val added = com.android.purebilibili.feature.video.player.PlaylistManager.enqueueToEnd(
+                                com.android.purebilibili.feature.video.player.PlaylistItem(
+                                    bvid = video.bvid,
+                                    cid = video.cid,
+                                    title = video.title,
+                                    cover = video.pic,
+                                    owner = video.owner.name,
+                                    ownerFace = video.owner.face,
+                                    duration = video.duration.toLong(),
+                                )
+                            )
+                            android.widget.Toast.makeText(
+                                sheetContext,
+                                if (added) "已加入待播队列" else "已在待播队列中",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                )
+            }
             AppHorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
             )

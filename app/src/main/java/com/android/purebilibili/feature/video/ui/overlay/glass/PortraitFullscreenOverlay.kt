@@ -176,6 +176,8 @@ fun PortraitFullscreenOverlay(
     onToggleStatusBar: () -> Unit,
     onRotateToLandscape: () -> Unit,
     onSearchClick: () -> Unit = {},
+    isAudioOnly: Boolean = false,
+    onAudioModeClick: (() -> Unit)? = null,
     onMoreClick: () -> Unit = {},
 
     playbackReady: Boolean = true,
@@ -234,6 +236,8 @@ fun PortraitFullscreenOverlay(
                     onHomeClick = onHomeClick,
                     viewCount = statView,
                     onSearchClick = onSearchClick,
+                    isAudioOnly = isAudioOnly,
+                    onAudioModeClick = onAudioModeClick,
                     onMoreClick = onMoreClick,
                     modifier = Modifier.graphicsLayer {
                         alpha = commentOverlayAlpha
@@ -605,6 +609,8 @@ private fun PortraitTopControlBar(
     onHomeClick: () -> Unit,
     viewCount: Int,
     onSearchClick: () -> Unit,
+    isAudioOnly: Boolean = false,
+    onAudioModeClick: (() -> Unit)? = null,
     onMoreClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -663,6 +669,16 @@ private fun PortraitTopControlBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(layoutPolicy.topActionSpacingDp.dp)
         ) {
+            if (onAudioModeClick != null) {
+                PortraitGlassIconButton(onClick = onAudioModeClick) {
+                    AppIcon(
+                        imageVector = androidx.compose.material.icons.Icons.Outlined.Headphones,
+                        contentDescription = if (isAudioOnly) "退出听视频" else "听视频",
+                        tint = if (isAudioOnly) AppContentColors.accent() else Color.White,
+                        modifier = Modifier.size(layoutPolicy.topActionIconSizeDp.dp)
+                    )
+                }
+            }
             PortraitGlassIconButton(onClick = onSearchClick) {
                 AppIcon(
                     imageVector = Icons.Rounded.Search,

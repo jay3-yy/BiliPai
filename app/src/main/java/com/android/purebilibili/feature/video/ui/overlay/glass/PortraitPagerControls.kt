@@ -136,6 +136,8 @@ internal fun PortraitPagerControls(
         onToggleStatusBar = {},
         onRotateToLandscape = actions.onToggleFullscreen,
         onSearchClick = onSearchClick,
+        isAudioOnly = state.isAudioOnly,
+        onAudioModeClick = actions.onAudioOnlyToggle,
         onMoreClick = onDetailClick,
     )
     when (menu) {

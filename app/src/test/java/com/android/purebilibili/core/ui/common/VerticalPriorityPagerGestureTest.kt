@@ -196,6 +196,32 @@ class VerticalPriorityPagerGestureTest {
     }
 
     @Test
+    fun `opposite release velocity returns to start page instead of jumping backwards`() {
+        assertEquals(
+            2,
+            resolvePagerReleaseTargetPage(
+                startPage = 2,
+                pageCount = 5,
+                pageSizePx = 400f,
+                scrollDeltaPx = 120f,
+                scrollVelocityPxPerSecond = -1_000f,
+                minimumFlingVelocityPxPerSecond = 900f,
+            ),
+        )
+        assertEquals(
+            2,
+            resolvePagerReleaseTargetPage(
+                startPage = 2,
+                pageCount = 5,
+                pageSizePx = 400f,
+                scrollDeltaPx = -120f,
+                scrollVelocityPxPerSecond = 1_000f,
+                minimumFlingVelocityPxPerSecond = 900f,
+            ),
+        )
+    }
+
+    @Test
     fun `release target stays inside pager bounds`() {
         assertEquals(
             0,

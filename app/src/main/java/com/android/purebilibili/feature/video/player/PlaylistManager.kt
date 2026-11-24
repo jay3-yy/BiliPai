@@ -529,6 +529,68 @@ object PlaylistManager {
         userEdited = true
         persistState()
     }
+
+    /** 将外部视频插播为下一集；若已在队列中则移至当前项之后，不修改收藏夹或稍后再看。 */
+    fun enqueuePlayNext(item: PlaylistItem): Boolean {
+        if (item.bvid.isBlank()) return false
+        val old = _playlist.value
+        val existingIndex = old.indexOfFirst { it.bvid == item.bvid }
+        if (existingIndex >= 0) {
+            if (existingIndex == _currentIndex.value) return false
+            playQueueItemNext(existingIndex)
+            return true
+        }
+        beginPlaylistSession()
+        val previousProgress = snapshotShuffleProgress()
+        val insertIndex = if (old.isEmpty()) 0 else (_currentIndex.value + 1).coerceIn(0, old.size)
+        val updated = old.toMutableList().apply { add(insertIndex, item) }
+        if (old.isEmpty()) {
+            _currentIndex.value = 0
+        } else {
+            nextOverrideIndex = insertIndex
+        }
+        _playlist.value = updated
+        userEdited = true
+        restoreShuffleProgressForPlaylistUpdate(old, updated, _currentIndex.value, previousProgress)
+        Logger.d(TAG, "⏭️ 插播下一集: ${item.title}")
+        persistState()
+        return true
+    }
+
+    /** 将外部视频追加到待播队列末尾；若已在队列中返回 false。 */
+    fun enqueueToEnd(item: PlaylistItem): Boolean {
+        if (item.bvid.isBlank()) return false
+        val old = _playlist.value
+        if (old.any { it.bvid == item.bvid }) return false
+        beginPlaylistSession()
+        val previousProgress = snapshotShuffleProgress()
+        val updated = old + item
+        if (old.isEmpty()) {
+            _currentIndex.value = 0
+        }
+        _playlist.value = updated
+        userEdited = true
+        restoreShuffleProgressForPlaylistUpdate(old, updated, _currentIndex.value, previousProgress)
+        Logger.d(TAG, "➕ 加入待播队列: ${item.title}")
+        persistState()
+        return true
+    }
+
+    /** 读取队列中下一首待播项（优先已插播项），供片尾倒计时等界面展示。 */
+    fun peekUpcomingNext(currentBvid: String): PlaylistItem? {
+        val list = _playlist.value
+        if (list.isEmpty()) return null
+        val overrideItem = nextOverrideIndex?.let { list.getOrNull(it) }
+        if (overrideItem != null && overrideItem.bvid.isNotBlank() && overrideItem.bvid != currentBvid) {
+            return overrideItem
+        }
+        val nextIndex = _currentIndex.value + 1
+        val nextItem = list.getOrNull(nextIndex)
+        if (nextItem != null && nextItem.bvid.isNotBlank() && nextItem.bvid != currentBvid) {
+            return nextItem
+        }
+        return null
+    }
     
     /**
      * 清空播放列表

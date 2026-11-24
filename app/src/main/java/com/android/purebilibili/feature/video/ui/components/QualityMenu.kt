@@ -1,13 +1,18 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.components.AppText
 
 @Composable
 fun QualitySelectionMenu(
@@ -24,6 +29,15 @@ fun QualitySelectionMenu(
         onDismissRequest = onDismiss, placement = placement,
         anchorBounds = anchorBounds,
     ) {
+        val unlockGuidance = remember(qualityIds, switchableQualityIds, isLoggedIn, isVip) {
+            when {
+                !isLoggedIn && qualityIds.any { it >= 80 && it !in switchableQualityIds } ->
+                    "登录账号即可解锁 1080P 及以上高清画质"
+                isLoggedIn && isVip && qualityIds.any { (it == 100 || it >= 112) && it !in switchableQualityIds } ->
+                    "部分高帧率 / 4K / HDR 需在登录页通过扫码授权高画质"
+                else -> null
+            }
+        }
         qualities.forEachIndexed { index, quality ->
             val qualityId = qualityIds.getOrNull(index) ?: 0
             val selected = quality == currentQuality
@@ -39,6 +53,14 @@ fun QualitySelectionMenu(
                 index = index, optionCount = qualities.size,
                 enabled = hint == null && !selected,
                 onClick = { onQualitySelected(index) },
+            )
+        }
+        if (unlockGuidance != null) {
+            AppText(
+                text = unlockGuidance,
+                style = MaterialTheme.typography.bodySmall,
+                color = AppContentColors.secondaryText(),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             )
         }
     }

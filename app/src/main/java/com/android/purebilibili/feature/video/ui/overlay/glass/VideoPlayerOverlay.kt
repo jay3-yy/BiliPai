@@ -1609,6 +1609,12 @@ private fun VideoPlayerOverlayContent(
                         .align(Alignment.BottomStart)
                         .onSizeChanged { onBottomControlsSizeChanged(it.height) }
                 ) {
+                    CompositionLocalProvider(
+                        LocalVideoProgressScrubbingConfig provides VideoProgressScrubbingConfig(
+                            fineScrubbingEnabled = overlaySettings.progressFineScrubbingEnabled,
+                            snapAndOriginCancelEnabled = overlaySettings.progressSnapAndOriginCancelEnabled,
+                        )
+                    ) {
                     key(player, bvid, cid) {
                     BottomControlBar(
                     onSelectionMenuSource = { secondaryMenuSource = it },
@@ -1733,6 +1739,7 @@ private fun VideoPlayerOverlayContent(
                     },
                     progressPlacement = effectiveProgressPlacement
                 )
+                    }
                     }
                 }
             }

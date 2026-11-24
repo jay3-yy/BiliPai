@@ -30,6 +30,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.WatchLater
+import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
+import androidx.compose.material.icons.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Person
 import com.android.purebilibili.core.ui.components.AppDropdownMenu
 import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
@@ -57,6 +59,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -339,14 +342,18 @@ fun RelatedVideoItem(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 5.dp)
-            .onGloballyPositioned { coordinates ->
+            .onPlaced { coordinates ->
                 cardCoordinatesRef.value = coordinates
             }
             .videoCardSourceAnchor(
                 video.bvid,
                 cardShape,
                 landingStyle = NavigationReturnLandingStyle.VIDEO_CARD,
-                sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                sourceLayout = if (stacked) {
+                    VideoCardSourceLayout.STACKED
+                } else {
+                    VideoCardSourceLayout.SIDE_BY_SIDE
+                },
             )
             .then(nativeCardSnapshot.modifier)
             .clip(cardShape)
@@ -357,10 +364,10 @@ fun RelatedVideoItem(
             coverAspectRatio = coverAspectRatio,
             stacked = stacked,
             fillInfoHeight = true,
-            coverModifier = Modifier.onGloballyPositioned { coordinates ->
+            coverModifier = Modifier.onPlaced { coordinates ->
                 coverCoordinatesRef.value = coordinates
             },
-            infoModifier = Modifier.onGloballyPositioned { coordinates ->
+            infoModifier = Modifier.onPlaced { coordinates ->
                 infoCoordinatesRef.value = coordinates
             },
             coverOverlayModifier = nativeCardSnapshot.coverOverlayModifier,
@@ -560,6 +567,54 @@ internal fun RelatedVideoGridRow(
                                 Toast.makeText(context, result.fold({ "已添加到稍后再看" }, { it.message ?: "添加失败" }), Toast.LENGTH_SHORT).show()
                             }
                         })
+                        if (video.bvid.isNotBlank()) {
+                            AppDropdownMenuItem(
+                                text = { AppText("下一集播放") },
+                                leadingIcon = { AppIcon(Icons.AutoMirrored.Outlined.PlaylistPlay, null) },
+                                onClick = {
+                                    menuVideo = null
+                                    val added = com.android.purebilibili.feature.video.player.PlaylistManager.enqueuePlayNext(
+                                        com.android.purebilibili.feature.video.player.PlaylistItem(
+                                            bvid = video.bvid,
+                                            cid = video.cid,
+                                            title = video.title,
+                                            cover = video.pic,
+                                            owner = video.owner.name,
+                                            ownerFace = video.owner.face,
+                                            duration = video.duration.toLong(),
+                                        )
+                                    )
+                                    Toast.makeText(
+                                        context,
+                                        if (added) "已设为下一集播放" else "当前正在播放该视频",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            )
+                            AppDropdownMenuItem(
+                                text = { AppText("加入待播队列") },
+                                leadingIcon = { AppIcon(Icons.Outlined.QueueMusic, null) },
+                                onClick = {
+                                    menuVideo = null
+                                    val added = com.android.purebilibili.feature.video.player.PlaylistManager.enqueueToEnd(
+                                        com.android.purebilibili.feature.video.player.PlaylistItem(
+                                            bvid = video.bvid,
+                                            cid = video.cid,
+                                            title = video.title,
+                                            cover = video.pic,
+                                            owner = video.owner.name,
+                                            ownerFace = video.owner.face,
+                                            duration = video.duration.toLong(),
+                                        )
+                                    )
+                                    Toast.makeText(
+                                        context,
+                                        if (added) "已加入待播队列" else "已在待播队列中",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            )
+                        }
                         if (video.cid > 0L && video.bvid.isNotBlank()) {
                             AppDropdownMenuItem(text = { AppText("AI总结") }, leadingIcon = { com.android.purebilibili.core.ui.ClientAiSummaryIcon(Modifier.size(20.dp)) }, onClick = {
                                 menuVideo = null

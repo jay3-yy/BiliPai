@@ -204,6 +204,7 @@ internal fun PlayerRestorePictureButton(
     visible: Boolean,
     uiLayoutPolicy: VideoPlayerUiLayoutPolicy,
     onRestore: () -> Unit,
+    label: String = "还原画面",
     modifier: Modifier = Modifier,
 ) {
     //  [新增] 缩放还原按钮 (仅在放大时显示)
@@ -227,12 +228,12 @@ internal fun PlayerRestorePictureButton(
         ) {
             AppIcon(
                 imageVector = Icons.Filled.Refresh,
-                contentDescription = "还原画面",
+                contentDescription = label,
                 modifier = Modifier.size(uiLayoutPolicy.restoreButtonIconSizeDp.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             AppText(
-                text = "还原画面",
+                text = label,
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
             )
         }

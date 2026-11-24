@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -2476,6 +2477,69 @@ internal fun ElegantVideoCard(
                                 onClick = {
                                     menu.expanded = false
                                     onWatchLater.invoke()
+                                }
+                            )
+                        }
+
+                        if (video.bvid.isNotBlank()) {
+                            AppDropdownMenuItem(
+                                leadingIcon = {
+                                    AppIcon(
+                                        androidx.compose.material.icons.Icons.AutoMirrored.Outlined.PlaylistPlay,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = AppContentColors.primaryText(),
+                                    )
+                                },
+                                text = { AppText("下一集播放", color = AppContentColors.primaryText()) },
+                                onClick = {
+                                    menu.expanded = false
+                                    val added = com.android.purebilibili.feature.video.player.PlaylistManager.enqueuePlayNext(
+                                        com.android.purebilibili.feature.video.player.PlaylistItem(
+                                            bvid = video.bvid,
+                                            cid = video.cid,
+                                            title = video.title,
+                                            cover = video.pic,
+                                            owner = video.owner.name,
+                                            ownerFace = video.owner.face,
+                                            duration = video.duration.toLong(),
+                                        )
+                                    )
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        if (added) "已设为下一集播放" else "当前正在播放该视频",
+                                        android.widget.Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            )
+                            AppDropdownMenuItem(
+                                leadingIcon = {
+                                    AppIcon(
+                                        Icons.Outlined.QueueMusic,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                        tint = AppContentColors.primaryText(),
+                                    )
+                                },
+                                text = { AppText("加入待播队列", color = AppContentColors.primaryText()) },
+                                onClick = {
+                                    menu.expanded = false
+                                    val added = com.android.purebilibili.feature.video.player.PlaylistManager.enqueueToEnd(
+                                        com.android.purebilibili.feature.video.player.PlaylistItem(
+                                            bvid = video.bvid,
+                                            cid = video.cid,
+                                            title = video.title,
+                                            cover = video.pic,
+                                            owner = video.owner.name,
+                                            ownerFace = video.owner.face,
+                                            duration = video.duration.toLong(),
+                                        )
+                                    )
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        if (added) "已加入待播队列" else "已在待播队列中",
+                                        android.widget.Toast.LENGTH_SHORT,
+                                    ).show()
                                 }
                             )
                         }

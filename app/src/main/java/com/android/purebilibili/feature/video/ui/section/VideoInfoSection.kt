@@ -1054,13 +1054,22 @@ fun VideoDescriptionAndTags(
                         verticalArrangement = Arrangement.spacedBy(tagMetrics.itemSpacingVertical)
                     ) {
                         videoTags.forEach { tag ->
-                            com.android.purebilibili.core.ui.components.AppTagChip(
-                                label = if (tag.tag_type == "bgm") tag.tag_name.replaceFirst("发现", "♫ BGM：") else tag.tag_name,
+                            val bgm = remember(tag) { resolveBgmTagInfo(tag) }
+                            val tagControl = com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl(
+                                target = if (bgm != null) {
+                                    com.android.purebilibili.navigation3.BiliPaiNavKey.BgmDetail(bgm.musicId)
+                                } else {
+                                    com.android.purebilibili.navigation3.BiliPaiNavKey.Search(tag.tag_name)
+                                },
+                                shape = RoundedCornerShape(50),
                                 onClick = {
-                                    val bgm = resolveBgmTagInfo(tag)
                                     if (bgm != null) onBgmClick(bgm) else onTagClick(tag.tag_name)
                                 },
-                                modifier = Modifier.copyOnLongPress(tag.tag_name, "标签"),
+                            )
+                            com.android.purebilibili.core.ui.components.AppTagChip(
+                                label = if (tag.tag_type == "bgm") tag.tag_name.replaceFirst("发现", "♫ BGM：") else tag.tag_name,
+                                onClick = tagControl.onClick,
+                                modifier = tagControl.modifier.copyOnLongPress(tag.tag_name, "标签"),
                                 size = videoTagSize,
                             )
                         }

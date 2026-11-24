@@ -1695,6 +1695,7 @@ private fun VideoPlayerOverlayContent(
                     moreMenuSource = moreSource,
                     danmakuMenuSource = danmakuSource,
                     onAudioClick = onAudioOnlyToggle,
+                    isAudioOnly = isAudioOnly,
                     onSendDanmakuClick = onDanmakuInputClick,
                     danmakuEnabled = danmakuEnabled,
                     onDanmakuToggle = onDanmakuToggle,
@@ -1860,6 +1861,12 @@ private fun VideoPlayerOverlayContent(
                     Box(
                         modifier = Modifier.onSizeChanged { bottomControlBarHeightPx = it.height },
                     ) {
+                        CompositionLocalProvider(
+                            LocalVideoProgressScrubbingConfig provides VideoProgressScrubbingConfig(
+                                fineScrubbingEnabled = overlaySettings.progressFineScrubbingEnabled,
+                                snapAndOriginCancelEnabled = overlaySettings.progressSnapAndOriginCancelEnabled,
+                            )
+                        ) {
                         key(player, bvid, cid) {
                             BottomControlBar(
                             showPlayPauseButton = hideCenterPlayback || portraitFullscreenChrome,
@@ -1925,6 +1932,7 @@ private fun VideoPlayerOverlayContent(
                             onChapterClick = { showChapterList = true },
                             onFloatingPanelVisibilityChange = { bottomControlFloatingPanelVisible = it },
                         )
+                        }
                         }
                     }
                 }
@@ -2530,7 +2538,6 @@ private fun VideoPlayerOverlayContent(
                 if (isFullscreen) add(PortraitMoreMenuEntry.LANDSCAPE, action = onToggleFullscreen)
                 if (playerControlVisibility.showCastButton) add(PortraitMoreMenuEntry.CAST, action = onCastClickAction)
                 add(PortraitMoreMenuEntry.PIP, action = onPipClick)
-                add(PortraitMoreMenuEntry.AUDIO_ONLY, title = if (isAudioOnly) "退出听音频" else "听音频", action = onAudioOnlyToggle)
                 if (isFullscreen && showFullscreenLockButton) add(PortraitMoreMenuEntry.LOCK, action = onLockToggle)
                 if (isFullscreen && showFullscreenScreenshotButton) add(PortraitMoreMenuEntry.SCREENSHOT, action = onCaptureScreenshot)
                 if (sponsorContributionAvailable) {

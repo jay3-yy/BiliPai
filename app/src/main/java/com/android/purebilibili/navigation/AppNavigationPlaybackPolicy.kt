@@ -92,7 +92,7 @@ internal fun shouldEnableVideoDetailSharedTransition(
     cardTransitionEnabled: Boolean,
     sourceRoute: String?,
 ): Boolean {
-    return cardTransitionEnabled && !isVideoDetailRoute(sourceRoute?.substringBefore("?"))
+    return cardTransitionEnabled && !sourceRoute?.substringBefore("?").isNullOrBlank()
 }
 
 internal fun shouldShareAudioModeViewModelWithPreviousEntry(

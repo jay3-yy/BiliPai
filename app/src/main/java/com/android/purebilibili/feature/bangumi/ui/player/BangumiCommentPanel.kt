@@ -100,7 +100,10 @@ internal fun BangumiCommentPanel(
     val progressiveHeaderEnabled = themeConfig.progressiveTopBlurEnabled && !themeConfig.headerBlurEnabled
     val solidHeaderEnabled = themeConfig.progressiveTopFadeEnabled && !themeConfig.headerBlurEnabled
     val floatingHeader = liquidGlassEnabled || progressiveHeaderEnabled || solidHeaderEnabled
-    val backdrop = if (liquidGlassEnabled || progressiveHeaderEnabled) rememberLayerBackdrop() else null
+    val backdropSource = if (liquidGlassEnabled || progressiveHeaderEnabled) {
+        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+    } else null
+    val backdrop = backdropSource?.backdrop
     val needsHaze = !liquidGlassEnabled && (themeConfig.headerBlurEnabled || themeConfig.bottomBarBlurEnabled)
     val hazeState = if (needsHaze) remember { HazeState() } else null
     val density = LocalDensity.current
@@ -175,7 +178,7 @@ internal fun BangumiCommentPanel(
                 listState = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
+                    .then(backdropSource?.modifier ?: Modifier)
                     .then(if (hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier)
                     .background(MaterialTheme.colorScheme.surface)
                     .nestedScroll(headerScroll),

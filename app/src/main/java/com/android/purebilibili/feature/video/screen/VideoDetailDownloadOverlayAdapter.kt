@@ -209,7 +209,7 @@ internal fun VideoDetailDownloadOverlayAdapter(
                                     // Toast 已经在 saveImageToGallery 内部或者需要外部调用?
                                     // VideoPlayerOverlay 是自己调用的。
                                     // context 是必要的。
-                                    if (success) viewModel.toast("封面已保存到相册")
+                                    if (success) viewModel.notifyCoverSaved(title, coverUrl)
                                     else viewModel.toast("保存失败")
                                 }
                             } else {

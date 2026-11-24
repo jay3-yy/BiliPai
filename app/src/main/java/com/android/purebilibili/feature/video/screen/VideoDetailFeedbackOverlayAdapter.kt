@@ -235,6 +235,36 @@ internal fun BoxScope.VideoDetailFeedbackOverlayAdapter(
         backgroundAlphaOverride = feedbackHintAlpha,
     )
 
+    val coverSavedSnackbarHostState = androidx.compose.runtime.remember {
+        androidx.compose.material3.SnackbarHostState()
+    }
+    LaunchedEffect(playbackViewModel) {
+        playbackViewModel.coverSavedShareEvents.collect { (title, coverUrl) ->
+            coverSavedSnackbarHostState.currentSnackbarData?.dismiss()
+            val result = coverSavedSnackbarHostState.showSnackbar(
+                message = "封面已保存到相册",
+                actionLabel = "分享",
+                duration = androidx.compose.material3.SnackbarDuration.Short,
+            )
+            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_SUBJECT, title)
+                    putExtra(android.content.Intent.EXTRA_TEXT, "$title\n$coverUrl")
+                }
+                feedbackContext.startActivity(
+                    android.content.Intent.createChooser(shareIntent, "分享视频封面")
+                )
+            }
+        }
+    }
+    com.android.purebilibili.core.ui.components.AppSnackbarHost(
+        hostState = coverSavedSnackbarHostState,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = feedbackBottomInsetDp.dp),
+    )
+
     val resumePlaybackSuggestion by playbackViewModel.resumePlaybackSuggestion.collectAsStateWithLifecycle()
     resumePlaybackSuggestion?.let { suggestion ->
         AppAlertDialog(

@@ -10,6 +10,7 @@ internal enum class MusicMoreMenuEntry(
     COVER_STYLE("cover_style", "切换封面"),
     COVER_MOTION("cover_motion", "封面律动"),
     LYRICS_STYLE("lyrics_style", "歌词界面"),
+    THEME_COLOR("theme_color", "背景主题色"),
     TITLE_COLLAPSE("title_collapse", "折叠标题"),
     LAYOUT_AUTO("layout_auto", resolveMusicPlayerLayoutPreferenceLabel(MusicPlayerLayoutPreference.AUTO), MusicPlayerLayoutPreference.AUTO),
     LAYOUT_SPLIT("layout_split", resolveMusicPlayerLayoutPreferenceLabel(MusicPlayerLayoutPreference.SPLIT), MusicPlayerLayoutPreference.SPLIT),

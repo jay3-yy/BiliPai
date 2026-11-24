@@ -76,13 +76,17 @@ private const val NOTIFICATION_ID = 1001
 private const val CHANNEL_ID = "media_playback_channel"
 private const val THEME_COLOR = 0xFFFB7299.toInt()
 
+internal const val NORMAL_PLAYER_TARGET_BUFFER_BYTES = 48 * 1024 * 1024
+internal const val RESILIENT_PLAYER_TARGET_BUFFER_BYTES = 64 * 1024 * 1024
+
 internal data class PlayerBufferPolicy(
     val minBufferMs: Int,
     val maxBufferMs: Int,
     val bufferForPlaybackMs: Int,
     val bufferForPlaybackAfterRebufferMs: Int,
     /** Forward-buffer target in wall-clock milliseconds, converted to media time at playback speed. */
-    val earlyPlaybackMaxBufferMs: Int
+    val earlyPlaybackMaxBufferMs: Int,
+    val targetBufferBytes: Int = NORMAL_PLAYER_TARGET_BUFFER_BYTES,
 )
 
 internal fun resolvePlayerBufferPolicy(isOnWifi: Boolean, resilient: Boolean = false): PlayerBufferPolicy {
@@ -92,7 +96,8 @@ internal fun resolvePlayerBufferPolicy(isOnWifi: Boolean, resilient: Boolean = f
             maxBufferMs = 40000,
             bufferForPlaybackMs = 700,
             bufferForPlaybackAfterRebufferMs = 1400,
-            earlyPlaybackMaxBufferMs = 6000
+            earlyPlaybackMaxBufferMs = 6000,
+            targetBufferBytes = NORMAL_PLAYER_TARGET_BUFFER_BYTES,
         )
     } else {
         PlayerBufferPolicy(
@@ -100,7 +105,8 @@ internal fun resolvePlayerBufferPolicy(isOnWifi: Boolean, resilient: Boolean = f
             maxBufferMs = 45000,
             bufferForPlaybackMs = 1000,
             bufferForPlaybackAfterRebufferMs = 2200,
-            earlyPlaybackMaxBufferMs = 4000
+            earlyPlaybackMaxBufferMs = 4000,
+            targetBufferBytes = NORMAL_PLAYER_TARGET_BUFFER_BYTES,
         )
     }
     return if (!resilient) normal else normal.copy(
@@ -108,6 +114,7 @@ internal fun resolvePlayerBufferPolicy(isOnWifi: Boolean, resilient: Boolean = f
         maxBufferMs = maxOf(normal.maxBufferMs, 50_000),
         bufferForPlaybackAfterRebufferMs = maxOf(normal.bufferForPlaybackAfterRebufferMs, 2_500),
         earlyPlaybackMaxBufferMs = maxOf(normal.earlyPlaybackMaxBufferMs, 15_000),
+        targetBufferBytes = RESILIENT_PLAYER_TARGET_BUFFER_BYTES,
     )
 }
 
@@ -243,7 +250,8 @@ internal fun createVideoLoadControl(policy: PlayerBufferPolicy): LoadControl =
                 policy.bufferForPlaybackMs,
                 policy.bufferForPlaybackAfterRebufferMs,
             )
-            .setPrioritizeTimeOverSizeThresholds(true)
+            .setTargetBufferBytes(policy.targetBufferBytes)
+            .setPrioritizeTimeOverSizeThresholds(false)
             .build(),
         earlyPlaybackMaxBufferMs = policy.earlyPlaybackMaxBufferMs,
         bufferForPlaybackMs = policy.bufferForPlaybackMs,

@@ -1248,7 +1248,22 @@ private fun List<LyricWord>.toAppleMusicRenderWords(
     forEachIndexed { index, word ->
         if (word.text.isBlank() || word.endMs <= word.startMs) return@forEachIndexed
         val start = lineText.indexOf(word.text, cursor)
-        if (start < 0) return emptyList()
+        if (start < 0) {
+            // 词级时间戳已存在，但文本空白/标点与 lineText 存在细微差异时，保留原词轴继续渲染逐词高亮。
+            return mapNotNull { fallbackWord ->
+                if (fallbackWord.text.isBlank() || fallbackWord.endMs <= fallbackWord.startMs) {
+                    null
+                } else {
+                    val fallbackDuration = fallbackWord.endMs - fallbackWord.startMs
+                    AppleMusicRenderWord(
+                        word = fallbackWord,
+                        sustainEndMs = fallbackWord.endMs.takeIf {
+                            fallbackDuration >= sustainThresholdMs.coerceAtLeast(0)
+                        }
+                    )
+                }
+            }
+        }
         val end = start + word.text.length
         val nextStart = getOrNull(index + 1)?.text?.let { next -> lineText.indexOf(next, end) } ?: -1
         val suffix = when {

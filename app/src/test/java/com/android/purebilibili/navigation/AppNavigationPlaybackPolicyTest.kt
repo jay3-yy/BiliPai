@@ -14,11 +14,17 @@ class AppNavigationPlaybackPolicyTest {
     }
 
     @Test
-    fun relatedDetailDisablesInternalSharedTransition() {
-        assertFalse(
+    fun relatedDetailEnablesSharedTransitionWhenSourceRoutePresent() {
+        assertTrue(
             shouldEnableVideoDetailSharedTransition(
                 cardTransitionEnabled = true,
                 sourceRoute = "video/BV_PARENT",
+            )
+        )
+        assertFalse(
+            shouldEnableVideoDetailSharedTransition(
+                cardTransitionEnabled = true,
+                sourceRoute = null,
             )
         )
         assertTrue(

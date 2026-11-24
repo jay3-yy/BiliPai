@@ -208,9 +208,15 @@ private fun buildHalcyonWords(
     nextLineStartMs: Long?,
 ): List<LyricWord> {
     if (text.isEmpty()) return emptyList()
-    val maxEnd = nextLineStartMs ?: lineEndMs
+    val effectiveLineEnd = when {
+        lineEndMs > lineStartMs && nextLineStartMs != null && nextLineStartMs > lineStartMs ->
+            minOf(lineEndMs, nextLineStartMs)
+        lineEndMs > lineStartMs -> lineEndMs
+        nextLineStartMs != null && nextLineStartMs > lineStartMs -> nextLineStartMs
+        else -> lineStartMs + 4_000L
+    }
     val raw = if (spans.isEmpty()) {
-        splitPlainLineToWords(text, lineStartMs, lineEndMs, maxEnd)
+        splitPlainLineToWords(text, lineStartMs, effectiveLineEnd, effectiveLineEnd)
     } else {
         spans.filter { it.text.isNotEmpty() }.flatMap { span ->
             val segments = span.text.split('\n')
@@ -233,7 +239,7 @@ private fun buildHalcyonWords(
         }
     }
     return raw.mapIndexed { index, word ->
-        val nextStart = raw.getOrNull(index + 1)?.startMs ?: maxEnd
+        val nextStart = raw.getOrNull(index + 1)?.startMs?.takeIf { it > word.startMs } ?: effectiveLineEnd
         word.copy(endMs = minOf(word.endMs, nextStart).coerceAtLeast(word.startMs + 1L))
     }
 }

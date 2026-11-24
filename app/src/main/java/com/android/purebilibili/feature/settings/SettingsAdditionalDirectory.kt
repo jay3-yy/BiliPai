@@ -112,7 +112,7 @@ internal val additionalSettingsDirectory = listOf(
         observeValue = { context ->
             SettingsManager.getCardTransitionMethod(context).map { context.getString(cardTransitionMethodLabel(it)) }
         },
-        aliases = listOf("官方金标", "小米旧版", "OPPO", "vivo", "转场接口"),
+        aliases = listOf("官方金标", "小米旧版", "OPPO", "vivo", "安卓共享元素", "共享元素", "转场接口"),
         target = SettingsSearchTarget.ANIMATION,
     ),
     PlaybackSettingItem(
@@ -222,6 +222,7 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("playback.video_second_codec_preference", "无法播放时改用", SettingsRootCategory.VIDEO_DECODER, SettingsSearchFocusIds.PLAYBACK_DECODER, { context -> com.android.purebilibili.core.store.SettingsManager .getVideoSecondCodec(context).map { when (it) { "avc1" -> "AVC"; "hev1" -> "HEVC"; "av01" -> "AV1"; else -> it } } }, target = SettingsSearchTarget.PLAYBACK),
     PlaybackSettingItem("playback.mini_player_mode", "离开播放页后的方式", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER, { context -> com.android.purebilibili.core.store.SettingsManager .getMiniPlayerMode(context).map { it.label } }, target = SettingsSearchTarget.PLAYBACK),
     PlaybackSettingItem("playback.music_lyrics_ui_style", "听视频歌词界面", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER, { context -> com.android.purebilibili.core.store.SettingsManager.getMusicLyricsUiStyle(context).map { it.label } }, target = SettingsSearchTarget.PLAYBACK),
+    PlaybackSettingItem("playback.music_theme_color_mode", "听视频背景主题色", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER, { context -> com.android.purebilibili.core.store.AudioLyricsSettingsStore.observeThemeColorMode(context).map { it.label } }, aliases = listOf("听视频主题色", "听视频颜色", "背景主题色", "自定义颜色", "听视频背景"), target = SettingsSearchTarget.PLAYBACK),
     PlaybackSettingItem("playback.wifi_quality", "无线网络默认画质", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_NETWORK, { context -> com.android.purebilibili.core.store.SettingsManager .getWifiQuality(context).map { resolveSelectionLabel(resolveDefaultPlaybackQualityOptions(), it, "720P") } }, target = SettingsSearchTarget.PLAYBACK),
     PlaybackSettingItem("playback.mobile_quality", "移动网络默认画质", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_NETWORK, { context -> com.android.purebilibili.core.store.SettingsManager .getMobileQuality(context).map { resolveSelectionLabel(resolveDefaultPlaybackQualityOptions(), it, "720P") } }, target = SettingsSearchTarget.PLAYBACK),
     PlaybackSettingItem("playback.data_saver_mode", "省流量模式", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_DATA_SAVER, { context -> com.android.purebilibili.core.store.SettingsManager .getDataSaverMode(context).map { it.label } }, target = SettingsSearchTarget.PLAYBACK),
@@ -247,6 +248,15 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("playback.app_screenshot_capture_mode", "截图范围", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager.getAppScreenshotCaptureMode(context).map { it.label } }, target = SettingsSearchTarget.PLAYBACK),
     PlaybackSettingItem("playback.bottom_progress_behavior", "底部进度条展示", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager .getBottomProgressBehavior(context).map { it.label } }, target = SettingsSearchTarget.PLAYBACK),
     PlaybackSettingItem("appearance.app_list_item_style", "列表条目样式", SettingsRootCategory.APPEARANCE_THEME, "appearance_display_mode", null, target = SettingsSearchTarget.APPEARANCE, readState = { state -> state.appListItemStyle.toString() }),
+    PlaybackSettingItem(
+        "appearance.theme_switch_transition_style",
+        "主题切换转场",
+        SettingsRootCategory.APPEARANCE_THEME,
+        "appearance_display_mode",
+        { context -> com.android.purebilibili.core.store.SettingsManager.getThemeSwitchTransitionStyle(context).map { it.label } },
+        aliases = listOf("主题转场", "切换动画", "径向揭示", "柔和淡入", "无转场"),
+        target = SettingsSearchTarget.APPEARANCE,
+    ),
     PlaybackSettingItem("appearance.app_icon_style", "图标样式", SettingsRootCategory.APPEARANCE_THEME, "appearance_display_mode", null, target = SettingsSearchTarget.APPEARANCE, readState = { state -> resolveAppIconStyleOptions().first { it.value == state.appIconStyle }.label }),
     PlaybackSettingItem(
         SETTINGS_ICON_GLYPHS_SETTING_ID,

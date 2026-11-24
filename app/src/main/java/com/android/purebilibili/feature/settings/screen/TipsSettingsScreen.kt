@@ -32,19 +32,25 @@ import com.android.purebilibili.core.ui.components.rememberAdaptivePreferenceIco
 import com.android.purebilibili.core.ui.components.rememberAdaptivePreferenceIconContainerColor
 import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
+import com.android.purebilibili.core.plugin.BuiltinPluginIds
+import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
+import com.android.purebilibili.navigation3.BiliPaiNavKey
 
 private data class TipEntry(
     @DrawableRes val iconResId: Int,
     val iconTint: Color,
     @androidx.annotation.StringRes val titleResId: Int,
     @androidx.annotation.StringRes val contentResId: Int,
+    val actionLabel: String? = null,
+    val onAction: (() -> Unit)? = null,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TipsSettingsScreen(
-    onBack: () -> Unit
+internal fun TipsSettingsScreen(
+    onBack: () -> Unit,
+    onNavigate: (BiliPaiNavKey) -> Unit = {},
 ) {
     val screenTitle = stringResource(R.string.tips_title)
     val backLabel = stringResource(R.string.common_back)
@@ -55,13 +61,21 @@ fun TipsSettingsScreen(
 
     val glyphs = currentSettingsIconGlyphs()
     val rememberedSecondaryTextColor = AppContentColors.secondaryText()
-    val basicTips = remember(rememberedSecondaryTextColor, glyphs) {
+    val basicTips = remember(rememberedSecondaryTextColor, glyphs, onNavigate) {
         listOf(
             TipEntry(
                 iconResId = glyphs.selectResource(R.drawable.ph_pencil_line_24, R.drawable.ms_draw_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_01_title,
                 contentResId = R.string.tips_01_content,
+                actionLabel = "前往全屏与手势",
+                onAction = {
+                    SettingsSearchFocusController.submit(
+                        SettingsSearchTarget.PLAYBACK,
+                        SettingsSearchFocusIds.PLAYBACK_FULLSCREEN,
+                    )
+                    onNavigate(BiliPaiNavKey.PlaybackSettings)
+                },
             ),
             TipEntry(
                 iconResId = glyphs.selectResource(R.drawable.ph_caret_up_24, R.drawable.ms_keyboard_arrow_up_24),
@@ -80,46 +94,97 @@ fun TipsSettingsScreen(
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_04_title,
                 contentResId = R.string.tips_04_content,
+                actionLabel = "去搜索试试",
+                onAction = { onNavigate(BiliPaiNavKey.Search()) },
             )
         )
     }
 
-    val hiddenTips = remember(rememberedSecondaryTextColor) {
+    val hiddenTips = remember(rememberedSecondaryTextColor, glyphs, onNavigate) {
         listOf(
             TipEntry(
                 iconResId = glyphs.selectResource(R.drawable.ph_skip_forward_24, R.drawable.ms_skip_next_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_05_title,
                 contentResId = R.string.tips_05_content,
+                actionLabel = "前往播放设置",
+                onAction = {
+                    SettingsSearchFocusController.submit(
+                        SettingsSearchTarget.PLAYBACK,
+                        SettingsSearchFocusIds.PLAYBACK_INTERACTION,
+                    )
+                    onNavigate(BiliPaiNavKey.PlaybackSettings)
+                },
             ),
             TipEntry(
                 iconResId = glyphs.selectResource(R.drawable.ph_camera_rotate_24, R.drawable.ms_cameraswitch_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_06_title,
                 contentResId = R.string.tips_06_content,
+                actionLabel = "前往全屏与手势",
+                onAction = {
+                    SettingsSearchFocusController.submit(
+                        SettingsSearchTarget.PLAYBACK,
+                        SettingsSearchFocusIds.PLAYBACK_FULLSCREEN,
+                    )
+                    onNavigate(BiliPaiNavKey.PlaybackSettings)
+                },
             ),
             TipEntry(
                 iconResId = glyphs.selectResource(R.drawable.ph_picture_in_picture_24, R.drawable.ms_picture_in_picture_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_07_title,
                 contentResId = R.string.tips_07_content,
+                actionLabel = "前往小窗与后台",
+                onAction = {
+                    SettingsSearchFocusController.submit(
+                        SettingsSearchTarget.PLAYBACK,
+                        SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER,
+                        "playback.mini_player_mode",
+                    )
+                    onNavigate(BiliPaiNavKey.PlaybackSettings)
+                },
             ),
             TipEntry(
                 iconResId = glyphs.selectResource(R.drawable.ph_thumbs_up_24, R.drawable.ms_thumb_up_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_08_title,
                 contentResId = R.string.tips_08_content,
-            )
+                actionLabel = "前往手势开关",
+                onAction = {
+                    SettingsSearchFocusController.submit(
+                        SettingsSearchTarget.PLAYBACK,
+                        SettingsSearchFocusIds.PLAYBACK_INTERACTION,
+                    )
+                    onNavigate(BiliPaiNavKey.PlaybackSettings)
+                },
+            ),
+            TipEntry(
+                iconResId = glyphs.selectResource(R.drawable.ph_caret_up_24, R.drawable.ms_keyboard_arrow_up_24),
+                iconTint = rememberedSecondaryTextColor,
+                titleResId = R.string.tips_13_title,
+                contentResId = R.string.tips_13_content,
+            ),
+            TipEntry(
+                iconResId = glyphs.selectResource(R.drawable.ph_vibrate_24, R.drawable.ms_touch_app_fill_24),
+                iconTint = rememberedSecondaryTextColor,
+                titleResId = R.string.tips_14_title,
+                contentResId = R.string.tips_14_content,
+            ),
         )
     }
 
-    val advancedTips = remember(rememberedSecondaryTextColor) {
+    val advancedTips = remember(rememberedSecondaryTextColor, glyphs, onNavigate) {
         listOf(
             TipEntry(
                 iconResId = R.drawable.ms_flare_24,
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_09_title,
                 contentResId = R.string.tips_09_content,
+                actionLabel = "前往空降助手",
+                onAction = {
+                    onNavigate(BiliPaiNavKey.BuiltinPluginSettings(BuiltinPluginIds.SPONSOR_BLOCK))
+                },
             ),
             TipEntry(
                 iconResId = glyphs.selectResource(R.drawable.ph_tag_simple_24, R.drawable.ms_label_fill_24),
@@ -138,6 +203,8 @@ fun TipsSettingsScreen(
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_12_title,
                 contentResId = R.string.tips_12_content,
+                actionLabel = "前往权限与链接",
+                onAction = { onNavigate(BiliPaiNavKey.PermissionSettings) },
             )
         )
     }
@@ -201,6 +268,8 @@ private fun TipSection(items: List<TipEntry>) {
                 iconTint = tip.iconTint,
                 titleResId = tip.titleResId,
                 contentResId = tip.contentResId,
+                actionLabel = tip.actionLabel,
+                onAction = tip.onAction,
             )
             if (index != items.lastIndex) {
                 TipDivider()
@@ -215,6 +284,8 @@ private fun TipItem(
     iconTint: Color,
     @androidx.annotation.StringRes titleResId: Int,
     @androidx.annotation.StringRes contentResId: Int,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
 ) {
     val title = stringResource(titleResId)
     val content = stringResource(contentResId)
@@ -260,6 +331,19 @@ private fun TipItem(
                 style = MaterialTheme.typography.bodyMedium,
                 color = AppContentColors.secondaryText()
             )
+            if (actionLabel != null && onAction != null) {
+                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+                AppTextButton(
+                    onClick = onAction,
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                ) {
+                    AppText(
+                        text = "$actionLabel →",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = AppContentColors.accent(),
+                    )
+                }
+            }
         }
     }
 }

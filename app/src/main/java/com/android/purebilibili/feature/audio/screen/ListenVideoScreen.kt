@@ -305,7 +305,8 @@ internal fun ListenVideoScreen(
         filterListenVideoArtists(state.artists, filterQuery)
     }
     val scope = rememberCoroutineScope()
-    val listenBackdrop = rememberLayerBackdrop()
+    val listenBackdropSource = com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+    val listenBackdrop = listenBackdropSource.backdrop
     val primaryContainer = MaterialTheme.colorScheme.primaryContainer
     val chromeBackground = AppSurfaceTokens.chromeBackground()
     val backgroundBrush = remember(primaryContainer, chromeBackground) {
@@ -331,7 +332,7 @@ internal fun ListenVideoScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .layerBackdrop(listenBackdrop)
+                .then(listenBackdropSource.modifier)
                 .background(backgroundBrush),
         )
         Column(

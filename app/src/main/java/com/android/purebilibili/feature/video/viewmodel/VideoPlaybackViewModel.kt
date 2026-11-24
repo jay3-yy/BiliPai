@@ -89,9 +89,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
@@ -3752,10 +3755,45 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     is PlaybackLoadResult.Success -> {
                         val result = loadResult.payload
                         logVideoLoadStage(VideoLoadStage.PLAYBACK_DATA_READY, requestToken)
+                        val cdnSelection = resolvePlaybackCdnCandidateSelection(
+                            videoUrl = result.playUrl,
+                            audioUrl = result.audioUrl,
+                            quality = result.quality,
+                            cachedDashVideos = result.cachedDashVideos,
+                            cachedDashAudios = result.cachedDashAudios,
+                            adaptiveDashSource = result.adaptiveDashSource
+                        )
                         // 媒体已经暂停准备；进度确认后仍等待入场许可，避免转场中出声。
-                        // 许可开放后再校验请求和账号，拒绝过期结果。
+                        // 若未走 provisional 预缓冲且仍在等待入场动画结束，趁飞行窗口把首段码流
+                        // 预拉进 SimpleCache；动画结束或离页时立刻取消，不与正式播放抢带宽。
                         if (!shouldSkipPlayerPrepare) {
-                            playbackStartAllowed.first { it }
+                            val prefetchTargets = appContext?.let { context ->
+                                com.android.purebilibili.feature.video.playback.policy
+                                    .resolveEntryPlaybackHeadPrefetchTargets(
+                                        videoUrl = cdnSelection.playUrl,
+                                        audioUrl = cdnSelection.audioUrl,
+                                        cdnCacheKeysByUrl = cdnSelection.cdnCacheKeysByUrl,
+                                        hasProvisionalPlayer = provisionalPlayer != null,
+                                        playbackStartAllowed = playbackStartAllowed.value,
+                                        isDataSaverActive = com.android.purebilibili.core.store.SettingsManager
+                                            .isDataSaverActive(context),
+                                        isAudioOnlyMode = _isInAudioMode.value,
+                                    )
+                            }.orEmpty()
+                            val entryHeadPrefetchJob = if (prefetchTargets.isNotEmpty()) {
+                                val context = appContext
+                                if (context != null) {
+                                    launch(Dispatchers.IO) {
+                                        com.android.purebilibili.feature.video.playback.policy
+                                            .prefetchEntryPlaybackHead(context, prefetchTargets)
+                                    }
+                                } else null
+                            } else null
+                            try {
+                                playbackStartAllowed.first { it }
+                            } finally {
+                                entryHeadPrefetchJob?.cancel()
+                            }
                             // 与 PLAYBACK_DATA_READY 的差值表示数据就绪后等待起播许可的时间。
                             logVideoLoadStage(VideoLoadStage.ENTRY_PREPARATION_RELEASED, requestToken)
                         }
@@ -3796,15 +3834,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                              Logger.d("PlayerVM", "🛡️ Previous position at end ($startPos / $videoDuration), restarting from 0")
                              startPos = 0
                         }
-
-                        val cdnSelection = resolvePlaybackCdnCandidateSelection(
-                            videoUrl = result.playUrl,
-                            audioUrl = result.audioUrl,
-                            quality = result.quality,
-                            cachedDashVideos = result.cachedDashVideos,
-                            cachedDashAudios = result.cachedDashAudios,
-                            adaptiveDashSource = result.adaptiveDashSource
-                        )
 
                         // A timer may have expired while the media request was in flight.
                         val startPlayback = (activeLoadAutoPlay ?: shouldAutoPlay) &&
@@ -6150,6 +6179,13 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     }
     
     //  异步加载视频标签
+    private val _coverSavedShareEvents = MutableSharedFlow<Pair<String, String>>(extraBufferCapacity = 4)
+    val coverSavedShareEvents: SharedFlow<Pair<String, String>> = _coverSavedShareEvents.asSharedFlow()
+
+    fun notifyCoverSaved(title: String, coverUrl: String) {
+        _coverSavedShareEvents.tryEmit(title to coverUrl)
+    }
+
     /**
      *  保存封面到相册
      */
@@ -6160,7 +6196,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         
         viewModelScope.launch {
             val success = com.android.purebilibili.feature.download.DownloadManager.saveImageToGallery(context, coverUrl, title)
-            if (success) toast("封面已保存到相册")
+            if (success) notifyCoverSaved(title, coverUrl)
             else toast("保存失败")
         }
     }

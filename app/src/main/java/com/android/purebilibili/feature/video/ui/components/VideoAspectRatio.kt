@@ -265,6 +265,34 @@ internal fun shouldRefreshMeasuredPlayerViewport(
     return expectedWidth != measuredWidth || expectedHeight != measuredHeight
 }
 
+/**
+ * 优先使用与当前 Compose 视口布局一致的实测像素；若实测值仍停留在切换前的
+ * 横屏/竖屏尺寸（或尚未重新测量），改用当前 layout 尺寸，避免把旧全屏尺寸写回小屏 PlayerView。
+ */
+internal fun resolveExpectedPlayerViewportSize(
+    measuredWidth: Int,
+    measuredHeight: Int,
+    layoutWidth: Int,
+    layoutHeight: Int,
+): VideoViewportLayout {
+    val hasMeasured = measuredWidth > 0 && measuredHeight > 0
+    val hasLayout = layoutWidth > 0 && layoutHeight > 0
+    if (hasMeasured && hasLayout) {
+        val matchesLayout = kotlin.math.abs(measuredWidth - layoutWidth) <= 2 &&
+            kotlin.math.abs(measuredHeight - layoutHeight) <= 2
+        return if (matchesLayout) {
+            VideoViewportLayout(measuredWidth, measuredHeight)
+        } else {
+            VideoViewportLayout(layoutWidth, layoutHeight)
+        }
+    }
+    return if (hasLayout) {
+        VideoViewportLayout(layoutWidth, layoutHeight)
+    } else {
+        VideoViewportLayout(measuredWidth, measuredHeight)
+    }
+}
+
 /** Coalesce viewport recovery on the View, without retaining disposed players globally. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private class PlayerViewportRefreshController(

@@ -53,8 +53,9 @@ internal fun BangumiIntroductionPanel(
     val tabAnimationSpec = rememberVideoContentTabSelectionAnimationSpec()
     val reduceMotion = com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion()
     val listState = rememberLazyListState()
-    val backdrop = rememberLayerBackdrop()
     val glass = LocalAppThemeConfig.current.liquidGlassEnabled
+    val backdropSource = if (glass) com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource() else null
+    val backdrop = backdropSource?.backdrop
     LocalNavigationBackHandler(enabled = true, onBackCompleted = onDismiss)
     val headerHeightPx = remember { mutableIntStateOf(0) }
     val header: @Composable (Modifier) -> Unit = { headerModifier ->
@@ -93,7 +94,7 @@ internal fun BangumiIntroductionPanel(
         Column(
             modifier = Modifier.fillMaxSize()
                 // 采样覆盖标签坐标；玻璃标签作为兄弟覆盖层，避免录入自身。
-                .then(if (glass) Modifier.layerBackdrop(backdrop) else Modifier)
+                .then(backdropSource?.modifier ?: Modifier)
                 .background(MaterialTheme.colorScheme.background),
         ) {
             if (glass) {

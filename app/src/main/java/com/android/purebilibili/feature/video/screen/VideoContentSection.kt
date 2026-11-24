@@ -799,6 +799,15 @@ internal fun VideoContentSection(
             )
         }
     }
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.layoutInfo.pageSize }
+            .distinctUntilChanged()
+            .collect { pageSize ->
+                if (pageSize > 0 && !pagerState.isScrollInProgress) {
+                    snapPagerToSettledPageIfMisaligned(pagerState)
+                }
+            }
+    }
     LaunchedEffect(pagerState, tabs.size) {
         snapshotFlow {
             resolveVideoContentEffectiveSelectedTabIndex(

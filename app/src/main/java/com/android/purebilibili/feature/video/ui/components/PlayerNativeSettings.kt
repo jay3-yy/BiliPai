@@ -167,6 +167,7 @@ internal fun PlayerSettingsRow(title: String, subtitle: String? = null, onClick:
         "字幕设置" -> Icons.Outlined.Subtitles
         "加载字幕" -> Icons.Outlined.FileOpen
         "播放信息" -> Icons.Outlined.Info
+        "手势说明与开关" -> Icons.Outlined.TouchApp
         "举报" -> Icons.Outlined.ErrorOutline
         FullscreenActionCountSettings.TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ic_settings_action_counts_24)
         com.android.purebilibili.core.store.FullscreenTopBarSettings.TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ms_widgets_24)

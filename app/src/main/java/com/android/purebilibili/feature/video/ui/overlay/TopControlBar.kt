@@ -121,6 +121,7 @@ fun TopControlBar(
     moreMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
     danmakuMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
     onAudioClick: (() -> Unit)? = null,
+    isAudioOnly: Boolean = false,
     onSendDanmakuClick: (() -> Unit)? = null,
     danmakuEnabled: Boolean = true,
     onDanmakuToggle: (() -> Unit)? = null,
@@ -263,10 +264,18 @@ fun TopControlBar(
                             }
                             if (clockVisible) HeaderStatusText(currentTime)
                         }
-                        if (!simplifiedPortrait && policy.showAudio && onAudioClick != null &&
-                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.AUDIO)
-                        ) {
-                            HeaderIcon(Icons.Outlined.Headphones, "听音频", onAudioClick)
+                        val showAudioButton = onAudioClick != null && (
+                            simplifiedPortrait ||
+                                (policy.showAudio &&
+                                    showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.AUDIO))
+                        )
+                        if (showAudioButton) {
+                            HeaderIcon(
+                                icon = Icons.Outlined.Headphones,
+                                description = if (isAudioOnly) "退出听视频" else "听视频",
+                                onClick = onAudioClick!!,
+                                active = isAudioOnly,
+                            )
                         }
                         if (!simplifiedPortrait && policy.showCast && showCastButton && onCastClick != null &&
                             showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.CAST)

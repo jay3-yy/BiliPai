@@ -52,6 +52,7 @@ import com.android.purebilibili.feature.video.progress.PbpRidgeSample
 import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubble
 import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubblePlacement
 import com.android.purebilibili.feature.video.ui.components.SeekPreviewBubbleSimple
+import com.android.purebilibili.feature.video.ui.components.SeekPreviewFilmstrip
 import com.android.purebilibili.feature.video.ui.components.resolveSeekPreviewBubbleHeightDp
 import kotlin.math.roundToInt
 
@@ -87,6 +88,18 @@ fun VideoProgressBar(
 ) {
     var containerWidthPx by remember { mutableFloatStateOf(0f) }
     var dragTargetPositionMs by remember { mutableLongStateOf(displayPositionMs.coerceAtLeast(0L)) }
+    var isFineScrubbingActive by remember { mutableStateOf(false) }
+    var activeSnapLabel by remember { mutableStateOf<String?>(null) }
+    val scrubbingConfig = LocalVideoProgressScrubbingConfig.current
+    val currentScrubbingConfig by rememberUpdatedState(scrubbingConfig)
+    val snapPoints = remember(duration, viewPoints, pbpRidgeSamples) {
+        extractProgressSnapPoints(
+            durationMs = duration,
+            viewPoints = viewPoints,
+            pbpRidgeSamples = pbpRidgeSamples,
+        )
+    }
+    val currentSnapPoints by rememberUpdatedState(snapPoints)
     val currentOnSeek by rememberUpdatedState(onSeek)
     val currentOnSeekStart by rememberUpdatedState(onSeekStart)
     val currentOnSeekDragStart by rememberUpdatedState(onSeekDragStart)
@@ -98,6 +111,8 @@ fun VideoProgressBar(
     LaunchedEffect(displayPositionMs, isSeekScrubbing) {
         if (!isSeekScrubbing) {
             dragTargetPositionMs = displayPositionMs.coerceAtLeast(0L)
+            isFineScrubbingActive = false
+            activeSnapLabel = null
         }
     }
 
@@ -153,13 +168,17 @@ fun VideoProgressBar(
             LocalConfiguration.current.screenWidthDp, LocalConfiguration.current.screenHeightDp,
         ).takeIf { it > 0 }
     } else null
-    val previewAreaHeightDp = if (isSeekScrubbing) {
+    val basePreviewAreaHeightDp = if (isSeekScrubbing) {
         resolveVideoProgressPreviewAreaHeightDp(
             layoutPolicy = layoutPolicy,
             hasChapter = currentChapter != null,
             previewImageHeightDp = previewImageHeightDp
         ).dp
     } else 0.dp
+    val previewAreaHeightDp = if (isSeekScrubbing && isFineScrubbingActive) {
+        val minFilmstripHeight = if (videoshotData?.isValid == true) 96.dp else 72.dp
+        maxOf(basePreviewAreaHeightDp, minFilmstripHeight)
+    } else basePreviewAreaHeightDp
     val thumbSizeDp = if (isSeekScrubbing) {
         layoutPolicy.thumbDraggingSizeDp.dp
     } else {
@@ -184,7 +203,7 @@ fun VideoProgressBar(
                     .fillMaxWidth()
                     .height(previewAreaHeightDp)
                     .padding(bottom = layoutPolicy.previewBottomPaddingDp.dp),
-                contentAlignment = Alignment.BottomStart
+                contentAlignment = if (isFineScrubbingActive) Alignment.BottomCenter else Alignment.BottomStart
             ) {
                 ProgressSeekPreview(
                     videoshotData = videoshotData,
@@ -195,7 +214,11 @@ fun VideoProgressBar(
                         positionMs = activePositionProvider(),
                         durationMs = duration
                     ),
-                    containerWidthPx = containerWidthPx
+                    containerWidthPx = containerWidthPx,
+                    fineScrubbingActive = isFineScrubbingActive,
+                    statusLabel = activeSnapLabel ?: if (!isFineScrubbingActive && scrubbingConfig.fineScrubbingEnabled && !horizontalSeekOnly) {
+                        "上滑进入精准时间轴"
+                    } else null,
                 )
 
             }
@@ -232,7 +255,18 @@ fun VideoProgressBar(
                                 var dragInProgress = false
                                 try {
                                     var dragStartPositionMs = displayPositionMs.coerceAtLeast(0L)
+                                    var originPositionMs = currentPosition.coerceAtLeast(0L)
                                     var latestDragPositionMs = dragStartPositionMs
+                                    var dragStartY = 0f
+                                    var fineActive = false
+                                    var fineAnchorPosMs = dragStartPositionMs
+                                    var fineAnchorTouchX = 0f
+                                    var hasLeftOrigin = false
+                                    var cancelledAtOrigin = false
+                                    var lastSnapKind = ProgressScrubSnapKind.NONE
+                                    var lastSnapPositionMs = -1L
+                                    val enterFinePx = FINE_SCRUB_ENTER_UPWARD_DP.dp.toPx()
+                                    val exitFinePx = FINE_SCRUB_EXIT_UPWARD_DP.dp.toPx()
                                     val startDrag: (Offset) -> Unit = { offset ->
                                         val targetPositionMs = resolveSeekPositionFromTouch(
                                             touchX = offset.x,
@@ -240,9 +274,20 @@ fun VideoProgressBar(
                                             durationMs = duration
                                         )
                                         dragInProgress = true
+                                        originPositionMs = (displayPositionProvider?.invoke() ?: currentPosition).coerceAtLeast(0L)
                                         dragStartPositionMs = targetPositionMs
                                         latestDragPositionMs = targetPositionMs
                                         dragTargetPositionMs = targetPositionMs
+                                        dragStartY = offset.y
+                                        fineActive = false
+                                        fineAnchorPosMs = targetPositionMs
+                                        fineAnchorTouchX = offset.x
+                                        hasLeftOrigin = hasLeftOriginThreshold(targetPositionMs, originPositionMs, duration)
+                                        cancelledAtOrigin = false
+                                        lastSnapKind = ProgressScrubSnapKind.NONE
+                                        lastSnapPositionMs = -1L
+                                        isFineScrubbingActive = false
+                                        activeSnapLabel = null
                                         currentOnSeekStart()
                                         currentOnSeekDragStart(targetPositionMs)
                                         if (seekHapticPolicy.start(targetPositionMs, duration, SystemClock.uptimeMillis())) {
@@ -251,29 +296,86 @@ fun VideoProgressBar(
                                     }
                                     val updateDrag: (PointerInputChange) -> Unit = { change ->
                                         change.consume()
-                                        val targetPositionMs = resolveSeekPositionFromTouch(
-                                            touchX = change.position.x,
-                                            containerWidthPx = size.width.toFloat(),
-                                            durationMs = duration
+                                        val cfg = currentScrubbingConfig
+                                        val upwardDragPx = dragStartY - change.position.y
+                                        val nextFineActive = resolveFineScrubbingActive(
+                                            currentlyActive = fineActive,
+                                            enabled = cfg.fineScrubbingEnabled && !horizontalSeekOnly,
+                                            upwardDragPx = upwardDragPx,
+                                            enterThresholdPx = enterFinePx,
+                                            exitThresholdPx = exitFinePx,
                                         )
+                                        if (nextFineActive != fineActive) {
+                                            fineActive = nextFineActive
+                                            isFineScrubbingActive = nextFineActive
+                                            if (nextFineActive) {
+                                                fineAnchorPosMs = latestDragPositionMs
+                                                fineAnchorTouchX = change.position.x
+                                                seekHaptic(HapticType.LIGHT)
+                                            }
+                                        }
+                                        val rawTargetPositionMs = if (fineActive) {
+                                            resolveFineScrubPositionMs(
+                                                anchorPositionMs = fineAnchorPosMs,
+                                                anchorTouchX = fineAnchorTouchX,
+                                                currentTouchX = change.position.x,
+                                                containerWidthPx = size.width.toFloat(),
+                                                durationMs = duration,
+                                            )
+                                        } else {
+                                            resolveSeekPositionFromTouch(
+                                                touchX = change.position.x,
+                                                containerWidthPx = size.width.toFloat(),
+                                                durationMs = duration
+                                            )
+                                        }
+                                        if (!hasLeftOrigin && hasLeftOriginThreshold(rawTargetPositionMs, originPositionMs, duration)) {
+                                            hasLeftOrigin = true
+                                        }
+                                        val resolution = resolveProgressScrubTarget(
+                                            rawTargetPositionMs = rawTargetPositionMs,
+                                            originPositionMs = originPositionMs,
+                                            durationMs = duration,
+                                            hasLeftOrigin = hasLeftOrigin,
+                                            fineScrubbingActive = fineActive,
+                                            snapAndOriginCancelEnabled = cfg.snapAndOriginCancelEnabled,
+                                            snapPoints = currentSnapPoints,
+                                        )
+                                        val targetPositionMs = resolution.positionMs
+                                        cancelledAtOrigin = resolution.cancelledAtOrigin
+                                        activeSnapLabel = resolution.snapLabel
+                                        val enteredNewSnap = resolution.snapKind != ProgressScrubSnapKind.NONE &&
+                                            (resolution.snapKind != lastSnapKind || resolution.positionMs != lastSnapPositionMs)
+                                        lastSnapKind = resolution.snapKind
+                                        lastSnapPositionMs = resolution.positionMs
                                         latestDragPositionMs = targetPositionMs
                                         dragTargetPositionMs = targetPositionMs
                                         currentOnSeekDragUpdate(targetPositionMs)
-                                        if (seekHapticPolicy.update(targetPositionMs, SystemClock.uptimeMillis())) {
+                                        if (enteredNewSnap) {
+                                            seekHaptic(HapticType.LIGHT)
+                                        } else if (seekHapticPolicy.update(targetPositionMs, SystemClock.uptimeMillis())) {
                                             seekHaptic(HapticType.GESTURE_STEP)
                                         }
                                     }
                                     val endDrag: () -> Unit = {
-                                        val commitPositionMs = resolveSeekDragCommitPositionMs(
-                                            dragStartPositionMs = dragStartPositionMs,
-                                            latestDragPositionMs = latestDragPositionMs
-                                        )
                                         dragInProgress = false
-                                        currentOnSeek(commitPositionMs)
+                                        isFineScrubbingActive = false
+                                        activeSnapLabel = null
+                                        if (cancelledAtOrigin) {
+                                            currentOnSeekDragCancel()
+                                        } else {
+                                            val commitPositionMs = resolveSeekDragCommitPositionMs(
+                                                dragStartPositionMs = dragStartPositionMs,
+                                                latestDragPositionMs = latestDragPositionMs
+                                            )
+                                            currentOnSeek(commitPositionMs)
+                                        }
                                         seekHapticPolicy.finish()
                                     }
                                     val cancelDrag: () -> Unit = {
                                         dragInProgress = false
+                                        isFineScrubbingActive = false
+                                        activeSnapLabel = null
                                         currentOnSeekDragCancel()
                                         seekHapticPolicy.finish()
                                     }
@@ -494,9 +596,22 @@ private fun ProgressSeekPreview(
     currentPosition: Long,
     duration: Long,
     thumbCenterXPx: Float,
-    containerWidthPx: Float
+    containerWidthPx: Float,
+    fineScrubbingActive: Boolean = false,
+    statusLabel: String? = null,
 ) {
     val target = positionProvider()
+    if (fineScrubbingActive) {
+        SeekPreviewFilmstrip(
+            videoshotData = videoshotData,
+            targetPositionMs = target,
+            currentPositionMs = currentPosition,
+            durationMs = duration,
+            statusLabel = statusLabel,
+            modifier = Modifier.testTag("player_seek_preview"),
+        )
+        return
+    }
     // 与竖屏 PortraitProgressBar 一致：预览跟随拖动 thumb；宽度未测量时回退居中。
     val placement = if (containerWidthPx > 0f) {
         SeekPreviewBubblePlacement.Anchored
@@ -507,10 +622,12 @@ private fun ProgressSeekPreview(
         SeekPreviewBubble(videoshotData = videoshotData, targetPositionMs = target,
             currentPositionMs = currentPosition, durationMs = duration, offsetX = thumbCenterXPx,
             containerWidth = containerWidthPx, placement = placement,
+            statusLabel = statusLabel,
             modifier = Modifier.testTag("player_seek_preview"))
     } else {
         SeekPreviewBubbleSimple(targetPositionMs = target, currentPositionMs = currentPosition,
             offsetX = thumbCenterXPx, containerWidth = containerWidthPx, placement = placement,
+            statusLabel = statusLabel,
             modifier = Modifier.testTag("player_seek_preview"))
     }
 }

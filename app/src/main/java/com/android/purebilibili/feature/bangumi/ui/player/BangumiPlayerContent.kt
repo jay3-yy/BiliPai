@@ -172,7 +172,8 @@ fun BangumiPlayerContent(
     val pagerInteractions = remember(pagerState) { MutableInteractionSource() }
     val pagerDragHeld by pagerInteractions.collectIsDraggedAsState()
     val scope = rememberCoroutineScope()
-    val selectionBackdrop = rememberLayerBackdrop()
+    val selectionBackdropSource = com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+    val selectionBackdrop = selectionBackdropSource.backdrop
     val indicatorPositionProvider = remember(pagerState) {
         { pagerState.tabIndicatorPosition }
     }
@@ -556,7 +557,7 @@ fun BangumiPlayerContent(
                 .then(
                     if (liquidGlassEnabled) {
                         Modifier
-                            .layerBackdrop(selectionBackdrop)
+                            .then(selectionBackdropSource.modifier)
                             .background(MaterialTheme.colorScheme.background)
                     } else Modifier
                 )

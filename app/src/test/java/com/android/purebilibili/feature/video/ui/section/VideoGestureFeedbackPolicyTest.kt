@@ -23,16 +23,6 @@ import kotlin.test.assertTrue
 class VideoGestureFeedbackPolicyTest {
 
     @Test
-    fun `resolveOrientationSwitchHintText returns landscape copy`() {
-        assertEquals("已切换到横屏", resolveOrientationSwitchHintText(isFullscreen = true))
-    }
-
-    @Test
-    fun `resolveOrientationSwitchHintText returns portrait copy`() {
-        assertEquals("已切换到竖屏", resolveOrientationSwitchHintText(isFullscreen = false))
-    }
-
-    @Test
     fun `resolveGestureIndicatorLabel returns brightness label`() {
         assertEquals("亮度", resolveGestureIndicatorLabel(VideoGestureMode.Brightness))
     }

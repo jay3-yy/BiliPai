@@ -1026,7 +1026,10 @@ internal fun VideoCommentMainList(
     val scope = rememberCoroutineScope()
     val appearance = rememberVideoCommentAppearance()
     val commentGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
-    val commentChromeBackdrop = if (commentGlassEnabled) rememberLayerBackdrop() else null
+    val commentChromeBackdropSource = if (commentGlassEnabled) {
+        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+    } else null
+    val commentChromeBackdrop = commentChromeBackdropSource?.backdrop
     // 首屏骨架按视口高度铺够槽位：少铺会让列表在数据到达时被撑长、整体跳一下。
     val commentSkeletonSlotCount = resolveVideoCommentSkeletonSlotCount(
         LocalConfiguration.current.screenHeightDp
@@ -1085,10 +1088,7 @@ internal fun VideoCommentMainList(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .then(
-                                if (commentChromeBackdrop != null) Modifier.layerBackdrop(commentChromeBackdrop)
-                                else Modifier
-                            ),
+                            .then(commentChromeBackdropSource?.modifier ?: Modifier),
                         contentPadding = WindowInsets.navigationBars.asPaddingValues()
                     ) {
                     commentSectionNotice(state.pageControl)

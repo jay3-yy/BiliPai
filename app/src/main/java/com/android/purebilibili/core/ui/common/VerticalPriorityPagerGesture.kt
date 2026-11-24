@@ -29,12 +29,14 @@ import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.pageLeft
 import androidx.compose.ui.semantics.pageRight
 import androidx.compose.ui.semantics.scrollToIndex
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineStart
@@ -124,15 +126,18 @@ internal fun resolvePagerReleaseTargetPage(
     )
     val crossedPositionThreshold = pageSizePx > 0f &&
         abs(scrollDeltaPx) >= positionThresholdPx
-    if (!isFastFling && !crossedPositionThreshold) return boundedStartPage
-
-    val releaseDirection = if (isFastFling) {
-        sign(scrollVelocityPxPerSecond)
-    } else {
-        sign(scrollDeltaPx)
+    val dragDirection = sign(scrollDeltaPx)
+    val velocityDirection = sign(scrollVelocityPxPerSecond)
+    if (isFastFling) {
+        // 拖动方向与抬手速度相反表示回撤/取消，回弹到起始页，不越过起始页跳到反方向页面。
+        if (dragDirection != 0f && velocityDirection != dragDirection) {
+            return boundedStartPage
+        }
+        return (boundedStartPage + if (velocityDirection > 0f) 1 else -1)
+            .coerceIn(0, pageCount - 1)
     }
-    if (releaseDirection == 0f) return boundedStartPage
-    return (boundedStartPage + if (releaseDirection > 0f) 1 else -1)
+    if (!crossedPositionThreshold || dragDirection == 0f) return boundedStartPage
+    return (boundedStartPage + if (dragDirection > 0f) 1 else -1)
         .coerceIn(0, pageCount - 1)
 }
 
@@ -232,7 +237,7 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
             )
             if (latestShouldYield.value()) return@gesture
             velocityTracker.resetTracking()
-            velocityTracker.addPosition(down.uptimeMillis, down.position)
+            velocityTracker.addPointerInputChange(down)
 
             var totalDrag = Offset.Zero
             var direction = PagerGestureDirection.UNDECIDED
@@ -249,14 +254,17 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                 val change = event.changes.firstOrNull { it.id == trackedPointerId }
                     ?: event.changes.firstOrNull { it.pressed }
                     ?: return@gesture
-                trackedPointerId = change.id
+                if (change.id != trackedPointerId) {
+                    trackedPointerId = change.id
+                    velocityTracker.resetTracking()
+                }
 
                 if (!change.pressed) return@gesture
                 val delta = change.positionChangeIgnoreConsumed()
                 if (delta == Offset.Zero) continue
                 if (change.isConsumed) return@gesture
                 totalDrag += delta
-                velocityTracker.addPosition(change.uptimeMillis, change.position)
+                velocityTracker.addPointerInputChange(change)
                 direction = resolveVerticalPriorityPagerGestureDirection(
                     totalX = totalDrag.x,
                     totalY = totalDrag.y,
@@ -271,6 +279,7 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
             if (direction != PagerGestureDirection.HORIZONTAL) return@gesture
             horizontalLockChange?.consume()
             val gestureStartPage = state.currentPage
+            val initialPageOffsetPx = state.currentPageOffsetFraction * state.layoutInfo.pageSize
 
             val initialHorizontalDelta = resolvePagerInitialHorizontalDelta(
                 totalX = totalDrag.x,
@@ -307,7 +316,7 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                 }
             }
 
-            var accumulatedScrollDelta = initialHorizontalDelta * scrollDirectionMultiplier
+            var accumulatedScrollDelta = initialPageOffsetPx + initialHorizontalDelta * scrollDirectionMultiplier
             var releasedNormally = false
             var gestureCancelled = false
             // Custom state.scroll does not publish Pager drag interactions. Report the
@@ -321,7 +330,6 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                     val event = awaitPointerEvent(PointerEventPass.Main)
                     if (latestShouldYield.value()) {
                         gestureCancelled = true
-                        dragSession.cancel()
                         released = true
                         continue
                     }
@@ -332,13 +340,19 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                         released = true
                         continue
                     }
-                    trackedPointerId = change.id
-                    velocityTracker.addPosition(change.uptimeMillis, change.position)
+                    val pointerSwitched = change.id != trackedPointerId
+                    if (pointerSwitched) {
+                        trackedPointerId = change.id
+                        velocityTracker.resetTracking()
+                    }
+                    // addPointerInputChange 会纳入 historical 采样、忽略抬手瞬间的触控中心偏移，
+                    // 并在停顿超过 40ms 后清空陈旧速度，避免抬手抖动制造反向弹跳。
+                    velocityTracker.addPointerInputChange(change)
 
                     if (change.changedToUpIgnoreConsumed() || !change.pressed) {
                         released = true
                     } else {
-                        val horizontalDelta = change.positionChangeIgnoreConsumed().x
+                        val horizontalDelta = if (pointerSwitched) 0f else change.positionChangeIgnoreConsumed().x
                         change.consume()
                         if (horizontalDelta != 0f) {
                             val scrollDelta = horizontalDelta * scrollDirectionMultiplier
@@ -348,11 +362,18 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                     }
                 }
 
+                val maxFlingVelocity = viewConfiguration.maximumFlingVelocity
+                val releaseVelocityX = if (gestureCancelled) {
+                    0f
+                } else {
+                    velocityTracker.calculateVelocity(
+                        Velocity(maxFlingVelocity, maxFlingVelocity)
+                    ).x * scrollDirectionMultiplier
+                }
                 dragSession.release(
                     PagerDragRelease(
-                        velocityPxPerSecond = velocityTracker.calculateVelocity().x *
-                            scrollDirectionMultiplier,
-                        scrollDeltaPx = accumulatedScrollDelta,
+                        velocityPxPerSecond = releaseVelocityX,
+                        scrollDeltaPx = if (gestureCancelled) 0f else accumulatedScrollDelta,
                     ),
                 )
                 releasedNormally = true

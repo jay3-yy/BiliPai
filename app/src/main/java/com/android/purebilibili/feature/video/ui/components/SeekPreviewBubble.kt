@@ -290,6 +290,7 @@ internal fun SeekPreviewBubble(
     containerWidth: Float,
     placement: SeekPreviewBubblePlacement = SeekPreviewBubblePlacement.Anchored,
     containerHeightDp: Int? = null,
+    statusLabel: String? = null,
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -303,6 +304,7 @@ internal fun SeekPreviewBubble(
         SeekPreviewBubbleSimple(
             targetPositionMs, currentPositionMs, offsetX, containerWidth, placement, modifier,
             requestImage = false,
+            statusLabel = statusLabel,
         )
         return
     }
@@ -372,6 +374,25 @@ internal fun SeekPreviewBubble(
                         )
                     )
             )
+
+            if (!statusLabel.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 6.dp, start = 6.dp, end = 6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.68f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    AppText(
+                        text = statusLabel,
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                    )
+                }
+            }
 
             SeekPreviewTimeLabel(
                 targetPositionMs = targetPositionMs,
@@ -631,6 +652,7 @@ internal fun SeekPreviewBubbleSimple(
     placement: SeekPreviewBubblePlacement = SeekPreviewBubblePlacement.Anchored,
     modifier: Modifier = Modifier,
     requestImage: Boolean = true,
+    statusLabel: String? = null,
 ) {
     val configuration = LocalConfiguration.current
     if (requestImage && resolveSeekPreviewBubbleHeightDp(configuration.screenWidthDp, configuration.screenHeightDp) > 0) {
@@ -644,7 +666,10 @@ internal fun SeekPreviewBubbleSimple(
     val density = LocalDensity.current
     val availableWidthDp = if (containerWidth > 0f) with(density) { containerWidth.toDp().value }
         else (configuration.screenWidthDp - 32).coerceAtLeast(1).toFloat()
-    val bubbleWidthDp = minOf(style.fallbackWidthDp.toFloat(), availableWidthDp).coerceAtLeast(1f)
+    val bubbleWidthDp = minOf(
+        if (statusLabel.isNullOrBlank()) style.fallbackWidthDp.toFloat() else (style.fallbackWidthDp + 28).toFloat(),
+        availableWidthDp,
+    ).coerceAtLeast(1f)
     val bubbleWidthPx = with(density) { bubbleWidthDp.dp.toPx() }
     val bubbleOffsetX = remember(placement, offsetX, containerWidth, bubbleWidthPx) {
         resolveSeekPreviewBubbleOffsetPx(
@@ -676,6 +701,16 @@ internal fun SeekPreviewBubbleSimple(
             ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (!statusLabel.isNullOrBlank()) {
+                AppText(
+                    text = statusLabel,
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+            }
             AppText(
                 text = FormatUtils.formatDuration((targetPositionMs / 1000L).toInt()),
                 color = Color.White,
@@ -692,6 +727,148 @@ internal fun SeekPreviewBubbleSimple(
                     fontSize = style.deltaFontSp.sp,
                     fontWeight = FontWeight.Medium
                 )
+            }
+        }
+    }
+}
+
+/**
+ * 精准时间轴横向缩略图胶片带（Fine Scrubbing）：
+ * 以当前目标帧为中心展开连续 5 帧缩略图，无雪碧图时降级为精准刻度时间胶囊。
+ */
+@Composable
+internal fun SeekPreviewFilmstrip(
+    videoshotData: VideoshotData?,
+    targetPositionMs: Long,
+    currentPositionMs: Long,
+    durationMs: Long,
+    statusLabel: String?,
+    modifier: Modifier = Modifier,
+) {
+    val framePositions = remember(targetPositionMs, durationMs) {
+        com.android.purebilibili.feature.video.ui.overlay.resolveFilmstripFramePositionsMs(
+            centerPositionMs = targetPositionMs,
+            durationMs = durationMs,
+            frameCount = 5,
+        )
+    }
+    val deltaSeconds = (targetPositionMs - currentPositionMs) / 1000L
+    val deltaText = when {
+        deltaSeconds > 0L -> "+${deltaSeconds}s"
+        deltaSeconds < 0L -> "${deltaSeconds}s"
+        else -> null
+    }
+    val headerLabel = statusLabel?.takeIf { it.isNotBlank() } ?: "精准时间轴 · 下滑退出"
+
+    AppSurface(
+        color = Color.Black.copy(alpha = 0.88f),
+        shape = RoundedCornerShape(12.dp),
+        shadowElevation = 8.dp,
+        modifier = modifier
+            .padding(horizontal = 8.dp)
+            .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(
+                    text = FormatUtils.formatDuration((targetPositionMs / 1000L).toInt()),
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (deltaText != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    AppText(
+                        text = deltaText,
+                        color = MediaContrastPalette.Foreground,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                AppText(
+                    text = headerLabel,
+                    color = Color.White.copy(alpha = 0.72f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+            }
+            Spacer(modifier = Modifier.height(5.dp))
+            if (videoshotData != null && videoshotData.isValid && framePositions.isNotEmpty()) {
+                val centerIndex = framePositions.size / 2
+                Box(contentAlignment = Alignment.Center) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        framePositions.forEachIndexed { index, frameMs ->
+                            val isCenter = index == centerIndex
+                            val anchorMs = remember(videoshotData, frameMs, durationMs) {
+                                resolveSeekPreviewAnchorPositionMs(videoshotData, frameMs, durationMs)
+                            }
+                            val previewInfo = remember(videoshotData, anchorMs, durationMs) {
+                                videoshotData.getPreviewInfo(anchorMs, durationMs)
+                            }
+                            val frameWidth = if (isCenter) 84.dp else 64.dp
+                            val frameHeight = if (isCenter) 48.dp else 38.dp
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 2.dp)
+                                    .width(frameWidth)
+                                    .height(frameHeight)
+                                    .clip(RoundedCornerShape(if (isCenter) 7.dp else 5.dp))
+                                    .then(
+                                        if (isCenter) {
+                                            Modifier.border(
+                                                1.5.dp,
+                                                Color.White,
+                                                RoundedCornerShape(7.dp),
+                                            )
+                                        } else {
+                                            Modifier.background(Color.Black.copy(alpha = 0.25f))
+                                        }
+                                    )
+                            ) {
+                                SeekPreviewImage(
+                                    videoshotData = videoshotData,
+                                    currentPreviewInfo = previewInfo,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                // 无雪碧图时以精准刻度尺呈现微调参考
+                Canvas(
+                    modifier = Modifier
+                        .width(220.dp)
+                        .height(18.dp)
+                ) {
+                    val tickCount = 21
+                    val spacing = size.width / (tickCount - 1)
+                    for (i in 0 until tickCount) {
+                        val x = i * spacing
+                        val isCenter = i == tickCount / 2
+                        val isMajor = i % 5 == 0
+                        val tickHeight = when {
+                            isCenter -> size.height
+                            isMajor -> size.height * 0.65f
+                            else -> size.height * 0.35f
+                        }
+                        drawLine(
+                            color = if (isCenter) Color.White else Color.White.copy(alpha = 0.45f),
+                            start = Offset(x, (size.height - tickHeight) / 2f),
+                            end = Offset(x, (size.height + tickHeight) / 2f),
+                            strokeWidth = if (isCenter) 2.5f else 1.5f,
+                        )
+                    }
+                }
             }
         }
     }

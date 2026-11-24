@@ -40,4 +40,26 @@ class PlayerViewViewportResizeTest {
             assertEquals(height, content.height)
         }
     }
+
+    @Test
+    fun expectedViewportPrefersNewPortraitLayoutOverStaleFullscreenMeasurement() {
+        assertEquals(
+            VideoViewportLayout(width = 1440, height = 810),
+            resolveExpectedPlayerViewportSize(
+                measuredWidth = 3200,
+                measuredHeight = 1440,
+                layoutWidth = 1440,
+                layoutHeight = 810,
+            ),
+        )
+        assertEquals(
+            VideoViewportLayout(width = 1441, height = 810),
+            resolveExpectedPlayerViewportSize(
+                measuredWidth = 1441,
+                measuredHeight = 810,
+                layoutWidth = 1440,
+                layoutHeight = 810,
+            ),
+        )
+    }
 }

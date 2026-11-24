@@ -49,7 +49,11 @@ internal data class PlayerPalette(
         fun fromCoverBackground(bitmap: Bitmap?, light: Boolean = false): PlayerPalette {
             val representative = representativeAccent(bitmap)
                 ?: return if (light) LightDefault else Default
-            val accent = representative.toPlayerAccent()
+            return fromSeedColor(representative, light = light)
+        }
+
+        fun fromSeedColor(seed: Color, light: Boolean = false): PlayerPalette {
+            val accent = seed.toPlayerAccent()
             return if (light) lightPalette(accent) else PlayerPalette(
                 top = accent.darken(0.40f),
                 middle = accent.darken(0.66f),

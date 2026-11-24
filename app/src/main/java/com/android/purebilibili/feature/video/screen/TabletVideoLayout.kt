@@ -1305,7 +1305,10 @@ internal fun TabletSecondaryContent(
                         )
                     } else {
                         val commentGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
-                        val commentChromeBackdrop = if (commentGlassEnabled) rememberLayerBackdrop() else null
+                        val commentChromeBackdropSource = if (commentGlassEnabled) {
+                            com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+                        } else null
+                        val commentChromeBackdrop = commentChromeBackdropSource?.backdrop
                         var showCommentSearchSheet by remember { mutableStateOf(false) }
                         Column(modifier = Modifier.fillMaxSize()) {
                             CommentSortHeader(
@@ -1331,10 +1334,7 @@ internal fun TabletSecondaryContent(
                                 state = listState,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .then(
-                                        if (commentChromeBackdrop != null) Modifier.layerBackdrop(commentChromeBackdrop)
-                                        else Modifier
-                                    ),
+                                    .then(commentChromeBackdropSource?.modifier ?: Modifier),
                                 contentPadding = PaddingValues(
                                     start = 8.dp,
                                     top = 8.dp,

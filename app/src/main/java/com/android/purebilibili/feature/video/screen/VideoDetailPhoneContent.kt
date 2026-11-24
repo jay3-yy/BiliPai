@@ -185,11 +185,12 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                         )
                         // Capture scrolling detail content only; BottomInputBar stays outside
                         // the source so neither blur nor backdrop samples the bar itself.
-                        val bottomInputBarBackdrop = if (floatingLiquidBottomInputBar) {
-                            rememberLayerBackdrop()
+                        val bottomInputBarBackdropSource = if (floatingLiquidBottomInputBar) {
+                            com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
                         } else {
                             null
                         }
+                        val bottomInputBarBackdrop = bottomInputBarBackdropSource?.backdrop
                         val showExternalPlaylistQueueBarOnCurrentTab =
                             shouldShowExternalPlaylistQueueBarOnContentTab(
                                 queueAvailable = shouldShowExternalPlaylistQueueBar,
@@ -218,15 +219,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(
-                                    if (floatingLiquidBottomInputBar && bottomInputBarBackdrop != null &&
-                                        com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
-                                    ) {
-                                        Modifier.layerBackdrop(bottomInputBarBackdrop)
-                                    } else {
-                                        Modifier
-                                    }
-                                )
+                                .then(bottomInputBarBackdropSource?.modifier ?: Modifier)
                                 .then(
                                     if (com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current) {
                                         Modifier.hazeSourceCompat(hazeState)

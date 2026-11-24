@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -216,7 +217,6 @@ fun PlaybackSettingsContent(
     val longPressSpeed = playerConfiguration.longPressSpeed
     val defaultPlaybackSpeed by remember(context) { com.android.purebilibili.core.store.SettingsManager.getDefaultPlaybackSpeed(context) }.collectAsStateWithLifecycle(initialValue = 1.0f)
     val rememberLastPlaybackSpeed by remember(context) { com.android.purebilibili.core.store.SettingsManager.getRememberLastPlaybackSpeed(context) }.collectAsStateWithLifecycle(initialValue = false)
-    val nativeMiuixPlayerPopups by remember(context) { PlayerSettingsStore.getNativeMiuixPlayerPopups(context) }.collectAsStateWithLifecycle(initialValue = true)
     val longPressSpeedHintHidden = playerConfiguration.longPressSpeedHintHidden
     val longPressSpeedHintScale = playerConfiguration.longPressSpeedHintScale
     val longPressSpeedHintAlpha = playerConfiguration.longPressSpeedHintAlpha
@@ -340,21 +340,6 @@ fun PlaybackSettingsContent(
                         else -> "未知"
                     }
                     AppPreferenceGroup {
-                                SettingsItemAnchor("playback.native_miuix_player_popups") {
-                                    AppSwitchPreference(
-                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.NATIVE_MIUIX_DIALOG),
-                                title = playbackSettingTitle("playback.native_miuix_player_popups"),
-                                subtitle = "播放器、动态和 UP 主页使用；关闭后用 Material 3",
-                                checked = nativeMiuixPlayerPopups,
-                                onCheckedChange = { enabled ->
-                                    scope.launch {
-                                        PlayerSettingsStore.setNativeMiuixPlayerPopups(context, enabled)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText(),
-                            )
-                                }
-                        AppPreferenceDivider()
                                 SettingsItemAnchor("playback.hw_decode") {
                                     AppSwitchPreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.HARDWARE_DECODER),
@@ -436,6 +421,29 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                                 iconTint = AppContentColors.secondaryText()
                             )
                                 }
+                        AppPreferenceDivider()
+                        val longPressSpeedSlideAdjustEnabled by remember(context) {
+                            SettingsManager.getLongPressSpeedSlideAdjustEnabled(context)
+                        }.collectAsStateWithLifecycle(initialValue = true)
+                        SettingsItemAnchor("playback.long_press_speed_slide_adjust_enabled") {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.LONG_PRESS_SPEED_SLIDE),
+                                title = playbackSettingTitle("playback.long_press_speed_slide_adjust_enabled"),
+                                subtitle = if (longPressSpeedSlideAdjustEnabled) {
+                                    "长按加速时左右滑动可切换 1.25x~3.0x 倍率"
+                                } else {
+                                    "关闭后长按始终使用固定默认倍速"
+                                },
+                                checked = longPressSpeedSlideAdjustEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch {
+                                        SettingsManager.setLongPressSpeedSlideAdjustEnabled(context, enabled)
+                                    }
+                                },
+                                iconTint = AppContentColors.secondaryText(),
+                            )
+                            LongPressSlideSpeedLivePreview(enabled = longPressSpeedSlideAdjustEnabled)
+                        }
                         AppPreferenceDivider()
                         SettingsItemAnchor("playback.long_press_speed_hint_hidden") {
                             AppSwitchPreference(
@@ -658,10 +666,14 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                             "关闭后离开应用或锁屏时停止播放"
                         },
                         checked = backgroundPlaybackEnabled,
-                        onCheckedChange = {
+                        onCheckedChange = { enabled ->
                             settingsScope.launch {
+                                if (enabled && stopPlaybackOnExit) {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setStopPlaybackOnExit(context, false)
+                                }
                                 com.android.purebilibili.core.store.SettingsManager
-                                    .setBackgroundPlaybackEnabled(context, it)
+                                    .setBackgroundPlaybackEnabled(context, enabled)
                             }
                         },
                         iconTint = AppContentColors.secondaryText()
@@ -693,17 +705,27 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                         icon = rememberSettingsSemanticIcon(SettingsIconRole.EXIT_PLAYER_MODE),
                         title = settingItemTitle("playback.mini_player_mode"),
                         subtitle = if (stopPlaybackOnExit) {
-                            "请先关闭“离开播放页后停止”"
+                            "当前离开视频页会停止播放；直接选择小窗或画中画将自动开启继续播放"
                         } else if (!backgroundPlaybackEnabled) {
-                            "请先开启“后台播放”"
+                            "当前未开启后台播放；直接选择小窗或画中画将自动为你开启"
                         } else {
                             miniPlayerMode.description
                         },
                         options = miniPlayerOptions,
                         selectedValue = miniPlayerMode,
-                        enabled = modeControlsEnabled,
+                        enabled = true,
                         onSelectionChange = { mode ->
                             settingsScope.launch {
+                                if (mode != SettingsManager.MiniPlayerMode.OFF) {
+                                    if (stopPlaybackOnExit) {
+                                        com.android.purebilibili.core.store.SettingsManager
+                                            .setStopPlaybackOnExit(context, false)
+                                    }
+                                    if (!backgroundPlaybackEnabled) {
+                                        com.android.purebilibili.core.store.SettingsManager
+                                            .setBackgroundPlaybackEnabled(context, true)
+                                    }
+                                }
                                 com.android.purebilibili.core.store.SettingsManager
                                     .setMiniPlayerMode(context, mode)
                             }
@@ -884,6 +906,83 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                         },
                         iconTint = AppContentColors.secondaryText()
                     )
+                    MusicLyricsStyleLivePreview(style = musicLyricsUiStyle)
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.music_theme_color_mode") {
+                    val musicThemeColorMode by remember(context) {
+                        com.android.purebilibili.core.store.AudioLyricsSettingsStore.observeThemeColorMode(context)
+                    }.collectAsStateWithLifecycle(
+                        initialValue = com.android.purebilibili.core.store.MusicThemeColorMode.FOLLOW_COVER
+                    )
+                    val musicCustomHex by remember(context) {
+                        com.android.purebilibili.core.store.AudioLyricsSettingsStore.observeCustomThemeColorHex(context)
+                    }.collectAsStateWithLifecycle(
+                        initialValue = com.android.purebilibili.core.store.AudioLyricsSettingsStore.DEFAULT_CUSTOM_THEME_COLOR_HEX
+                    )
+                    Column {
+                        SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_SPECTRUM),
+                            title = "听视频背景主题色",
+                            subtitle = when (musicThemeColorMode) {
+                                com.android.purebilibili.core.store.MusicThemeColorMode.FOLLOW_COVER ->
+                                    "跟随当前视频封面自动取色；也可切换为固定氛围色或自定义色"
+                                com.android.purebilibili.core.store.MusicThemeColorMode.FOLLOW_APP_THEME ->
+                                    "与当前应用的全局主题色保持一致"
+                                com.android.purebilibili.core.store.MusicThemeColorMode.CUSTOM ->
+                                    "使用自定义十六进制色值：$musicCustomHex"
+                                else -> "当前使用「${musicThemeColorMode.label}」沉浸氛围背景"
+                            },
+                            options = com.android.purebilibili.core.store.MusicThemeColorMode.entries.map {
+                                AppSegmentOption(it, it.label)
+                            },
+                            selectedValue = musicThemeColorMode,
+                            onSelectionChange = { mode ->
+                                settingsScope.launch {
+                                    com.android.purebilibili.core.store.AudioLyricsSettingsStore
+                                        .setThemeColorMode(context, mode)
+                                }
+                            },
+                            iconTint = AppContentColors.secondaryText(),
+                        )
+                        if (musicThemeColorMode == com.android.purebilibili.core.store.MusicThemeColorMode.CUSTOM) {
+                            var hexInput by remember(musicCustomHex) { mutableStateOf(musicCustomHex) }
+                            val previewArgb = com.android.purebilibili.core.store.AudioLyricsSettingsStore
+                                .parseHexColorArgb(hexInput)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .background(Color(previewArgb ?: 0xFF2F7DFF))
+                                )
+                                com.android.purebilibili.core.ui.components.AppOutlinedTextField(
+                                    value = hexInput,
+                                    onValueChange = { hexInput = it.take(7) },
+                                    label = { AppText("色值 (#RRGGBB)") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                com.android.purebilibili.core.ui.components.AppButton(
+                                    onClick = {
+                                        settingsScope.launch {
+                                            com.android.purebilibili.core.store.AudioLyricsSettingsStore
+                                                .setCustomThemeColorHex(context, hexInput)
+                                        }
+                                    },
+                                    enabled = previewArgb != null,
+                                ) {
+                                    AppText("应用")
+                                }
+                            }
+                        }
+                    }
                 }
                 if (musicLyricsUiStyle == SettingsManager.MusicLyricsUiStyle.ARC) {
                     val arcTiltIntensity by remember(context) {
@@ -2161,6 +2260,8 @@ internal enum class PlaybackFullscreenGroup(private vararg val settingIds: Strin
     DOUBLE_TAP(
         "playback.seek_forward_seconds",
         "playback.seek_backward_seconds",
+        "playback.double_tap_jump_ahead_enabled",
+        "playback.two_finger_chapter_skip_enabled",
     ),
     PORTRAIT(
         "playback.portrait_player_collapse_mode",
@@ -2170,6 +2271,7 @@ internal enum class PlaybackFullscreenGroup(private vararg val settingIds: Strin
         "playback.direct_portrait_story_entry",
         "playback.portrait_only_vertical_recommendations",
         "playback.launch_to_portrait_feed_on_startup",
+        "playback.portrait_swipe_down_minimize_enabled",
     ),
     SWIPE(
         "playback.center_swipe_to_fullscreen_enabled",
@@ -2177,6 +2279,8 @@ internal enum class PlaybackFullscreenGroup(private vararg val settingIds: Strin
         "playback.set_system_brightness_enabled",
         "playback.fullscreen_swipe_seek_enabled",
         "playback.swipe_seek_seconds",
+        "playback.fullscreen_swipe_up_more_enabled",
+        "playback.pinch_zoom_snap_and_badge_enabled",
     ),
     ORIENTATION(
         "playback.auto_rotate_enabled",
@@ -2222,11 +2326,14 @@ internal enum class PlaybackFullscreenGroup(private vararg val settingIds: Strin
         "playback.show_fullscreen_time",
         "playback.fullscreen_action_counts",
         "playback.show_fullscreen_action_items",
+        "playback.end_screen_next_countdown_enabled",
     ),
     PROGRESS(
         "playback.chapter_display_mode",
         "playback.bottom_progress_behavior",
         "playback.progress_peak_danmaku_enabled",
+        "playback.progress_fine_scrubbing_enabled",
+        "playback.progress_snap_and_origin_cancel_enabled",
     );
 
     val itemKey: String
@@ -2489,6 +2596,50 @@ SettingsItemAnchor("playback.seek_backward_seconds") {
                     }
                 )
 }
+                val doubleTapJumpAheadEnabled by remember(context) {
+                    SettingsManager.getDoubleTapJumpAheadEnabled(context)
+                }.collectAsStateWithLifecycle(initialValue = true)
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.double_tap_jump_ahead_enabled") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.DOUBLE_TAP_JUMP_AHEAD),
+                        title = playbackSettingTitle("playback.double_tap_jump_ahead_enabled"),
+                        subtitle = if (doubleTapJumpAheadEnabled) {
+                            "双击快进时若前方有高能峰值或下一章节，浮出快捷空降按钮"
+                        } else {
+                            "关闭后双击快进不再弹出高能空降建议"
+                        },
+                        checked = doubleTapJumpAheadEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                SettingsManager.setDoubleTapJumpAheadEnabled(context, enabled)
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
+            }
+            val twoFingerChapterSkipEnabled by remember(context) {
+                SettingsManager.getTwoFingerChapterSkipEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
+            AppPreferenceDivider()
+            SettingsItemAnchor("playback.two_finger_chapter_skip_enabled") {
+                AppSwitchPreference(
+                    icon = rememberSettingsSemanticIcon(SettingsIconRole.TWO_FINGER_CHAPTER_SKIP),
+                    title = playbackSettingTitle("playback.two_finger_chapter_skip_enabled"),
+                    subtitle = if (twoFingerChapterSkipEnabled) {
+                        "有章节标记时，双指双击右侧跳下一章、左侧回上一章"
+                    } else {
+                        "关闭后双指双击不再切换章节"
+                    },
+                    checked = twoFingerChapterSkipEnabled,
+                    onCheckedChange = { enabled ->
+                        scope.launch {
+                            SettingsManager.setTwoFingerChapterSkipEnabled(context, enabled)
+                        }
+                    },
+                    iconTint = AppContentColors.secondaryText(),
+                )
             }
         }
     }
@@ -2520,6 +2671,7 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
                 }
             }
         )
+        PortraitPlayerCollapseLivePreview(mode = portraitPlayerCollapseMode)
 }
 
         AppPreferenceDivider()
@@ -2648,6 +2800,26 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
                 iconTint = AppContentColors.secondaryText()
             )
         }
+        val portraitSwipeDownMinimizeEnabled by remember(context) {
+            SettingsManager.getPortraitSwipeDownMinimizeEnabled(context)
+        }.collectAsStateWithLifecycle(initialValue = true)
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.portrait_swipe_down_minimize_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.PORTRAIT_SWIPE_DOWN_MINIMIZE),
+                title = playbackSettingTitle("playback.portrait_swipe_down_minimize_enabled"),
+                subtitle = if (portraitSwipeDownMinimizeEnabled) {
+                    "竖屏播放画面中部下拉收起页面（开启手势反向时自动让位）"
+                } else {
+                    "关闭后竖屏播放器中部下拉不再收起页面"
+                },
+                checked = portraitSwipeDownMinimizeEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setPortraitSwipeDownMinimizeEnabled(context, enabled) }
+                },
+                iconTint = AppContentColors.secondaryText(),
+            )
+        }
 
     }
 
@@ -2750,6 +2922,46 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
                 onSelectionChange = { seconds ->
                     scope.launch { SettingsManager.setSwipeSeekSeconds(context, seconds) }
                 },
+            )
+        }
+        val fullscreenSwipeUpMoreEnabled by remember(context) {
+            SettingsManager.getFullscreenSwipeUpMoreEnabled(context)
+        }.collectAsStateWithLifecycle(initialValue = true)
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.fullscreen_swipe_up_more_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.FULLSCREEN_SWIPE_UP_MORE),
+                title = playbackSettingTitle("playback.fullscreen_swipe_up_more_enabled"),
+                subtitle = if (fullscreenSwipeUpMoreEnabled) {
+                    "横屏全屏底部上滑可呼出横向推荐视频抽屉"
+                } else {
+                    "关闭后全屏底部上滑不再呼出推荐抽屉"
+                },
+                checked = fullscreenSwipeUpMoreEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setFullscreenSwipeUpMoreEnabled(context, enabled) }
+                },
+                iconTint = AppContentColors.secondaryText(),
+            )
+        }
+        val pinchZoomSnapAndBadgeEnabled by remember(context) {
+            SettingsManager.getPinchZoomSnapAndBadgeEnabled(context)
+        }.collectAsStateWithLifecycle(initialValue = true)
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.pinch_zoom_snap_and_badge_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.PINCH_ZOOM_SNAP_BADGE),
+                title = playbackSettingTitle("playback.pinch_zoom_snap_and_badge_enabled"),
+                subtitle = if (pinchZoomSnapAndBadgeEnabled) {
+                    "双指接近铺满倍率时自动吸附并提示，还原按钮显示实时放大倍数"
+                } else {
+                    "关闭后保持原有纯自由缩放与还原按钮"
+                },
+                checked = pinchZoomSnapAndBadgeEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setPinchZoomSnapAndBadgeEnabled(context, enabled) }
+                },
+                iconTint = AppContentColors.secondaryText(),
             )
         }
     }
@@ -3362,6 +3574,26 @@ SettingsItemAnchor("playback.app_screenshot_capture_mode") {
                 iconTint = AppContentColors.secondaryText()
             )
             }
+        val endScreenNextCountdownEnabled by remember(context) {
+            SettingsManager.getEndScreenNextCountdownEnabled(context)
+        }.collectAsStateWithLifecycle(initialValue = true)
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.end_screen_next_countdown_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.END_SCREEN_NEXT_COUNTDOWN),
+                title = playbackSettingTitle("playback.end_screen_next_countdown_enabled"),
+                subtitle = if (endScreenNextCountdownEnabled) {
+                    "视频临近结束时右下角浮出即将播放倒计时卡片"
+                } else {
+                    "关闭后片尾不再浮出即将播放卡片"
+                },
+                checked = endScreenNextCountdownEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setEndScreenNextCountdownEnabled(context, enabled) }
+                },
+                iconTint = AppContentColors.secondaryText(),
+            )
+        }
     }
 
     fullscreenPreferenceGroup(PlaybackFullscreenGroup.PROGRESS) {
@@ -3371,6 +3603,10 @@ SettingsItemAnchor("playback.app_screenshot_capture_mode") {
             .collectAsStateWithLifecycle(initialValue = BottomProgressBehavior.ALWAYS_HIDE)
         val progressPeakDanmakuEnabled by remember(context) { SettingsManager.getProgressPeakDanmakuEnabled(context) }
             .collectAsStateWithLifecycle(initialValue = false)
+        val progressFineScrubbingEnabled by remember(context) { SettingsManager.getProgressFineScrubbingEnabled(context) }
+            .collectAsStateWithLifecycle(initialValue = true)
+        val progressSnapAndOriginCancelEnabled by remember(context) { SettingsManager.getProgressSnapAndOriginCancelEnabled(context) }
+            .collectAsStateWithLifecycle(initialValue = true)
 
         AppPreferenceDivider()
         SettingsItemAnchor("playback.chapter_display_mode") {
@@ -3420,6 +3656,44 @@ SettingsItemAnchor("playback.bottom_progress_behavior") {
                 onCheckedChange = { enabled ->
                     scope.launch {
                         SettingsManager.setProgressPeakDanmakuEnabled(context, enabled)
+                    }
+                },
+                iconTint = AppContentColors.secondaryText(),
+            )
+        }
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.progress_fine_scrubbing_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.PROGRESS_FINE_SCRUBBING),
+                title = playbackSettingTitle("playback.progress_fine_scrubbing_enabled"),
+                subtitle = if (progressFineScrubbingEnabled) {
+                    "拖动进度条时上滑展开连续缩略图胶片带并进入精细时间轴"
+                } else {
+                    "关闭后仅保留原有单帧预览气泡"
+                },
+                checked = progressFineScrubbingEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch {
+                        SettingsManager.setProgressFineScrubbingEnabled(context, enabled)
+                    }
+                },
+                iconTint = AppContentColors.secondaryText(),
+            )
+        }
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.progress_snap_and_origin_cancel_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.PROGRESS_SNAP_CANCEL),
+                title = playbackSettingTitle("playback.progress_snap_and_origin_cancel_enabled"),
+                subtitle = if (progressSnapAndOriginCancelEnabled) {
+                    "经过章节或高能峰值时轻振磁吸，拖回起点附近松手取消跳转"
+                } else {
+                    "关闭后保持原有线性拖动"
+                },
+                checked = progressSnapAndOriginCancelEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch {
+                        SettingsManager.setProgressSnapAndOriginCancelEnabled(context, enabled)
                     }
                 },
                 iconTint = AppContentColors.secondaryText(),
@@ -3537,4 +3811,291 @@ SettingsItemAnchor("playback.player_insight_mode") {
                             )
                             }
                     }
+}
+
+@Composable
+private fun LongPressSlideSpeedLivePreview(enabled: Boolean) {
+    val gate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val animateActive = gate.active && enabled
+    val phaseState = remember { androidx.compose.animation.core.Animatable(0.5f) }
+    LaunchedEffect(animateActive) {
+        if (!animateActive) {
+            phaseState.snapTo(0.5f)
+            return@LaunchedEffect
+        }
+        while (true) {
+            phaseState.animateTo(
+                targetValue = 0.85f,
+                animationSpec = androidx.compose.animation.core.tween(950),
+            )
+            phaseState.animateTo(
+                targetValue = 0.15f,
+                animationSpec = androidx.compose.animation.core.tween(1100),
+            )
+            phaseState.animateTo(
+                targetValue = 0.5f,
+                animationSpec = androidx.compose.animation.core.tween(700),
+            )
+        }
+    }
+    val accent = AppContentColors.accent()
+    val containerColor = AppSurfaceTokens.groupedListContainer()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+            .clip(AppShapes.container(ContainerLevel.Field))
+            .background(containerColor)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(
+                    text = if (enabled) "演示：按住画面左右滑动实时调速" else "关闭后长按固定使用预设倍速",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppContentColors.secondaryText(),
+                )
+                AppText(
+                    text = "1.5x · 2.0x · 3.0x",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (enabled) accent else AppContentColors.secondaryText(),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(22.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(accent.copy(alpha = if (enabled) 0.22f else 0.10f))
+                )
+                Box(
+                    modifier = Modifier
+                        .graphicsLayer {
+                            val travelPx = (size.width * 2.4f).coerceAtLeast(1f)
+                            translationX = (phaseState.value - 0.5f) * travelPx + travelPx * 0.65f
+                        }
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(if (enabled) accent else AppContentColors.secondaryText().copy(alpha = 0.45f))
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
+                ) {
+                    AppText(
+                        text = if (enabled) "⇄ 滑速" else "2.0x",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MusicLyricsStyleLivePreview(style: SettingsManager.MusicLyricsUiStyle) {
+    val gate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val sweepState = remember { androidx.compose.animation.core.Animatable(0.55f) }
+    LaunchedEffect(gate.active, style) {
+        if (!gate.active) {
+            sweepState.snapTo(0.65f)
+            return@LaunchedEffect
+        }
+        while (true) {
+            sweepState.snapTo(0f)
+            sweepState.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.tween(2200),
+            )
+            kotlinx.coroutines.delay(350)
+        }
+    }
+    val isArc = style == SettingsManager.MusicLyricsUiStyle.ARC
+    val isClassic = style == SettingsManager.MusicLyricsUiStyle.CLASSIC
+    val previewBg = Color(0xFF151822)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+            .clip(AppShapes.container(ContainerLevel.Field))
+            .background(previewBg)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    if (isArc) {
+                        rotationY = 14f
+                        cameraDistance = 12f * density
+                    }
+                },
+            horizontalAlignment = if (isClassic) Alignment.CenterHorizontally else Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            AppText(
+                text = "上一句歌词轻轻淡出",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.32f),
+            )
+            Box(
+                modifier = Modifier.graphicsLayer {
+                    if (!isClassic) {
+                        translationY = -2.dp.toPx() * sweepState.value
+                    }
+                }
+            ) {
+                AppText(
+                    text = when (style) {
+                        SettingsManager.MusicLyricsUiStyle.CLASSIC -> "当前句居中清晰高亮"
+                        SettingsManager.MusicLyricsUiStyle.IMMERSIVE -> "当前句大字逐词高亮上浮"
+                        SettingsManager.MusicLyricsUiStyle.ARC -> "3D 弧面纵深 · 逐词高亮"
+                    },
+                    style = if (isClassic) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleSmall,
+                    color = Color.White.copy(alpha = 0.45f),
+                )
+                AppText(
+                    text = when (style) {
+                        SettingsManager.MusicLyricsUiStyle.CLASSIC -> "当前句居中清晰高亮"
+                        SettingsManager.MusicLyricsUiStyle.IMMERSIVE -> "当前句大字逐词高亮上浮"
+                        SettingsManager.MusicLyricsUiStyle.ARC -> "3D 弧面纵深 · 逐词高亮"
+                    },
+                    style = if (isClassic) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleSmall,
+                    color = Color.White,
+                    modifier = Modifier.graphicsLayer {
+                        alpha = 0.55f + 0.45f * sweepState.value
+                    },
+                )
+            }
+            AppText(
+                text = "下一句歌词即将唱起",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.32f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PortraitPlayerCollapseLivePreview(mode: com.android.purebilibili.core.store.PortraitPlayerCollapseMode) {
+    val animatesCollapse = mode != com.android.purebilibili.core.store.PortraitPlayerCollapseMode.OFF
+    val gate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val animateActive = gate.active && animatesCollapse
+    val collapseState = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(animateActive, mode) {
+        if (!animateActive) {
+            collapseState.snapTo(if (animatesCollapse) 0.7f else 0f)
+            return@LaunchedEffect
+        }
+        while (true) {
+            collapseState.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.tween(900),
+            )
+            kotlinx.coroutines.delay(550)
+            collapseState.animateTo(
+                targetValue = 0f,
+                animationSpec = androidx.compose.animation.core.tween(800),
+            )
+            kotlinx.coroutines.delay(550)
+        }
+    }
+    val accent = AppContentColors.accent()
+    val containerColor = AppSurfaceTokens.groupedListContainer()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+            .clip(AppShapes.container(ContainerLevel.Field))
+            .background(containerColor)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // 微型手机示意图：上方视频区随评论上滑平滑缩小
+        Box(
+            modifier = Modifier
+                .size(width = 48.dp, height = 68.dp)
+                .clip(AppShapes.container(ContainerLevel.Tag))
+                .background(Color(0xFF1A1D26))
+                .padding(4.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(26.dp)
+                    .graphicsLayer {
+                        val factor = 1f - 0.55f * collapseState.value
+                        scaleY = factor
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+                    }
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                    .background(accent.copy(alpha = 0.85f))
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        translationY = -12.dp.toPx() * collapseState.value
+                    },
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Color.White.copy(alpha = 0.55f))
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.75f)
+                        .height(5.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Color.White.copy(alpha = 0.35f))
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .height(5.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Color.White.copy(alpha = 0.25f))
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            AppText(
+                text = "效果示意：${mode.label}",
+                style = MaterialTheme.typography.labelLarge,
+                color = AppContentColors.primaryText(),
+            )
+            AppText(
+                text = when (mode) {
+                    com.android.purebilibili.core.store.PortraitPlayerCollapseMode.OFF ->
+                        "播放时视频区保持完整大小，不随评论滚动缩小"
+                    com.android.purebilibili.core.store.PortraitPlayerCollapseMode.INTRO_ONLY ->
+                        "看竖屏视频滑评论或简介时，上方画面自动缩小让出阅读空间"
+                    com.android.purebilibili.core.store.PortraitPlayerCollapseMode.COMMENT_ONLY ->
+                        "看横屏视频滑评论区时，上方画面自动缩小，看评论更舒展"
+                    com.android.purebilibili.core.store.PortraitPlayerCollapseMode.BOTH ->
+                        "横屏与竖屏视频在浏览下方内容时，均会自动缩小上方画面"
+                    com.android.purebilibili.core.store.PortraitPlayerCollapseMode.PAUSED_ONLY ->
+                        "播放中保持大屏不缩小；仅暂停后再上滑时自动收起画面"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = AppContentColors.secondaryText(),
+            )
+        }
+    }
 }

@@ -1,20 +1,26 @@
 package com.android.purebilibili.core.ui.components
 
 import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,10 +63,22 @@ fun LongPressSpeedPreferenceControl(
     val displayedSpeed = normalizeLongPressSpeed(currentSpeed)
     var showSpeedEditor by rememberSaveable { mutableStateOf(false) }
     var speedInput by rememberSaveable { mutableStateOf("") }
+    val useGlassAnchorMenu = appGlassMenuAvailable()
+    var glassMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    val openCustomEditor = {
+        speedInput = formatPlaybackSpeed(displayedSpeed).removeSuffix("x")
+        showSpeedEditor = true
+    }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (useGlassAnchorMenu) {
+                        Modifier.clickable { glassMenuExpanded = true }
+                    } else Modifier,
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -87,23 +105,110 @@ fun LongPressSpeedPreferenceControl(
                     )
                 }
             }
-            AppTextButton(
-                onClick = {
-                    speedInput = formatPlaybackSpeed(displayedSpeed).removeSuffix("x")
-                    showSpeedEditor = true
-                },
-                modifier = Modifier
-                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                    .semantics {
-                        contentDescription = "输入长按倍速，当前 ${formatPlaybackSpeed(displayedSpeed)}"
-                    },
-            ) {
-                AppText(
-                    text = formatPlaybackSpeed(displayedSpeed),
-                    color = com.android.purebilibili.core.ui.AppContentColors.link(),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
+            if (useGlassAnchorMenu) {
+                val valueTextStyle = if (
+                    com.android.purebilibili.core.theme.LocalAppUiStyle.current == com.android.purebilibili.core.theme.AppUiStyle.MIUIX ||
+                    com.android.purebilibili.core.ui.rememberResolvedAppListItemStyle() == com.android.purebilibili.core.ui.AppListItemStyle.NATIVE
+                ) {
+                    MaterialTheme.typography.bodySmall
+                } else MaterialTheme.typography.bodyMedium
+                val valueTint = com.android.purebilibili.core.ui.AppContentColors.secondaryText()
+                AppGlassMenuAnchor(
+                    onOpen = { glassMenuExpanded = true },
+                    modifier = Modifier
+                        .heightIn(min = 32.dp)
+                        .semantics {
+                            contentDescription = "选择长按倍速，当前 ${formatPlaybackSpeed(displayedSpeed)}"
+                        },
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .heightIn(min = 32.dp)
+                            .padding(start = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppText(
+                            text = formatPlaybackSpeed(displayedSpeed),
+                            style = valueTextStyle,
+                            color = valueTint,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Default.UnfoldMore,
+                            contentDescription = null,
+                            tint = valueTint,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                    AppGlassMenu(
+                        expanded = glassMenuExpanded,
+                        onDismissRequest = { glassMenuExpanded = false },
+                        title = title ?: "长按临时加速",
+                        useAvailableHeight = true,
+                    ) {
+                        Column {
+                            val isCustom = displayedSpeed !in LONG_PRESS_SPEED_PRESETS
+                            LONG_PRESS_SPEED_PRESETS.forEach { preset ->
+                                val selected = displayedSpeed == preset
+                                AppDropdownMenuItem(
+                                    text = { AppText(formatPlaybackSpeed(preset)) },
+                                    trailingIcon = if (selected) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        }
+                                    } else null,
+                                    selected = selected,
+                                    onClick = {
+                                        onSpeedChange(preset)
+                                        glassMenuExpanded = false
+                                    },
+                                )
+                            }
+                            AppDropdownMenuItem(
+                                text = {
+                                    AppText(
+                                        if (isCustom) "自定义（${formatPlaybackSpeed(displayedSpeed)}）" else "自定义…",
+                                    )
+                                },
+                                trailingIcon = if (isCustom) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+                                } else null,
+                                selected = isCustom,
+                                onClick = {
+                                    glassMenuExpanded = false
+                                    openCustomEditor()
+                                },
+                            )
+                        }
+                    }
+                }
+            } else {
+                AppTextButton(
+                    onClick = openCustomEditor,
+                    modifier = Modifier
+                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                        .semantics {
+                            contentDescription = "输入长按倍速，当前 ${formatPlaybackSpeed(displayedSpeed)}"
+                        },
+                ) {
+                    AppText(
+                        text = formatPlaybackSpeed(displayedSpeed),
+                        color = com.android.purebilibili.core.ui.AppContentColors.link(),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
     }
