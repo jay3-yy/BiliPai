@@ -202,4 +202,12 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "privacy.search_history_control" to "关闭后隐藏搜索历史，记录设置和已有历史不变",
     "privacy.search_discover_control" to "关闭后隐藏搜索页的「搜索发现」分区",
     "privacy.search_suggestions_enabled" to "开启时使用官方搜索推荐；关闭后改用公开热搜词",
+    "gamepad.enabled" to "连接 Xbox、PlayStation、Switch 或通用手柄后全局操控浏览与视频播放",
+    "gamepad.hide_bottom_key_hints" to "开启后隐藏屏幕底部的手柄键位提示栏，使用中也可按提示栏快捷键随时切换",
+    "gamepad.swap_confirm_back" to "互换确认与返回按键映射，适配日版/亚洲 PlayStation 或 Switch 习惯",
+    "gamepad.auto_swap_switch" to "识别到 Switch Pro / Joy-Con 时自动以右侧 A 键确认、下方 B 键返回",
+    "gamepad.hover_highlight" to "移动光标经过视频卡片时触发悬浮抬升反馈",
+    "gamepad.auto_hide_cursor" to "手指触屏或 4.5 秒无摇杆操作时淡出光标，不遮挡观看",
+    "gamepad.invert_scroll" to "默认向下推右摇杆向下浏览列表，开启后变为自然拖动方向",
+    "gamepad.player_shortcuts" to "开启后在视频详情页与全屏支持按住右扳机倍速、肩键快进退、弹幕与全屏/三连快捷操作",
 )

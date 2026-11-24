@@ -68,6 +68,7 @@ internal enum class SettingsIconRole(
     REPLAY_ONBOARDING(R.drawable.ms_replay_24, R.drawable.ph_arrow_counter_clockwise_24),
     TIPS(R.drawable.ms_lightbulb_24, R.drawable.ph_lightbulb_24),
     KEYBOARD_SHORTCUTS(R.drawable.ms_keyboard_24, R.drawable.ph_keyboard_24),
+    GAMEPAD_CONTROL(R.drawable.ms_sports_esports_24),
     VIDEO_COMPANION(R.drawable.ic_settings_video_split_24),
     OPEN_LINKS(R.drawable.ms_link_24, R.drawable.ph_link_24),
     DONATE(R.drawable.ms_card_giftcard_24, R.drawable.ph_gift_24),
@@ -438,6 +439,7 @@ internal fun resolveSettingsSearchTargetIconRole(
     SettingsSearchTarget.REPLAY_ONBOARDING -> SettingsIconRole.REPLAY_ONBOARDING
     SettingsSearchTarget.TIPS -> SettingsIconRole.TIPS
     SettingsSearchTarget.KEYBOARD_SHORTCUTS -> SettingsIconRole.KEYBOARD_SHORTCUTS
+    SettingsSearchTarget.GAMEPAD_CONTROL -> SettingsIconRole.GAMEPAD_CONTROL
     SettingsSearchTarget.OPEN_LINKS -> SettingsIconRole.OPEN_LINKS
     SettingsSearchTarget.DONATE -> SettingsIconRole.DONATE
     SettingsSearchTarget.TELEGRAM -> SettingsIconRole.OPEN_LINKS

@@ -148,6 +148,10 @@ internal fun settingsDestinationCopy(target: SettingsSearchTarget): SettingsDest
         title = "键盘快捷键",
         summary = "外接键盘时快速打开搜索、切换底栏项",
     )
+    SettingsSearchTarget.GAMEPAD_CONTROL -> SettingsDestinationCopy(
+        title = "手柄控制",
+        summary = "Xbox / PlayStation / Switch 手柄适配、提示栏与自定义键位",
+    )
     SettingsSearchTarget.OPEN_LINKS -> SettingsDestinationCopy(
         title = "默认打开链接",
         summary = "用 BiliPai 打开 B 站链接",

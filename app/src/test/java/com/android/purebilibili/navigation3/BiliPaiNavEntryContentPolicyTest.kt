@@ -69,6 +69,10 @@ class BiliPaiNavEntryContentPolicyTest {
             BiliPaiNavEntryContentRole.KEYBOARD_SHORTCUTS_SETTINGS,
             resolveBiliPaiNavEntryContentRole(BiliPaiNavKey.KeyboardShortcutsSettings)
         )
+        assertEquals(
+            BiliPaiNavEntryContentRole.GAMEPAD_CONTROL_SETTINGS,
+            resolveBiliPaiNavEntryContentRole(BiliPaiNavKey.GamepadControlSettings)
+        )
     }
 
     @Test

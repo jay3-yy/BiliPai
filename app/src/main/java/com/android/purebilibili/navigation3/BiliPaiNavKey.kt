@@ -192,6 +192,11 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data object GamepadControlSettings : BiliPaiNavKey {
+        override val routeBase: String = "gamepad_control_settings"
+    }
+
+    @Serializable
     data object Login : BiliPaiNavKey {
         override val routeBase: String = "login"
     }

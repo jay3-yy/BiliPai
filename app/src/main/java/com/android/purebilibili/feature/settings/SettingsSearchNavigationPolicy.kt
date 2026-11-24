@@ -39,6 +39,7 @@ internal fun resolveSettingsSearchNavigation(result: SettingsSearchResult): Bili
         SettingsSearchTarget.OPEN_SOURCE_LICENSES -> BiliPaiNavKey.OpenSourceLicenses
         SettingsSearchTarget.TIPS -> BiliPaiNavKey.TipsSettings
         SettingsSearchTarget.KEYBOARD_SHORTCUTS -> BiliPaiNavKey.KeyboardShortcutsSettings
+        SettingsSearchTarget.GAMEPAD_CONTROL -> BiliPaiNavKey.GamepadControlSettings
         // Leaf entries such as GitHub, update check and Telegram are actions hosted by their
         // root category. They used to resolve to null, so tapping a valid search result did
         // nothing. Open the owning category; the normal settings callbacks remain authoritative.

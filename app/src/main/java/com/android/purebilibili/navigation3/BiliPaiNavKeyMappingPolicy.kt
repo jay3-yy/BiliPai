@@ -77,6 +77,7 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         BiliPaiNavKey.WebDavBackup -> ScreenRoutes.WebDavBackup.route
         BiliPaiNavKey.TipsSettings -> ScreenRoutes.TipsSettings.route
         BiliPaiNavKey.KeyboardShortcutsSettings -> ScreenRoutes.KeyboardShortcutsSettings.route
+        BiliPaiNavKey.GamepadControlSettings -> ScreenRoutes.GamepadControlSettings.route
         BiliPaiNavKey.Login -> ScreenRoutes.Login.route
         BiliPaiNavKey.Profile -> ScreenRoutes.Profile.route
         BiliPaiNavKey.ProfileAccountEdit -> "profile_account_edit"
@@ -238,6 +239,7 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         normalized == ScreenRoutes.WebDavBackup.route -> BiliPaiNavKey.WebDavBackup
         normalized == ScreenRoutes.TipsSettings.route -> BiliPaiNavKey.TipsSettings
         normalized == ScreenRoutes.KeyboardShortcutsSettings.route -> BiliPaiNavKey.KeyboardShortcutsSettings
+        normalized == ScreenRoutes.GamepadControlSettings.route -> BiliPaiNavKey.GamepadControlSettings
         normalized == ScreenRoutes.Login.route -> BiliPaiNavKey.Login
         normalized == ScreenRoutes.Profile.route -> BiliPaiNavKey.Profile
         normalized == "profile_account_edit" -> BiliPaiNavKey.ProfileAccountEdit

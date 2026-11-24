@@ -266,6 +266,8 @@
     <string name="settings_category_storage_summary">Save locations, cache, settings sharing, and WebDAV backup</string>
     <string name="settings_category_plugins_title">Plugins</string>
     <string name="settings_category_plugins_summary">Install and manage plugins, skins, and extensions</string>
+    <string name="settings_category_gamepad_title">Gamepad Control</string>
+    <string name="settings_category_gamepad_summary">Xbox, PlayStation &amp; Switch controllers, HUD toggle, and custom bindings</string>
     <string name="settings_category_support_title">Help &amp; About</string>
     <string name="settings_category_support_summary">Tips, troubleshooting, updates, and app information</string>
     <string name="settings_category_select_hint">Choose a category on the left to view its settings</string>

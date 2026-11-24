@@ -82,6 +82,7 @@ private fun resolveIosSettingsEntryTint(
     SettingsSearchTarget.REPLAY_ONBOARDING -> iOSPink
     SettingsSearchTarget.TIPS -> iOSOrange
     SettingsSearchTarget.KEYBOARD_SHORTCUTS -> iOSBlue
+    SettingsSearchTarget.GAMEPAD_CONTROL -> iOSGreen
     SettingsSearchTarget.OPEN_LINKS -> iOSTeal
     SettingsSearchTarget.DONATE -> iOSRed
     SettingsSearchTarget.TELEGRAM -> iOSBlue

@@ -515,4 +515,21 @@ class SettingsSearchPolicyTest {
         }
     }
 
+    @Test
+    fun queryByGamepadKeywords_hitsGamepadControlModule() {
+        listOf("手柄", "PS5", "Switch", "隐藏提示栏", "自定义键位").forEach { query ->
+            assertTrue(
+                resolveSettingsSearchResults(query).any { it.target == SettingsSearchTarget.GAMEPAD_CONTROL },
+                "Expected query '$query' to match GAMEPAD_CONTROL",
+            )
+        }
+        assertTrue(
+            resolveSettingsSearchResults("隐藏底部显示键位").any {
+                it.target == SettingsSearchTarget.GAMEPAD_CONTROL &&
+                    it.settingId == "gamepad.hide_bottom_key_hints"
+            },
+            "Expected query '隐藏底部显示键位' to hit gamepad.hide_bottom_key_hints",
+        )
+    }
+
 }

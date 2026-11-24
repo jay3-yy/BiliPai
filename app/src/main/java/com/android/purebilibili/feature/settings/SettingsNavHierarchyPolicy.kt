@@ -31,6 +31,7 @@ internal val SETTINGS_SUBTREE_ROUTE_BASES: Set<String> = setOf(
     "settings_share",
     "webdav_backup",
     "tips_settings",
+    "gamepad_control_settings",
     "open_source_licenses",
     "process_memory",
     "performance_history",
@@ -50,6 +51,7 @@ private val SETTINGS_DEPTH2_ROUTE_BASES: Set<String> = setOf(
     "settings_share",
     "webdav_backup",
     "tips_settings",
+    "gamepad_control_settings",
     "open_source_licenses",
     "process_memory",
     "performance_history",
@@ -87,6 +89,7 @@ internal fun resolveSettingsCategoryDirectTargetKey(
     SettingsRootCategory.APPEARANCE_THEME -> BiliPaiNavKey.AppearanceSettings
     SettingsRootCategory.ANIMATION_HAPTICS -> BiliPaiNavKey.AnimationSettings
     SettingsRootCategory.PLUGINS_EXTENSIONS -> BiliPaiNavKey.PluginsSettings()
+    SettingsRootCategory.GAMEPAD_CONTROL -> BiliPaiNavKey.GamepadControlSettings
     SettingsRootCategory.NAVIGATION_INTERACTION -> BiliPaiNavKey.BottomBarSettings
     SettingsRootCategory.HOME_RECOMMENDATION -> BiliPaiNavKey.HomeSettings
     SettingsRootCategory.MESSAGE_NOTIFICATION -> BiliPaiNavKey.MessageNotificationSettings
@@ -120,6 +123,7 @@ private val ROUTE_TO_CATEGORY: Map<String, SettingsRootCategory> = mapOf(
     "content_filter_history" to SettingsRootCategory.PLUGINS_EXTENSIONS,
     "js_plugin" to SettingsRootCategory.PLUGINS_EXTENSIONS,
     "external_media" to SettingsRootCategory.PLUGINS_EXTENSIONS,
+    "gamepad_control_settings" to SettingsRootCategory.GAMEPAD_CONTROL,
     "tips_settings" to SettingsRootCategory.SYSTEM_ABOUT,
     "open_source_licenses" to SettingsRootCategory.SYSTEM_ABOUT,
     "process_memory" to SettingsRootCategory.SYSTEM_ABOUT,
