@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -42,14 +43,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import com.android.purebilibili.core.ui.wallpaper.sharedGlobalWallpaperBackground
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.Hyphens
@@ -80,6 +86,8 @@ import com.android.purebilibili.navigation3.NavigationControlMotionGroup
 import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
 import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import com.android.purebilibili.core.ui.components.appDesktopFocusableItemVisuals
+import com.android.purebilibili.feature.video.ui.components.detectReplyLinkGestures
+import com.android.purebilibili.feature.video.ui.components.replyLinkAt
 import com.android.purebilibili.feature.web.PublicWebLinkText
 
 private const val ARTICLE_BANNER_CORNER_RADIUS_DP = 20f
@@ -311,33 +319,31 @@ fun ArticleDetailScreen(
             }
 
             is ArticleDetailUiState.Success -> {
-                androidx.compose.foundation.text.selection.SelectionContainer {
-                    ArticleDetailContent(
-                        article = state.article,
-                        paddingValues = paddingValues,
-                        transitionEnabled = transitionEnabled,
-                        onSharedReturnReadyChange = { sharedReturnReady = it },
-                        onUserClick = onUserClick,
-                        onArticleClick = onArticleClick,
-                        onAdjacentArticleClick = onAdjacentArticleClick ?: onArticleClick,
-                        comments = comments,
-                        commentJumpToken = commentJumpToken,
-                        readingPreferences = readingPreferences,
-                        readFromStartToken = readFromStartToken,
-                        autoHideBottomBar = autoHideBottomBar,
-                        bottomBarVisible = bottomBarVisible,
-                        onBottomBarVisibilityChange = { bottomBarScrollVisible = it },
-                        commentEntry = (openCommentRootRpid > 0L || openCommentTargetRpid > 0L) && !bodyReadingRequested,
-                        showOutline = showOutline,
-                        onDismissOutline = { showOutline = false },
-                        onOutlineNavigation = {
-                            commentJumpToken = 0
-                            bodyReadingRequested = true
-                        },
-                        onLinkClick = onLinkClick,
-                        onCollectionClick = onCollectionClick,
-                    )
-                }
+                ArticleDetailContent(
+                    article = state.article,
+                    paddingValues = paddingValues,
+                    transitionEnabled = transitionEnabled,
+                    onSharedReturnReadyChange = { sharedReturnReady = it },
+                    onUserClick = onUserClick,
+                    onArticleClick = onArticleClick,
+                    onAdjacentArticleClick = onAdjacentArticleClick ?: onArticleClick,
+                    comments = comments,
+                    commentJumpToken = commentJumpToken,
+                    readingPreferences = readingPreferences,
+                    readFromStartToken = readFromStartToken,
+                    autoHideBottomBar = autoHideBottomBar,
+                    bottomBarVisible = bottomBarVisible,
+                    onBottomBarVisibilityChange = { bottomBarScrollVisible = it },
+                    commentEntry = (openCommentRootRpid > 0L || openCommentTargetRpid > 0L) && !bodyReadingRequested,
+                    showOutline = showOutline,
+                    onDismissOutline = { showOutline = false },
+                    onOutlineNavigation = {
+                        commentJumpToken = 0
+                        bodyReadingRequested = true
+                    },
+                    onLinkClick = onLinkClick,
+                    onCollectionClick = onCollectionClick,
+                )
             }
         }
         }
@@ -691,118 +697,117 @@ private fun ArticleDetailContent(
                     when (block) {
                         is ArticleContentBlock.Heading -> {
                             if (block.spans.isEmpty()) {
-                                AppText(
-                                    text = block.text,
-                                    style = headingStyle,
-                                    color = articleTextColor,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            } else {
-                                val text = buildArticleAnnotatedString(
-                                    spans = block.spans,
-                                    defaultColor = articleTextColor,
-                                    baseFontSize = headingStyle.fontSize,
-                                    linkListener = articleLinkListener,
-                                    explicitFontScale = readingPreferences.fontScale,
-                                    backgroundColor = articleBackground,
-                                )
-                                PublicWebLinkText(text) { previewModifier, onPreviewTextLayout ->
+                                SelectionContainer {
                                     AppText(
-                                        text = text,
+                                        text = block.text,
                                         style = headingStyle,
                                         color = articleTextColor,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = previewModifier,
-                                        onTextLayout = onPreviewTextLayout,
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
+                            } else {
+                                ArticleSelectableText(
+                                    text = buildArticleAnnotatedString(
+                                        spans = block.spans,
+                                        defaultColor = articleTextColor,
+                                        baseFontSize = headingStyle.fontSize,
+                                        linkListener = articleLinkListener,
+                                        explicitFontScale = readingPreferences.fontScale,
+                                        backgroundColor = articleBackground,
+                                    ),
+                                    style = headingStyle,
+                                    color = articleTextColor,
+                                    fontWeight = FontWeight.SemiBold,
+                                    onLinkClick = onLinkClick,
+                                )
                             }
                         }
 
                         is ArticleContentBlock.Paragraph -> {
                             if (block.spans.isEmpty()) {
-                                AppText(
-                                    text = block.text,
-                                    style = bodyStyle,
-                                    color = articleTextColor
-                                )
-                            } else {
-                                val text = buildArticleAnnotatedString(
-                                    spans = block.spans,
-                                    defaultColor = articleTextColor,
-                                    baseFontSize = bodyStyle.fontSize,
-                                    linkListener = articleLinkListener,
-                                    explicitFontScale = readingPreferences.fontScale,
-                                    backgroundColor = articleBackground,
-                                )
-                                PublicWebLinkText(text) { previewModifier, onPreviewTextLayout ->
+                                SelectionContainer {
                                     AppText(
-                                        text = text,
+                                        text = block.text,
                                         style = bodyStyle,
-                                        color = articleTextColor,
-                                        modifier = previewModifier,
-                                        onTextLayout = onPreviewTextLayout,
+                                        color = articleTextColor
                                     )
                                 }
+                            } else {
+                                ArticleSelectableText(
+                                    text = buildArticleAnnotatedString(
+                                        spans = block.spans,
+                                        defaultColor = articleTextColor,
+                                        baseFontSize = bodyStyle.fontSize,
+                                        linkListener = articleLinkListener,
+                                        explicitFontScale = readingPreferences.fontScale,
+                                        backgroundColor = articleBackground,
+                                    ),
+                                    style = bodyStyle,
+                                    color = articleTextColor,
+                                    onLinkClick = onLinkClick,
+                                )
                             }
                         }
 
                         is ArticleContentBlock.Quote -> {
                             if (block.spans.isEmpty()) {
-                                AppText(
-                                    text = block.text,
-                                    style = bodyStyle,
-                                    color = articleQuoteColor,
-                                    modifier = Modifier.padding(start = 12.dp)
-                                )
-                            } else {
-                                val text = buildArticleAnnotatedString(
-                                    spans = block.spans,
-                                    defaultColor = articleQuoteColor,
-                                    baseFontSize = bodyStyle.fontSize,
-                                    linkListener = articleLinkListener,
-                                    explicitFontScale = readingPreferences.fontScale,
-                                    backgroundColor = articleBackground,
-                                )
-                                PublicWebLinkText(text) { previewModifier, onPreviewTextLayout ->
+                                SelectionContainer {
                                     AppText(
-                                        text = text,
+                                        text = block.text,
                                         style = bodyStyle,
                                         color = articleQuoteColor,
-                                        modifier = Modifier.padding(start = 12.dp).then(previewModifier),
-                                        onTextLayout = onPreviewTextLayout,
+                                        modifier = Modifier.padding(start = 12.dp)
                                     )
                                 }
+                            } else {
+                                ArticleSelectableText(
+                                    text = buildArticleAnnotatedString(
+                                        spans = block.spans,
+                                        defaultColor = articleQuoteColor,
+                                        baseFontSize = bodyStyle.fontSize,
+                                        linkListener = articleLinkListener,
+                                        explicitFontScale = readingPreferences.fontScale,
+                                        backgroundColor = articleBackground,
+                                    ),
+                                    style = bodyStyle,
+                                    color = articleQuoteColor,
+                                    modifier = Modifier.padding(start = 12.dp),
+                                    onLinkClick = onLinkClick,
+                                )
                             }
                         }
 
                         is ArticleContentBlock.ListBlock -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                block.items.forEachIndexed { itemIndex, item ->
-                                    val prefix = if (block.ordered) "${itemIndex + 1}. " else "• "
-                                    AppText(
-                                        text = prefix + item,
-                                        style = bodyStyle,
-                                        color = articleTextColor
-                                    )
+                            SelectionContainer {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    block.items.forEachIndexed { itemIndex, item ->
+                                        val prefix = if (block.ordered) "${itemIndex + 1}. " else "• "
+                                        AppText(
+                                            text = prefix + item,
+                                            style = bodyStyle,
+                                            color = articleTextColor
+                                        )
+                                    }
                                 }
                             }
                         }
 
                         is ArticleContentBlock.Code -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(AppShapes.container(ContainerLevel.Card))
-                                    .background(AppSurfaceTokens.surfaceContainer())
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(12.dp)
-                            ) {
-                                AppText(
-                                    text = block.content,
-                                    style = codeStyle.copy(fontFamily = FontFamily.Monospace),
-                                    color = articleCodeColor
-                                )
+                            SelectionContainer {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(AppShapes.container(ContainerLevel.Card))
+                                        .background(AppSurfaceTokens.surfaceContainer())
+                                        .horizontalScroll(rememberScrollState())
+                                        .padding(12.dp)
+                                ) {
+                                    AppText(
+                                        text = block.content,
+                                        style = codeStyle.copy(fontFamily = FontFamily.Monospace),
+                                        color = articleCodeColor
+                                    )
+                                }
                             }
                         }
 
@@ -913,5 +918,47 @@ private fun ArticleDetailContent(
             sourceCornerRadiusDp = request.sourceCornerRadiusDp,
             onDismiss = { imagePreviewRequest = null }
         )
+    }
+}
+
+/**
+ * 正文块单独划选。带链接的 span 用字符命中分发短按，避免划选容器吞掉 [onLinkClick]。
+ */
+@Composable
+private fun ArticleSelectableText(
+    text: AnnotatedString,
+    style: TextStyle,
+    color: Color,
+    onLinkClick: ((String) -> Unit)?,
+    modifier: Modifier = Modifier,
+    fontWeight: FontWeight? = null,
+) {
+    var textLayoutResult by remember(text) { mutableStateOf<TextLayoutResult?>(null) }
+    val opensLinks = onLinkClick != null && text.getLinkAnnotations(0, text.length).isNotEmpty()
+    val linkModifier = if (opensLinks) {
+        Modifier.pointerInput(text) {
+            detectReplyLinkGestures(
+                linkAt = { position -> textLayoutResult?.replyLinkAt(position) },
+                onLinkClick = { link -> link.linkInteractionListener?.onClick(link) },
+                onLongPress = {},
+            )
+        }
+    } else {
+        Modifier
+    }
+    SelectionContainer {
+        PublicWebLinkText(text) { previewModifier, onPreviewTextLayout ->
+            AppText(
+                text = text,
+                style = style,
+                color = color,
+                fontWeight = fontWeight,
+                modifier = modifier.then(linkModifier).then(previewModifier),
+                onTextLayout = { layout ->
+                    textLayoutResult = layout
+                    onPreviewTextLayout(layout)
+                },
+            )
+        }
     }
 }
