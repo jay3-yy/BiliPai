@@ -107,28 +107,68 @@ fun BiliPaiJsPluginContentScreen(
     val store = remember(context) { BiliPaiJsPluginInstallStore.createDefault(context) }
     val runtime = remember(context) { BiliPaiJsRuntime(context) }
     val scope = rememberCoroutineScope()
-    var installed by remember(pluginId) {
-        mutableStateOf(store.listInstalledPlugins().firstOrNull { it.manifest.id == pluginId })
-    }
-    var selectedModule by remember(installed) {
-        mutableStateOf(installed?.manifest?.modules?.firstOrNull())
-    }
-    val preset = remember(pluginId, selectedModule) {
-        val module = selectedModule ?: return@remember null
-        BiliPaiJsLayoutPresetStore.readPreset(context, pluginId, resolveBiliPaiJsModuleId(module))
-    }
-    val paramValues = remember(pluginId, selectedModule) {
-        mutableStateMapOf<String, String>().apply {
-            val module = selectedModule ?: return@apply
-            val presetParams = preset?.params.orEmpty()
-            putAll(
-                resolveBiliPaiJsInitialParamValues(
-                    params = module.params,
-                    savedValues = readBiliPaiJsParamValues(context, pluginId, module),
-                    presetValues = presetParams
-                )
-            )
+    var installed by remember(pluginId) { mutableStateOf<InstalledBiliPaiJsPlugin?>(null) }
+    var selectedModule by remember(pluginId) { mutableStateOf<BiliPaiJsModule?>(null) }
+    var preset by remember(pluginId) { mutableStateOf<BiliPaiJsLayoutPreset?>(null) }
+    val paramValues = remember(pluginId) { mutableStateMapOf<String, String>() }
+    var pluginSeedLoaded by remember(pluginId) { mutableStateOf(false) }
+
+    LaunchedEffect(pluginId) {
+        pluginSeedLoaded = false
+        val loadedInstalled = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            store.readInstalled(pluginId)
         }
+        installed = loadedInstalled
+        val initialModule = loadedInstalled?.manifest?.modules?.firstOrNull()
+        selectedModule = initialModule
+        if (initialModule != null) {
+            val (loadedPreset, initialParams) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val modulePreset = BiliPaiJsLayoutPresetStore.readPreset(
+                    context,
+                    pluginId,
+                    resolveBiliPaiJsModuleId(initialModule),
+                )
+                val resolvedParams = resolveBiliPaiJsInitialParamValues(
+                    params = initialModule.params,
+                    savedValues = readBiliPaiJsParamValues(context, pluginId, initialModule),
+                    presetValues = modulePreset?.params.orEmpty(),
+                )
+                modulePreset to resolvedParams
+            }
+            preset = loadedPreset
+            paramValues.clear()
+            paramValues.putAll(initialParams)
+        } else {
+            preset = null
+            paramValues.clear()
+        }
+        pluginSeedLoaded = true
+    }
+
+    LaunchedEffect(pluginId, selectedModule) {
+        if (!pluginSeedLoaded) return@LaunchedEffect
+        val module = selectedModule
+        if (module == null) {
+            preset = null
+            paramValues.clear()
+            return@LaunchedEffect
+        }
+        val (loadedPreset, initialParams) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val modulePreset = BiliPaiJsLayoutPresetStore.readPreset(
+                context,
+                pluginId,
+                resolveBiliPaiJsModuleId(module),
+            )
+            val resolvedParams = resolveBiliPaiJsInitialParamValues(
+                params = module.params,
+                savedValues = readBiliPaiJsParamValues(context, pluginId, module),
+                presetValues = modulePreset?.params.orEmpty(),
+            )
+            modulePreset to resolvedParams
+        }
+        preset = loadedPreset
+        paramValues.clear()
+        paramValues.putAll(initialParams)
     }
     val effectiveLayout = remember(pluginId, selectedModule, preset) {
         preset?.layout ?: selectedModule?.layout ?: BiliPaiJsLayouts.LIST

@@ -1,0 +1,40 @@
+{
+  "bpxVersion": 1,
+  "id": "community.skin.frost_sakura",
+  "name": "霜樱光学主题",
+  "version": "1.0.0",
+  "description": "适配亮暗双模与液态玻璃实时折射染色的轻量樱粉装扮色板",
+  "license": "CC-BY-4.0",
+  "licenseNote": "原创配色方案，采用 CC-BY-4.0 协议允许社区自由分享与改编",
+  "author": {
+    "name": "蓝雪视觉工坊",
+    "biliMid": 888888,
+    "github": "jay3-yy",
+    "bio": "保持三材质通透呼吸感"
+  },
+  "mounts": [
+    { "slot": "theme.skin", "id": "frost_sakura_skin", "title": "霜樱光学染色" }
+  ],
+  "skin": {
+    "surfaces": ["HOME_TOP_CHROME", "HOME_BOTTOM_BAR", "PLAYER_PROGRESS"],
+    "tokens": {
+      "light": {
+        "topAtmosphereTint": "#FDF2F7",
+        "bottomBarTrimTint": "#FCE8F1",
+        "bottomBarSelectedTint": "#D94E86",
+        "seekbarAccent": "#E05288"
+      },
+      "dark": {
+        "topAtmosphereTint": "#241920",
+        "bottomBarTrimTint": "#2A1C25",
+        "bottomBarSelectedTint": "#FF82B0",
+        "seekbarAccent": "#FF7AA8"
+      },
+      "liquidGlass": {
+        "surfaceTint": "#F7BFD6",
+        "refractionAccent": "#FF8AB5",
+        "tintOpacity": 0.22
+      }
+    }
+  }
+}

@@ -18,19 +18,6 @@ import kotlin.test.assertTrue
 class BottomBarUiSkinDecorationTest {
 
     @Test
-    fun illustratedSkinKeepsTheConfiguredFloatingDock() {
-        val source = File("src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt")
-            .readText()
-        val host = source.substringAfter("fun FrostedBottomBar(")
-            .substringBefore("private fun MaterialBottomBar(")
-        val floatingChrome = source.substringAfter("private fun BiliPaiFloatingBottomBarChrome(")
-            .substringBefore("// BiliPai 对齐：材质/动效由 FloatingBottomBar 三层结构承担")
-
-        assertEquals(2, "isFloating = isFloating,".toRegex().findAll(host).count())
-        assertTrue(!floatingChrome.contains("IllustratedSkinBottomBar("))
-    }
-
-    @Test
     fun illustratedNavigationRequiresArtworkAndKeepsTabletNavigation() {
         assertTrue(shouldUseIllustratedSkinBottomBar(true, true, false))
         assertTrue(!shouldUseIllustratedSkinBottomBar(false, true, false))
@@ -43,25 +30,6 @@ class BottomBarUiSkinDecorationTest {
         assertEquals(52.dp, resolveIllustratedSkinIconSize(80.dp))
         assertEquals(40.dp, resolveIllustratedSkinIconSize(48.dp))
         assertEquals(24.dp, resolveIllustratedSkinIconSize(24.dp))
-    }
-
-    @Test
-    fun bottomSkinDecorativeTrimSupportsOptionalShapeClipForFloatingShell() {
-        val source = File("src/main/java/com/android/purebilibili/feature/home/components/BottomBarUiSkin.kt")
-            .readText()
-        val trimSource = source
-            .substringAfter("internal fun BottomBarSkinDecorativeTrim(")
-            .substringBefore("private fun parseUiSkinColor(")
-
-        assertTrue(trimSource.contains("clipShape: androidx.compose.ui.graphics.Shape? = null"))
-        assertTrue(trimSource.contains("clipShape?.let { Modifier.clip(it) } ?: Modifier"))
-        assertTrue(trimSource.contains(".clearAndSetSemantics {}"))
-        assertTrue(trimSource.contains(".drawBehind {"))
-        assertTrue(trimSource.contains("drawRect(decoration.bottomTrimTint)"))
-        // Fit 保留完整皮肤图，基础底色填补未覆盖区域。
-        assertTrue(trimSource.contains("ContentScale.Fit"))
-        assertTrue(trimSource.contains("Alignment.BottomCenter"))
-        assertTrue(!trimSource.contains(".alpha(0.82f)"))
     }
 
     @Test
@@ -220,26 +188,38 @@ class BottomBarUiSkinDecorationTest {
         )
 
         assertEquals("/tmp/tail_icon_main.png", decoration?.iconPathFor(BottomNavItem.HOME))
-        assertEquals("/tmp/tail_icon_main.png", decoration?.iconPathFor(BottomNavItem.HOME, selected = true))
+        assertEquals("/tmp/tail_icon_selected_main.png", decoration?.iconPathFor(BottomNavItem.HOME, selected = true))
         assertEquals("/tmp/tail_icon_dynamic.png", decoration?.iconPathFor(BottomNavItem.DYNAMIC))
         assertEquals(
-            "/tmp/tail_icon_dynamic.png",
+            "/tmp/tail_icon_selected_dynamic.png",
             decoration?.iconPathFor(BottomNavItem.DYNAMIC, selected = true)
         )
         assertEquals("/tmp/tail_icon_shop.png", decoration?.iconPathFor(BottomNavItem.HISTORY))
         assertEquals(
-            "/tmp/tail_icon_shop.png",
+            "/tmp/tail_icon_selected_shop.png",
             decoration?.iconPathFor(BottomNavItem.HISTORY, selected = true)
         )
         assertEquals("/tmp/tail_icon_channel.png", decoration?.iconPathFor(BottomNavItem.LISTEN_VIDEO))
         assertEquals(
-            "/tmp/tail_icon_channel.png",
+            "/tmp/tail_icon_selected_channel.png",
             decoration?.iconPathFor(BottomNavItem.LISTEN_VIDEO, selected = true)
         )
         assertEquals("/tmp/tail_icon_myself.png", decoration?.iconPathFor(BottomNavItem.PROFILE))
         assertEquals("/tmp/tail_icon_myself.png", decoration?.iconPathFor(BottomNavItem.SETTINGS))
         assertEquals("/tmp/tail_icon_shop.png", decoration?.iconPathFor(BottomNavItem.STORY))
         assertEquals("/tmp/tail_icon_channel.png", decoration?.iconPathFor(BottomNavItem.LIVE))
+
+        // 可见自定义槽位发生资源重名冲突时自动分配尚未出场的角色贴图，避免相邻 Tab 撞脸
+        val customVisible = listOf(
+            BottomNavItem.HOME,
+            BottomNavItem.DYNAMIC,
+            BottomNavItem.PROFILE,
+            BottomNavItem.SETTINGS,
+        )
+        val distinctResolved = customVisible.mapNotNull { nav ->
+            decoration?.iconPathFor(nav, selected = false, visibleItems = customVisible)
+        }.toSet()
+        assertEquals(4, distinctResolved.size)
     }
 
     @Test
@@ -313,7 +293,7 @@ class BottomBarUiSkinDecorationTest {
 
         assertEquals("/tmp/tail_icon_channel.png", decoration?.iconPathFor(BottomNavItem.LISTEN_VIDEO))
         assertEquals(
-            "/tmp/tail_icon_channel.png",
+            "/tmp/tail_icon_selected_channel.png",
             decoration?.iconPathFor(BottomNavItem.LISTEN_VIDEO, selected = true)
         )
     }

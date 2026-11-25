@@ -16,6 +16,7 @@ internal enum class SettingsBackTarget {
     UPDATE_RESULT,
     CHANGELOG_RESULT,
     BLOCKED_LIST,
+    COMMENT_FRAUD_HISTORY,
 }
 
 internal data class SettingsBottomBarScrollState(
@@ -92,8 +93,10 @@ internal fun resolveSettingsBackTarget(
     showUpdateResult: Boolean = false,
     showChangelogResult: Boolean = false,
     showBlockedList: Boolean = false,
+    showCommentFraudHistory: Boolean = false,
 ): SettingsBackTarget = when {
     showBlockedList -> SettingsBackTarget.BLOCKED_LIST
+    showCommentFraudHistory -> SettingsBackTarget.COMMENT_FRAUD_HISTORY
     showChangelogResult -> SettingsBackTarget.CHANGELOG_RESULT
     showUpdateResult -> SettingsBackTarget.UPDATE_RESULT
     showReleaseDisclaimerDialog -> SettingsBackTarget.RELEASE_DISCLAIMER_DIALOG

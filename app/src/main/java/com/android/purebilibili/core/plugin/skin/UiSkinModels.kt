@@ -8,6 +8,7 @@ enum class UiSkinSurface {
     HOME_DRAWER,
     PROFILE,
     DYNAMIC_PUBLISH,
+    COMMENT_CARD,
     LOADING_INDICATOR,
     LIKE_EFFECT,
     PLAYER_PROGRESS
@@ -42,6 +43,7 @@ data class UiSkinManifest(
 
 @Serializable
 data class UiSkinAssets(
+    val coverImage: String? = null,
     val bottomBarTrim: String? = null,
     val drawerBottomTrim: String? = null,
     val topAtmosphere: String? = null,
@@ -55,6 +57,11 @@ data class UiSkinAssets(
     val homeChannelSelectedIcon: String? = null,
     val dynamicPublishIcon: String? = null,
     val dynamicPublishSelectedIcon: String? = null,
+    val fanCardImage: String? = null,
+    val fanShareCardImage: String? = null,
+    val commentCardBgImage: String? = null,
+    val spaceVideoVertical: String? = null,
+    val spaceVideoHorizontal: String? = null,
     val loadingAnimation: String? = null,
     val loadingFrame: String? = null,
     val likeEffectAnimation: String? = null,
@@ -68,6 +75,7 @@ data class UiSkinAssets(
 ) {
     fun declaredPaths(): List<String> {
         return buildList {
+            coverImage?.let(::add)
             bottomBarTrim?.let(::add)
             drawerBottomTrim?.let(::add)
             topAtmosphere?.let(::add)
@@ -81,6 +89,11 @@ data class UiSkinAssets(
             homeChannelSelectedIcon?.let(::add)
             dynamicPublishIcon?.let(::add)
             dynamicPublishSelectedIcon?.let(::add)
+            fanCardImage?.let(::add)
+            fanShareCardImage?.let(::add)
+            commentCardBgImage?.let(::add)
+            spaceVideoVertical?.let(::add)
+            spaceVideoHorizontal?.let(::add)
             loadingAnimation?.let(::add)
             loadingFrame?.let(::add)
             likeEffectAnimation?.let(::add)
@@ -106,20 +119,27 @@ data class UiSkinSpaceBackground(
 
 @Serializable
 data class UiSkinColorTokens(
+    val coverTint: String? = null,
     val bottomBarTrimTint: String? = null,
     val bottomBarIconTint: String? = null,
     val bottomBarIconDarkTint: String? = null,
     val bottomBarSelectedTint: String? = null,
     val bottomBarSelectedDarkTint: String? = null,
     val topAtmosphereTint: String? = null,
+    val topForegroundTint: String? = null,
+    val topForegroundDarkTint: String? = null,
     val searchCapsuleTint: String? = null,
     val sideBackgroundTint: String? = null,
     val dynamicPublishIconTint: String? = null,
     val dynamicPublishShadeTop: String? = null,
     val dynamicPublishShadeBottom: String? = null,
+    val fanNoColor: String? = null,
+    val commentFanNoColor: String? = null,
     val playerProgressActiveTint: String? = null,
     val playerProgressBufferedTint: String? = null,
     val playerProgressTrackTint: String? = null,
+    val liquidGlassSurfaceTint: String? = null,
+    val liquidGlassTintOpacity: Float? = null,
     val colorMode: String? = null
 )
 
@@ -164,16 +184,35 @@ data class InstalledUiSkinPackage(
     }
 }
 
+enum class UiSkinTonePolicy(val label: String) {
+    AUTO("自动采样"),
+    FORCE_LIGHT_BG("浅底深字"),
+    FORCE_DARK_BG("深底浅字"),
+}
+
 data class UiSkinSelection(
     val enabled: Boolean = false,
     val selectedSkinId: String? = null,
-    val selectedInstallId: String? = null
+    val selectedInstallId: String? = null,
+    val disabledSurfaces: Set<UiSkinSurface> = emptySet(),
+    val customFanNumber: String = "000088",
+    val tonePolicy: UiSkinTonePolicy = UiSkinTonePolicy.AUTO,
 )
 
 data class UiSkinState(
     val enabled: Boolean = false,
-    val activeSkin: InstalledUiSkinPackage? = null
-)
+    val activeSkin: InstalledUiSkinPackage? = null,
+    val availableSurfaces: Set<UiSkinSurface> = activeSkin?.manifest?.surfaces.orEmpty(),
+    val disabledSurfaces: Set<UiSkinSurface> = emptySet(),
+    val customFanNumber: String = "000088",
+    val tonePolicy: UiSkinTonePolicy = UiSkinTonePolicy.AUTO,
+) {
+    fun isSurfaceEnabled(surface: UiSkinSurface): Boolean {
+        return enabled && activeSkin != null &&
+            surface in activeSkin.manifest.surfaces &&
+            surface !in disabledSurfaces
+    }
+}
 
 internal fun buildUiSkinInstallId(
     skinId: String,

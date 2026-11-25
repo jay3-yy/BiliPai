@@ -29,23 +29,59 @@ object RuleEngine {
                 is Condition.Or -> condition.conditions.forEach(::visit)
             }
         }
-        rules.forEach { rule -> rule.toCondition()?.let(::visit) }
+        rules.forEach { rule ->
+            rule.toCondition()?.let(::visit)
+            if (!rule.pattern.isNullOrBlank()) {
+                regexCache.get(rule.pattern)
+            }
+        }
     }
-    
+
     /**
-     * 评估视频是否应该显示
+     * 评估视频是否应该显示（hide 与 fold 在主列表收拢过滤）
      */
     fun shouldShowVideo(video: VideoItem, rules: List<Rule>): Boolean {
         for (rule in rules) {
-            if (rule.action != RuleAction.HIDE) continue
+            if (rule.action != RuleAction.HIDE && rule.action != RuleAction.FOLD) continue
             
             val condition = rule.toCondition() ?: continue
             if (evaluateCondition(condition) { field -> getVideoFieldValue(video, field) }) {
-                Logger.d(TAG) { "🚫 隐藏视频: ${video.title} (规则匹配)" }
+                Logger.d(TAG) { "🚫 隐藏/折叠视频: ${video.title} (规则匹配)" }
                 return false
             }
         }
         return true
+    }
+
+    /**
+     * 执行 `.bpx` feed.pipe 原地净化与语义标签动作（rewriteTitle / badge）
+     */
+    fun transformVideo(video: VideoItem, rules: List<Rule>): VideoItem {
+        var currentTitle = video.title
+        for (rule in rules) {
+            if (rule.action != RuleAction.REWRITE_TITLE && rule.action != RuleAction.BADGE) continue
+            val condition = rule.toCondition() ?: continue
+            if (!evaluateCondition(condition) { field ->
+                    if (field == "title") currentTitle else getVideoFieldValue(video, field)
+                }
+            ) continue
+            when (rule.action) {
+                RuleAction.REWRITE_TITLE -> {
+                    val regex = rule.pattern?.takeIf { it.isNotBlank() }?.let(regexCache::get)
+                    if (regex != null) {
+                        val cleaned = regex.replace(currentTitle, rule.replacement.orEmpty()).trim()
+                        if (cleaned.isNotEmpty()) currentTitle = cleaned
+                    }
+                }
+                RuleAction.BADGE -> {
+                    val badge = rule.text?.trim().orEmpty()
+                    if (badge.isNotEmpty() && !currentTitle.startsWith("[$badge]")) {
+                        currentTitle = "[$badge] $currentTitle"
+                    }
+                }
+            }
+        }
+        return if (currentTitle == video.title) video else video.copy(title = currentTitle)
     }
     
     /**
@@ -115,10 +151,10 @@ object RuleEngine {
     private fun getVideoFieldValue(video: VideoItem, field: String): Any? {
         return when (field) {
             "title" -> video.title
-            "duration" -> video.duration
+            "duration", "durationSec" -> video.duration
             "bvid" -> video.bvid
             "tid" -> video.tid
-            "tname" -> video.tname
+            "tname", "zoneName" -> video.tname
             "owner.mid" -> video.owner.mid
             "owner.name" -> video.owner.name
             "stat.view" -> video.stat.view

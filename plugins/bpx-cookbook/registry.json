@@ -1,0 +1,90 @@
+{
+  "registryVersion": 1,
+  "name": "BiliPai 官方精选食谱源 (Beta)",
+  "maintainer": {
+    "name": "BiliPai 共创工坊",
+    "biliMid": 233333,
+    "url": "https://github.com/jay3-yy/BiliPai"
+  },
+  "updatedAt": "2026-11-25T13:45:00Z",
+  "extensions": [
+    {
+      "id": "community.clean.declickbait",
+      "name": "去标题党与热点折叠",
+      "version": "1.0.0",
+      "minAppVersionCode": 1,
+      "slots": ["feed.pipe"],
+      "description": "剥离夸张震惊体前缀，折叠超短引流视频并为深度长片打标",
+      "downloadUrl": "https://raw.githubusercontent.com/jay3-yy/BiliPai/main/plugins/bpx-cookbook/declickbait.bpx.json",
+      "sha256": "4a8e550e21dc395b0fb0d762253f6bd2b1d3ddcf0565ff45d416932796af1517",
+      "authorName": "BiliPai 共创工坊",
+      "authorBiliMid": 233333,
+      "changelog": "首发 Beta 样板：标题党净化 + 低赞超短视频折叠 + 深度长片徽标"
+    },
+    {
+      "id": "community.ai.class_rep",
+      "name": "AI 省流课代表",
+      "version": "1.0.0",
+      "minAppVersionCode": 1,
+      "slots": ["detail.companion"],
+      "description": "提取 CC 字幕流式生成章节摘要与可点击跳转时间轴",
+      "downloadUrl": "https://raw.githubusercontent.com/jay3-yy/BiliPai/main/plugins/bpx-cookbook/ai-summary.bpx.js",
+      "sha256": "af90de9a84bd3e94b595f0918e564fd3b03f906314afb3d50acc9e3cd6746b29",
+      "authorName": "BiliPai Lab",
+      "authorBiliMid": 10001,
+      "changelog": "首发 Beta 样板：视频详情页流式 SSE 摘要与时间轴一键直跳"
+    },
+    {
+      "id": "community.danmaku.dandan_supplement",
+      "name": "弹弹Play 弹幕补全",
+      "version": "1.0.0",
+      "minAppVersionCode": 1,
+      "slots": ["player.track"],
+      "description": "为番剧与冷门剧集自动匹配补充弹幕轨并与主站弹幕混流",
+      "downloadUrl": "https://raw.githubusercontent.com/jay3-yy/BiliPai/main/plugins/bpx-cookbook/external-danmaku.bpx.js",
+      "sha256": "6281896385ed18c9baa958fe125dc0771223e2b1c08a119b07d4a05fd4436489",
+      "authorName": "番剧补完计划",
+      "authorBiliMid": 668899,
+      "changelog": "首发 Beta 样板：外挂弹幕匹配与主站弹幕池混流"
+    },
+    {
+      "id": "community.lens.hidden_gems",
+      "name": "冷门宝藏挖掘透镜",
+      "version": "1.0.0",
+      "minAppVersionCode": 1,
+      "slots": ["home.lens"],
+      "description": "按高赞播比与完播潜力重排候选流，优先发现中小 UP 主硬核作品",
+      "downloadUrl": "https://raw.githubusercontent.com/jay3-yy/BiliPai/main/plugins/bpx-cookbook/hidden-gems-lens.bpx.js",
+      "sha256": "314c050c1b9119cc76e1b15a92e4a85a8e5315e52f7533f640d80422a9d7f8ec",
+      "authorName": "算法驯服师",
+      "authorBiliMid": 5201314,
+      "changelog": "首发 Beta 样板：纯本地高赞播比重排推荐透镜"
+    },
+    {
+      "id": "community.comment.timestamp_rep",
+      "name": "评论指路课代表置顶",
+      "version": "1.0.0",
+      "minAppVersionCode": 1,
+      "slots": ["community.craft"],
+      "description": "提取热评中的时间轴指路生成置顶跳转卡，并折叠抽奖刷屏",
+      "downloadUrl": "https://raw.githubusercontent.com/jay3-yy/BiliPai/main/plugins/bpx-cookbook/comment-rep.bpx.js",
+      "sha256": "6379f62df2c18ce9cd45486c249bd448df9ea7f629bfee58b0e00ccf777b7129",
+      "authorName": "省流协会",
+      "authorBiliMid": 778899,
+      "changelog": "首发 Beta 样板：热评时间轴速览置顶卡与抽奖刷屏温和折叠"
+    },
+    {
+      "id": "community.skin.frost_sakura",
+      "name": "霜樱光学主题",
+      "version": "1.0.0",
+      "minAppVersionCode": 1,
+      "slots": ["theme.skin"],
+      "description": "适配亮暗双模与液态玻璃实时折射染色的轻量樱粉装扮色板",
+      "downloadUrl": "https://raw.githubusercontent.com/jay3-yy/BiliPai/main/plugins/bpx-cookbook/three-material-skin.bpx.json",
+      "sha256": "e31d7279fa79c4dd364e8fca1414959b26c78e2be6714e182044b9cb859277d7",
+      "authorName": "蓝雪视觉工坊",
+      "authorBiliMid": 888888,
+      "changelog": "首发 Beta 样板：MD3 / Miuix / 液态玻璃三材质光学主题色板"
+    }
+  ]
+}

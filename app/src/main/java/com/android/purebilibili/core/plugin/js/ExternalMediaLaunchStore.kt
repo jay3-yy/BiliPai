@@ -14,8 +14,14 @@ data class ExternalMediaLaunchRequest(
 )
 
 object ExternalMediaLaunchStore {
-    private val requests = ConcurrentHashMap<String, ExternalMediaLaunchRequest>()
+    private const val MAX_CACHED_LAUNCH_REQUESTS = 16
+    private val requests = object : LinkedHashMap<String, ExternalMediaLaunchRequest>(16, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, ExternalMediaLaunchRequest>?
+        ): Boolean = size > MAX_CACHED_LAUNCH_REQUESTS
+    }
 
+    @Synchronized
     fun put(
         title: String,
         coverUrl: String?,
@@ -35,11 +41,23 @@ object ExternalMediaLaunchStore {
         return launchId
     }
 
+    @Synchronized
     fun get(launchId: String): ExternalMediaLaunchRequest? {
         return requests[launchId]
     }
 
+    @Synchronized
     fun remove(launchId: String) {
         requests.remove(launchId)
+    }
+
+    @Synchronized
+    fun trimToSize(maxEntries: Int) {
+        val safeMax = maxEntries.coerceAtLeast(0)
+        val iterator = requests.entries.iterator()
+        while (requests.size > safeMax && iterator.hasNext()) {
+            iterator.next()
+            iterator.remove()
+        }
     }
 }

@@ -211,6 +211,7 @@ internal fun PluginsScreen(
             initialImportUrl = initialImportUrl,
             onOpenJsPlugin = { onNavigate(BiliPaiNavKey.JsPluginContent(it)) },
             onOpenSkinCatalog = { onNavigate(BiliPaiNavKey.PluginSkinCatalog) },
+            onOpenCreatorSpace = { mid -> onNavigate(BiliPaiNavKey.Space(mid)) },
         )
     }
 }
@@ -227,6 +228,7 @@ fun PluginsContent(
     onOpenJsPlugin: (String) -> Unit = {},
     onOpenSkinCatalog: () -> Unit = {},
     onCreateJsonPlugin: () -> Unit = {},
+    onOpenCreatorSpace: (Long) -> Unit = {},
 ) {
     val commonPlugins = remember(plugins) {
         plugins.filter { it.plugin.id in pluginCenterCommonOrder }
@@ -237,6 +239,20 @@ fun PluginsContent(
     val scope = rememberCoroutineScope()
     LaunchedEffect(context) {
         com.android.purebilibili.core.plugin.json.JsonPluginManager.initialize(context)
+        com.android.purebilibili.core.plugin.bpx.BpxInstaller.ensureLoaded(context)
+    }
+    val installedBpxExtensions by com.android.purebilibili.core.plugin.bpx.BpxInstaller.extensionsFlow
+        .collectAsStateWithLifecycle()
+    var loadedBpxRegistries by remember {
+        mutableStateOf<List<com.android.purebilibili.core.plugin.bpx.LoadedBpxRegistry>>(emptyList())
+    }
+    var isLoadingBpxRegistries by remember { mutableStateOf(false) }
+    var downloadingRegistryExtensionId by remember { mutableStateOf<String?>(null) }
+    var showBpxRegistrySourceDialog by remember { mutableStateOf(false) }
+    var customRegistryUrlInput by remember { mutableStateOf("") }
+    var customRegistryError by remember { mutableStateOf<String?>(null) }
+    var bpxSettingsTarget by remember {
+        mutableStateOf<com.android.purebilibili.core.plugin.bpx.InstalledBpxRecord?>(null)
     }
     val effectMatchHintsEnabledFlow = remember(context) {
         PluginStore.effectMatchHintsEnabledFlow(context)
@@ -279,6 +295,8 @@ fun PluginsContent(
     var showPreviewDialog by remember { mutableStateOf(false) }
     var previewPlugin by remember { mutableStateOf<com.android.purebilibili.core.plugin.json.JsonRulePlugin?>(null) }
     var previewSourceUrl by remember { mutableStateOf<String?>(null) }
+    var bpxPreview by remember { mutableStateOf<com.android.purebilibili.core.plugin.bpx.BpxPreviewPackage?>(null) }
+    var bpxInstalling by remember { mutableStateOf(false) }
     var initialImportConsumed by remember(initialImportUrl) { mutableStateOf(false) }
     val kotlinPluginStore = remember(context) {
         ExternalKotlinPluginInstallStore.createDefault(context)
@@ -436,6 +454,20 @@ fun PluginsContent(
 
     fun requestPreview(rawUrl: String) {
         val normalizedUrl = rawUrl.trim()
+        if (com.android.purebilibili.core.plugin.bpx.BpxOfflineCodec.isOfflinePreviewUri(normalizedUrl)) {
+            com.android.purebilibili.core.plugin.bpx.BpxOfflineCodec
+                .decodeOfflinePreviewUri(normalizedUrl)
+                .onSuccess { decoded ->
+                    bpxPreview = decoded
+                    showImportDialog = false
+                    importError = null
+                }
+                .onFailure { error ->
+                    importError = error.message ?: "离线二维码扩展解析失败"
+                    showImportDialog = true
+                }
+            return
+        }
         val validationError = validateImportUrlOrError(normalizedUrl)
         if (validationError != null) {
             importError = validationError
@@ -445,6 +477,25 @@ fun PluginsContent(
         importError = null
         isPreviewLoading = true
         scope.launch {
+            val cleanPath = normalizedUrl.substringBefore('?').lowercase()
+            if (cleanPath.endsWith(".bpx.json") || cleanPath.endsWith(".bpx.js")) {
+                val bpxResult = withContext(Dispatchers.IO) {
+                    runCatching { downloadJsRemotePlugin(normalizedUrl) }
+                        .fold(
+                            onSuccess = { text -> com.android.purebilibili.core.plugin.bpx.BpxOfflineCodec.parseBpxSource(text) },
+                            onFailure = { err -> Result.failure(err) }
+                        )
+                }
+                isPreviewLoading = false
+                bpxResult.onSuccess { parsed ->
+                    bpxPreview = parsed
+                    showImportDialog = false
+                }.onFailure { err ->
+                    importError = err.message ?: ".bpx 扩展预览失败"
+                    showImportDialog = true
+                }
+                return@launch
+            }
             val result = com.android.purebilibili.core.plugin.json.JsonPluginManager.previewFromUrl(normalizedUrl)
             isPreviewLoading = false
             if (result.isSuccess) {
@@ -555,6 +606,70 @@ fun PluginsContent(
             extraBottom = contentBottomPadding,
         )
     ) {
+            item(key = "plugin-beta-banner") {
+                AppSurface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 12.dp)
+                        .clip(AppShapes.container(ContainerLevel.Card)),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        AppIcon(
+                            imageVector = rememberSettingsVector(
+                                R.drawable.ph_sparkle_24,
+                                R.drawable.ms_auto_awesome_24
+                            ),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .size(20.dp),
+                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                AppText(
+                                    text = "插件与扩展系统处于 Beta 测试阶段",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = AppContentColors.primaryText(),
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                                AppSurface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                ) {
+                                    AppText(
+                                        text = "BETA",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
+                            AppText(
+                                text = "当前 .bpx 扩展工坊、装扮部件与第三方沙盒接口仍在持续演进。所有外部扩展均运行于无登录凭证的隔离沙盒，连续超时或异常达 3 次将自动熔断停用。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppContentColors.secondaryText(),
+                            )
+                        }
+                    }
+                }
+            }
+
             if (missingRecommendedPlugins.isNotEmpty()) {
                 item(key = "starter-recommended-bundle") {
                     AppSurface(
@@ -597,6 +712,263 @@ fun PluginsContent(
             }
 
             builtInSection("常用插件", commonPlugins)
+
+            item(key = "bpx-workshop-heading") { PluginCenterSectionTitle("扩展工坊 (.bpx Beta)") }
+            item(key = "bpx-workshop-actions") {
+                AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    AppPreference(
+                        icon = rememberSettingsVector(R.drawable.ph_compass_24, R.drawable.ms_dashboard_24),
+                        title = if (isLoadingBpxRegistries) "正在同步订阅源目录…" else "浏览扩展订阅源工坊",
+                        subtitle = if (loadedBpxRegistries.isEmpty()) {
+                            "拉取官方食谱与已订阅 registry.json，支持一键安装与版本更新检测"
+                        } else {
+                            val totalExt = loadedBpxRegistries.sumOf { it.manifest?.extensions?.size ?: 0 }
+                            "已加载 ${loadedBpxRegistries.size} 个订阅源 · 共 $totalExt 款扩展（点击刷新）"
+                        },
+                        onClick = if (isLoadingBpxRegistries) null else ({
+                            isLoadingBpxRegistries = true
+                            scope.launch {
+                                loadedBpxRegistries = com.android.purebilibili.core.plugin.bpx.BpxRegistryManager
+                                    .fetchAllSubscribedRegistries(context)
+                                isLoadingBpxRegistries = false
+                            }
+                        }),
+                    )
+                    AppPreferenceDivider()
+                    AppPreference(
+                        icon = rememberSettingsVector(R.drawable.ph_link_24, R.drawable.ms_link_24),
+                        title = "管理自定义订阅源 (registry.json)",
+                        subtitle = "已订阅 ${com.android.purebilibili.core.plugin.bpx.BpxRegistryManager.getSubscribedUrls(context).size} 个静态扩展源",
+                        onClick = {
+                            customRegistryError = null
+                            showBpxRegistrySourceDialog = true
+                        },
+                    )
+                }
+            }
+
+            if (installedBpxExtensions.isNotEmpty()) {
+                item(key = "bpx-installed-list") {
+                    AppSurface(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .clip(AppShapes.container(ContainerLevel.Card)),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 1.dp,
+                    ) {
+                        Column {
+                            installedBpxExtensions.forEachIndexed { index, record ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            AppText(
+                                                text = record.manifest.name,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.Medium,
+                                                color = AppContentColors.primaryText(),
+                                            )
+                                            AppText(
+                                                text = "v${record.manifest.version}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = AppContentColors.secondaryText(),
+                                            )
+                                            if (record.trippedCount >= 3) {
+                                                AppSurface(
+                                                    shape = RoundedCornerShape(999.dp),
+                                                    color = MaterialTheme.colorScheme.errorContainer,
+                                                ) {
+                                                    AppText(
+                                                        text = "已熔断",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        AppText(
+                                            text = "${record.manifest.author.name} · ${record.manifest.mounts.joinToString { it.slot }}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = AppContentColors.secondaryText(),
+                                        )
+                                    }
+                                    if (record.manifest.settings.isNotEmpty()) {
+                                        AppTextButton(onClick = { bpxSettingsTarget = record }) {
+                                            AppText("配置")
+                                        }
+                                    }
+                                    AppTextButton(
+                                        onClick = {
+                                            scope.launch {
+                                                com.android.purebilibili.core.plugin.bpx.BpxInstaller
+                                                    .uninstall(context, record.manifest.id)
+                                                showToast("已卸载《${record.manifest.name}》")
+                                            }
+                                        }
+                                    ) {
+                                        AppText("卸载", color = AppContentColors.error())
+                                    }
+                                    AppAdaptiveSwitch(
+                                        checked = record.enabled,
+                                        onCheckedChange = { checked ->
+                                            scope.launch {
+                                                com.android.purebilibili.core.plugin.bpx.BpxInstaller
+                                                    .setEnabled(context, record.manifest.id, checked)
+                                            }
+                                        },
+                                    )
+                                }
+                                if (index < installedBpxExtensions.lastIndex) {
+                                    AppPreferenceDivider()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (loadedBpxRegistries.isNotEmpty()) {
+                item(key = "bpx-registry-catalog") {
+                    val installedById = remember(installedBpxExtensions) {
+                        installedBpxExtensions.associateBy { it.manifest.id }
+                    }
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        loadedBpxRegistries.forEach { loaded ->
+                            AppSurface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(AppShapes.container(ContainerLevel.Card)),
+                                color = MaterialTheme.colorScheme.surface,
+                                tonalElevation = 1.dp,
+                            ) {
+                                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                    AppText(
+                                        text = loaded.manifest?.name ?: loaded.sourceUrl,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = AppContentColors.primaryText(),
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                    )
+                                    if (loaded.error != null) {
+                                        AppText(
+                                            text = "源读取失败：${loaded.error}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = AppContentColors.error(),
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                        )
+                                    } else {
+                                        val entries = loaded.manifest?.extensions.orEmpty()
+                                        entries.forEachIndexed { idx, entry ->
+                                            val installed = installedById[entry.id]
+                                            val hasUpdate = com.android.purebilibili.core.plugin.bpx.BpxRegistryManager
+                                                .hasNewerVersion(entry.version, installed?.manifest?.version)
+                                            val isFetchingThis = downloadingRegistryExtensionId == entry.id
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.weight(1f),
+                                                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                    ) {
+                                                        AppText(
+                                                            text = entry.name,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = AppContentColors.primaryText(),
+                                                        )
+                                                        if (hasUpdate && installed != null) {
+                                                            AppSurface(
+                                                                shape = RoundedCornerShape(999.dp),
+                                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                            ) {
+                                                                AppText(
+                                                                    text = "可更新 v${installed.manifest.version} → v${entry.version}",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                                                )
+                                                            }
+                                                        } else {
+                                                            AppText(
+                                                                text = "v${entry.version}",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = AppContentColors.secondaryText(),
+                                                            )
+                                                        }
+                                                    }
+                                                    if (entry.description.isNotBlank()) {
+                                                        AppText(
+                                                            text = entry.description,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = AppContentColors.secondaryText(),
+                                                        )
+                                                    }
+                                                    AppText(
+                                                        text = entry.slots.joinToString(" · "),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.primary,
+                                                    )
+                                                }
+                                                AppTextButton(
+                                                    enabled = !isFetchingThis,
+                                                    onClick = {
+                                                        downloadingRegistryExtensionId = entry.id
+                                                        scope.launch {
+                                                            val res = com.android.purebilibili.core.plugin.bpx.BpxRegistryManager
+                                                                .downloadExtensionPreview(entry)
+                                                            downloadingRegistryExtensionId = null
+                                                            res.onSuccess { preview ->
+                                                                bpxPreview = preview
+                                                            }.onFailure { err ->
+                                                                showToast(err.message ?: "扩展下载校验失败")
+                                                            }
+                                                        }
+                                                    },
+                                                ) {
+                                                    AppText(
+                                                        when {
+                                                            isFetchingThis -> "读取中…"
+                                                            hasUpdate -> "更新"
+                                                            installed != null -> "重装"
+                                                            else -> "安装"
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                            if (idx < entries.lastIndex) {
+                                                AppPreferenceDivider()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             item(key = "rules-heading") { PluginCenterSectionTitle("自定义规则") }
             item(key = "rule-actions") {
@@ -1487,7 +1859,8 @@ fun PluginsContent(
                     )
                     if (preview.manifest.assets.homeProfileBackground != null ||
                         preview.manifest.assets.homeProfileSquaredBackground != null ||
-                        preview.manifest.assets.homeProfileVideoBackground != null
+                        preview.manifest.assets.homeProfileVideoBackground != null ||
+                        preview.manifest.assets.spaceBackgrounds.isNotEmpty()
                     ) {
                         AppText("导入方式", style = MaterialTheme.typography.labelLarge)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1538,6 +1911,9 @@ fun PluginsContent(
                                     selectedInstallId = installed.installId
                                 )
                             )
+                            if (com.android.purebilibili.core.plugin.skin.UiSkinSurface.PROFILE in installed.manifest.surfaces) {
+                                scope.launch { SettingsManager.setProfileBgUseSkin(context, true) }
+                            }
                             uiSkinPreview = null
                             uiSkinPackageBytes = null
                             uiSkinPreviewAssetFiles = emptyMap()
@@ -1578,12 +1954,22 @@ fun PluginsContent(
             isActive = isActive
         )
         val imagePreviewItems = buildUiSkinImagePreviewItems(installed.assetFiles)
+        var fanNumberDraft by remember(installed.installId, uiSkinState.customFanNumber) {
+            mutableStateOf(uiSkinState.customFanNumber)
+        }
+        val previewMaxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.62f
         AppAlertDialog(
             onDismissRequest = { uiSkinInstalledPreview = null },
-            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_eye_24, R.drawable.ms_visibility_24), title = "皮肤预览") },
-            title = { AppText("皮肤预览") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_eye_24, R.drawable.ms_visibility_24), title = "皮肤与部件管理") },
+            title = { AppText("皮肤预览与部件管理") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = previewMaxHeight)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     AppText(
                         text = previewModel.title,
                         style = MaterialTheme.typography.titleMedium,
@@ -1594,18 +1980,120 @@ fun PluginsContent(
                         style = MaterialTheme.typography.bodySmall,
                         color = AppContentColors.secondaryText()
                     )
-                    AppText(
-                        text = previewModel.packageHashText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.secondaryText()
+                    UiSkinCompositionPreview(
+                        data = UiSkinCompositionPreviewData(
+                            displayName = installed.displayName,
+                            manifest = installed.manifest,
+                            assetFiles = installed.assetFiles,
+                            darkMode = com.android.purebilibili.core.ui.isAppInDarkTheme(),
+                        )
                     )
+                    if (isActive) {
+                        AppText(
+                            text = "顶栏与状态栏明暗策略",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = AppContentColors.primaryText()
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            com.android.purebilibili.core.plugin.skin.UiSkinTonePolicy.entries.forEach { policy ->
+                                val selected = uiSkinState.tonePolicy == policy
+                                AppSurface(
+                                    onClick = { UiSkinSettingsStore.setTonePolicy(context, policy) },
+                                    shape = AppShapes.container(ContainerLevel.Chip),
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHighest
+                                    },
+                                ) {
+                                    AppText(
+                                        text = policy.label,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (selected) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            AppContentColors.secondaryText()
+                                        },
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (isActive && installed.manifest.surfaces.size > 1) {
+                        AppText(
+                            text = "生效部件分项开关（与官方装扮部件自由混搭对齐）",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = AppContentColors.primaryText()
+                        )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            installed.manifest.surfaces.forEach { surface ->
+                                val surfaceOn = surface !in uiSkinState.disabledSurfaces
+                                AppSurface(
+                                    onClick = {
+                                        UiSkinSettingsStore.setSurfaceEnabled(context, surface, !surfaceOn)
+                                        if (!surfaceOn && surface == com.android.purebilibili.core.plugin.skin.UiSkinSurface.PROFILE) {
+                                            scope.launch { SettingsManager.setProfileBgUseSkin(context, true) }
+                                        }
+                                    },
+                                    shape = AppShapes.container(ContainerLevel.Chip),
+                                    color = if (surfaceOn) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainerHighest
+                                    },
+                                ) {
+                                    AppText(
+                                        text = "${if (surfaceOn) "✓ " else ""}${surface.displayLabel}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (surfaceOn) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            AppContentColors.secondaryText()
+                                        },
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (isActive && com.android.purebilibili.core.plugin.skin.UiSkinSurface.COMMENT_CARD in installed.manifest.surfaces) {
+                        AppText(
+                            text = "评论区装扮粉丝编号（本人评论显示 CO.${uiSkinState.customFanNumber}）",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = AppContentColors.primaryText()
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            AppTextField(
+                                value = fanNumberDraft,
+                                onValueChange = { raw ->
+                                    fanNumberDraft = raw.filter(Char::isDigit).take(8)
+                                },
+                                singleLine = true,
+                                placeholder = "例如 000088",
+                                modifier = Modifier.weight(1f)
+                            )
+                            AppTextButton(
+                                onClick = {
+                                    UiSkinSettingsStore.setCustomFanNumber(context, fanNumberDraft)
+                                    showToast("已更新粉丝编号铭牌")
+                                }
+                            ) {
+                                AppText("保存编号")
+                            }
+                        }
+                    }
                     AppText(
                         text = previewModel.assetSummaryText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.secondaryText()
-                    )
-                    AppText(
-                        text = previewModel.sourceText,
                         style = MaterialTheme.typography.bodySmall,
                         color = AppContentColors.secondaryText()
                     )
@@ -1613,15 +2101,6 @@ fun PluginsContent(
                         text = previewModel.licenseText,
                         style = MaterialTheme.typography.bodySmall,
                         color = AppContentColors.secondaryText()
-                    )
-                    AppText(
-                        text = "${previewModel.shareText} · ${previewModel.officialAssetText}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (installed.manifest.containsOfficialAssets) {
-                            AppContentColors.error()
-                        } else {
-                            AppContentColors.secondaryText()
-                        }
                     )
                     UiSkinImagePreviewGrid(items = imagePreviewItems)
                 }
@@ -1637,16 +2116,19 @@ fun PluginsContent(
                                 selectedInstallId = installed.installId
                             )
                         )
+                        if (com.android.purebilibili.core.plugin.skin.UiSkinSurface.PROFILE in installed.manifest.surfaces) {
+                            scope.launch { SettingsManager.setProfileBgUseSkin(context, true) }
+                        }
                         uiSkinInstalledPreview = null
                         android.widget.Toast.makeText(
                             context,
-                            "已启用皮肤预览",
+                            "已启用皮肤",
                             android.widget.Toast.LENGTH_SHORT
                         ).show()
                     },
                     enabled = !isActive
                 ) {
-                    AppText(if (isActive) "已启用" else "启用预览")
+                    AppText(if (isActive) "当前生效中" else "启用皮肤")
                 }
             },
             dismissButton = {
@@ -1699,6 +2181,357 @@ fun PluginsContent(
                     AppText("取消")
                 }
             }
+        )
+    }
+
+    bpxPreview?.let { preview ->
+        val manifest = preview.manifest
+        val requiredSettings = remember(manifest.id, manifest.version) {
+            manifest.settings.filter { it.required || it.type == "secret" }
+        }
+        val settingDrafts = remember(manifest.id, manifest.version) {
+            mutableStateMapOf<String, String>()
+        }
+        val maxDialogHeight = LocalConfiguration.current.screenHeightDp.dp * 0.64f
+        AppAlertDialog(
+            onDismissRequest = { if (!bpxInstalling) bpxPreview = null },
+            icon = {
+                SettingsFunctionIcon(
+                    rememberSettingsVector(R.drawable.ph_puzzle_piece_24, R.drawable.ms_extension_24),
+                    title = "扩展安装核验单"
+                )
+            },
+            title = { AppText("扩展安装核验单 (.bpx)") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = maxDialogHeight)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    AppText(
+                        text = manifest.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = AppContentColors.primaryText()
+                    )
+                    AppText(
+                        text = "${manifest.id} · v${manifest.version} · SHA-256 ${preview.sha256.take(12)}…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppContentColors.secondaryText()
+                    )
+                    if (manifest.description.isNotBlank()) {
+                        AppText(
+                            text = manifest.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = AppContentColors.primaryText()
+                        )
+                    }
+
+                    // 创作者名片（Creator Card）：支持一键直达创作者 B 站个人空间
+                    AppSurface(
+                        shape = AppShapes.container(ContainerLevel.Card),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AppText(
+                                    text = manifest.author.name.take(1),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                AppText(
+                                    text = manifest.author.name,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = AppContentColors.primaryText()
+                                )
+                                AppText(
+                                    text = manifest.author.bio?.takeIf { it.isNotBlank() }
+                                        ?: "感谢社区创作者贡献",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = AppContentColors.secondaryText()
+                                )
+                            }
+                            val creatorMid = manifest.author.biliMid ?: 0L
+                            if (creatorMid > 0L) {
+                                AppTextButton(onClick = { onOpenCreatorSpace(creatorMid) }) {
+                                    AppText("访问 B 站空间")
+                                }
+                            }
+                        }
+                    }
+
+                    // 挂载插槽可视化预览
+                    AppText(
+                        text = "安装后将原位出现在：",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = AppContentColors.primaryText()
+                    )
+                    preview.slotDisplayLabels().forEach { slotText ->
+                        AppText(
+                            text = "• $slotText",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppContentColors.secondaryText()
+                        )
+                    }
+
+                    // 最小权限与凭证隔离承诺
+                    AppText(
+                        text = "沙盒最小权限核验：",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = AppContentColors.primaryText()
+                    )
+                    val domains = manifest.permissions.networkDomains
+                    AppText(
+                        text = if (domains.isEmpty()) {
+                            "🔒 纯本地运行（0 外部联网请求）· 绝不接触 B 站账号登录凭证"
+                        } else {
+                            "🌐 仅允许访问域名：${domains.joinToString(", ")}\n🔒 独立无 Cookie 沙盒，无法读取您的 B 站登录凭证"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppContentColors.secondaryText()
+                    )
+
+                    if (requiredSettings.isNotEmpty()) {
+                        AppText(
+                            text = "初始配置（保存在本机隔离存储）：",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = AppContentColors.primaryText()
+                        )
+                        requiredSettings.forEach { field ->
+                            AppTextField(
+                                value = settingDrafts[field.key].orEmpty(),
+                                onValueChange = { settingDrafts[field.key] = it },
+                                singleLine = true,
+                                placeholder = field.placeholder ?: field.title,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                AppTextButton(
+                    enabled = !bpxInstalling,
+                    onClick = {
+                        bpxInstalling = true
+                        scope.launch {
+                            val installResult = withContext(Dispatchers.IO) {
+                                com.android.purebilibili.core.plugin.bpx.BpxInstaller.installAndActivate(
+                                    context = context,
+                                    preview = preview,
+                                    settingValues = settingDrafts.toMap(),
+                                )
+                            }
+                            bpxInstalling = false
+                            installResult.onSuccess {
+                                installedUiSkins = uiSkinStore.listInstalledPackages()
+                                bpxPreview = null
+                                showToast("扩展《${manifest.name}》已安装并启用")
+                            }.onFailure { err ->
+                                showToast(err.message ?: "扩展安装失败")
+                            }
+                        }
+                    }
+                ) {
+                    AppText(if (bpxInstalling) "启用中…" else "确认授权并启用")
+                }
+            },
+            dismissButton = {
+                AppTextButton(
+                    enabled = !bpxInstalling,
+                    onClick = { bpxPreview = null }
+                ) {
+                    AppText("取消")
+                }
+            }
+        )
+    }
+
+    if (showBpxRegistrySourceDialog) {
+        val currentUrls = remember(showBpxRegistrySourceDialog, customRegistryUrlInput) {
+            com.android.purebilibili.core.plugin.bpx.BpxRegistryManager.getSubscribedUrls(context)
+        }
+        AppAlertDialog(
+            onDismissRequest = { showBpxRegistrySourceDialog = false },
+            icon = {
+                SettingsFunctionIcon(
+                    rememberSettingsVector(R.drawable.ph_link_24, R.drawable.ms_link_24),
+                    title = "管理自定义订阅源"
+                )
+            },
+            title = { AppText("扩展订阅源 (registry.json)") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AppText(
+                        text = "添加任意遵循 .bpx v1 规范的静态 registry.json 地址（如 GitHub Raw 或个人静态站），无需搭服务器即可分发更新。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppContentColors.secondaryText(),
+                    )
+                    currentUrls.forEach { url ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            AppText(
+                                text = url,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AppContentColors.primaryText(),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (url != com.android.purebilibili.core.plugin.bpx.OFFICIAL_STARTER_REGISTRY_URL) {
+                                AppTextButton(
+                                    onClick = {
+                                        com.android.purebilibili.core.plugin.bpx.BpxRegistryManager
+                                            .removeSubscribedUrl(context, url)
+                                        customRegistryUrlInput = customRegistryUrlInput.trim()
+                                    }
+                                ) {
+                                    AppText("移除", color = AppContentColors.error())
+                                }
+                            }
+                        }
+                    }
+                    AppTextField(
+                        value = customRegistryUrlInput,
+                        onValueChange = {
+                            customRegistryUrlInput = it
+                            customRegistryError = null
+                        },
+                        singleLine = true,
+                        placeholder = "https://.../registry.json",
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    customRegistryError?.let { err ->
+                        AppText(
+                            text = err,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppContentColors.error(),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                AppTextButton(
+                    onClick = {
+                        if (customRegistryUrlInput.isBlank()) {
+                            showBpxRegistrySourceDialog = false
+                            return@AppTextButton
+                        }
+                        com.android.purebilibili.core.plugin.bpx.BpxRegistryManager
+                            .addSubscribedUrl(context, customRegistryUrlInput)
+                            .onSuccess {
+                                customRegistryUrlInput = ""
+                                showBpxRegistrySourceDialog = false
+                                isLoadingBpxRegistries = true
+                                scope.launch {
+                                    loadedBpxRegistries = com.android.purebilibili.core.plugin.bpx.BpxRegistryManager
+                                        .fetchAllSubscribedRegistries(context)
+                                    isLoadingBpxRegistries = false
+                                }
+                            }
+                            .onFailure { err ->
+                                customRegistryError = err.message ?: "无效的订阅源地址"
+                            }
+                    }
+                ) {
+                    AppText(if (customRegistryUrlInput.isBlank()) "完成" else "添加并同步")
+                }
+            },
+            dismissButton = {
+                AppTextButton(onClick = { showBpxRegistrySourceDialog = false }) {
+                    AppText("关闭")
+                }
+            },
+        )
+    }
+
+    bpxSettingsTarget?.let { target ->
+        val drafts = remember(target.manifest.id, target.settingValues) {
+            mutableStateMapOf<String, String>().apply {
+                putAll(target.settingValues)
+            }
+        }
+        AppAlertDialog(
+            onDismissRequest = { bpxSettingsTarget = null },
+            icon = {
+                SettingsFunctionIcon(
+                    rememberSettingsVector(R.drawable.ph_sliders_24, R.drawable.ms_tune_24),
+                    title = "扩展参数设置"
+                )
+            },
+            title = { AppText("配置《${target.manifest.name}》") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    target.manifest.settings.forEach { field ->
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            AppText(
+                                text = field.title,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = AppContentColors.primaryText(),
+                            )
+                            field.description?.takeIf { it.isNotBlank() }?.let { desc ->
+                                AppText(
+                                    text = desc,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AppContentColors.secondaryText(),
+                                )
+                            }
+                            AppTextField(
+                                value = drafts[field.key].orEmpty(),
+                                onValueChange = { drafts[field.key] = it },
+                                singleLine = true,
+                                placeholder = field.placeholder ?: field.title,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                AppTextButton(
+                    onClick = {
+                        val targetId = target.manifest.id
+                        val nextValues = drafts.toMap()
+                        scope.launch {
+                            com.android.purebilibili.core.plugin.bpx.BpxInstaller
+                                .updateSettings(context, targetId, nextValues)
+                            bpxSettingsTarget = null
+                            showToast("配置已保存")
+                        }
+                    }
+                ) {
+                    AppText("保存")
+                }
+            },
+            dismissButton = {
+                AppTextButton(onClick = { bpxSettingsTarget = null }) {
+                    AppText("取消")
+                }
+            },
         )
     }
 
@@ -1824,7 +2657,7 @@ private fun InstalledUiSkinItem(
             AppTextButton(onClick = onPreview) {
                 AppIcon(rememberSettingsVector(R.drawable.ph_eye_24, R.drawable.ms_visibility_24), null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
-                AppText("预览")
+                AppText(if (isActive) "预览与部件设置" else "预览与启用")
             }
             AppTextButton(onClick = onDelete, enabled = previewModel.canDelete) {
                 AppIcon(rememberSettingsVector(R.drawable.ph_trash_24, R.drawable.ms_delete_24), null,

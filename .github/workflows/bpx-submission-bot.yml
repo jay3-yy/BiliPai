@@ -1,0 +1,165 @@
+name: BPX Extension Submission Bot
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  validate-and-open-pr:
+    if: contains(github.event.issue.labels.*.name, 'bpx-submission')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Extract and validate .bpx payload from Issue form
+        id: check
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_USER: ${{ github.event.issue.user.login }}
+        run: |
+          node - <<'EOF'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import { validateBpxContent } from './plugins/tools/validate-bpx.mjs';
+
+          const body = process.env.ISSUE_BODY || '';
+          const sectionMatch = body.match(/### 粘贴完整 \.bpx\.json 或 \.bpx\.js 源码\s+```[a-zA-Z]*\n([\s\S]*?)```/)
+            || body.match(/```(?:json|js|javascript)?\n([\s\S]*?)```/);
+
+          const rawCode = sectionMatch ? sectionMatch[1].trim() : '';
+          const report = validateBpxContent(rawCode, `issue-${process.env.ISSUE_NUMBER}`);
+
+          fs.mkdirSync('/tmp/bpx-bot', { recursive: true });
+          fs.writeFileSync('/tmp/bpx-bot/report.json', JSON.stringify(report, null, 2));
+
+          if (report.ok && report.manifest) {
+            const ext = report.format === 'json' ? 'bpx.json' : 'bpx.js';
+            const targetRel = `plugins/community/bpx/${report.manifest.id}.${ext}`;
+            fs.mkdirSync(path.dirname(targetRel), { recursive: true });
+            fs.writeFileSync(targetRel, rawCode + '\n', 'utf8');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `valid=true\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `ext_id=${report.manifest.id}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `ext_name=${report.manifest.name}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `target_file=${targetRel}\n`);
+          } else {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `valid=false\n`);
+          }
+          EOF
+
+      - name: Comment diagnostic report when validation fails
+        if: steps.check.outputs.valid != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('/tmp/bpx-bot/report.json', 'utf8'));
+            const rows = report.issues
+              .map((i) => `| \`${i.code}\` | ${i.message} | ${i.hint} |`)
+              .join('\n');
+            const comment = [
+              `### 🤖 BiliPai 审稿机器人体检未通过`,
+              `感谢 @${context.payload.issue.user.login} 的投稿！自动静态检查发现了以下需要微调的项目：`,
+              ``,
+              `| 规则码 | 检测结果 | 修改建议 |`,
+              `| :--- | :--- | :--- |`,
+              rows,
+              ``,
+              `💡 **一招修好**：你可以把代码粘贴进 **BiliPai 在线校验扫码台**，点击「复制 AI 修复指令」发给大模型修正后，直接编辑本 Issue 即可重新触发体检！`
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+      - name: Create automated Pull Request and comment preview summary
+        if: steps.check.outputs.valid == 'true'
+        env:
+          EXT_ID: ${{ steps.check.outputs.ext_id }}
+          EXT_NAME: ${{ steps.check.outputs.ext_name }}
+          TARGET_FILE: ${{ steps.check.outputs.target_file }}
+          AUTHOR_LOGIN: ${{ github.event.issue.user.login }}
+          ISSUE_NUM: ${{ github.event.issue.number }}
+        run: |
+          BRANCH="bpx-submit/issue-${ISSUE_NUM}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add "$TARGET_FILE"
+          git commit -m "feat(bpx): add community extension ${EXT_ID} by @${AUTHOR_LOGIN} (#${ISSUE_NUM})" || true
+          git push -f origin "$BRANCH"
+
+      - name: Open or update PR and post pass summary
+        if: steps.check.outputs.valid == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('/tmp/bpx-bot/report.json', 'utf8'));
+            const m = report.manifest;
+            const branch = `bpx-submit/issue-${context.issue.number}`;
+            const domains = (m.permissions?.networkDomains || []).join(', ') || '🔒 纯本地运行（0 联网）';
+            const slots = (m.mounts || []).map((s) => `\`${s.slot}\``).join(', ');
+
+            const existing = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${branch}`,
+              state: 'open'
+            });
+
+            let prUrl = existing.data[0]?.html_url;
+            if (!prUrl) {
+              const pr = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `feat(bpx): 收录社区扩展《${m.name}》(${m.id})`,
+                head: branch,
+                base: context.payload.repository.default_branch,
+                body: [
+                  `由社区创作者 @${context.payload.issue.user.login} 通过 #${context.issue.number} 零门槛表单投递。`,
+                  ``,
+                  `- **扩展 ID**：\`${m.id}\` (\`v${m.version}\`)`,
+                  `- **挂载插槽**：${slots}`,
+                  `- **联网白名单**：${domains}`,
+                  `- **SHA-256**：\`${report.sha256}\``,
+                  `- **创作者 B 站 UID**：${m.author?.biliMid || '未填写'}`,
+                  ``,
+                  `Closes #${context.issue.number}`
+                ].join('\n')
+              });
+              prUrl = pr.data.html_url;
+            }
+
+            const qrLine = report.previewUri
+              ? `- **离线唤起口令（${report.compressedBytes} B）**：\`${report.previewUri}\``
+              : `- **包体积**：压缩后 ${report.compressedBytes} B`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: [
+                `### ✅ BiliPai 审稿机器人体检全绿通过！`,
+                `感谢 @${context.payload.issue.user.login} 共创《**${m.name}**》！已自动为你创建合并请求：${prUrl}`,
+                ``,
+                `- **挂载插槽**：${slots}`,
+                `- **联网权限**：${domains}`,
+                qrLine,
+                ``,
+                `维护者确认符合三条准入红线并点击 Merge 后，将自动上架官方精选源并在 App 内点亮你的创作者名片！`
+              ].join('\n')
+            });

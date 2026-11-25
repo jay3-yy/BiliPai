@@ -90,24 +90,60 @@ fun ExternalMediaPlayerScreen(
             .build().withAppVideoDecoderDiagnostics(context)
     }
 
-    DisposableEffect(player) {
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var resumePlaybackOnForeground by remember { mutableStateOf(false) }
+    val danmakuRenderView = remember(context) { DanmakuRenderView(context) }
+    DisposableEffect(danmakuRenderView) {
         onDispose {
+            danmakuRenderView.releaseRenderer()
+        }
+    }
+
+    DisposableEffect(player, lifecycleOwner, danmakuRenderView) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    resumePlaybackOnForeground = player.playWhenReady
+                    player.playWhenReady = false
+                    player.pause()
+                    danmakuRenderView.engine.pause()
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                    if (resumePlaybackOnForeground) {
+                        resumePlaybackOnForeground = false
+                        if (player.playbackState == Player.STATE_IDLE && player.currentMediaItem != null) {
+                            player.prepare()
+                        }
+                        player.playWhenReady = true
+                    }
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
             player.release()
         }
     }
 
     val jsStore = remember(context) { BiliPaiJsPluginInstallStore.createDefault(context) }
     val jsRuntime = remember(context) { BiliPaiJsRuntime(context) }
-    val danmakuPlugin = remember(request?.danmakuPluginId) {
-        request?.danmakuPluginId?.let { pluginId ->
-            jsStore.listInstalledPlugins().firstOrNull {
-                it.manifest.id == pluginId && it.enabled && it.manifest.supportsDanmaku
+    var danmakuPlugin by remember(request?.danmakuPluginId) {
+        mutableStateOf<com.android.purebilibili.core.plugin.js.InstalledBiliPaiJsPlugin?>(null)
+    }
+    LaunchedEffect(request?.danmakuPluginId) {
+        val pluginId = request?.danmakuPluginId
+        danmakuPlugin = if (pluginId.isNullOrBlank()) {
+            null
+        } else {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                jsStore.readInstalled(pluginId)?.takeIf { it.enabled && it.manifest.supportsDanmaku }
             }
         }
     }
     var danmakuEnabled by remember(request?.launchId) { mutableStateOf(true) }
     var danmakuItems by remember(request?.launchId) { mutableStateOf<List<DanmakuItem>>(emptyList()) }
-    val danmakuRenderView = remember(context) { DanmakuRenderView(context) }
     val systemDensity = context.resources.displayMetrics.density
     val danmakuRenderConfig = remember(systemDensity) {
         // The top bar and stream selector remain visible; this surface is not fullscreen.
@@ -117,12 +153,6 @@ fun ExternalMediaPlayerScreen(
             strokeWidthPx = resolveDanmakuStrokeWidthPx(systemDensity, strokeWidth = 1.5f),
             lineHeightPx = textSizePx * (64f / 48f)
         )
-    }
-
-    DisposableEffect(danmakuRenderView) {
-        onDispose {
-            danmakuRenderView.releaseRenderer()
-        }
     }
 
     LaunchedEffect(danmakuPlugin, request?.title) {

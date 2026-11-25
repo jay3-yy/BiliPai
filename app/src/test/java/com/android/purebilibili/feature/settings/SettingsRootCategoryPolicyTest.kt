@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 class SettingsRootCategoryPolicyTest {
 
@@ -84,6 +85,8 @@ class SettingsRootCategoryPolicyTest {
             SettingsRootCategory.SYSTEM_ABOUT,
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.EXPORT_LOGS),
         )
+        assertFalse(SettingsRootCategory.PLUGINS_EXTENSIONS.title.contains("Beta", ignoreCase = true))
+        assertFalse(SettingsRootCategory.PLUGINS_EXTENSIONS.subtitle.contains("Beta", ignoreCase = true))
     }
 
     @Suppress("DEPRECATION")

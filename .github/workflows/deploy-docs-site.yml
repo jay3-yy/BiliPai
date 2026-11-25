@@ -1,0 +1,57 @@
+name: Deploy BiliPai Extension Docs Site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs-site/**'
+      - 'plugins/bpx-cookbook/**'
+      - 'plugins/tools/validate-bpx.mjs'
+      - '.github/workflows/deploy-docs-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify all official .bpx cookbook samples
+        run: node plugins/tools/validate-bpx.mjs plugins/bpx-cookbook
+
+      - name: Install docs-site dependencies and build VitePress
+        working-directory: docs-site
+        run: |
+          npm install
+          npm run docs:build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site/.vitepress/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

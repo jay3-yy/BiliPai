@@ -113,8 +113,8 @@ internal fun settingsDestinationCopy(target: SettingsSearchTarget): SettingsDest
         summary = "清理应用缓存并设置自动清理周期与容量上限",
     )
     SettingsSearchTarget.PLUGINS -> SettingsDestinationCopy(
-        title = "插件中心",
-        summary = "安装、启用和管理扩展功能",
+        title = "插件中心 (Beta)",
+        summary = "Beta 测试 · 安装、启用和管理装扮与 .bpx 扩展功能",
     )
     SettingsSearchTarget.EXPORT_LOGS -> SettingsDestinationCopy(
         title = "导出日志",

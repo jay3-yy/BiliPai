@@ -57,7 +57,7 @@
     <string name="icon_settings_title">App Icon</string>
     <string name="bottom_bar_management_title">Navigation</string>
     <string name="permission_management_title">Permissions</string>
-    <string name="plugins_center_title">Plugins</string>
+    <string name="plugins_center_title">Plugins (Beta)</string>
     <string name="open_source_licenses_title">Open Source Licenses</string>
     <string name="tips_title">Tips</string>
 
@@ -265,7 +265,7 @@
     <string name="settings_category_storage_title">Downloads &amp; Backup</string>
     <string name="settings_category_storage_summary">Save locations, cache, settings sharing, and WebDAV backup</string>
     <string name="settings_category_plugins_title">Plugins</string>
-    <string name="settings_category_plugins_summary">Install and manage plugins, skins, and extensions</string>
+    <string name="settings_category_plugins_summary">Install and manage plugins, skins, and .bpx extensions</string>
     <string name="settings_category_gamepad_title">Gamepad Control</string>
     <string name="settings_category_gamepad_summary">Xbox, PlayStation &amp; Switch controllers, HUD toggle, and custom bindings</string>
     <string name="settings_category_support_title">Help &amp; About</string>

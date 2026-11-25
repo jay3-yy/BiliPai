@@ -1,0 +1,42 @@
+{
+  "bpxVersion": 1,
+  "id": "community.clean.declickbait",
+  "name": "去标题党与热点折叠",
+  "version": "1.0.0",
+  "description": "剥离夸张震惊体前缀，折叠超短引流视频并为深度长片打标",
+  "license": "MIT",
+  "licenseNote": "MIT 开源示例规则，允许自由修改与二次分发",
+  "author": {
+    "name": "BiliPai 共创工坊",
+    "biliMid": 233333,
+    "github": "jay3-yy",
+    "bio": "让时间流回到清爽可预期"
+  },
+  "mounts": [
+    { "slot": "feed.pipe", "id": "clean_feed", "title": "推荐流去标题党管线" }
+  ],
+  "rules": [
+    {
+      "condition": { "field": "title", "op": "regex", "value": "^(震惊[！!]|千万别[^，。！？]{1,8}[！!]|家人们谁懂啊[！!，,]?)" },
+      "action": "rewriteTitle",
+      "pattern": "^(震惊[！!]|千万别[^，。！？]{1,8}[！!]|家人们谁懂啊[！!，,]?)\\s*",
+      "replacement": ""
+    },
+    {
+      "condition": {
+        "and": [
+          { "field": "durationSec", "op": "lt", "value": 25 },
+          { "field": "stat.like", "op": "lt", "value": 500 }
+        ]
+      },
+      "action": "fold",
+      "groupLabel": "已折叠低赞超短视频"
+    },
+    {
+      "condition": { "field": "durationSec", "op": "ge", "value": 1800 },
+      "action": "badge",
+      "text": "深度长片",
+      "tone": "accent"
+    }
+  ]
+}

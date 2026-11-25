@@ -86,7 +86,7 @@ class BiliPaiJsPluginInstallStore(
         return true
     }
 
-    private fun readInstalled(pluginId: String): InstalledBiliPaiJsPlugin? {
+    fun readInstalled(pluginId: String): InstalledBiliPaiJsPlugin? {
         val file = metadataFile(pluginId)
         if (!file.exists()) return null
         return runCatching {

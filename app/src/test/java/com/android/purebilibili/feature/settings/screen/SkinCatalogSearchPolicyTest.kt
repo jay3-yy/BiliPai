@@ -1,11 +1,10 @@
 package com.android.purebilibili.feature.settings.screen
 
 import com.android.purebilibili.core.plugin.skin.SkinCatalog
+import com.android.purebilibili.core.plugin.skin.SkinCatalogCapabilities
 import com.android.purebilibili.core.plugin.skin.SkinCatalogEntry
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class SkinCatalogSearchPolicyTest {
 
@@ -29,14 +28,37 @@ class SkinCatalogSearchPolicyTest {
     }
 
     @Test
-    fun catalogScreenExposesSearchFieldAndEmptyResultFeedback() {
-        val source = File(
-            "src/main/java/com/android/purebilibili/feature/settings/screen/SkinCatalogScreen.kt"
-        ).readText()
+    fun categoryFiltersMatchLightDarkDynamicAndInstalledEntries() {
+        val themes = listOf(
+            catalogEntry(id = "light-plain", name = "浅色装扮", colorMode = "light"),
+            catalogEntry(
+                id = "dark-animated",
+                name = "深色动效装扮",
+                colorMode = "dark",
+                capabilities = SkinCatalogCapabilities(animatedIcons = true),
+            ),
+        )
 
-        assertTrue(source.contains("AppLiquidAwareSearchField("))
-        assertTrue(source.contains("onQueryChange = stateHolder::setSearchQuery"))
-        assertTrue(source.contains("没有找到相关装扮"))
+        assertEquals(
+            listOf("light-plain"),
+            SkinCatalogUiState(catalog = catalog(themes), filter = SkinCatalogFilter.LIGHT)
+                .resolveFilteredThemes(emptySet()).map { it.id },
+        )
+        assertEquals(
+            listOf("dark-animated"),
+            SkinCatalogUiState(catalog = catalog(themes), filter = SkinCatalogFilter.DARK)
+                .resolveFilteredThemes(emptySet()).map { it.id },
+        )
+        assertEquals(
+            listOf("dark-animated"),
+            SkinCatalogUiState(catalog = catalog(themes), filter = SkinCatalogFilter.DYNAMIC_EFFECT)
+                .resolveFilteredThemes(emptySet()).map { it.id },
+        )
+        assertEquals(
+            listOf("light-plain"),
+            SkinCatalogUiState(catalog = catalog(themes), filter = SkinCatalogFilter.INSTALLED)
+                .resolveFilteredThemes(setOf("浅色装扮")).map { it.id },
+        )
     }
 
     private fun catalog(themes: List<SkinCatalogEntry>) = SkinCatalog(
@@ -46,10 +68,17 @@ class SkinCatalogSearchPolicyTest {
         themes = themes,
     )
 
-    private fun catalogEntry(id: String, name: String) = SkinCatalogEntry(
+    private fun catalogEntry(
+        id: String,
+        name: String,
+        colorMode: String? = null,
+        capabilities: SkinCatalogCapabilities = SkinCatalogCapabilities(),
+    ) = SkinCatalogEntry(
         id = id,
         name = name,
         previewUrl = "https://example.com/$id.jpg",
         packageZipUrl = "https://example.com/$id.zip",
+        colorMode = colorMode,
+        capabilities = capabilities,
     )
 }

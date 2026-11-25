@@ -12,5 +12,4 @@ internal fun resolvePluginDefaultEnabled(pluginId: String): Boolean {
 private val BUILTIN_DEFAULT_ENABLED_PLUGIN_IDS = setOf(
     BuiltinPluginIds.DLNA_CAST,
     BuiltinPluginIds.GOOGLE_CAST,
-    BuiltinPluginIds.GAMEPAD_CONTROL,
 )

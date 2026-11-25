@@ -107,7 +107,7 @@ object JsonPluginManager {
 
                     // 添加到列表
                     val loaded = LoadedJsonPlugin(plugin, enabled = enabled, sourceUrl = normalizedUrl)
-                    _plugins.value = _plugins.value.filter { it.plugin.id != plugin.id } + loaded
+                    _plugins.update { current -> current.filter { it.plugin.id != plugin.id } + loaded }
                     persistEnabledState(plugin.id, enabled)
                     if (plugin.type == "danmaku") {
                         PluginManager.notifyDanmakuPluginsUpdated()
@@ -169,8 +169,8 @@ object JsonPluginManager {
         val file = File(getPluginDir(), "$pluginId.json")
         if (file.exists()) file.delete()
 
-        _plugins.value = _plugins.value.filter { it.plugin.id != pluginId }
-        _filterStats.value = _filterStats.value - pluginId
+        _plugins.update { current -> current.filter { it.plugin.id != pluginId } }
+        _filterStats.update { it - pluginId }
         clearEnabledState(pluginId)
         saveFilterStats()
         if (removedType == "danmaku") {
@@ -184,22 +184,24 @@ object JsonPluginManager {
      */
     suspend fun setEnabled(pluginId: String, enabled: Boolean): Unit = withStore {
         check(isInitialized) { "规则管理器尚未初始化" }
-        val targetType = _plugins.value.find { it.plugin.id == pluginId }?.plugin?.type
+        val existing = _plugins.value.find { it.plugin.id == pluginId }
+        val targetType = existing?.plugin?.type
         if (targetType == null) {
             Logger.w(TAG, " 插件不存在: $pluginId")
             return@withStore
         }
 
-        var changed = false
-        _plugins.value = _plugins.value.map {
-            if (it.plugin.id == pluginId && it.enabled != enabled) {
-                changed = true
-                it.copy(enabled = enabled)
-            } else {
-                it
-            }
-        }
+        val changed = existing.enabled != enabled
         if (changed) {
+            _plugins.update { plugins ->
+                plugins.map {
+                    if (it.plugin.id == pluginId && it.enabled != enabled) {
+                        it.copy(enabled = enabled)
+                    } else {
+                        it
+                    }
+                }
+            }
             persistEnabledState(pluginId, enabled)
             if (targetType == "danmaku") {
                 PluginManager.notifyDanmakuPluginsUpdated()
@@ -218,9 +220,24 @@ object JsonPluginManager {
 
     // ============ 过滤方法 ============
 
+    @androidx.compose.runtime.Immutable
+    data class FilterFeedbackEvent(
+        val id: Long,
+        val count: Int,
+    )
+
+    private val filterFeedbackSeq = java.util.concurrent.atomic.AtomicLong(0L)
+
     /**  最近一次过滤掉的视频数量（用于 UI 提示） */
     private val _lastFilteredCount = MutableStateFlow(0)
     val lastFilteredCount: StateFlow<Int> = _lastFilteredCount.asStateFlow()
+
+    private val _filterFeedbackEvent = MutableStateFlow<FilterFeedbackEvent?>(null)
+    val filterFeedbackEvent: StateFlow<FilterFeedbackEvent?> = _filterFeedbackEvent.asStateFlow()
+
+    fun consumeFilterFeedbackEvent(id: Long) {
+        _filterFeedbackEvent.update { if (it?.id == id) null else it }
+    }
 
     /**
      * 过滤视频列表（带统计和计数）
@@ -247,7 +264,11 @@ object JsonPluginManager {
             }
 
             if (hiddenBy == null) {
-                result.add(video)
+                var transformed = video
+                for (loaded in feedPlugins) {
+                    transformed = RuleEngine.transformVideo(transformed, loaded.plugin.rules)
+                }
+                result.add(transformed)
             } else {
                 filteredCount++
                 val hiddenPlugin = hiddenBy.plugin
@@ -271,6 +292,10 @@ object JsonPluginManager {
         //  更新最近过滤数量
         _lastFilteredCount.value = filteredCount
         if (filteredCount > 0) {
+            _filterFeedbackEvent.value = FilterFeedbackEvent(
+                id = filterFeedbackSeq.incrementAndGet(),
+                count = filteredCount,
+            )
             Logger.d(TAG, " 本次过滤了 $filteredCount 个视频")
             val names = statsDelta.keys.mapNotNull { pluginId ->
                 feedPlugins.firstOrNull { it.plugin.id == pluginId }?.plugin?.name
@@ -297,14 +322,16 @@ object JsonPluginManager {
         savePlugin(plugin)
 
         // 更新列表（保留 enabled 状态）
-        _plugins.value = _plugins.value.map { loaded ->
-            if (loaded.plugin.id == plugin.id) {
-                loaded.copy(plugin = plugin)
-            } else loaded
+        _plugins.update { plugins ->
+            plugins.map { loaded ->
+                if (loaded.plugin.id == plugin.id) {
+                    loaded.copy(plugin = plugin)
+                } else loaded
+            }
         }
 
         // 重置该插件的统计
-        _filterStats.value = _filterStats.value - plugin.id
+        _filterStats.update { it - plugin.id }
         saveFilterStats()
         if (plugin.type == "danmaku") {
             PluginManager.notifyDanmakuPluginsUpdated()
@@ -313,13 +340,32 @@ object JsonPluginManager {
         Logger.d(TAG, " 插件已更新: ${plugin.name}")
     }
 
+    suspend fun installOrReplacePlugin(plugin: JsonRulePlugin): Result<JsonRulePlugin> = runCatching {
+        withStore {
+            check(isInitialized) { "规则管理器尚未初始化" }
+            validatePlugin(plugin)?.let { throw it }
+            val existing = _plugins.value.find { it.plugin.id == plugin.id }
+            val enabled = existing?.enabled ?: true
+            savePlugin(plugin)
+            _plugins.update { current ->
+                current.filter { it.plugin.id != plugin.id } +
+                    LoadedJsonPlugin(plugin, enabled, sourceUrl = null)
+            }
+            persistEnabledState(plugin.id, enabled)
+            if (plugin.type == "danmaku") {
+                PluginManager.notifyDanmakuPluginsUpdated()
+            }
+            plugin
+        }
+    }
+
     /**
      *  重置统计（同时清除持久化数据）
      */
     suspend fun resetStats(pluginId: String? = null): Unit = withStore {
         check(isInitialized) { "规则管理器尚未初始化" }
         if (pluginId != null) {
-            _filterStats.value = _filterStats.value - pluginId
+            _filterStats.update { it - pluginId }
         } else {
             _filterStats.value = emptyMap()
         }
@@ -444,10 +490,12 @@ object JsonPluginManager {
             check(editingId == null || existing != null) { "插件已被移除，请返回后重新创建" }
             savePlugin(plugin)
             val enabled = existing?.enabled ?: true
-            _plugins.value = _plugins.value.filter { it.plugin.id != plugin.id } +
-                LoadedJsonPlugin(plugin, enabled, sourceUrl = null)
+            _plugins.update { current ->
+                current.filter { it.plugin.id != plugin.id } +
+                    LoadedJsonPlugin(plugin, enabled, sourceUrl = null)
+            }
             persistEnabledState(plugin.id, enabled)
-            _filterStats.value = _filterStats.value - plugin.id
+            _filterStats.update { it - plugin.id }
             saveFilterStats()
             if (plugin.type == "danmaku" || existing?.plugin?.type == "danmaku") {
                 PluginManager.notifyDanmakuPluginsUpdated()

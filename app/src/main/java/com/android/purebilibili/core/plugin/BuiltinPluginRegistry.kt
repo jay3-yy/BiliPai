@@ -47,13 +47,17 @@ internal class BuiltinPluginRegistry(
                         enabled = true
                     } catch (error: Exception) {
                         restoreLifecycle(plugin, enabled = false)
-                        mutablePluginsFlow.value = mutablePluginsFlow.value + PluginInfo(plugin, false)
+                        mutablePluginsFlow.update { current ->
+                            if (current.any { it.plugin.id == plugin.id }) current else current + PluginInfo(plugin, false)
+                        }
                         onFailure(plugin.id, error)
                         if (error is CancellationException) throw error
                         return@withLock
                     }
                 }
-                mutablePluginsFlow.value = mutablePluginsFlow.value + PluginInfo(plugin, enabled)
+                mutablePluginsFlow.update { current ->
+                    if (current.any { it.plugin.id == plugin.id }) current else current + PluginInfo(plugin, enabled)
+                }
             } finally {
                 readyPluginIds.update { it + plugin.id }
             }
@@ -88,8 +92,10 @@ internal class BuiltinPluginRegistry(
                 return@withLock
             }
 
-            mutablePluginsFlow.value = mutablePluginsFlow.value.map { current ->
-                if (current.plugin.id == pluginId) current.copy(enabled = enabled) else current
+            mutablePluginsFlow.update { plugins ->
+                plugins.map { current ->
+                    if (current.plugin.id == pluginId) current.copy(enabled = enabled) else current
+                }
             }
             try {
                 onEnabledChanged(info.plugin, enabled)

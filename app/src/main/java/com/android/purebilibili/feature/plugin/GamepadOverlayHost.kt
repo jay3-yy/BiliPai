@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -164,17 +165,21 @@ private fun GamepadCursorOverlay(
     config: GamepadConfig,
 ) {
     val cursorStateHolder = GamepadControlEngine.cursorState.collectAsStateWithLifecycle()
-    val cursorAlpha by animateFloatAsState(
+    val cursorAlphaState = animateFloatAsState(
         targetValue = if (cursorStateHolder.value.visible) 1f else 0f,
         label = "gamepad_cursor_alpha",
     )
-    if (cursorAlpha <= 0.01f) return
+    val shouldDrawCursor by remember {
+        derivedStateOf { cursorAlphaState.value > 0.01f }
+    }
+    if (!shouldDrawCursor) return
 
     val scale = config.cursorSize.radiusScale
     val idleColor = resolveCursorIdleColor(config.cursorColorStyle)
     val isBiliPink = config.cursorColorStyle == GamepadCursorColorStyle.BILI_PINK
 
     Canvas(modifier = Modifier.fillMaxSize()) {
+        val cursorAlpha = cursorAlphaState.value
         val cursor = cursorStateHolder.value
         val center = Offset(cursor.x, cursor.y)
         val pressed = cursor.pressed

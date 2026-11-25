@@ -59,7 +59,7 @@
     <string name="icon_settings_title">应用图标</string>
     <string name="bottom_bar_management_title">导航设置</string>
     <string name="permission_management_title">权限管理</string>
-    <string name="plugins_center_title">插件中心</string>
+    <string name="plugins_center_title">插件中心 (Beta)</string>
     <string name="open_source_licenses_title">开源许可证</string>
     <string name="tips_title">使用技巧</string>
 
@@ -268,7 +268,7 @@
     <string name="settings_category_storage_title">下载与备份</string>
     <string name="settings_category_storage_summary">保存位置、缓存、设置分享和 WebDAV 备份</string>
     <string name="settings_category_plugins_title">插件中心</string>
-    <string name="settings_category_plugins_summary">插件、装扮和扩展功能</string>
+    <string name="settings_category_plugins_summary">插件、装扮和扩展工坊</string>
     <string name="settings_category_gamepad_title">手柄控制</string>
     <string name="settings_category_gamepad_summary">Xbox / PlayStation / Switch 手柄适配、提示栏与自定义键位</string>
     <string name="settings_category_support_title">帮助与关于</string>

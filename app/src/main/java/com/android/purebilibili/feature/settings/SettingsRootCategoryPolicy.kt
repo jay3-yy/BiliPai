@@ -45,7 +45,7 @@ enum class SettingsRootCategory(
     ),
     PLUGINS_EXTENSIONS(
         title = "插件中心",
-        subtitle = "插件、装扮和扩展功能",
+        subtitle = "插件、装扮和扩展工坊",
         searchTarget = SettingsSearchTarget.PLUGINS,
     ),
     GAMEPAD_CONTROL(

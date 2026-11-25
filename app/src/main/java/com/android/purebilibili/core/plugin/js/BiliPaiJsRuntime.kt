@@ -193,6 +193,9 @@ class BiliPaiJsRuntime(
         expression: String
     ): String = try {
         withTimeout(timeoutMillis) {
+            val storageBridge = withContext(Dispatchers.IO) {
+                StorageBridge.load(File(storageRoot, pluginId))
+            }
             withContext(Dispatchers.Main.immediate) {
                 val callId = UUID.randomUUID().toString()
                 val result = CompletableDeferred<String>()
@@ -206,7 +209,7 @@ class BiliPaiJsRuntime(
                 webView.settings.setGeolocationEnabled(false)
                 webView.addJavascriptInterface(callbacks, "BiliPaiNative")
                 webView.addJavascriptInterface(HttpBridge(), "BiliPaiHttpNative")
-                webView.addJavascriptInterface(StorageBridge(File(storageRoot, pluginId)), "BiliPaiStorageNative")
+                webView.addJavascriptInterface(storageBridge, "BiliPaiStorageNative")
                 webView.addJavascriptInterface(LogBridge(pluginId), "BiliPaiLogNative")
                 webView.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String?) {
@@ -223,6 +226,8 @@ class BiliPaiJsRuntime(
                 try {
                     result.await()
                 } finally {
+                    webView.stopLoading()
+                    webView.clearCache(false)
                     webView.removeJavascriptInterface("BiliPaiNative")
                     webView.removeJavascriptInterface("BiliPaiHttpNative")
                     webView.removeJavascriptInterface("BiliPaiStorageNative")
@@ -314,15 +319,18 @@ class BiliPaiJsRuntime(
         }
     }
 
-    private class StorageBridge(
-        private val storageDir: File
+    private class StorageBridge private constructor(
+        private val storageDir: File,
+        private val values: ConcurrentHashMap<String, String>,
     ) {
-        private val values = ConcurrentHashMap<String, String>()
-
-        init {
-            storageDir.mkdirs()
-            storageDir.listFiles { file -> file.isFile }?.forEach { file ->
-                values[file.name] = file.readText(Charsets.UTF_8)
+        companion object {
+            fun load(storageDir: File): StorageBridge {
+                val loaded = ConcurrentHashMap<String, String>()
+                storageDir.mkdirs()
+                storageDir.listFiles { file -> file.isFile }?.forEach { file ->
+                    loaded[file.name] = file.readText(Charsets.UTF_8)
+                }
+                return StorageBridge(storageDir, loaded)
             }
         }
 

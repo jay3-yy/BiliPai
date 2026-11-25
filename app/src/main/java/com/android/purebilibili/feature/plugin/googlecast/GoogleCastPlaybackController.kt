@@ -10,6 +10,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -25,7 +26,7 @@ internal object GoogleCastPlaybackController {
     private var session: CastSession? = null
     private var pollJob: Job? = null
     private var missingMediaAttempts = 0
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate)
 
     internal fun shouldKeepPollingForMediaStatus(
         remoteClientExists: Boolean,
@@ -72,21 +73,29 @@ internal object GoogleCastPlaybackController {
                         return@launch
                     }
                     missingMediaAttempts++
-                    _playbackState.value = _playbackState.value.copy(
-                        isActive = true,
-                        isBuffering = true
-                    )
+                    _playbackState.update {
+                        it.copy(
+                            isActive = true,
+                            isBuffering = true
+                        )
+                    }
                     continue
                 }
                 missingMediaAttempts = 0
-                _playbackState.value = _playbackState.value.copy(
-                    isActive = true,
-                    isPlaying = client.isPlaying,
-                    isBuffering = client.isBuffering,
-                    currentPositionMs = client.approximateStreamPosition.coerceAtLeast(0L),
-                    durationMs = client.streamDuration.coerceAtLeast(0L),
-                    bufferedPositionMs = client.approximateStreamPosition.coerceAtLeast(0L)
-                )
+                val isPlaying = client.isPlaying
+                val isBuffering = client.isBuffering
+                val positionMs = client.approximateStreamPosition.coerceAtLeast(0L)
+                val durationMs = client.streamDuration.coerceAtLeast(0L)
+                _playbackState.update {
+                    it.copy(
+                        isActive = true,
+                        isPlaying = isPlaying,
+                        isBuffering = isBuffering,
+                        currentPositionMs = positionMs,
+                        durationMs = durationMs,
+                        bufferedPositionMs = positionMs
+                    )
+                }
             }
         }
     }

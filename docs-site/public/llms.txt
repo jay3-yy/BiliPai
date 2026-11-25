@@ -1,0 +1,17 @@
+# BiliPai Extension 2.0 (.bpx) Developer Docs
+
+> BiliPai 扩展生态官方文档索引：插件只输出结构化语义数据，宿主 100% 接管 Material 3 / Miuix / 液态玻璃三材质渲染与帧率安全。
+
+## 核心 AI 上下文（推荐直接读取）
+
+- [完整 AI 开发单文件上下文 (llms-full.txt)](./llms-full.txt): 包含 `.bpx` v1 Manifest Schema、六大插槽出入参 TypeScript 签名、QuickJS 沙盒 API、禁用全局对象黑名单及 6 个可直接运行的最小完整样板。
+
+## 场景食谱（Cookbook）
+
+- [六大明星食谱总览](./cookbook/index.md): 去标题党折叠、AI 省流课代表、弹弹Play 外挂弹幕、冷门宝藏透镜、评论指路置顶、三材质光学装扮。
+- [在线工坊与扫码上机](./playground.md): 浏览器本地校验 `.bpx`、生成 AI 自修指令与免后端 `bilipai://ext/preview?payload=` 离线二维码。
+
+## 规范与社区
+
+- [.bpx v1 契约与 Schema 字典](./reference/spec.md): 清单字段、权限模型、配置项自动渲染 Schema 与性能熔断预算。
+- [零 Git 门槛投稿与自建订阅源](./community/submit.md): 图形化 Issue 自动转 PR 流程、三条准入红线与 `registry.json` 订阅源规范。

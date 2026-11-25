@@ -158,7 +158,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
     @Volatile
     private var config: AdFilterConfig = AdFilterConfig()
-    private var filteredCount = 0
+    private val filteredCount = java.util.concurrent.atomic.AtomicInteger(0)
     private val videoTagFilter = VideoTagFilter(
         loadTags = { bvid ->
             val response = NetworkModule.api.getVideoTags(bvid)
@@ -173,7 +173,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         bvid: (T) -> String,
         asVideoItem: (T) -> VideoItem,
     ): List<T> = videoTagFilter.filter(items, config.blockedTagKeywords, bvid) { item, keyword ->
-        filteredCount++
+        filteredCount.incrementAndGet()
         recordFilteredItem(asVideoItem(item), AdFilterReasonType.TAG_KEYWORD, keyword)
     }
 
@@ -209,7 +209,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
     )
 
     override suspend fun onEnable() {
-        filteredCount = 0
+        filteredCount.set(0)
         loadConfigSuspend()
         com.android.purebilibili.core.store.ContentFilterRules.setAdFilteringEnabled(true)
         Logger.d(TAG, " 去广告增强v2.0已启用")
@@ -218,8 +218,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
     override suspend fun onDisable() {
         com.android.purebilibili.core.store.ContentFilterRules.setAdFilteringEnabled(false)
-        Logger.d(TAG, "🔴 去广告增强已禁用，本次过滤了 $filteredCount 条内容")
-        filteredCount = 0
+        Logger.d(TAG, "🔴 去广告增强已禁用，本次过滤了 ${filteredCount.getAndSet(0)} 条内容")
     }
 
     override fun shouldShowItem(item: VideoItem, feedKind: FeedKind): Boolean {
@@ -234,7 +233,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         // 1️⃣ 检查UP主拉黑列表（按名称） - 支持模糊匹配和简繁体
         val blockedName = findBlockedUpName(upName)
         if (blockedName != null) {
-            filteredCount++
+            filteredCount.incrementAndGet()
             recordFilteredItem(
                 item = item,
                 reasonType = AdFilterReasonType.BLOCKED_UP,
@@ -246,7 +245,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
         // 2️⃣ 检查UP主拉黑列表（按MID）
         if (config.blockedUpMids.contains(upMid)) {
-            filteredCount++
+            filteredCount.incrementAndGet()
             recordFilteredItem(
                 item = item,
                 reasonType = AdFilterReasonType.BLOCKED_UP,
@@ -260,7 +259,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         if (config.filterSponsored) {
             val keyword = AD_KEYWORDS.firstOrNull { title.contains(it, ignoreCase = true) }
             if (keyword != null) {
-                filteredCount++
+                filteredCount.incrementAndGet()
                 recordFilteredItem(
                     item = item,
                     reasonType = AdFilterReasonType.SPONSORED,
@@ -275,7 +274,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         if (config.filterClickbait) {
             val keyword = CLICKBAIT_KEYWORDS.firstOrNull { title.contains(it, ignoreCase = true) }
             if (keyword != null) {
-                filteredCount++
+                filteredCount.incrementAndGet()
                 recordFilteredItem(
                     item = item,
                     reasonType = AdFilterReasonType.CLICKBAIT,
@@ -289,7 +288,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
         // 6️⃣ 过滤低质量视频（播放量过低）
         if (config.filterLowQuality && viewCount > 0 && viewCount < config.minViewCount) {
-            filteredCount++
+            filteredCount.incrementAndGet()
             recordFilteredItem(
                 item = item,
                 reasonType = AdFilterReasonType.LOW_VIEW,

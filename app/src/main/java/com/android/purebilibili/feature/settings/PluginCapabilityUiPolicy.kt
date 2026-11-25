@@ -264,44 +264,53 @@ fun buildUiSkinImagePreviewItems(
         }
 }
 
-private val UiSkinSurface.displayLabel: String
+internal val UiSkinSurface.displayLabel: String
     get() = when (this) {
         UiSkinSurface.HOME_BOTTOM_BAR -> "首页底栏"
         UiSkinSurface.HOME_TOP_CHROME -> "首页顶部"
         UiSkinSurface.HOME_DRAWER -> "首页侧栏"
-        UiSkinSurface.PROFILE -> "个人页"
+        UiSkinSurface.PROFILE -> "个人页与空间"
         UiSkinSurface.DYNAMIC_PUBLISH -> "动态发布"
+        UiSkinSurface.COMMENT_CARD -> "评论装扮卡"
         UiSkinSurface.LOADING_INDICATOR -> "加载动画"
         UiSkinSurface.LIKE_EFFECT -> "点赞特效"
         UiSkinSurface.PLAYER_PROGRESS -> "播放器进度条"
     }
 
 private val String.previewOrder: Int
-    get() = when (substringAfterLast("/")) {
-        "tail_bg.png", "tail_bg.jpg" -> 0
-        "side_bg_bottom.png", "side_bg_bottom.jpg" -> 1
-        "head_bg.jpg", "head_bg.png", "head_tab_bg.jpg", "head_tab_bg.png" -> 1
-        "side_bg.jpg", "side_bg.png" -> 2
-        "head_myself_bg.jpg", "head_myself_bg.png",
-        "head_myself_squared_bg.jpg", "head_myself_squared_bg.png",
-        "head_myself_mp4_bg.mp4" -> 3
-        else -> if (substringAfterLast("/").startsWith("tail_icon_")) 4 else 5
+    get() = when {
+        substringAfterLast("/").startsWith("cover_image.") -> 0
+        substringAfterLast("/") in setOf("tail_bg.png", "tail_bg.jpg") -> 1
+        substringAfterLast("/") in setOf("head_bg.jpg", "head_bg.png", "head_tab_bg.jpg", "head_tab_bg.png") -> 2
+        substringAfterLast("/") in setOf("side_bg.jpg", "side_bg.png", "side_bg_bottom.png", "side_bg_bottom.jpg") -> 3
+        substringAfterLast("/").startsWith("head_myself_") || startsWith("assets/space_bg/") -> 4
+        substringAfterLast("/").startsWith("comment_card_bg.") || substringAfterLast("/").startsWith("fan_") -> 5
+        substringAfterLast("/").startsWith("tail_icon_") -> 6
+        startsWith("assets/emojis/") -> 8
+        else -> 7
     }
 
 private val String.previewLabel: String
-    get() = when (substringAfterLast("/")) {
-        "tail_bg.png", "tail_bg.jpg" -> "底栏饰面"
-        "side_bg_bottom.png", "side_bg_bottom.jpg" -> "侧栏底饰"
-        "head_bg.jpg", "head_bg.png", "head_tab_bg.jpg", "head_tab_bg.png" -> "顶部氛围"
-        "side_bg.jpg", "side_bg.png" -> "侧栏背景"
-        "head_myself_bg.jpg", "head_myself_bg.png" -> "个人页背景"
-        "head_myself_squared_bg.jpg", "head_myself_squared_bg.png" -> "个人页方图"
-        "head_myself_mp4_bg.mp4" -> "个人页动态背景"
-        "tail_icon_pub_btn_bg.png", "tail_icon_pub_btn_bg.jpg" -> "发布图标"
-        "tail_icon_selected_pub_btn_bg.png", "tail_icon_selected_pub_btn_bg.jpg" -> "按下发布图标"
-        "tail_icon_channel.png", "tail_icon_channel.jpg" -> "频道图标"
-        "tail_icon_selected_channel.png", "tail_icon_selected_channel.jpg" -> "选中频道图标"
-        else -> if (substringAfterLast("/").startsWith("tail_icon_")) "底栏图标" else "资源图片"
+    get() = when {
+        substringAfterLast("/").startsWith("cover_image.") -> "套装封面"
+        substringAfterLast("/") in setOf("tail_bg.png", "tail_bg.jpg") -> "底栏饰面"
+        substringAfterLast("/") in setOf("side_bg_bottom.png", "side_bg_bottom.jpg") -> "侧栏底饰"
+        substringAfterLast("/") in setOf("head_bg.jpg", "head_bg.png", "head_tab_bg.jpg", "head_tab_bg.png") -> "顶部氛围"
+        substringAfterLast("/") in setOf("side_bg.jpg", "side_bg.png") -> "侧栏背景"
+        substringAfterLast("/") in setOf("head_myself_bg.jpg", "head_myself_bg.png") -> "个人页背景"
+        substringAfterLast("/") in setOf("head_myself_squared_bg.jpg", "head_myself_squared_bg.png") -> "个人页方图"
+        substringAfterLast("/") == "head_myself_mp4_bg.mp4" -> "个人页动态背景"
+        startsWith("assets/space_bg/") -> "空间背景"
+        substringAfterLast("/").startsWith("comment_card_bg.") -> "评论装扮横幅"
+        substringAfterLast("/").startsWith("fan_share_card.") -> "粉丝专属卡"
+        substringAfterLast("/").startsWith("fan_card.") -> "收藏集装扮卡"
+        substringAfterLast("/") in setOf("tail_icon_pub_btn_bg.png", "tail_icon_pub_btn_bg.jpg") -> "发布图标"
+        substringAfterLast("/") in setOf("tail_icon_selected_pub_btn_bg.png", "tail_icon_selected_pub_btn_bg.jpg") -> "按下发布图标"
+        substringAfterLast("/") in setOf("tail_icon_channel.png", "tail_icon_channel.jpg") -> "频道图标"
+        substringAfterLast("/") in setOf("tail_icon_selected_channel.png", "tail_icon_selected_channel.jpg") -> "选中频道图标"
+        startsWith("assets/emojis/") -> substringAfterLast("/").substringBeforeLast(".")
+        substringAfterLast("/").startsWith("tail_icon_") -> "底栏图标"
+        else -> "装扮资源"
     }
 
 private val PluginCapability.label: String

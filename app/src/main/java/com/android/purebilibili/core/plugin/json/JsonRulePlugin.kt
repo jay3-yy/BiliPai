@@ -172,8 +172,12 @@ data class Rule(
     //  新格式：复合条件
     val condition: Condition? = null,
     
-    val action: String,       // 动作: hide, highlight
-    val style: HighlightStyle? = null  // 仅 highlight 时使用
+    val action: String,       // 动作: hide, highlight, fold, badge, rewriteTitle
+    val style: HighlightStyle? = null,  // 仅 highlight 时使用
+    val pattern: String? = null,        // rewriteTitle 匹配正则
+    val replacement: String? = null,    // rewriteTitle 替换文本
+    val text: String? = null,           // badge 标签文本
+    val groupLabel: String? = null      // fold 分组说明
 ) {
     /**
      * 获取统一的条件对象（兼容新旧格式）
@@ -219,6 +223,9 @@ object RuleOperator {
 object RuleAction {
     const val HIDE = "hide"
     const val HIGHLIGHT = "highlight"
+    const val FOLD = "fold"
+    const val BADGE = "badge"
+    const val REWRITE_TITLE = "rewriteTitle"
 }
 
 

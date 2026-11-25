@@ -3,6 +3,7 @@ package com.android.purebilibili.core.plugin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Lightweight in-app hint bus for plugin effect visualization.
@@ -37,18 +38,20 @@ object PluginEffectHintBus {
 
     fun setEffectMatchHintsEnabled(enabled: Boolean) {
         effectMatchHintsEnabled = enabled
-        val currentKind = _current.value?.kind
-        if (!enabled && currentKind != null &&
-            !shouldShowPluginEffectHint(currentKind, effectMatchHintsEnabled = false)
-        ) {
-            _current.value = null
+        if (!enabled) {
+            _current.update { current ->
+                if (current != null && !shouldShowPluginEffectHint(current.kind, effectMatchHintsEnabled = false)) {
+                    null
+                } else {
+                    current
+                }
+            }
         }
     }
 
     fun dismiss(issuedAtMs: Long) {
-        val current = _current.value ?: return
-        if (current.issuedAtMs == issuedAtMs) {
-            _current.value = null
+        _current.update { current ->
+            if (current?.issuedAtMs == issuedAtMs) null else current
         }
     }
 

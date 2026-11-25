@@ -16,11 +16,38 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.animateLottieCompositionAsState
 import com.airbnb.lottie.compose.rememberLottieComposition
+import com.android.purebilibili.data.model.response.EmoteItem
+import com.android.purebilibili.data.model.response.EmotePackage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
 val LocalUiSkinState = compositionLocalOf { UiSkinState() }
+
+private const val LOCAL_SKIN_EMOTE_PACKAGE_ID = -990_001L
+
+fun UiSkinState.toSkinEmotePackage(): EmotePackage? {
+    val skin = activeSkin?.takeIf { enabled } ?: return null
+    val emotes = skin.manifest.assets.emojiImages.entries.mapIndexedNotNull { index, (name, assetPath) ->
+        val filePath = skin.assetFilePath(assetPath) ?: return@mapIndexedNotNull null
+        val code = if (name.startsWith("[") && name.endsWith("]")) name else "[$name]"
+        EmoteItem(
+            id = LOCAL_SKIN_EMOTE_PACKAGE_ID - index - 1,
+            text = code,
+            url = File(filePath).toURI().toString(),
+        )
+    }
+    if (emotes.isEmpty()) return null
+    val coverIconUrl = skin.assetFilePath(skin.manifest.assets.coverImage)
+        ?.let { File(it).toURI().toString() }
+        ?: emotes.first().url
+    return EmotePackage(
+        id = LOCAL_SKIN_EMOTE_PACKAGE_ID,
+        text = skin.displayName,
+        url = coverIconUrl,
+        emote = emotes,
+    )
+}
 
 fun parseUiSkinColor(value: String?, fallback: Color): Color {
     val normalized = value?.trim()?.takeIf { it.isNotBlank() } ?: return fallback

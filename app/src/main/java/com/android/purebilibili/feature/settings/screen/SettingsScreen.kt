@@ -730,6 +730,7 @@ fun SettingsScreen(
         showUpdateResult = updateCheckResult != null,
         showChangelogResult = changelogCheckResult != null,
         showBlockedList = showBlockedList,
+        showCommentFraudHistory = showCommentFraudHistory,
     )
     SettingsLocalBackHandler(enabled = settingsBackTarget != SettingsBackTarget.NONE) {
         when (settingsBackTarget) {
@@ -752,6 +753,7 @@ fun SettingsScreen(
             SettingsBackTarget.UPDATE_RESULT -> updateCheckResult = null
             SettingsBackTarget.CHANGELOG_RESULT -> changelogCheckResult = null
             SettingsBackTarget.BLOCKED_LIST -> showBlockedList = false
+            SettingsBackTarget.COMMENT_FRAUD_HISTORY -> showCommentFraudHistory = false
         }
     }
 

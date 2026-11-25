@@ -1,0 +1,61 @@
+name: 🧩 投稿社区扩展 (.bpx)
+description: 无需使用 Git 命令行！粘贴通过在线校验台的 .bpx 规则/脚本/装扮代码，审稿机器人将自动体检并为你生成 PR 与 App 内创作者名片。
+title: "[BPX 投稿] "
+labels: ["bpx-submission"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 欢迎参与 BiliPai 扩展共创！
+        提交前建议先在 **BiliPai 在线校验扫码台** 粘贴测试并扫码真机预览。提交后 **BiliPai Review Bot** 将自动运行合规体检并在评论区反馈结果。
+
+  - type: checkboxes
+    id: redlines
+    attributes:
+      label: 官方精选源「三条准入红线」确认
+      options:
+        - label: 内容合规：本扩展不包含任何绕过 B 站大会员/付费鉴权、破解版权限制或盗版影视直链逻辑。
+          required: true
+        - label: 素材版权：若包含主题装扮/图片，均为本人原创、CC 开源协议或拥有明确可再分发许可（未搬运商业付费装扮）。
+          required: true
+        - label: 透明沙盒：代码为未混淆压缩的明文源码，且所有联网域名均已精确写入 permissions.networkDomains（无 * 通配符）。
+          required: true
+
+  - type: dropdown
+    id: slot
+    attributes:
+      label: 主要挂载插槽
+      options:
+        - feed.pipe（推荐流净化 / 折叠 / 去标题党 / 角标）
+        - detail.companion（视频详情页 AI 与伴侣半屏面板）
+        - player.track（播放器时间轴跳过段 / 外挂弹幕与字幕）
+        - home.lens（首页顶栏推荐透镜 / 跨源聚合频道）
+        - community.craft（评论区指路课代表置顶 / 弹幕词条）
+        - theme.skin（三材质光学自适应主题装扮）
+    validations:
+      required: true
+
+  - type: input
+    id: bili_mid
+    attributes:
+      label: 创作者 B 站数字 UID（可选，用于点亮 App 内创作者名片直达空间）
+      placeholder: "例如：12345678（留空则仅展示 GitHub 主页）"
+    validations:
+      required: false
+
+  - type: textarea
+    id: bpx_source
+    attributes:
+      label: 粘贴完整 .bpx.json 或 .bpx.js 源码
+      description: 请直接粘贴未经改动的单文件源码（不需要手动包裹 ``` 代码块，表单会自动格式化）。
+      render: javascript
+    validations:
+      required: true
+
+  - type: textarea
+    id: showcase_note
+    attributes:
+      label: 使用场景与实测说明
+      description: 简述你的扩展解决了什么痛点，或附上实测视频 BV 号与效果图。
+    validations:
+      required: true

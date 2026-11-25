@@ -34,8 +34,9 @@ internal fun rememberSettingsThemeConfiguration(): AppThemeSettings {
     val provided = LocalSettingsThemeConfiguration.current
     if (provided != null) return provided
     val context = LocalContext.current
+    val initialSettings = remember(context) { SettingsManager.getInitialAppThemeSettings(context) }
     val settings by remember(context) { SettingsManager.getAppThemeSettings(context) }
-        .collectAsStateWithLifecycle(initialValue = SettingsManager.getInitialAppThemeSettings(context))
+        .collectAsStateWithLifecycle(initialValue = initialSettings)
     return settings
 }
 

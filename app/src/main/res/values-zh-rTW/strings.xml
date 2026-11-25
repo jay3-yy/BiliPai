@@ -59,7 +59,7 @@
     <string name="icon_settings_title">應用圖示</string>
     <string name="bottom_bar_management_title">導航設定</string>
     <string name="permission_management_title">權限管理</string>
-    <string name="plugins_center_title">外掛中心</string>
+    <string name="plugins_center_title">外掛中心 (Beta)</string>
     <string name="open_source_licenses_title">開源授權</string>
     <string name="tips_title">使用技巧</string>
 
