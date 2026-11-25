@@ -11,7 +11,13 @@ export default defineConfig({
   description: 'Beta 公开测试 · 一句话用 AI 造扩展 · 浏览器本地体检 · 手机扫码即装的三材质原生扩展生态',
   cleanUrls: true,
   lastUpdated: true,
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
+    ['meta', { name: 'theme-color', content: '#e05288' }],
+  ],
   themeConfig: {
+    logo: '/logo.svg',
+    siteTitle: 'BiliPai 扩展工坊',
     search: {
       provider: 'local',
       options: {

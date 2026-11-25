@@ -1,10 +1,40 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter, withBase } from 'vitepress'
-import { STARTER_RECIPES, buildCapsuleAiPrompt, type BpxRecipe } from '../bpxRecipes'
+import {
+  SLOT_META,
+  STARTER_RECIPES,
+  buildCapsuleAiPrompt,
+  type BpxRecipe,
+  type BpxSlotId
+} from '../bpxRecipes'
 
 const router = useRouter()
 const copiedId = ref<string | null>(null)
+const selectedSlot = ref<'all' | BpxSlotId>('all')
+
+const slotAccents: Record<BpxSlotId, { fg: string; bg: string }> = {
+  'feed.pipe': { fg: '#e05288', bg: 'rgba(224, 82, 136, 0.13)' },
+  'detail.companion': { fg: '#6366f1', bg: 'rgba(99, 102, 241, 0.13)' },
+  'player.track': { fg: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.13)' },
+  'home.lens': { fg: '#10b981', bg: 'rgba(16, 185, 129, 0.13)' },
+  'community.craft': { fg: '#f59e0b', bg: 'rgba(245, 158, 11, 0.14)' },
+  'theme.skin': { fg: '#ec4899', bg: 'rgba(236, 72, 153, 0.13)' },
+}
+
+const slotFilters = computed(() => [
+  { id: 'all' as const, label: `全部食谱 (${STARTER_RECIPES.length})` },
+  ...(Object.keys(SLOT_META) as BpxSlotId[]).map((slot) => ({
+    id: slot,
+    label: SLOT_META[slot].label
+  }))
+])
+
+const visibleRecipes = computed(() =>
+  selectedSlot.value === 'all'
+    ? STARTER_RECIPES
+    : STARTER_RECIPES.filter((r) => r.slot === selectedSlot.value)
+)
 
 function openInPlayground(recipe: BpxRecipe) {
   router.go(withBase(`/playground?recipe=${encodeURIComponent(recipe.id)}`))
@@ -24,43 +54,119 @@ async function copyAiRemixPrompt(recipe: BpxRecipe) {
 </script>
 
 <template>
-  <div class="bpx-cookbook-grid">
-    <article v-for="recipe in STARTER_RECIPES" :key="recipe.id" class="bpx-glass-card bpx-recipe-card">
-      <div class="bpx-recipe-top">
-        <span class="bpx-pill">{{ recipe.slotLabel }}</span>
-        <span class="bpx-lines-badge">{{ recipe.lines }} 行 · .bpx.{{ recipe.format }}</span>
-      </div>
+  <div class="bpx-cookbook-wrap">
+    <div class="bpx-filter-bar" role="tablist" aria-label="按宿主插槽筛选食谱">
+      <button
+        v-for="item in slotFilters"
+        :key="item.id"
+        type="button"
+        role="tab"
+        :aria-selected="selectedSlot === item.id"
+        class="bpx-filter-pill"
+        :class="{ active: selectedSlot === item.id }"
+        @click="selectedSlot = item.id"
+      >
+        <span
+          v-if="item.id !== 'all'"
+          class="bpx-filter-dot"
+          :style="{ background: slotAccents[item.id].fg }"
+        />
+        {{ item.label }}
+      </button>
+    </div>
 
-      <h3 class="bpx-recipe-title">{{ recipe.title }}</h3>
-      <p class="bpx-recipe-summary">{{ recipe.summary }}</p>
+    <div class="bpx-cookbook-grid">
+      <article v-for="recipe in visibleRecipes" :key="recipe.id" class="bpx-glass-card bpx-recipe-card">
+        <div class="bpx-recipe-top">
+          <span
+            class="bpx-slot-pill"
+            :style="{
+              color: slotAccents[recipe.slot].fg,
+              background: slotAccents[recipe.slot].bg
+            }"
+          >
+            {{ recipe.slotLabel }}
+          </span>
+          <span class="bpx-lines-badge">{{ recipe.lines }} 行 · .bpx.{{ recipe.format }}</span>
+        </div>
 
-      <div class="bpx-mount-tag">
-        <span class="bpx-mount-label">原位挂载：</span>{{ recipe.mountPreview }}
-      </div>
+        <h3 class="bpx-recipe-title">{{ recipe.title }}</h3>
+        <p class="bpx-recipe-summary">{{ recipe.summary }}</p>
 
-      <ul class="bpx-highlights">
-        <li v-for="h in recipe.highlights" :key="h">✦ {{ h }}</li>
-      </ul>
+        <div class="bpx-mount-tag">
+          <span class="bpx-mount-label">挂载位</span>
+          <span class="bpx-mount-val">{{ recipe.mountPreview }}</span>
+        </div>
 
-      <div class="bpx-recipe-actions">
-        <button type="button" class="bpx-btn bpx-btn-primary" @click="openInPlayground(recipe)">
-          ⚡ 在工坊打开并扫码
-        </button>
-        <button type="button" class="bpx-btn bpx-btn-ghost" @click="copyAiRemixPrompt(recipe)">
-          {{ copiedId === recipe.id ? '✓ 已复制 AI 配方' : '🤖 复制 AI 改写模板' }}
-        </button>
-        <a :href="withBase(recipe.docLink)" class="bpx-detail-link">详解 →</a>
-      </div>
-    </article>
+        <ul class="bpx-highlights">
+          <li v-for="h in recipe.highlights" :key="h">
+            <span class="hl-dot" :style="{ background: slotAccents[recipe.slot].fg }" />
+            {{ h }}
+          </li>
+        </ul>
+
+        <div class="bpx-recipe-actions">
+          <button type="button" class="bpx-btn bpx-btn-primary" @click="openInPlayground(recipe)">
+            在工坊打开
+          </button>
+          <button type="button" class="bpx-btn bpx-btn-ghost" @click="copyAiRemixPrompt(recipe)">
+            {{ copiedId === recipe.id ? '已复制模板' : '复制 AI 模板' }}
+          </button>
+          <a :href="withBase(recipe.docLink)" class="bpx-detail-link">详解 →</a>
+        </div>
+      </article>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.bpx-cookbook-wrap {
+  margin-top: 8px;
+}
+
+.bpx-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.bpx-filter-pill {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--vp-c-text-2);
+  background: var(--bpx-glass-bg);
+  border: 1px solid var(--bpx-glass-border);
+  transition: all 0.18s ease;
+}
+
+.bpx-filter-pill:hover {
+  color: var(--vp-c-text-1);
+  border-color: rgba(224, 82, 136, 0.36);
+}
+
+.bpx-filter-pill.active {
+  background: var(--vp-c-brand-soft);
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+}
+
+.bpx-filter-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
 .bpx-cookbook-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(332px, 1fr));
   gap: 20px;
-  margin-top: 18px;
 }
 
 .bpx-recipe-card {
@@ -76,8 +182,20 @@ async function copyAiRemixPrompt(recipe: BpxRecipe) {
   gap: 8px;
 }
 
+.bpx-slot-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
 .bpx-lines-badge {
-  font-size: 12px;
+  font-size: 11.5px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: var(--vp-c-bg-soft);
   color: var(--vp-c-text-3);
   font-family: var(--vp-font-family-mono);
 }
@@ -86,36 +204,46 @@ async function copyAiRemixPrompt(recipe: BpxRecipe) {
   margin: 14px 0 8px !important;
   font-size: 18px !important;
   line-height: 1.35 !important;
+  letter-spacing: -0.015em;
   border: none !important;
   padding: 0 !important;
 }
 
 .bpx-recipe-summary {
-  margin: 0 0 12px !important;
+  margin: 0 0 14px !important;
   font-size: 13.5px;
-  line-height: 1.6;
+  line-height: 1.62;
   color: var(--vp-c-text-2);
   flex: 1;
 }
 
 .bpx-mount-tag {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   font-size: 12px;
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
   background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
   color: var(--vp-c-text-2);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .bpx-mount-label {
-  font-weight: 600;
+  flex-shrink: 0;
+  font-weight: 700;
   color: var(--vp-c-text-1);
+}
+
+.bpx-mount-val {
+  min-width: 0;
 }
 
 .bpx-highlights {
   list-style: none !important;
   padding: 0 !important;
-  margin: 0 0 16px !important;
+  margin: 0 0 18px !important;
   display: flex;
   flex-wrap: wrap;
   gap: 6px 12px;
@@ -125,6 +253,16 @@ async function copyAiRemixPrompt(recipe: BpxRecipe) {
 
 .bpx-highlights li {
   margin: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hl-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0.85;
 }
 
 .bpx-recipe-actions {
@@ -132,6 +270,8 @@ async function copyAiRemixPrompt(recipe: BpxRecipe) {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--vp-c-divider);
   margin-top: auto;
 }
 
@@ -141,17 +281,19 @@ async function copyAiRemixPrompt(recipe: BpxRecipe) {
   padding: 7px 14px;
   font-size: 12.5px;
   font-weight: 600;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition: transform 0.16s ease, opacity 0.16s ease, border-color 0.16s ease;
 }
 
 .bpx-btn-primary {
-  background: var(--vp-c-brand-1);
+  background: linear-gradient(135deg, #eb528c 0%, #7d63ff 100%);
   color: #fff;
   border: 1px solid transparent;
+  box-shadow: 0 6px 16px rgba(224, 82, 136, 0.22);
 }
 
 .bpx-btn-primary:hover {
-  opacity: 0.9;
+  transform: translateY(-1px);
+  opacity: 0.94;
 }
 
 .bpx-btn-ghost {
@@ -162,12 +304,19 @@ async function copyAiRemixPrompt(recipe: BpxRecipe) {
 
 .bpx-btn-ghost:hover {
   border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
 }
 
 .bpx-detail-link {
   margin-left: auto;
   font-size: 12.5px;
   font-weight: 600;
+  color: var(--vp-c-text-2) !important;
   text-decoration: none !important;
+  transition: color 0.15s ease;
+}
+
+.bpx-detail-link:hover {
+  color: var(--vp-c-brand-1) !important;
 }
 </style>

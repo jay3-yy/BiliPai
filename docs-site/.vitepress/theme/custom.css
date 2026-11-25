@@ -1,82 +1,365 @@
 :root {
   --vp-c-brand-1: #e05288;
-  --vp-c-brand-2: #f0679c;
-  --vp-c-brand-3: #c93f74;
-  --vp-c-brand-soft: rgba(224, 82, 136, 0.14);
-  --bpx-glass-bg: rgba(255, 255, 255, 0.72);
-  --bpx-glass-border: rgba(224, 82, 136, 0.18);
-  --bpx-card-shadow: 0 12px 32px rgba(20, 24, 40, 0.06);
+  --vp-c-brand-2: #ef679c;
+  --vp-c-brand-3: #c73c71;
+  --vp-c-brand-soft: rgba(224, 82, 136, 0.12);
+
+  --vp-c-bg: #fbfbfd;
+  --vp-c-bg-alt: #f4f5f9;
+  --vp-c-bg-soft: #f2f4f8;
+  --vp-c-divider: rgba(15, 23, 42, 0.08);
+  --vp-c-gutter: rgba(15, 23, 42, 0.06);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(125deg, #e05288 0%, #c84ee0 52%, #5c6bff 100%);
+
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-bg: linear-gradient(135deg, #eb528c 0%, #7d63ff 100%);
+  --vp-button-brand-hover-bg: linear-gradient(135deg, #f36299 0%, #8a73ff 100%);
+  --vp-button-brand-active-bg: linear-gradient(135deg, #d7427c 0%, #6b52ee 100%);
+
+  --bpx-glass-bg: rgba(255, 255, 255, 0.74);
+  --bpx-glass-border: rgba(15, 23, 42, 0.08);
+  --bpx-glass-highlight: rgba(255, 255, 255, 0.92);
+  --bpx-card-shadow: 0 10px 30px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --bpx-card-shadow-hover: 0 20px 44px rgba(224, 82, 136, 0.11), 0 4px 12px rgba(15, 23, 42, 0.06);
 }
 
 .dark {
   --vp-c-brand-1: #ff7aa8;
   --vp-c-brand-2: #ff94b9;
   --vp-c-brand-3: #e05288;
-  --vp-c-brand-soft: rgba(255, 122, 168, 0.16);
-  --bpx-glass-bg: rgba(28, 30, 38, 0.72);
-  --bpx-glass-border: rgba(255, 122, 168, 0.2);
-  --bpx-card-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+  --vp-c-brand-soft: rgba(255, 122, 168, 0.15);
+
+  --vp-c-bg: #0c0e14;
+  --vp-c-bg-alt: #11141d;
+  --vp-c-bg-soft: #151925;
+  --vp-c-divider: rgba(255, 255, 255, 0.08);
+  --vp-c-gutter: rgba(255, 255, 255, 0.06);
+
+  --vp-home-hero-name-background: linear-gradient(125deg, #ff85b2 0%, #d98eff 50%, #7aa2ff 100%);
+
+  --bpx-glass-bg: rgba(22, 26, 38, 0.72);
+  --bpx-glass-border: rgba(255, 255, 255, 0.1);
+  --bpx-glass-highlight: rgba(255, 255, 255, 0.16);
+  --bpx-card-shadow: 0 14px 36px rgba(0, 0, 0, 0.36);
+  --bpx-card-shadow-hover: 0 22px 48px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(255, 122, 168, 0.28);
 }
 
+/* Frosted glass navbar */
+.VPNavBar {
+  backdrop-filter: blur(20px) saturate(175%);
+  -webkit-backdrop-filter: blur(20px) saturate(175%);
+  background-color: rgba(251, 251, 253, 0.78) !important;
+}
+
+.dark .VPNavBar {
+  background-color: rgba(12, 14, 20, 0.76) !important;
+}
+
+.VPNavBarTitle .logo {
+  height: 26px;
+  border-radius: 7px;
+}
+
+/* Subtle ambient background on Home */
+.VPHome {
+  position: relative;
+  overflow-x: clip;
+  background-image:
+    radial-gradient(ellipse 70% 42% at 20% 0%, rgba(235, 82, 140, 0.11), transparent 62%),
+    radial-gradient(ellipse 60% 38% at 86% 6%, rgba(107, 107, 255, 0.1), transparent 60%);
+}
+
+.dark .VPHome {
+  background-image:
+    radial-gradient(ellipse 70% 44% at 18% 0%, rgba(255, 110, 165, 0.14), transparent 62%),
+    radial-gradient(ellipse 62% 40% at 84% 4%, rgba(99, 102, 241, 0.14), transparent 60%);
+}
+
+/* Hero Typography & Buttons */
+.VPHero {
+  padding-top: calc(var(--vp-nav-height) + 44px) !important;
+  padding-bottom: 48px !important;
+}
+
+.VPHero .name {
+  letter-spacing: -0.03em;
+  line-height: 1.12 !important;
+}
+
+.VPHero .text {
+  letter-spacing: -0.025em;
+  line-height: 1.18 !important;
+  margin-top: 8px;
+}
+
+.VPHero .tagline {
+  font-size: 16px !important;
+  line-height: 1.7 !important;
+  color: var(--vp-c-text-2) !important;
+  max-width: 540px;
+}
+
+.VPHero .VPButton {
+  border-radius: 999px !important;
+  padding: 0 22px !important;
+  height: 44px;
+  line-height: 42px !important;
+  font-weight: 600 !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+}
+
+.VPHero .VPButton.brand {
+  background: var(--vp-button-brand-bg) !important;
+  box-shadow: 0 10px 24px rgba(224, 82, 136, 0.28);
+}
+
+.VPHero .VPButton.brand:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(224, 82, 136, 0.36);
+}
+
+.VPHero .VPButton.alt {
+  background: var(--bpx-glass-bg) !important;
+  border: 1px solid var(--bpx-glass-border) !important;
+  backdrop-filter: blur(14px);
+}
+
+.VPHero .VPButton.alt:hover {
+  transform: translateY(-2px);
+  border-color: var(--vp-c-brand-1) !important;
+}
+
+/* Hero Beta Kicker Pill */
+.bpx-hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 13px;
+  margin-bottom: 18px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+  background: var(--bpx-glass-bg);
+  border: 1px solid var(--bpx-glass-border);
+  box-shadow: inset 0 1px 0 var(--bpx-glass-highlight), 0 6px 18px rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(14px);
+}
+
+.bpx-kicker-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--vp-c-brand-1);
+  box-shadow: 0 0 0 4px var(--vp-c-brand-soft);
+}
+
+.bpx-kicker-sep {
+  opacity: 0.4;
+}
+
+/* Shared Optical Glass Card */
 .bpx-glass-card {
   background: var(--bpx-glass-bg);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(165%);
+  -webkit-backdrop-filter: blur(20px) saturate(165%);
   border: 1px solid var(--bpx-glass-border);
-  border-radius: 20px;
-  box-shadow: var(--bpx-card-shadow);
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  border-radius: 22px;
+  box-shadow: var(--bpx-card-shadow), inset 0 1px 0 var(--bpx-glass-highlight);
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease, box-shadow 0.22s ease;
 }
 
 .bpx-glass-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--vp-c-brand-1);
+  transform: translateY(-3px);
+  border-color: rgba(224, 82, 136, 0.38);
+  box-shadow: var(--bpx-card-shadow-hover), inset 0 1px 0 var(--bpx-glass-highlight);
 }
 
 .bpx-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
+  padding: 4px 11px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   background: var(--vp-c-brand-soft);
   color: var(--vp-c-brand-1);
 }
 
-.bpx-step-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 14px;
-  margin: 24px 0 36px;
+/* Home Container & Section Headers */
+.bpx-home-container {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 8px 24px 72px;
 }
 
-.bpx-step-item {
-  padding: 16px 18px;
-  border-radius: 16px;
-  background: var(--vp-c-bg-soft);
-  border: 1px solid var(--vp-c-divider);
+.bpx-section {
+  margin-top: 56px;
 }
 
-.bpx-step-num {
+.bpx-section-eyebrow {
   font-size: 12px;
   font-weight: 700;
-  color: var(--vp-c-brand-1);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--vp-c-brand-1);
+  margin-bottom: 8px;
 }
 
-.bpx-step-title {
-  margin: 6px 0 4px;
+.bpx-section-heading {
+  margin: 0 0 10px !important;
+  padding: 0 !important;
+  border: none !important;
+  font-size: 28px !important;
+  line-height: 1.25 !important;
+  letter-spacing: -0.025em;
+  font-weight: 800 !important;
+  color: var(--vp-c-text-1);
+}
+
+.bpx-section-lead {
+  margin: 0 0 24px !important;
   font-size: 15px;
+  line-height: 1.65;
+  color: var(--vp-c-text-2);
+  max-width: 680px;
+}
+
+/* 3-Pillar Architecture Highlights */
+.bpx-pillar-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 820px) {
+  .bpx-pillar-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bpx-pillar-card {
+  padding: 22px 24px;
+}
+
+.bpx-pillar-metric {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(125deg, var(--vp-c-brand-1), #7c6bff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  line-height: 1.15;
+}
+
+.bpx-pillar-title {
+  margin: 8px 0 6px;
+  font-size: 15.5px;
   font-weight: 700;
   color: var(--vp-c-text-1);
 }
 
-.bpx-step-desc {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
+.bpx-pillar-desc {
+  margin: 0 !important;
+  font-size: 13.5px;
+  line-height: 1.6;
   color: var(--vp-c-text-2);
+}
+
+/* 4-Step Co-Creation Strip */
+.bpx-step-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 980px) {
+  .bpx-step-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .bpx-step-strip {
+    grid-template-columns: 1fr;
+  }
+}
+
+.bpx-step-item {
+  position: relative;
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--bpx-glass-bg);
+  border: 1px solid var(--bpx-glass-border);
+  box-shadow: var(--bpx-card-shadow), inset 0 1px 0 var(--bpx-glass-highlight);
+  backdrop-filter: blur(18px);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.bpx-step-item:hover {
+  transform: translateY(-2px);
+  border-color: rgba(224, 82, 136, 0.35);
+}
+
+.bpx-step-num {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--vp-font-family-mono);
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+  letter-spacing: 0.04em;
+}
+
+.bpx-step-title {
+  margin: 12px 0 6px;
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--vp-c-text-1);
+}
+
+.bpx-step-desc {
+  margin: 0 !important;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--vp-c-text-2);
+}
+
+/* Refine Sidebar & Code Blocks & Callouts */
+.VPSidebarItem.is-active > .item .link {
+  font-weight: 700;
+}
+
+.vp-doc div[class*="language-"] {
+  border-radius: 14px;
+  border: 1px solid var(--vp-c-divider);
+}
+
+.vp-doc .custom-block {
+  border-radius: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bpx-glass-card,
+  .bpx-step-item,
+  .VPHero .VPButton,
+  .stage-shell,
+  .slot-card {
+    transition: none !important;
+  }
+
+  .bpx-glass-card:hover,
+  .bpx-step-item:hover,
+  .VPHero .VPButton:hover {
+    transform: none !important;
+  }
 }

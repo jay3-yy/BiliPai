@@ -29,6 +29,11 @@ const withinQrBudget = ref<boolean>(true)
 
 const validation = computed(() => validateBpxSource(codeInput.value))
 const errorCount = computed(() => validation.value.issues.filter((i) => i.severity === 'error').length)
+const qrBudgetPercent = computed(() => Math.min(100, Math.round((compressedBytes.value / 2048) * 100)))
+const activeFileName = computed(() => {
+  const id = validation.value.manifest?.id || activeRecipeId.value || 'custom_extension'
+  return `${id}.bpx.${validation.value.format}`
+})
 
 function selectRecipe(id: string) {
   const found = STARTER_RECIPES.find((r) => r.id === id)
@@ -160,17 +165,32 @@ const submitIssueUrl = computed(() => {
     <!-- 2. Split Editor & Live Verifier / QR Studio -->
     <div class="bpx-workbench">
       <!-- Left: Editor -->
-      <section class="bpx-editor-pane">
+      <section class="bpx-editor-pane bpx-glass-card">
+        <div class="bpx-editor-chrome">
+          <div class="bpx-window-dots" aria-hidden="true">
+            <span class="dot red" />
+            <span class="dot yellow" />
+            <span class="dot green" />
+          </div>
+          <span class="bpx-filename">{{ activeFileName }}</span>
+          <span class="bpx-byte-tag">源码 {{ validation.rawBytes }} B</span>
+        </div>
+
         <div class="bpx-toolbar">
           <label class="bpx-select-label">
-            切换食谱样板：
+            切换食谱样板
             <select :value="activeRecipeId" class="bpx-recipe-select" @change="selectRecipe(($event.target as HTMLSelectElement).value)">
               <option v-for="r in STARTER_RECIPES" :key="r.id" :value="r.id">
                 {{ r.title }} (.bpx.{{ r.format }})
               </option>
             </select>
           </label>
-          <span class="bpx-byte-tag">源码 {{ validation.rawBytes }} B</span>
+          <div v-if="compressedBytes > 0" class="bpx-budget-meter" :class="{ over: !withinQrBudget }">
+            <span>二维码容量 {{ compressedBytes }} / 2048 B</span>
+            <div class="bpx-budget-track">
+              <div class="bpx-budget-fill" :style="{ width: `${qrBudgetPercent}%` }" />
+            </div>
+          </div>
         </div>
 
         <textarea
@@ -182,16 +202,16 @@ const submitIssueUrl = computed(() => {
 
         <div class="bpx-editor-footer">
           <button type="button" class="bpx-action-btn ghost" @click="downloadBpxFile">
-            ⬇ 导出 .bpx.{{ validation.format }} 文件
+            导出 .bpx.{{ validation.format }} 文件
           </button>
           <a
             v-if="errorCount === 0 && validation.manifest"
             :href="submitIssueUrl"
             target="_blank"
             rel="noreferrer"
-            class="bpx-action-btn ghost"
+            class="bpx-action-btn primary"
           >
-            🚀 零 Git 填表投稿至官方源 →
+            零 Git 填表投稿至官方源 →
           </a>
         </div>
       </section>
@@ -385,7 +405,42 @@ const submitIssueUrl = computed(() => {
 .bpx-editor-pane {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.bpx-editor-pane:hover {
+  transform: none;
+}
+
+.bpx-editor-chrome {
+  display: flex;
+  align-items: center;
   gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.bpx-window-dots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.bpx-window-dots .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.bpx-window-dots .dot.red { background: #ff5f56; }
+.bpx-window-dots .dot.yellow { background: #ffbd2e; }
+.bpx-window-dots .dot.green { background: #27c93f; }
+
+.bpx-filename {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
 }
 
 .bpx-toolbar {
@@ -393,43 +448,88 @@ const submitIssueUrl = computed(() => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .bpx-select-label {
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--vp-c-text-2);
 }
 
 .bpx-recipe-select {
-  margin-left: 6px;
-  padding: 5px 10px;
-  border-radius: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
   border: 1px solid var(--vp-c-divider);
   background: var(--vp-c-bg-soft);
   color: var(--vp-c-text-1);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .bpx-byte-tag {
-  font-size: 12px;
+  margin-left: auto;
+  font-size: 11.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--vp-c-bg-soft);
   font-family: var(--vp-font-family-mono);
-  color: var(--vp-c-text-3);
+  color: var(--vp-c-text-2);
+}
+
+.bpx-budget-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 156px;
+  font-size: 11px;
+  font-family: var(--vp-font-family-mono);
+  color: var(--vp-c-text-2);
+}
+
+.bpx-budget-meter.over {
+  color: #ef4444;
+}
+
+.bpx-budget-track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--vp-c-bg-soft);
+  overflow: hidden;
+}
+
+.bpx-budget-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22c55e, #6366f1);
+  transition: width 0.2s ease;
+}
+
+.bpx-budget-meter.over .bpx-budget-fill {
+  background: #ef4444;
 }
 
 .bpx-code-area {
   width: 100%;
   min-height: 460px;
-  padding: 14px;
+  padding: 16px;
   border-radius: 14px;
-  border: 1px solid var(--vp-c-divider);
-  background: var(--vp-c-bg-alt);
-  color: var(--vp-c-text-1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #131620;
+  color: #e6edf7;
   font-family: var(--vp-font-family-mono);
   font-size: 12.5px;
-  line-height: 1.55;
+  line-height: 1.62;
   resize: vertical;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bpx-code-area:focus {
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 0 0 3px var(--vp-c-brand-soft);
 }
 
 .bpx-editor-footer {
@@ -443,23 +543,35 @@ const submitIssueUrl = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 16px;
+  padding: 9px 18px;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
   text-decoration: none !important;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
 .bpx-action-btn.primary {
-  background: var(--vp-c-brand-1);
+  background: linear-gradient(135deg, #eb528c 0%, #7d63ff 100%);
   color: #fff !important;
   border: none;
+  box-shadow: 0 8px 20px rgba(224, 82, 136, 0.24);
+}
+
+.bpx-action-btn.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(224, 82, 136, 0.34);
 }
 
 .bpx-action-btn.ghost {
   background: var(--vp-c-bg-soft);
   color: var(--vp-c-text-1) !important;
   border: 1px solid var(--vp-c-divider);
+}
+
+.bpx-action-btn.ghost:hover {
+  border-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1) !important;
 }
 
 .bpx-action-btn.small {
