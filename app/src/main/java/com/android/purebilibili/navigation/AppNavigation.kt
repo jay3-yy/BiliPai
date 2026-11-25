@@ -1725,8 +1725,11 @@ fun AppNavigation(
                 )
                 if (opened) {
                     officialVideoChildActive = true
-                } else if (isNavigationCurrent() && hostActivity.window.decorView.hasWindowFocus()) {
-                    // 截图随窗口几何失效后，仍有效的点击继续走普通导航。
+                } else if (
+                    isNavigationCurrent() &&
+                    (hostActivity.window.decorView.hasWindowFocus() || hostWindowResumed)
+                ) {
+                    // 截图随窗口几何失效或弹窗刚关闭尚未交还焦点时，仍有效的点击继续走普通导航。
                     commitInApp()
                 }
             }
@@ -2152,7 +2155,10 @@ fun AppNavigation(
                     )
                     if (opened) {
                         officialVideoChildActive = true
-                    } else if (isCurrent() && hostActivity.window.decorView.hasWindowFocus()) {
+                    } else if (
+                        isCurrent() &&
+                        (hostActivity.window.decorView.hasWindowFocus() || hostWindowResumed)
+                    ) {
                         prepareAndCommitInAppVideoNavigation()
                     }
                 }

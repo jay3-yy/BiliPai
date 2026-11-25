@@ -82,7 +82,11 @@ fun DynamicSubReplyPreviewHost(
         onLoadMore = onLoadMore,
         onRefresh = onRefresh,
         onSortModeChange = onSortModeChange,
-        onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
+        onAvatarClick = { mid ->
+            val parsedMid = mid.toLongOrNull() ?: return@SubReplySheet
+            onDismiss()
+            onUserClick(parsedMid)
+        },
         onReplyClick = onReplyClick,
         onUrlClick = onUrlClick,
         onCommentLike = onCommentLike,
