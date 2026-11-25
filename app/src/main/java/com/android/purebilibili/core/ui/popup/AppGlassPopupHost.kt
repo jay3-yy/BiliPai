@@ -365,7 +365,7 @@ private fun AppGlassPopupContentHost(
     }
     val context = LocalContext.current
     val motionStyleFlow = remember(context) { LiquidGlassSettingsStore.observePopupMotionStyle(context) }
-    val motionStyle by motionStyleFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.STANDARD)
+    val motionStyle by motionStyleFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.ELASTIC)
     SideEffect { controller.preferredMotionStyle = motionStyle }
     DisposableEffect(controller) { onDispose { controller.dispose() } }
     val parentExiting = com.android.purebilibili.core.ui.LocalAppDialogExitRunning.current

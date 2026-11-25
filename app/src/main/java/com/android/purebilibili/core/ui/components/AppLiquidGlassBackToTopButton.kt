@@ -40,6 +40,7 @@ import com.android.purebilibili.core.store.BackToTopSettingsStore
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
+import com.android.purebilibili.core.ui.motion.GlassMorphSprings
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
 import com.android.purebilibili.feature.home.components.biliPaiFloatingDockShell
@@ -114,7 +115,11 @@ fun AppLiquidGlassBackToTopButton(
 
     val dragScaleState = animateFloatAsState(
         targetValue = if (isDragging) 1.15f else 1.0f,
-        animationSpec = AppMotionTokens.standardSpec(),
+        animationSpec = if (glassActive) {
+            (if (isDragging) GlassMorphSprings.Expand else GlassMorphSprings.Return).asComposeSpring()
+        } else {
+            AppMotionTokens.standardSpec()
+        },
         label = "back_to_top_drag_scale",
     )
     val dragAlphaState = animateFloatAsState(
@@ -126,9 +131,23 @@ fun AppLiquidGlassBackToTopButton(
         visible = visible,
         modifier = modifier.offset(y = (-28).dp),
         enter = fadeIn(animationSpec = AppMotionTokens.standardSpec()) +
-            scaleIn(animationSpec = AppMotionTokens.standardSpec(), initialScale = 0.92f),
+            scaleIn(
+                animationSpec = if (glassActive) {
+                    GlassMorphSprings.Expand.asComposeSpring()
+                } else {
+                    AppMotionTokens.standardSpec()
+                },
+                initialScale = 0.92f,
+            ),
         exit = fadeOut(animationSpec = AppMotionTokens.expressiveSpec()) +
-            scaleOut(animationSpec = AppMotionTokens.expressiveSpec(), targetScale = 0.92f),
+            scaleOut(
+                animationSpec = if (glassActive) {
+                    GlassMorphSprings.Return.asComposeSpring()
+                } else {
+                    AppMotionTokens.expressiveSpec()
+                },
+                targetScale = 0.92f,
+            ),
     ) {
         Box(
             modifier = Modifier

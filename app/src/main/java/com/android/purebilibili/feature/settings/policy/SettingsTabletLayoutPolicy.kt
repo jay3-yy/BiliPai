@@ -9,13 +9,15 @@ data class SettingsTabletLayoutPolicy(
 )
 
 fun shouldUseSettingsSplitLayout(
-    widthDp: Int
-): Boolean = widthDp >= 840
+    widthDp: Int,
+    hasVerticalSeparatingHinge: Boolean = false,
+): Boolean = widthDp >= 840 || (hasVerticalSeparatingHinge && widthDp >= 600)
 
 fun shouldRenderSettingsSinglePaneContent(
     widthDp: Int,
-    forceSinglePaneContent: Boolean
-): Boolean = forceSinglePaneContent || !shouldUseSettingsSplitLayout(widthDp)
+    forceSinglePaneContent: Boolean,
+    hasVerticalSeparatingHinge: Boolean = false,
+): Boolean = forceSinglePaneContent || !shouldUseSettingsSplitLayout(widthDp, hasVerticalSeparatingHinge)
 
 fun resolveSettingsTabletLayoutPolicy(
     widthDp: Int
@@ -36,11 +38,11 @@ fun resolveSettingsTabletLayoutPolicy(
             rootPanelMaxWidthDp = 600
         )
         else -> SettingsTabletLayoutPolicy(
-            primaryRatio = 0.38f,
-            masterPanePaddingDp = 14,
-            detailPanePaddingDp = 20,
-            detailMaxWidthDp = 720,
-            rootPanelMaxWidthDp = 560
+            primaryRatio = 0.44f,
+            masterPanePaddingDp = 12,
+            detailPanePaddingDp = 16,
+            detailMaxWidthDp = 640,
+            rootPanelMaxWidthDp = 540
         )
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
@@ -40,6 +41,7 @@ internal class SettingsSharedContainerOrigin(
     var resolveSourceRectInHost: (() -> Rect?)? = null
     var captureGeneration by mutableIntStateOf(0)
     var capturedSourceLayer by mutableStateOf<GraphicsLayer?>(null)
+    var capturedSourceBitmap by mutableStateOf<ImageBitmap?>(null)
     var capturedSourceLayerWidth: Float = 0f
     var capturedSourceLayerHeight: Float = 0f
 }

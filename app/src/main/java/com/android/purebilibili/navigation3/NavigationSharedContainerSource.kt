@@ -127,6 +127,7 @@ private class SharedSourceLayerHolder(
 internal fun navigationSharedContainerSourceModifier(
     source: NavigationSharedContainerSource?,
     shape: Shape,
+    recordSourceLayer: Boolean = true,
 ): Modifier {
     if (source == null) return Modifier
     val density = LocalDensity.current
@@ -135,7 +136,12 @@ internal fun navigationSharedContainerSourceModifier(
     val layerHolder = remember(source, graphicsContext) { SharedSourceLayerHolder(graphicsContext) }
     val hadActiveBounds = remember(source) { mutableStateOf(false) }
     DisposableEffect(source, layerHolder) {
-        onDispose { layerHolder.release(source.origin) }
+        onDispose {
+            layerHolder.release(source.origin)
+            if (source.origin.sharedBounds == null) {
+                source.origin.capturedSourceBitmap = null
+            }
+        }
     }
     LaunchedEffect(source, layerHolder) {
         snapshotFlow { source.origin.sharedBounds != null }.collect { active ->
@@ -144,6 +150,9 @@ internal fun navigationSharedContainerSourceModifier(
             } else if (hadActiveBounds.value) {
                 hadActiveBounds.value = false
                 layerHolder.release(source.origin)
+                source.origin.capturedSourceBitmap = null
+                source.origin.capturedSourceLayerWidth = 0f
+                source.origin.capturedSourceLayerHeight = 0f
             }
         }
     }
@@ -170,7 +179,7 @@ internal fun navigationSharedContainerSourceModifier(
         val origin = source.origin
         val activeBounds = origin.sharedBounds
         val generation = origin.captureGeneration
-        val shouldCapture = generation > 0 && (
+        val shouldCapture = recordSourceLayer && generation > 0 && (
             layerHolder.recordedGeneration != generation ||
                 (activeBounds != null && activeBounds.deterministicGeometry && (
                     layerHolder.layer == null ||
@@ -202,7 +211,7 @@ internal fun navigationSharedContainerSourceModifier(
             origin.resolveSourceRectInHost?.invoke() != null &&
             isDeterministicSharedSourceCardHidden(
                 bounds = activeBounds,
-                hasSourceOverlay = origin.capturedSourceLayer != null,
+                hasSourceOverlay = origin.capturedSourceLayer != null || origin.capturedSourceBitmap != null,
             )
         if (!hideForDeterministicFlight) {
             if (recordedLayer != null) {

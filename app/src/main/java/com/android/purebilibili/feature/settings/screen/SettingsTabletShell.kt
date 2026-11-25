@@ -39,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -96,9 +95,9 @@ fun SettingsTabletShell(
     isSearchActive: Boolean = false,
     rightPane: @Composable () -> Unit,
 ) {
-    val configuration = LocalConfiguration.current
-    val layoutPolicy = remember(configuration.screenWidthDp) {
-        resolveSettingsTabletLayoutPolicy(widthDp = configuration.screenWidthDp)
+    val windowWidthDp = LocalWindowSizeClass.current.widthDp.value.toInt()
+    val layoutPolicy = remember(windowWidthDp) {
+        resolveSettingsTabletLayoutPolicy(widthDp = windowWidthDp)
     }
     val categories = remember { resolveSettingsRootCategoryOrder() }
     val isDetailActive = shouldRenderSettingsTabletDetailPane(
@@ -106,8 +105,6 @@ fun SettingsTabletShell(
         isSearchActive = isSearchActive,
     )
     val categoryIconTints = rememberSettingsSiblingIconTints(categories.size)
-    val useThreePaneLayout =
-        LocalWindowSizeClass.current.shouldUseThreePaneLayout && selectedCategory != null
     val wallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
     val movingWallpaper = wallpaperVisible && LocalRootOwnsMovingWallpaper.current
     val paneBackground = if (movingWallpaper) Modifier
@@ -309,34 +306,10 @@ fun SettingsTabletShell(
             }
         }
     }
-    val infoPaneContent: @Composable ThreePaneScaffoldPaneScope.() -> Unit = {
-        Column(
-            modifier = Modifier
-                .preferredWidth(0.35f)
-                .fillMaxSize()
-                .globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer())
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AppText(
-                text = selectedCategory?.let { stringResource(it.titleResource()) }
-                    ?: stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            AppText(
-                text = selectedCategory?.let { stringResource(it.subtitleResource()) }
-                    ?: stringResource(R.string.settings_category_select_hint),
-                style = MaterialTheme.typography.bodyLarge,
-                color = AppContentColors.secondaryText(),
-            )
-        }
-    }
     val detailSlotContent: @Composable ThreePaneScaffoldPaneScope.() -> Unit = {
         if (!isDetailActive) emptyDetailPane() else detailPane()
     }
-    // 官方脚手架的槽位映射：list=listPane，detail=primary 槽，extra=tertiary 槽。
-    // 三栏（超宽 + 已选分类）时 detail 槽放分类信息列，extra 槽放设置正文。
+    // 始终采用清晰的左右双栏，超宽屏下由正文 maxWidth + 充裕留白承接，不再插入重复展示标题的空白中栏。
     val scaffoldValue = when {
         singlePaneOnly && isDetailActive -> ThreePaneScaffoldValue(
             primary = PaneAdaptedValue.Expanded,
@@ -347,11 +320,6 @@ fun SettingsTabletShell(
             primary = PaneAdaptedValue.Hidden,
             secondary = PaneAdaptedValue.Expanded,
             tertiary = PaneAdaptedValue.Hidden,
-        )
-        useThreePaneLayout && !isSearchActive -> ThreePaneScaffoldValue(
-            primary = PaneAdaptedValue.Expanded,
-            secondary = PaneAdaptedValue.Expanded,
-            tertiary = PaneAdaptedValue.Expanded,
         )
         else -> ThreePaneScaffoldValue(
             primary = PaneAdaptedValue.Expanded,
@@ -364,7 +332,6 @@ fun SettingsTabletShell(
         directive = directive,
         value = scaffoldValue,
         listPane = listPaneContent,
-        detailPane = if (useThreePaneLayout && !isSearchActive) infoPaneContent else detailSlotContent,
-        extraPane = if (useThreePaneLayout && !isSearchActive) detailPane else null,
+        detailPane = detailSlotContent,
     )
 }

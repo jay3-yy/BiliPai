@@ -28,8 +28,14 @@ internal data class GlassMorphSpringSpec(val dampingRatio: Float, val response: 
     }
 }
 
-/** 玻璃外壳共用响应；菜单独立控制通道，底栏由 Compose 统一驱动几何。 */
+/** 液态玻璃全局统一形变弹簧；展开柔和舒展、回收利落收敛，与实测 iOS 液态玻璃手感一致。 */
 internal object GlassMorphSprings {
-    val Expand = GlassMorphSpringSpec(0.75f, 0.35f)
-    val Return = GlassMorphSpringSpec(0.8f, 0.49f)
+    val Expand = GlassMorphSpringSpec(0.76f, 0.38f)
+    val Return = GlassMorphSpringSpec(0.76f, 0.36f)
+
+    /** 液态玻璃底栏分轴形变参数（收起先缩窄再落槽；展开垂直先抬升，水平克制收敛避免右侧单边拉扯）。 */
+    val DockCollapseX = GlassMorphSpringSpec(0.74f, 0.36f)
+    val DockCollapseY = GlassMorphSpringSpec(0.76f, 0.43f)
+    val DockExpandX = GlassMorphSpringSpec(0.86f, 0.34f)
+    val DockExpandY = GlassMorphSpringSpec(0.78f, 0.30f)
 }

@@ -582,10 +582,7 @@ internal fun settingsSharedContainerDestination(
                     open = openFraction,
                     scaleDestinationToWidth = scaleDestinationToWidth,
                 )
-                val hasSourceOverlay = origin.sharedBounds === bounds &&
-                    origin.capturedSourceLayer != null &&
-                    origin.capturedSourceLayerWidth > 1f &&
-                    origin.capturedSourceLayerHeight > 1f
+                val hasSourceOverlay = origin.hasActiveSourceOverlay(bounds)
                 val alphas = resolveDeterministicSharedContainerAlpha(
                     open = openFraction,
                     returning = returning,
@@ -629,10 +626,10 @@ internal fun settingsSharedContainerDestination(
                 val hasValidSource = sourceRect != null && sourceRect.width > 1f && sourceRect.height > 1f
                 val returning = if (morphing) bounds.isReturning(scope, openFraction) else false
                 val sourceLayer = origin.capturedSourceLayer
+                val sourceBitmap = origin.capturedSourceBitmap
                 val layerWidth = origin.capturedSourceLayerWidth
                 val layerHeight = origin.capturedSourceLayerHeight
-                val hasActiveSourceOverlay = origin.sharedBounds === bounds &&
-                    sourceLayer != null && layerWidth > 1f && layerHeight > 1f
+                val hasActiveSourceOverlay = origin.hasActiveSourceOverlay(bounds)
                 // open <= 0.001f 时下方真实来源卡片处于可见态，跳过飞行壳底色与源层绘制避免首末帧双层叠加或未捕获源层时闪黑；
                 // 极近落位区（0.001..0.12）平滑过渡垫底色透明度，缓解液态玻璃与半透明卡片的质感明暗跳变。
                 val skipGroundedOverlay = openFraction <= 0.001f
@@ -667,11 +664,17 @@ internal fun settingsSharedContainerDestination(
                         )
                         val uniformScaleX = size.width / layerWidth
                         val uniformScaleY = (geometry.outerScaleX / geometry.outerScaleY) * uniformScaleX
-                        sourceLayer.alpha = alphas.sourceOverlayAlpha
-                        scale(scaleX = uniformScaleX, scaleY = uniformScaleY, pivot = Offset.Zero) {
-                            drawLayer(sourceLayer)
+                        if (sourceBitmap != null) {
+                            scale(scaleX = uniformScaleX, scaleY = uniformScaleY, pivot = Offset.Zero) {
+                                drawImage(sourceBitmap, alpha = alphas.sourceOverlayAlpha)
+                            }
+                        } else if (sourceLayer != null) {
+                            sourceLayer.alpha = alphas.sourceOverlayAlpha
+                            scale(scaleX = uniformScaleX, scaleY = uniformScaleY, pivot = Offset.Zero) {
+                                drawLayer(sourceLayer)
+                            }
+                            sourceLayer.alpha = 1f
                         }
-                        sourceLayer.alpha = 1f
                     }
                 }
             }
@@ -705,10 +708,7 @@ internal fun settingsSharedContainerDestination(
                     open = openFraction,
                     scaleDestinationToWidth = scaleDestinationToWidth,
                 )
-                val hasSourceOverlay = origin.sharedBounds === bounds &&
-                    origin.capturedSourceLayer != null &&
-                    origin.capturedSourceLayerWidth > 1f &&
-                    origin.capturedSourceLayerHeight > 1f
+                val hasSourceOverlay = origin.hasActiveSourceOverlay(bounds)
                 val alphas = resolveDeterministicSharedContainerAlpha(
                     open = openFraction,
                     returning = returning,
@@ -804,6 +804,13 @@ private fun Transition<Boolean>.settingsVisibilityScope(
         }
     }
 }
+
+private fun SettingsSharedContainerOrigin.hasActiveSourceOverlay(
+    bounds: SettingsSharedContainerBounds,
+): Boolean = sharedBounds === bounds &&
+    (capturedSourceLayer != null || capturedSourceBitmap != null) &&
+    capturedSourceLayerWidth > 1f &&
+    capturedSourceLayerHeight > 1f
 
 @Composable
 internal fun settingsSharedContainerBounds(

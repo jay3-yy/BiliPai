@@ -292,9 +292,10 @@ fun DynamicDetailScreen(
         initialFirstVisibleItemIndex =
             if (openComments || openCommentRootRpid > 0L || openCommentTargetRpid > 0L) 1 else 0,
     )
-    //  [新增] 大屏/横屏分栏：右栏评论列表
+    //  [新增] 大屏/横屏及折叠屏铰链避让分栏：右栏评论列表
     val commentListState = rememberLazyListState()
-    val useSplitLayout = LocalWindowSizeClass.current.shouldUseSplitLayout
+    val dynamicAdaptiveInfo = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
+    val useSplitLayout = LocalWindowSizeClass.current.shouldUseSplitLayout || dynamicAdaptiveInfo.shouldAvoidHinge
     val activeCommentListState = if (useSplitLayout) commentListState else detailListState
     val commentBarVisible = rememberCommentBarScrollVisible(
         autoHideOnScroll = rememberSettingsNavigationConfiguration().bottomBarVisibilityMode ==

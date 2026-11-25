@@ -118,7 +118,7 @@ internal fun LiquidGlassAdjustmentPanel(
     val paletteFlow = remember(context) { LiquidGlassSettingsStore.observePopupPalette(context) }
     val popupPalette by paletteFlow.collectAsStateWithLifecycle(initialValue = GlassPopupPalette.DOCK)
     val motionStyleFlow = remember(context) { LiquidGlassSettingsStore.observePopupMotionStyle(context) }
-    val popupMotionStyle by motionStyleFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.STANDARD)
+    val popupMotionStyle by motionStyleFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.ELASTIC)
     val dockMotionFlow = remember(context) { LiquidGlassSettingsStore.observeDockMotionStyle(context) }
     val dockMotionStyle by dockMotionFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.STANDARD)
     val paletteScope = rememberCoroutineScope()
