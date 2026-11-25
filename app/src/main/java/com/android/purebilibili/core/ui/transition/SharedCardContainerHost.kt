@@ -121,6 +121,7 @@ internal fun <T : Any> SharedCardContainerHost(
         mutableStateOf<T?>(null)
     }
     val transitionState = remember { SeekableTransitionState(opened) }
+    val sessionToken = remember { LongArray(1) }
     var detailContentReady by remember { mutableStateOf(opened != null) }
     LaunchedEffect(transitionState.currentState, transitionState.targetState) {
         if (transitionState.currentState != null &&
@@ -131,41 +132,48 @@ internal fun <T : Any> SharedCardContainerHost(
     }
     val detailVisible = opened != null || transitionState.currentState != null || transitionState.targetState != null
     val closeDetail: () -> Unit = {
+        val opToken = ++sessionToken[0]
         scope.launch {
             transitionState.animateTo(null, tween(duration, easing = LinearEasing))
-            opened = null
+            if (sessionToken[0] == opToken) opened = null
         }
     }
     val openDetail: (T) -> Unit = { target ->
         if (!detailVisible) {
+            val opToken = ++sessionToken[0]
             detailContentReady = false
             opened = target
             scope.launch {
                 transitionState.animateTo(target, tween(duration, easing = LinearEasing))
-                detailContentReady = true
+                if (sessionToken[0] == opToken) detailContentReady = true
             }
         }
     }
     val replaceDetail: (T) -> Unit = { target ->
+        ++sessionToken[0]
         opened = target
         scope.launch { transitionState.snapTo(target) }
     }
     val predictiveBackEnabled = com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current
     PredictiveBackHandler(enabled = detailVisible) { progress ->
+        val gestureToken = ++sessionToken[0]
         var fraction = 0f
         try {
             progress.collect { event ->
-                if (predictiveBackEnabled) {
+                if (predictiveBackEnabled && sessionToken[0] == gestureToken) {
                     fraction = event.progress.coerceIn(0f, 1f)
                     transitionState.seekTo(if (reduceMotion) 0f else fraction, null)
                 }
             }
-            // Continue the existing seek direction and let Compose use its remaining time.
-            transitionState.animateTo(null)
-            opened = null
+            if (sessionToken[0] == gestureToken) {
+                // Continue the existing seek direction and let Compose use its remaining time.
+                transitionState.animateTo(null)
+                if (sessionToken[0] == gestureToken) opened = null
+            }
         } catch (cancelled: CancellationException) {
-            withContext(NonCancellable) {
-                opened?.let { detail ->
+            val detail = opened
+            if (detail != null && sessionToken[0] == gestureToken) {
+                withContext(NonCancellable) {
                     // Changing target to detail here creates a NEW transition while Compose
                     // also settles the interrupted initial values. That produces a second
                     // whole-page movement after release. Rewind the same shared bounds first.
@@ -176,11 +184,17 @@ internal fun <T : Any> SharedCardContainerHost(
                             animate(restoreFraction, 0f,
                                 animationSpec = tween(restoreMillis, easing = LinearEasing),
                             ) { value, _ -> trySend(value) }
-                        }.conflate().collect { value -> transitionState.seekTo(value, null) }
+                        }.conflate().collect { value ->
+                            if (sessionToken[0] == gestureToken && opened == detail) {
+                                transitionState.seekTo(value, null)
+                            }
+                        }
                     }
                     // Both endpoints now match the original detail pixels; reset state
                     // without starting another bounds/fade animation.
-                    transitionState.snapTo(detail)
+                    if (sessionToken[0] == gestureToken && opened == detail) {
+                        transitionState.snapTo(detail)
+                    }
                 }
             }
             throw cancelled

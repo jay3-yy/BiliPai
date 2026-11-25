@@ -33,10 +33,27 @@ internal object VideoCardTransitionDiagnostics {
     private val blurEffectUpdates = AtomicLong()
     private val sourceLayerDraws = AtomicLong()
     private val navBackdropDraws = AtomicLong()
+    private val returnFallbacks = AtomicLong()
     private var lastState: VideoCardTransitionSettleState? = null
     private var ownership = "UNKNOWN"
     private var liveSurfaceEnabled: Boolean? = null
     private const val TAG = "VideoCardMotion"
+
+    /** 返回落点降级为普通退出或原地淡出时记录一次原因与计数，不进入逐帧路径。 */
+    fun onReturnFallback(engine: String, reason: String, detail: () -> String = { "" }) {
+        val count = returnFallbacks.incrementAndGet()
+        setCounter("bili.video_card.return_fallbacks", count)
+        if (!Log.isLoggable(TAG, Log.DEBUG) && !Logger.areVerboseRuntimeLogsEnabled()) return
+        val extra = detail()
+        val message = buildString {
+            append("phase=RETURN_FALLBACK engine=").append(engine)
+            append(" reason=").append(reason)
+            append(" count=").append(count)
+            if (extra.isNotEmpty()) append(' ').append(extra)
+        }
+        if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, message)
+        Logger.d(TAG, message)
+    }
 
     /** 只在点击解析失败时记录一次，区分未测量与来源身份失配；不进入逐帧路径。 */
     fun onSourceGeometryRejected(sourceKey: String?, recordedSourceKey: String?, hasRecordedBounds: Boolean) {

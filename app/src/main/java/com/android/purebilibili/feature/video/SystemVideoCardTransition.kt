@@ -459,18 +459,30 @@ internal object SystemVideoCardTransition {
             childWindow.displayId == session.sourceWindow.displayId &&
             childWindow.rotation == session.sourceWindow.rotation
         val bounds = if (returnToSource && sameWindow && session != null && source != null) {
-            session.openingBounds.takeIf {
-                session.sourceAnchor.matchesWindowGeometry(
-                    source.window.decorView, it, session.openingAnchorRadius,
-                    session.windowCoordinates, session.allowPartialSource,
-                )
-            }
+            session.sourceAnchor.resolveReturnBounds(
+                source.window.decorView, session.openingBounds, session.openingAnchorRadius,
+                session.windowCoordinates, session.allowPartialSource,
+            )
         } else null
         val sourceAvailable = bounds != null
         // 准备参数不等于系统已经开始返回，联动等待协议的真实回调。
         session?.returnMotionEnabled = sourceAvailable && motionEnabled
         if (!sourceAvailable) {
-            Logger.w("SystemVideoCardTransition", "返回落点失效: reason=$reason returnToSource=$returnToSource sameWindow=$sameWindow")
+            val fallbackReason = when {
+                !returnToSource -> "return_to_source_disabled"
+                session == null -> "session_missing"
+                source == null || source.isFinishing || source.isDestroyed -> "source_activity_gone"
+                childWindow.displayId != session.sourceWindow.displayId -> "display_changed"
+                childWindow.rotation != session.sourceWindow.rotation -> "rotation_changed"
+                windowGeometry(source) != session.sourceWindow -> "window_geometry_changed"
+                else -> "source_geometry_incompatible"
+            }
+            com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.onReturnFallback(
+                engine = session?.method?.storageValue ?: "system_window",
+                reason = fallbackReason,
+                detail = { "trigger=$reason route=${session?.sourceRoute}" },
+            )
+            Logger.w("SystemVideoCardTransition", "返回落点失效: reason=$reason fallback=$fallbackReason returnToSource=$returnToSource sameWindow=$sameWindow")
         }
         if (token.startsWith("vivo:")) {
             session?.vivoOpening?.prepareReturn(

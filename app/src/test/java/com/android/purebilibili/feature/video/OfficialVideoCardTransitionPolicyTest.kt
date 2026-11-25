@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video
 
+import com.android.purebilibili.core.ui.transition.isCompatibleVideoCardReturnGeometry
 import com.itgsa.animation.sharedview.ViewAnimationType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -169,6 +170,60 @@ class OfficialVideoCardTransitionPolicyTest {
                 "int|VIEW_ANIM_DEFAULT,VIEW_ANIM_FADE_OUT|Back animation type",
                 motionEnabled = true,
                 sourceAvailable = true,
+            ),
+        )
+    }
+
+    @Test
+    fun returnGeometryAllowsTranslationWithSameSizeAndRadiusButRejectsResizeOrCornerChange() {
+        assertTrue(
+            isCompatibleVideoCardReturnGeometry(
+                currentWidth = 480,
+                currentHeight = 360,
+                expectedWidth = 480,
+                expectedHeight = 360,
+                currentRadiusPx = 24f,
+                expectedRadiusPx = 24f,
+            ),
+        )
+        assertTrue(
+            isCompatibleVideoCardReturnGeometry(
+                currentWidth = 481,
+                currentHeight = 359,
+                expectedWidth = 480,
+                expectedHeight = 360,
+                currentRadiusPx = 24f,
+                expectedRadiusPx = 24f,
+            ),
+        )
+        assertFalse(
+            isCompatibleVideoCardReturnGeometry(
+                currentWidth = 520,
+                currentHeight = 360,
+                expectedWidth = 480,
+                expectedHeight = 360,
+                currentRadiusPx = 24f,
+                expectedRadiusPx = 24f,
+            ),
+        )
+        assertFalse(
+            isCompatibleVideoCardReturnGeometry(
+                currentWidth = 480,
+                currentHeight = 360,
+                expectedWidth = 480,
+                expectedHeight = 360,
+                currentRadiusPx = 16f,
+                expectedRadiusPx = 24f,
+            ),
+        )
+        assertFalse(
+            isCompatibleVideoCardReturnGeometry(
+                currentWidth = 0,
+                currentHeight = 360,
+                expectedWidth = 480,
+                expectedHeight = 360,
+                currentRadiusPx = 24f,
+                expectedRadiusPx = 24f,
             ),
         )
     }

@@ -41,13 +41,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.lerp as lerpRect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
@@ -68,9 +76,11 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import top.yukonga.miuix.kmp.nav.runtime.NavChange
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
+import top.yukonga.miuix.kmp.nav.transition.NavSettlePhase
 import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
+import kotlin.math.abs
 
 private const val SETTINGS_SHARED_DRAW_TAG = "SettingsSharedDraw"
 private const val SHARED_CONTAINER_BACKGROUND_ZOOM = 0.10f
@@ -177,20 +187,263 @@ internal fun SettingsSharedTransitionLayout(enabled: Boolean, content: @Composab
     }
 }
 
+internal data class DeterministicSharedContainerGeometry(
+    val outerScaleX: Float,
+    val outerScaleY: Float,
+    val translationX: Float,
+    val translationY: Float,
+    val innerScaleX: Float,
+    val innerScaleY: Float,
+    val innerTransformOrigin: TransformOrigin,
+)
+
+internal data class DeterministicSharedContainerAlpha(
+    val containerAlpha: Float,
+    val contentAlpha: Float,
+    val sourceOverlayAlpha: Float,
+    val sourceCardHidden: Boolean,
+)
+
+private fun smoothstep(edge0: Float, edge1: Float, x: Float): Float {
+    val u = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
+    return u * u * (3f - 2f * u)
+}
+
+/**
+ * 纯几何容器插值：完全由导航深度 open ∈ [0, 1] 与实测来源矩形决定，
+ * 不依赖 Lookahead/MFR 状态机，避免详情页折叠或切 Tab 后返回路线漂移。
+ */
+internal fun resolveDeterministicSharedContainerGeometry(
+    source: Rect,
+    destinationWidth: Float,
+    destinationHeight: Float,
+    open: Float,
+    scaleDestinationToWidth: Boolean,
+): DeterministicSharedContainerGeometry {
+    val w = destinationWidth.coerceAtLeast(1f)
+    val h = destinationHeight.coerceAtLeast(1f)
+    val t = open.coerceIn(0f, 1f)
+    val current = lerpRect(source, Rect(0f, 0f, w, h), t)
+    val outerScaleX = (current.width / w).coerceAtLeast(0.01f)
+    val outerScaleY = (current.height / h).coerceAtLeast(0.01f)
+    return if (scaleDestinationToWidth) {
+        DeterministicSharedContainerGeometry(
+            outerScaleX = outerScaleX,
+            outerScaleY = outerScaleY,
+            translationX = current.left,
+            translationY = current.top,
+            innerScaleX = 1f,
+            innerScaleY = outerScaleX / outerScaleY,
+            innerTransformOrigin = TransformOrigin(0.5f, 0f),
+        )
+    } else {
+        DeterministicSharedContainerGeometry(
+            outerScaleX = outerScaleX,
+            outerScaleY = outerScaleY,
+            translationX = current.left,
+            translationY = current.top,
+            innerScaleX = 1f / outerScaleX,
+            innerScaleY = 1f / outerScaleY,
+            innerTransformOrigin = TransformOrigin(0f, 0f),
+        )
+    }
+}
+
+internal fun resolveDeterministicSharedContainerAlpha(
+    open: Float,
+    returning: Boolean,
+    hasSourceOverlay: Boolean = true,
+): DeterministicSharedContainerAlpha {
+    val t = open.coerceIn(0f, 1f)
+    if (!hasSourceOverlay) {
+        // 源快照层在首帧绘制期尚未就绪（如冷启首次点击或相关推荐点击）时，
+        // preparesEnterFrame 首帧（t <= 0.001）必须让目标壳完全透明，避免未加载的黑色播放器与骨架直接盖在来源卡片上。
+        return if (returning) {
+            DeterministicSharedContainerAlpha(
+                containerAlpha = smoothstep(0f, 0.08f, t),
+                contentAlpha = 1f,
+                sourceOverlayAlpha = 0f,
+                sourceCardHidden = t > 0.08f,
+            )
+        } else {
+            DeterministicSharedContainerAlpha(
+                containerAlpha = smoothstep(0.001f, 0.14f, t),
+                contentAlpha = 1f,
+                sourceOverlayAlpha = 0f,
+                sourceCardHidden = t > 0.14f,
+            )
+        }
+    }
+    // 复用 0.10.1 共享容器叠化窗口：
+    // 展开 0..0.22 完整展示来源卡片并遮住加载骨架，0.22..0.50 平滑切到详情页；
+    // 返回 0.75..0.45 将来源卡片叠回飞行壳内，0.45..0 以完整来源卡精准落槽。
+    // t <= 0.001 时下方真实来源卡片处于可见态，整壳保持透明避免壁纸底图或垫底色在首末帧双层叠加。
+    val contentAlpha = resolveSettingsContainerContentAlpha(t, returning)
+    return DeterministicSharedContainerAlpha(
+        containerAlpha = if (t <= 0.001f) 0f else 1f,
+        contentAlpha = contentAlpha,
+        sourceOverlayAlpha = 1f - contentAlpha,
+        sourceCardHidden = t > 0.001f,
+    )
+}
+
+internal fun isDeterministicSharedSourceCardHidden(
+    bounds: SettingsSharedContainerBounds,
+    hasSourceOverlay: Boolean,
+): Boolean {
+    val scope = bounds.navigationScope.value
+    val morphing = isDeterministicSharedContainerMorphing(
+        relativeDepth = scope.relativeDepth,
+        isRunning = scope.isRunning,
+        isRemoving = scope.isRemoving,
+        gestureActive = scope.gesture != null,
+    )
+    if (!morphing) return false
+    val openFraction = (1f + scope.relativeDepth.coerceAtMost(0f)).coerceIn(0f, 1f)
+    val returning = bounds.isReturning(scope, openFraction)
+    return resolveDeterministicSharedContainerAlpha(
+        open = openFraction,
+        returning = returning,
+        hasSourceOverlay = hasSourceOverlay,
+    ).sourceCardHidden
+}
+
+private class DeterministicSharedContainerClipShape : Shape {
+    var tlX = 0f
+    var tlY = 0f
+    var trX = 0f
+    var trY = 0f
+    var brX = 0f
+    var brY = 0f
+    var blX = 0f
+    var blY = 0f
+    private var lastWidth = -1f
+    private var lastHeight = -1f
+    private var cachedOutline: Outline? = null
+
+    fun matches(
+        tlX: Float, tlY: Float,
+        trX: Float, trY: Float,
+        brX: Float, brY: Float,
+        blX: Float, blY: Float,
+    ): Boolean = abs(this.tlX - tlX) <= 0.05f && abs(this.tlY - tlY) <= 0.05f &&
+        abs(this.trX - trX) <= 0.05f && abs(this.trY - trY) <= 0.05f &&
+        abs(this.brX - brX) <= 0.05f && abs(this.brY - brY) <= 0.05f &&
+        abs(this.blX - blX) <= 0.05f && abs(this.blY - blY) <= 0.05f
+
+    fun update(
+        tlX: Float, tlY: Float,
+        trX: Float, trY: Float,
+        brX: Float, brY: Float,
+        blX: Float, blY: Float,
+    ) {
+        this.tlX = tlX
+        this.tlY = tlY
+        this.trX = trX
+        this.trY = trY
+        this.brX = brX
+        this.brY = brY
+        this.blX = blX
+        this.blY = blY
+        cachedOutline = null
+    }
+
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val current = cachedOutline
+        if (current != null && lastWidth == size.width && lastHeight == size.height) return current
+        lastWidth = size.width
+        lastHeight = size.height
+        val maxX = size.width * 0.5f
+        val maxY = size.height * 0.5f
+        val outline = Outline.Rounded(
+            RoundRect(
+                rect = Rect(0f, 0f, size.width, size.height),
+                topLeft = CornerRadius(tlX.coerceIn(0f, maxX), tlY.coerceIn(0f, maxY)),
+                topRight = CornerRadius(trX.coerceIn(0f, maxX), trY.coerceIn(0f, maxY)),
+                bottomRight = CornerRadius(brX.coerceIn(0f, maxX), brY.coerceIn(0f, maxY)),
+                bottomLeft = CornerRadius(blX.coerceIn(0f, maxX), blY.coerceIn(0f, maxY)),
+            ),
+        )
+        cachedOutline = outline
+        return outline
+    }
+}
+
+private class DeterministicSharedContainerShapeCache {
+    private val shapes = arrayOf(DeterministicSharedContainerClipShape(), DeterministicSharedContainerClipShape())
+    private var index = 0
+
+    fun resolve(
+        tlPx: Float, trPx: Float, brPx: Float, blPx: Float,
+        outerScaleX: Float, outerScaleY: Float,
+    ): Shape {
+        val sx = outerScaleX.coerceAtLeast(0.01f)
+        val sy = outerScaleY.coerceAtLeast(0.01f)
+        val tlX = tlPx / sx
+        val tlY = tlPx / sy
+        val trX = trPx / sx
+        val trY = trPx / sy
+        val brX = brPx / sx
+        val brY = brPx / sy
+        val blX = blPx / sx
+        val blY = blPx / sy
+        if (tlX <= 0.05f && trX <= 0.05f && brX <= 0.05f && blX <= 0.05f) return RectangleShape
+        val current = shapes[index]
+        if (current.matches(tlX, tlY, trX, trY, brX, brY, blX, blY)) return current
+        index = 1 - index
+        return shapes[index].also { it.update(tlX, tlY, trX, trY, brX, brY, blX, blY) }
+    }
+}
+
+internal fun isDeterministicSharedContainerMorphing(
+    relativeDepth: Float,
+    isRunning: Boolean,
+    isRemoving: Boolean,
+    gestureActive: Boolean,
+): Boolean {
+    // 被更深一层页面覆盖的父页（relativeDepth > 0 且未离场）不参与自身壳形变。
+    if (relativeDepth > 0f && !isRemoving) return false
+    val openFraction = (1f + relativeDepth.coerceAtMost(0f)).coerceIn(0f, 1f)
+    return isRunning || isRemoving || gestureActive || openFraction < 0.999f
+}
+
 internal class SettingsSharedContainerBounds(
     val origin: SettingsSharedContainerOrigin,
     val destinationZIndex: Float,
-    val sourceVisibility: AnimatedVisibilityScope,
-    val pageVisibility: AnimatedVisibilityScope,
+    val sourceVisibility: AnimatedVisibilityScope?,
+    val pageVisibility: AnimatedVisibilityScope?,
     val open: State<Float>,
     val navigationScope: State<NavTransitionScope>,
-    val transition: Transition<Boolean>,
+    val transition: Transition<Boolean>?,
     val scaleDestinationToWidth: Boolean = false,
+    val deterministicGeometry: Boolean = false,
 ) {
     var sourcePlaced by mutableStateOf(false)
     var destinationPlaced by mutableStateOf(false)
     var destinationCorners by mutableStateOf(WindowCornerRadii())
+    var hasOpened: Boolean = false
+    var returnFallbackReported: Boolean = false
     val clipShape = settingsSharedContainerShape(origin, open) { destinationCorners }
+
+    val isMorphing: Boolean
+        get() = if (deterministicGeometry) {
+            val scope = navigationScope.value
+            isDeterministicSharedContainerMorphing(
+                relativeDepth = scope.relativeDepth,
+                isRunning = scope.isRunning,
+                isRemoving = scope.isRemoving,
+                gestureActive = scope.gesture != null,
+            )
+        } else {
+            transition != null && transition.currentState != transition.targetState
+        }
+
+    fun isReturning(scope: NavTransitionScope, openFraction: Float): Boolean {
+        if (openFraction >= 0.99f && !scope.isRemoving) hasOpened = true
+        return hasOpened || scope.isRemoving || scope.gesture != null ||
+            scope.change == NavChange.Pop || scope.change is NavChange.MultiPop ||
+            scope.settle?.phase == NavSettlePhase.Commit || scope.settle?.phase == NavSettlePhase.Cancel
+    }
 
     val traceDraw = BuildConfig.DEBUG && Log.isLoggable(SETTINGS_SHARED_DRAW_TAG, Log.DEBUG)
 
@@ -202,7 +455,7 @@ internal class SettingsSharedContainerBounds(
                 "frame_ms=${AnimationUtils.currentAnimationTimeMillis()} monotonic_ns=${System.nanoTime()} " +
                     "session=${System.identityHashCode(this)} stage=$stage open=${open.value} " +
                     "depth=${navigationScope.value.relativeDepth} " +
-                    "state=${transition.currentState}->${transition.targetState} " +
+                    "state=${transition?.currentState}->${transition?.targetState} " +
                     "available=${origin.available} placed=$sourcePlaced/$destinationPlaced ${detail()}",
             )
         }
@@ -223,8 +476,250 @@ internal fun settingsSharedContainerDestination(
     color: Color,
     destinationZIndex: Float = 0f,
     scaleDestinationToWidth: Boolean = false,
+    deterministicGeometry: Boolean = false,
     wallpaperBacking: Modifier = Modifier,
 ): Modifier {
+    val latestScope = rememberUpdatedState(navScope)
+    val view = LocalView.current
+    val activity = LocalActivity.current
+    if (deterministicGeometry) {
+        val openState = remember {
+            object : State<Float> {
+                override val value: Float
+                    get() = (1f + latestScope.value.relativeDepth.coerceAtMost(0f)).coerceIn(0f, 1f)
+            }
+        }
+        val bounds = remember(origin, openState, scaleDestinationToWidth) {
+            SettingsSharedContainerBounds(
+                origin = origin,
+                destinationZIndex = destinationZIndex,
+                sourceVisibility = null,
+                pageVisibility = null,
+                open = openState,
+                navigationScope = latestScope,
+                transition = null,
+                scaleDestinationToWidth = scaleDestinationToWidth,
+                deterministicGeometry = true,
+            ).apply {
+                val isFreshPush = navScope.change == NavChange.Push && !navScope.isRemoving && navScope.relativeDepth <= 0f
+                hasOpened = !isFreshPush && navScope.relativeDepth >= 0f
+            }
+        }
+        DisposableEffect(bounds) {
+            origin.sharedBounds = bounds
+            onDispose {
+                if (origin.sharedBounds === bounds) origin.sharedBounds = null
+            }
+        }
+        LaunchedEffect(bounds) {
+            snapshotFlow {
+                latestScope.value.isRemoving && origin.available
+            }.first { it }
+            if (!origin.returnLandingHandledByOwner) origin.returnLanding.request()
+        }
+        val shapeCache = remember(bounds) { DeterministicSharedContainerShapeCache() }
+        return Modifier
+            .onGloballyPositioned {
+                bounds.destinationPlaced = true
+                bounds.destinationCorners = resolveWindowCornerRadii(
+                    view,
+                    Rect(it.positionInWindow(), it.size.toSize()),
+                    isInMultiWindow = activity?.isInMultiWindowMode == true,
+                )
+            }
+            .graphicsLayer {
+                val scope = latestScope.value
+                val openFraction = (1f + scope.relativeDepth.coerceAtMost(0f)).coerceIn(0f, 1f)
+                val morphing = isDeterministicSharedContainerMorphing(
+                    relativeDepth = scope.relativeDepth,
+                    isRunning = scope.isRunning,
+                    isRemoving = scope.isRemoving,
+                    gestureActive = scope.gesture != null,
+                )
+                val returning = bounds.isReturning(scope, openFraction)
+                if (!morphing) {
+                    scaleX = 1f
+                    scaleY = 1f
+                    translationX = 0f
+                    translationY = 0f
+                    alpha = 1f
+                    clip = false
+                    shape = RectangleShape
+                    return@graphicsLayer
+                }
+                val sourceRect = if (origin.available) origin.resolveSourceRectInHost?.invoke() else null
+                if (sourceRect == null || sourceRect.width <= 1f || sourceRect.height <= 1f) {
+                    if (returning && !bounds.returnFallbackReported) {
+                        bounds.returnFallbackReported = true
+                        val fallbackReason = when {
+                            !origin.available -> "source_unavailable"
+                            origin.coordinates?.isAttached != true &&
+                                origin.capturedHostSize != androidx.compose.ui.unit.IntSize(
+                                    size.width.toInt(),
+                                    size.height.toInt(),
+                                ) -> "cross_orientation_or_resized"
+                            else -> "offscreen_or_detached"
+                        }
+                        com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.onReturnFallback(
+                            engine = "android_shared",
+                            reason = fallbackReason,
+                            detail = { "owner=${origin.owner} identity=${origin.sourceIdentity}" },
+                        )
+                    }
+                    scaleX = 1f
+                    scaleY = 1f
+                    translationX = 0f
+                    translationY = 0f
+                    alpha = openFraction
+                    clip = false
+                    shape = RectangleShape
+                    return@graphicsLayer
+                }
+                val geometry = resolveDeterministicSharedContainerGeometry(
+                    source = sourceRect,
+                    destinationWidth = size.width,
+                    destinationHeight = size.height,
+                    open = openFraction,
+                    scaleDestinationToWidth = scaleDestinationToWidth,
+                )
+                val hasSourceOverlay = origin.sharedBounds === bounds &&
+                    origin.capturedSourceLayer != null &&
+                    origin.capturedSourceLayerWidth > 1f &&
+                    origin.capturedSourceLayerHeight > 1f
+                val alphas = resolveDeterministicSharedContainerAlpha(
+                    open = openFraction,
+                    returning = returning,
+                    hasSourceOverlay = hasSourceOverlay,
+                )
+                transformOrigin = TransformOrigin(0f, 0f)
+                scaleX = geometry.outerScaleX
+                scaleY = geometry.outerScaleY
+                translationX = geometry.translationX
+                translationY = geometry.translationY
+                alpha = alphas.containerAlpha
+                val needsClip = openFraction < 0.999f
+                clip = needsClip
+                if (!needsClip) {
+                    shape = RectangleShape
+                } else {
+                    val corners = bounds.destinationCorners
+                    val startTopPx = origin.topRadius.toPx()
+                    val startBottomPx = origin.bottomRadius.toPx()
+                    shape = shapeCache.resolve(
+                        tlPx = startTopPx + (corners.topLeft - startTopPx) * openFraction,
+                        trPx = startTopPx + (corners.topRight - startTopPx) * openFraction,
+                        brPx = startBottomPx + (corners.bottomRight - startBottomPx) * openFraction,
+                        blPx = startBottomPx + (corners.bottomLeft - startBottomPx) * openFraction,
+                        outerScaleX = geometry.outerScaleX,
+                        outerScaleY = geometry.outerScaleY,
+                    )
+                }
+            }
+            .then(wallpaperBacking)
+            .drawWithContent {
+                val scope = latestScope.value
+                val openFraction = (1f + scope.relativeDepth.coerceAtMost(0f)).coerceIn(0f, 1f)
+                val morphing = isDeterministicSharedContainerMorphing(
+                    relativeDepth = scope.relativeDepth,
+                    isRunning = scope.isRunning,
+                    isRemoving = scope.isRemoving,
+                    gestureActive = scope.gesture != null,
+                )
+                val sourceRect = if (morphing && origin.available) origin.resolveSourceRectInHost?.invoke() else null
+                val hasValidSource = sourceRect != null && sourceRect.width > 1f && sourceRect.height > 1f
+                val returning = if (morphing) bounds.isReturning(scope, openFraction) else false
+                val sourceLayer = origin.capturedSourceLayer
+                val layerWidth = origin.capturedSourceLayerWidth
+                val layerHeight = origin.capturedSourceLayerHeight
+                val hasActiveSourceOverlay = origin.sharedBounds === bounds &&
+                    sourceLayer != null && layerWidth > 1f && layerHeight > 1f
+                // open <= 0.001f 时下方真实来源卡片处于可见态，跳过飞行壳底色与源层绘制避免首末帧双层叠加或未捕获源层时闪黑；
+                // 极近落位区（0.001..0.12）平滑过渡垫底色透明度，缓解液态玻璃与半透明卡片的质感明暗跳变。
+                val skipGroundedOverlay = openFraction <= 0.001f
+                if (morphing && openFraction < 0.999f && hasValidSource && !skipGroundedOverlay) {
+                    val colorProgress = if (returning) {
+                        openFraction
+                    } else {
+                        resolveSettingsContainerContentAlpha(openFraction, returning = false)
+                    }
+                    val backingAlpha = if (hasActiveSourceOverlay) {
+                        smoothstep(0.001f, 0.12f, openFraction)
+                    } else 1f
+                    if (backingAlpha > 0.001f) {
+                        val backingColor = lerp(origin.color, color, colorProgress)
+                        drawRect(backingColor.copy(alpha = backingColor.alpha * backingAlpha))
+                    }
+                }
+                drawContent()
+                if (morphing && hasValidSource && hasActiveSourceOverlay && !skipGroundedOverlay) {
+                    val alphas = resolveDeterministicSharedContainerAlpha(
+                        open = openFraction,
+                        returning = returning,
+                        hasSourceOverlay = true,
+                    )
+                    if (alphas.sourceOverlayAlpha > 0.001f) {
+                        val geometry = resolveDeterministicSharedContainerGeometry(
+                            source = sourceRect!!,
+                            destinationWidth = size.width,
+                            destinationHeight = size.height,
+                            open = openFraction,
+                            scaleDestinationToWidth = scaleDestinationToWidth,
+                        )
+                        val uniformScaleX = size.width / layerWidth
+                        val uniformScaleY = (geometry.outerScaleX / geometry.outerScaleY) * uniformScaleX
+                        sourceLayer.alpha = alphas.sourceOverlayAlpha
+                        scale(scaleX = uniformScaleX, scaleY = uniformScaleY, pivot = Offset.Zero) {
+                            drawLayer(sourceLayer)
+                        }
+                        sourceLayer.alpha = 1f
+                    }
+                }
+            }
+            .graphicsLayer {
+                val scope = latestScope.value
+                val openFraction = (1f + scope.relativeDepth.coerceAtMost(0f)).coerceIn(0f, 1f)
+                val morphing = isDeterministicSharedContainerMorphing(
+                    relativeDepth = scope.relativeDepth,
+                    isRunning = scope.isRunning,
+                    isRemoving = scope.isRemoving,
+                    gestureActive = scope.gesture != null,
+                )
+                if (!morphing) {
+                    scaleX = 1f
+                    scaleY = 1f
+                    alpha = 1f
+                    return@graphicsLayer
+                }
+                val sourceRect = if (origin.available) origin.resolveSourceRectInHost?.invoke() else null
+                if (sourceRect == null || sourceRect.width <= 1f || sourceRect.height <= 1f) {
+                    scaleX = 1f
+                    scaleY = 1f
+                    alpha = 1f
+                    return@graphicsLayer
+                }
+                val returning = bounds.isReturning(scope, openFraction)
+                val geometry = resolveDeterministicSharedContainerGeometry(
+                    source = sourceRect,
+                    destinationWidth = size.width,
+                    destinationHeight = size.height,
+                    open = openFraction,
+                    scaleDestinationToWidth = scaleDestinationToWidth,
+                )
+                val hasSourceOverlay = origin.sharedBounds === bounds &&
+                    origin.capturedSourceLayer != null &&
+                    origin.capturedSourceLayerWidth > 1f &&
+                    origin.capturedSourceLayerHeight > 1f
+                val alphas = resolveDeterministicSharedContainerAlpha(
+                    open = openFraction,
+                    returning = returning,
+                    hasSourceOverlay = hasSourceOverlay,
+                )
+                transformOrigin = geometry.innerTransformOrigin
+                scaleX = geometry.innerScaleX
+                scaleY = geometry.innerScaleY
+                alpha = alphas.contentAlpha
+            }
+    }
     val state = remember(origin) {
         val isFreshPush = navScope.change == NavChange.Push && !navScope.isRemoving && navScope.relativeDepth <= 0f
         SeekableTransitionState(!isFreshPush && navScope.relativeDepth >= 0f)
@@ -236,7 +731,6 @@ internal fun settingsSharedContainerDestination(
         transitionSpec = { tween(SETTINGS_CONTAINER_DURATION_MILLIS, easing = LinearEasing) },
         label = "Settings container openness",
     ) { if (it) 1f else 0f }
-    val latestScope = rememberUpdatedState(navScope)
     val bounds = remember(origin, originVisibility, pageVisibility, open, transition, scaleDestinationToWidth) {
         SettingsSharedContainerBounds(
             origin,
@@ -247,6 +741,7 @@ internal fun settingsSharedContainerDestination(
             latestScope,
             transition,
             scaleDestinationToWidth = scaleDestinationToWidth,
+            deterministicGeometry = false,
         )
     }
     DisposableEffect(bounds) {
@@ -283,8 +778,6 @@ internal fun settingsSharedContainerDestination(
         }.first { it }
         if (!origin.returnLandingHandledByOwner) origin.returnLanding.request()
     }
-    val view = LocalView.current
-    val activity = LocalActivity.current
     return Modifier
         .onGloballyPositioned {
             // 取目标页面的布局边界；共享叠层中每帧变化的矩形只负责裁剪插值。
@@ -318,10 +811,15 @@ internal fun settingsSharedContainerBounds(
     pageColor: Color? = null,
     wallpaperBacking: Modifier = Modifier,
 ): Modifier {
-    val sharedScope = LocalSettingsContainerSharedScope.current ?: return Modifier
     if (bounds == null) return Modifier
     val origin = bounds.origin
     val source = pageColor == null
+    if (bounds.deterministicGeometry) {
+        return Modifier
+    }
+    val sharedScope = LocalSettingsContainerSharedScope.current ?: return Modifier
+    val transition = bounds.transition ?: return Modifier
+    val visibilityScope = (if (source) bounds.sourceVisibility else bounds.pageVisibility) ?: return Modifier
     return with(sharedScope) {
         val config = remember(origin) {
             object : SharedTransitionScope.SharedContentConfig {
@@ -333,7 +831,7 @@ internal fun settingsSharedContainerBounds(
             }
         }
         val sharedContent = rememberSharedContentState(key = bounds, config = config)
-        val isMorphing = bounds.transition.currentState != bounds.transition.targetState
+        val isMorphing = transition.currentState != transition.targetState
         val side = if (source) "row" else "page"
         // 底色、页面和来源内容在共享叠层里使用同一组物理圆角。
         val clip = remember(bounds, sharedScope) { OverlayClip(bounds.clipShape) }
@@ -357,7 +855,7 @@ internal fun settingsSharedContainerBounds(
                 if (source) bounds.sourcePlaced = true else bounds.destinationPlaced = true
             }.sharedBounds(
                 sharedContentState = sharedContent,
-                animatedVisibilityScope = if (source) bounds.sourceVisibility else bounds.pageVisibility,
+                animatedVisibilityScope = visibilityScope,
                 enter = EnterTransition.None,
                 exit = ExitTransition.None,
                 // 导航进度已经包含缓动和松手的弹簧，边界只按这个进度取样。
@@ -414,7 +912,7 @@ internal fun settingsSharedContainerBounds(
                 if (open > 0f && isMorphing && isTransitionActive &&
                     sharedContent.isMatchFound && origin.available
                 ) {
-                    val colorProgress = if (bounds.transition.currentState) {
+                    val colorProgress = if (transition.currentState) {
                         open
                     } else {
                         resolveSettingsContainerContentAlpha(open, returning = false)
@@ -427,11 +925,11 @@ internal fun settingsSharedContainerBounds(
             .graphicsLayer {
                 alpha = when {
                     source -> if (sharedContent.isMatchFound && origin.available) {
-                        1f - resolveSettingsContainerContentAlpha(bounds.open.value, bounds.transition.currentState)
+                        1f - resolveSettingsContainerContentAlpha(bounds.open.value, transition.currentState)
                     } else 1f
                     origin.available -> resolveSettingsContainerContentAlpha(
                         open = bounds.open.value,
-                        returning = bounds.transition.currentState,
+                        returning = transition.currentState,
                     )
                     // 来源条目已移出列表时保留返回手势，用淡出交接页面。
                     else -> (1f + bounds.navigationScope.value.relativeDepth).coerceIn(0f, 1f)

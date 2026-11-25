@@ -354,13 +354,23 @@ internal fun BiliPaiNavDisplayHost(
     val latestPrepareGesture by rememberUpdatedState(onPrepareVideoCardGesture)
     val latestRelatedReturn by rememberUpdatedState(onRelatedVideoDetailReturned)
     val latestPreferWholeCardReturn by rememberUpdatedState(preferWholeCardReturn)
-    val cardMorphMode = resolveBiliPaiVideoCardMorphMode(
-        cardTransitionEnabled = videoCardTransitionEnabled,
-        reduceMotion = reduceMotion,
-        sourceRoute = sourceMetadata.sourceRoute,
-        hasUsableSourceBounds = sourceMetadata.sourceBounds
-            ?.let { it.width > 1f && it.height > 1f } == true,
-    )
+    val videoDetailOwnedBySharedContainer = navigationSharedEnabled && (
+        stackSnapshot.any { it is BiliPaiNavKey.VideoDetail && it in navigationContainerTransitions } ||
+            navigationSharedSnapshot.any { (target, origin) ->
+                target is BiliPaiNavKey.VideoDetail && origin.sharedBounds != null
+            }
+        )
+    val cardMorphMode = if (videoDetailOwnedBySharedContainer) {
+        BiliPaiVideoCardMorphMode.NONE
+    } else {
+        resolveBiliPaiVideoCardMorphMode(
+            cardTransitionEnabled = videoCardTransitionEnabled,
+            reduceMotion = reduceMotion,
+            sourceRoute = sourceMetadata.sourceRoute,
+            hasUsableSourceBounds = sourceMetadata.sourceBounds
+                ?.let { it.width > 1f && it.height > 1f } == true,
+        )
+    }
     val cardMorphAvailable = cardMorphMode != BiliPaiVideoCardMorphMode.NONE
     var relatedReturnTransitionObserved by remember(videoSourceGeneration) { mutableStateOf(false) }
     val style = if (reduceMotion) {
@@ -1236,36 +1246,42 @@ internal fun BiliPaiNavDisplayHost(
                             val navScope = LocalNavTransitionScope.current
                             // 逐帧深度与手势对象必须在 derivedStateOf 内读取，只在布尔边界翻转时通知重组，
                             // 避免共享元素动画每帧触发整个首页与详情页入口重组。
-                            val sharedSurfaceBlocked by remember(
+                            val coveredBySharedContainer by remember(
                                 key,
                                 navScope,
                                 navigationSharedEnabled,
                                 navigationSharedSources,
-                                useSettingsContainer,
                             ) {
                                 derivedStateOf(structuralEqualityPolicy()) {
-                                    val coveredBySharedContainer = navigationSharedEnabled &&
+                                    navigationSharedEnabled &&
                                         navigationSharedSources.sources.values.any { origin ->
                                             origin.owner == key && (
                                                 navScope.relativeDepth > 0.02f ||
                                                     (navScope.isRunning && navScope.relativeDepth > 0f) ||
-                                                    origin.sharedBounds?.let {
-                                                        it.transition.currentState != it.transition.targetState
-                                                    } == true
+                                                    origin.sharedBounds?.isMorphing == true
                                                 )
                                         }
+                                }
+                            }
+                            val selfSharedSurfaceBlocked by remember(
+                                navScope,
+                                useSettingsContainer,
+                            ) {
+                                derivedStateOf(structuralEqualityPolicy()) {
                                     // 展开首帧（prepareEnterFrame 等待期间）relativeDepth <= -0.02f 时即需隐藏原生 Surface，
                                     // 避免动画尚未起跑前短暂闪现 SurfaceView 导致黑框与事务卡顿；
                                     // 展开贴近全屏（>-0.02f）且非返回/手势时提前交还播放器 Surface。
-                                    coveredBySharedContainer || (
-                                        useSettingsContainer && (
-                                            navScope.isRemoving ||
-                                                navScope.gesture != null ||
-                                                navScope.relativeDepth <= -0.02f
-                                            )
+                                    useSettingsContainer && (
+                                        navScope.isRemoving ||
+                                            navScope.gesture != null ||
+                                            navScope.relativeDepth <= -0.02f
                                         )
                                 }
                             }
+                            val sharedSurfaceBlocked = coveredBySharedContainer || selfSharedSurfaceBlocked
+                            val sharedTextureSurfaceVisible = !coveredBySharedContainer && (
+                                !selfSharedSurfaceBlocked || settingsTransition?.navigationControlFallback == true
+                                )
                             val replayWallpaperInsideContainer =
                                 useSettingsContainer && entryWallpaperVisible && hasSharedWallpaperBacking
                             val containerBounds = if (settingsTransition != null && sharedContainerEnabled) {
@@ -1280,6 +1296,7 @@ internal fun BiliPaiNavDisplayHost(
                                     },
                                     destinationZIndex = settingsTransition.destinationZIndex,
                                     scaleDestinationToWidth = settingsTransition.scaleDestinationToWidth,
+                                    deterministicGeometry = settingsTransition.navigationControlFallback,
                                     wallpaperBacking = if (replayWallpaperInsideContainer) {
                                         Modifier.sharedGlobalWallpaperBackground(settingsContainerPageColor.value)
                                     } else Modifier,
@@ -1301,6 +1318,7 @@ internal fun BiliPaiNavDisplayHost(
                                     com.android.purebilibili.core.ui.animation.LocalNavigationOwnsContentEntrance
                                         provides (useSettingsContainer || key == systemWindowEntry),
                                     LocalNavigationSharedSurfaceVisible provides !sharedSurfaceBlocked,
+                                    LocalNavigationSharedTextureSurfaceVisible provides sharedTextureSurfaceVisible,
                                 ) {
                                     stableNavEntryContent(key)
                                 }

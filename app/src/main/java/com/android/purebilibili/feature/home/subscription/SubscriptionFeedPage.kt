@@ -241,6 +241,7 @@ fun SubscriptionFeedPage(
         )
     }
     val transitionState = remember { SeekableTransitionState<ParsedFeedItem?>(null) }
+    val transitionSessionToken = remember { LongArray(1) }
     val isArticleOpen = opened != null || transitionState.currentState != null || transitionState.targetState != null
 
     LaunchedEffect(isArticleOpen) {
@@ -251,25 +252,28 @@ fun SubscriptionFeedPage(
     }
     val predictiveBackEnabled = com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current
     PredictiveBackHandler(enabled = pageActive && isArticleOpen) { progress ->
+        val gestureToken = ++transitionSessionToken[0]
         var lastFraction = 0f
         try {
             progress.collect { event ->
-                if (!predictiveBackEnabled) return@collect
+                if (!predictiveBackEnabled || transitionSessionToken[0] != gestureToken) return@collect
                 lastFraction = event.progress.coerceIn(0f, 1f)
                 transitionState.seekTo(
                     fraction = lastFraction,
                     targetState = null
                 )
             }
-            val remainingMs = ((1f - lastFraction) * 360).toInt().coerceIn(100, 360)
-            transitionState.animateTo(
-                targetState = null,
-                animationSpec = tween(remainingMs, easing = LinearEasing)
-            )
-            opened = null
+            if (transitionSessionToken[0] == gestureToken) {
+                val remainingMs = ((1f - lastFraction) * 360).toInt().coerceIn(100, 360)
+                transitionState.animateTo(
+                    targetState = null,
+                    animationSpec = tween(remainingMs, easing = LinearEasing)
+                )
+                if (transitionSessionToken[0] == gestureToken) opened = null
+            }
         } catch (cancelled: CancellationException) {
             val currentOpened = opened
-            if (currentOpened != null) {
+            if (currentOpened != null && transitionSessionToken[0] == gestureToken) {
                 withContext(NonCancellable) {
                     if (lastFraction > 0.001f) {
                         val startFraction = lastFraction
@@ -283,11 +287,15 @@ fun SubscriptionFeedPage(
                                 animationSpec = tween(durationMs, easing = AppMotionEasing.M1Standard),
                             ) { fraction, _ -> trySend(fraction) }
                         }.conflate().collect { fraction ->
-                            transitionState.seekTo(fraction = fraction, targetState = null)
+                            if (transitionSessionToken[0] == gestureToken && opened == currentOpened) {
+                                transitionState.seekTo(fraction = fraction, targetState = null)
+                            }
                         }
                     }
-                    transitionState.seekTo(fraction = 0f, targetState = null)
-                    transitionState.snapTo(currentOpened)
+                    if (transitionSessionToken[0] == gestureToken && opened == currentOpened) {
+                        transitionState.seekTo(fraction = 0f, targetState = null)
+                        transitionState.snapTo(currentOpened)
+                    }
                 }
             }
             throw cancelled
@@ -413,12 +421,13 @@ fun SubscriptionFeedPage(
                         }
                     },
                     onBack = {
+                        val opToken = ++transitionSessionToken[0]
                         scope.launch {
                             transitionState.animateTo(
                                 targetState = null,
                                 animationSpec = tween(360, easing = LinearEasing)
                             )
-                            opened = null
+                            if (transitionSessionToken[0] == opToken) opened = null
                         }
                     },
                     onOpenImages = { images, index, rect, rects ->
@@ -455,6 +464,7 @@ fun SubscriptionFeedPage(
                         onRefresh = { reloadToken += 1 },
                         onOpenPluginSettings = onOpenPluginSettings,
                         onOpen = { item ->
+                            ++transitionSessionToken[0]
                             opened = item
                             val key = feedItemKey(item)
                             readKeys = readKeys + key

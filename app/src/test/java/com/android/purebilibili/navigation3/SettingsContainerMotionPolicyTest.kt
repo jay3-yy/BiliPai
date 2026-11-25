@@ -1,5 +1,6 @@
 package com.android.purebilibili.navigation3
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.animation.core.TargetBasedAnimation
 import androidx.compose.animation.core.VectorConverter
@@ -12,6 +13,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.feature.settings.SettingsSharedContainerOrigin
+import com.android.purebilibili.feature.settings.isSettingsSharedContainerAvailableInHost
+import com.android.purebilibili.feature.settings.resolveValidatedSharedSourceRectInHost
 import top.yukonga.miuix.kmp.nav.runtime.NavChange
 import top.yukonga.miuix.kmp.nav.transition.NavGesture
 import top.yukonga.miuix.kmp.nav.transition.NavRole
@@ -22,6 +25,7 @@ import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SettingsContainerMotionPolicyTest {
@@ -251,5 +255,230 @@ class SettingsContainerMotionPolicyTest {
         assertTrue(supportsNavigationSharedContainer(target = child, owner = parent))
         assertTrue(isSettingsContainerBoundary(true, listOf(BiliPaiNavKey.MainHost, parent, child), child, parent))
         assertFalse(isSettingsContainerBoundary(true, listOf(BiliPaiNavKey.MainHost, parent, child), child, BiliPaiNavKey.MainHost))
+    }
+
+    @Test
+    fun deterministicSharedContainerInterpolatesBottomRightCardWithoutScaleOrPositionDrift() {
+        val card = Rect(520f, 1600f, 1040f, 2240f)
+        val w = 1080f
+        val h = 2400f
+
+        val closed = resolveDeterministicSharedContainerGeometry(
+            source = card,
+            destinationWidth = w,
+            destinationHeight = h,
+            open = 0f,
+            scaleDestinationToWidth = true,
+        )
+        assertEquals(card.left, closed.translationX, 0.001f)
+        assertEquals(card.top, closed.translationY, 0.001f)
+        assertEquals(card.width / w, closed.outerScaleX, 0.001f)
+        assertEquals(card.height / h, closed.outerScaleY, 0.001f)
+        // Net content scale stays uniform width-fit (outerScaleX on both axes).
+        assertEquals(closed.outerScaleX, closed.outerScaleX * closed.innerScaleX, 0.001f)
+        assertEquals(closed.outerScaleX, closed.outerScaleY * closed.innerScaleY, 0.001f)
+
+        val opened = resolveDeterministicSharedContainerGeometry(
+            source = card,
+            destinationWidth = w,
+            destinationHeight = h,
+            open = 1f,
+            scaleDestinationToWidth = true,
+        )
+        assertEquals(0f, opened.translationX, 0.001f)
+        assertEquals(0f, opened.translationY, 0.001f)
+        assertEquals(1f, opened.outerScaleX, 0.001f)
+        assertEquals(1f, opened.outerScaleY, 0.001f)
+
+        // Early predictive back (open = 0.85) moves smoothly without jumping to card topLeft at 1.0x.
+        val earlyBack = resolveDeterministicSharedContainerGeometry(
+            source = card,
+            destinationWidth = w,
+            destinationHeight = h,
+            open = 0.85f,
+            scaleDestinationToWidth = true,
+        )
+        assertEquals(card.left * 0.15f, earlyBack.translationX, 0.001f)
+        assertEquals(card.top * 0.15f, earlyBack.translationY, 0.001f)
+        assertTrue(earlyBack.outerScaleX < 1f && earlyBack.outerScaleX > closed.outerScaleX)
+        assertTrue(earlyBack.outerScaleY < 1f && earlyBack.outerScaleY > closed.outerScaleY)
+    }
+
+    @Test
+    fun deterministicSharedContainerAlphaIsReversibleAndHandsOffCleanlyToSourceCard() {
+        val frameZeroOpen = resolveDeterministicSharedContainerAlpha(open = 0f, returning = false)
+        assertEquals(0f, frameZeroOpen.containerAlpha, 0.001f)
+        assertEquals(0f, frameZeroOpen.contentAlpha, 0.001f)
+        assertEquals(1f, frameZeroOpen.sourceOverlayAlpha, 0.001f)
+        assertFalse(frameZeroOpen.sourceCardHidden)
+
+        // 首帧源快照层尚未完成录制时，容器必须保持完全透明，避免把未加载的黑屏详情页直接盖在原卡片上。
+        val frameZeroOpenWithoutOverlay = resolveDeterministicSharedContainerAlpha(
+            open = 0f,
+            returning = false,
+            hasSourceOverlay = false,
+        )
+        assertEquals(0f, frameZeroOpenWithoutOverlay.containerAlpha, 0.001f)
+        assertFalse(frameZeroOpenWithoutOverlay.sourceCardHidden)
+
+        val earlyOpenWithoutOverlay = resolveDeterministicSharedContainerAlpha(
+            open = 0.07f,
+            returning = false,
+            hasSourceOverlay = false,
+        )
+        assertTrue(earlyOpenWithoutOverlay.containerAlpha in 0.05f..0.95f)
+        assertFalse(earlyOpenWithoutOverlay.sourceCardHidden)
+
+        val settledOpenWithoutOverlay = resolveDeterministicSharedContainerAlpha(
+            open = 0.2f,
+            returning = false,
+            hasSourceOverlay = false,
+        )
+        assertEquals(1f, settledOpenWithoutOverlay.containerAlpha, 0.001f)
+        assertTrue(settledOpenWithoutOverlay.sourceCardHidden)
+
+        val earlyOpen = resolveDeterministicSharedContainerAlpha(open = 0.15f, returning = false)
+        assertEquals(1f, earlyOpen.containerAlpha, 0.001f)
+        assertEquals(0f, earlyOpen.contentAlpha, 0.001f)
+        assertEquals(1f, earlyOpen.sourceOverlayAlpha, 0.001f)
+        assertTrue(earlyOpen.sourceCardHidden)
+
+        val midOpen = resolveDeterministicSharedContainerAlpha(open = 0.36f, returning = false)
+        assertEquals(0.5f, midOpen.contentAlpha, 0.001f)
+        assertEquals(0.5f, midOpen.sourceOverlayAlpha, 0.001f)
+
+        val earlyReturn = resolveDeterministicSharedContainerAlpha(open = 0.8f, returning = true)
+        assertEquals(1f, earlyReturn.containerAlpha, 0.001f)
+        assertEquals(1f, earlyReturn.contentAlpha, 0.001f)
+        assertEquals(0f, earlyReturn.sourceOverlayAlpha, 0.001f)
+        assertTrue(earlyReturn.sourceCardHidden)
+
+        val midReturn = resolveDeterministicSharedContainerAlpha(open = 0.6f, returning = true)
+        assertEquals(0.5f, midReturn.contentAlpha, 0.001f)
+        assertEquals(0.5f, midReturn.sourceOverlayAlpha, 0.001f)
+
+        val lateReturn = resolveDeterministicSharedContainerAlpha(open = 0.2f, returning = true)
+        assertEquals(1f, lateReturn.containerAlpha, 0.001f)
+        assertEquals(0f, lateReturn.contentAlpha, 0.001f)
+        assertEquals(1f, lateReturn.sourceOverlayAlpha, 0.001f)
+        assertTrue(lateReturn.sourceCardHidden)
+
+        val landedReturn = resolveDeterministicSharedContainerAlpha(open = 0f, returning = true)
+        assertEquals(0f, landedReturn.containerAlpha, 0.001f)
+        assertEquals(1f, landedReturn.sourceOverlayAlpha, 0.001f)
+        assertFalse(landedReturn.sourceCardHidden)
+
+        val cancelledReturn = resolveDeterministicSharedContainerAlpha(open = 1f, returning = true)
+        assertEquals(1f, cancelledReturn.containerAlpha, 0.001f)
+        assertEquals(1f, cancelledReturn.contentAlpha, 0.001f)
+        assertEquals(0f, cancelledReturn.sourceOverlayAlpha, 0.001f)
+    }
+
+    @Test
+    fun coveredParentEntryDoesNotMorphWhileChildEntryTransitions() {
+        assertFalse(
+            isDeterministicSharedContainerMorphing(
+                relativeDepth = 0.4f,
+                isRunning = true,
+                isRemoving = false,
+                gestureActive = true,
+            ),
+        )
+        assertTrue(
+            isDeterministicSharedContainerMorphing(
+                relativeDepth = -0.2f,
+                isRunning = true,
+                isRemoving = false,
+                gestureActive = true,
+            ),
+        )
+    }
+
+    @Test
+    fun validatedSharedSourceRectRejectsOffscreenAndCrossOrientationFallback() {
+        val portraitHost = IntSize(1080, 2400)
+        val landscapeHost = IntSize(2400, 1080)
+        val portraitCard = Rect(520f, 1600f, 1040f, 2240f)
+        val shiftedCard = Rect(520f, 1480f, 1040f, 2120f)
+
+        assertEquals(
+            shiftedCard,
+            resolveValidatedSharedSourceRectInHost(
+                liveRect = shiftedCard,
+                capturedRect = portraitCard,
+                capturedHostSize = portraitHost,
+                currentHostSize = portraitHost,
+            ),
+        )
+        assertNull(
+            resolveValidatedSharedSourceRectInHost(
+                liveRect = Rect(520f, 2500f, 1040f, 3140f),
+                capturedRect = portraitCard,
+                capturedHostSize = portraitHost,
+                currentHostSize = portraitHost,
+            ),
+        )
+        assertNull(
+            resolveValidatedSharedSourceRectInHost(
+                liveRect = null,
+                capturedRect = portraitCard,
+                capturedHostSize = portraitHost,
+                currentHostSize = landscapeHost,
+            ),
+        )
+        assertEquals(
+            portraitCard,
+            resolveValidatedSharedSourceRectInHost(
+                liveRect = null,
+                capturedRect = portraitCard,
+                capturedHostSize = portraitHost,
+                currentHostSize = portraitHost,
+            ),
+        )
+    }
+
+    @Test
+    fun settingsRowPushedPastViewportEdgeByParentDepthZoomRemainsAvailable() {
+        val hostSize = IntSize(1080, 2400)
+        val rowSize = IntSize(1000, 140)
+        // 静止时紧贴底部安全区内的设置行，在父页 1.10x 中心放大后会被推到 bottom > 2400。
+        val restingRect = Rect(40f, 2240f, 1040f, 2380f)
+        val zoomedClippedBoundsInRoot = Rect(0f, 2344f, 1080f, 2400f)
+
+        assertTrue(
+            isSettingsSharedContainerAvailableInHost(
+                boundsInRoot = zoomedClippedBoundsInRoot,
+                rowSize = rowSize,
+                hostOrigin = Offset.Zero,
+                hostSize = hostSize,
+                allowPartial = false,
+                unscaledRestingRectInHost = restingRect,
+                isParentZoomed = true,
+            ),
+        )
+        // 静止态下真正滚出边界被裁切的设置行仍不可用。
+        assertFalse(
+            isSettingsSharedContainerAvailableInHost(
+                boundsInRoot = zoomedClippedBoundsInRoot,
+                rowSize = rowSize,
+                hostOrigin = Offset.Zero,
+                hostSize = hostSize,
+                allowPartial = false,
+                unscaledRestingRectInHost = null,
+                isParentZoomed = false,
+            ),
+        )
+        // 即使在放大态，反算后的静止位置已经滚出屏幕外时仍不可用。
+        assertFalse(
+            isSettingsSharedContainerAvailableInHost(
+                boundsInRoot = zoomedClippedBoundsInRoot,
+                rowSize = rowSize,
+                hostOrigin = Offset.Zero,
+                hostSize = hostSize,
+                allowPartial = false,
+                unscaledRestingRectInHost = Rect(40f, 2450f, 1040f, 2590f),
+                isParentZoomed = true,
+            ),
+        )
     }
 }

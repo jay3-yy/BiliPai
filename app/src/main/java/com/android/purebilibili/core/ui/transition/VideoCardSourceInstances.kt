@@ -83,6 +83,38 @@ internal fun sameVideoCardBounds(first: Rect, second: Rect): Boolean =
     abs(first.left - second.left) <= 1f && abs(first.top - second.top) <= 1f &&
         abs(first.right - second.right) <= 1f && abs(first.bottom - second.bottom) <= 1f
 
+internal fun isCompatibleVideoCardReturnGeometry(
+    currentWidth: Int,
+    currentHeight: Int,
+    expectedWidth: Int,
+    expectedHeight: Int,
+    currentRadiusPx: Float?,
+    expectedRadiusPx: Float,
+): Boolean = currentWidth > 1 && currentHeight > 1 &&
+    currentRadiusPx == expectedRadiusPx &&
+    abs(currentWidth - expectedWidth) <= 1 &&
+    abs(currentHeight - expectedHeight) <= 1
+
+/** 返回时校验最新可见矩形：允许在同窗口内平移，但尺寸差超 1px 或圆角变化时拒绝回卡。 */
+internal fun resolveCompatibleVideoCardReturnBounds(
+    currentBounds: AndroidRect?,
+    expectedBounds: AndroidRect,
+    currentRadiusPx: Float?,
+    expectedRadiusPx: Float,
+): AndroidRect? {
+    val current = currentBounds ?: return null
+    return current.takeIf {
+        isCompatibleVideoCardReturnGeometry(
+            currentWidth = it.width(),
+            currentHeight = it.height(),
+            expectedWidth = expectedBounds.width(),
+            expectedHeight = expectedBounds.height(),
+            currentRadiusPx = currentRadiusPx,
+            expectedRadiusPx = expectedRadiusPx,
+        )
+    }
+}
+
 private fun resolveClosestVideoCardSourceCandidate(
     candidates: List<VideoCardSourceInstance>,
     clickedBounds: Rect,
@@ -143,6 +175,23 @@ internal class VideoCardSourceAnchor(source: VideoCardSourceInstance) {
     ): Boolean = belongsToWindow(decor) &&
         bounds(windowCoordinates, allowPartial) == expectedBounds &&
         radiusPx() == expectedRadiusPx
+
+    /** 返回时允许来源卡片在同窗口内平移，只要可见且宽高与圆角未改变就返回最新落点。 */
+    fun resolveReturnBounds(
+        decor: View,
+        expectedBounds: AndroidRect,
+        expectedRadiusPx: Float,
+        windowCoordinates: Boolean,
+        allowPartial: Boolean,
+    ): AndroidRect? {
+        if (!belongsToWindow(decor)) return null
+        return resolveCompatibleVideoCardReturnBounds(
+            currentBounds = bounds(windowCoordinates, allowPartial),
+            expectedBounds = expectedBounds,
+            currentRadiusPx = radiusPx(),
+            expectedRadiusPx = expectedRadiusPx,
+        )
+    }
 
     fun cornerRadiusDp(): Int? = reference.get()?.takeIf { VideoCardSourceInstances.isAttached(it) }
         ?.let { (it.radiusPx() / it.density.density).roundToInt() }

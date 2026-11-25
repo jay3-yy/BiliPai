@@ -233,19 +233,19 @@ open class VideoActivity : FragmentActivity() {
             }
             val appThemeConfig by remember(this@VideoActivity) {
                 SettingsManager.getAppThemeConfig(this@VideoActivity)
-            }.collectAsStateWithLifecycle(initialValue = SettingsManager.DEFAULT_INITIAL_APP_THEME_CONFIG)
+            }.collectAsStateWithLifecycle(initialValue = remember { SettingsManager.getInitialAppThemeConfig() })
             val commentDisplaySettings by remember(this@VideoActivity) {
                 SettingsManager.getCommentDisplaySettings(this@VideoActivity)
             }.collectAsStateWithLifecycle(initialValue = SettingsManager.CommentDisplaySettings())
             val cardDynamicTintEnabled by remember(this@VideoActivity) {
                 SettingsManager.getHomeCardDynamicTintEnabled(this@VideoActivity)
-            }.collectAsStateWithLifecycle(initialValue = false)
+            }.collectAsStateWithLifecycle(initialValue = remember { SettingsManager.getInitialHomeCardDynamicTintEnabled() })
             val cardBackgroundMode by remember(this@VideoActivity) {
                 SettingsManager.getHomeCardBackgroundMode(this@VideoActivity)
-            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeCardBackgroundMode.OFF)
+            }.collectAsStateWithLifecycle(initialValue = remember { SettingsManager.getInitialHomeCardBackgroundMode() })
             val cardFrostedGlassEnabled by remember(this@VideoActivity) {
                 SettingsManager.getHomeCardFrostedGlassEnabled(this@VideoActivity)
-            }.collectAsStateWithLifecycle(initialValue = false)
+            }.collectAsStateWithLifecycle(initialValue = remember { SettingsManager.getInitialHomeCardFrostedGlassEnabled() })
             val replyPreviewReactions: com.android.purebilibili.feature.video.viewmodel.ReplyPreviewReactionViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel()
             val replyTranslations: com.android.purebilibili.feature.video.viewmodel.ReplyTranslationViewModel =

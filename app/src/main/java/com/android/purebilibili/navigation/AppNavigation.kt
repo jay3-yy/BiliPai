@@ -4063,7 +4063,7 @@ fun AppNavigation(
                         },
                         onLogout = {
                             coroutineScope.launch {
-                                com.android.purebilibili.core.store.TokenManager.clear(context)
+                                com.android.purebilibili.data.repository.SessionRepository.signOut(context)
                                 com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(
                                     mid = null,
                                     isVip = false,
@@ -7056,9 +7056,13 @@ fun AppNavigation(
                 }
 
             val bottomBarAlignment = Modifier.align(Alignment.BottomCenter)
+            // 独立小横条可停留在任意二级页，owner 绑定触发时的实际宿主页并在转场期间锁定，
+            // 避免硬编码 MainHost 导致非首页二级页过不了共享容器边界校验而丢失动画。
+            val nowPlayingContainerOwner = activeSharedNowPlayingOrigin?.owner
+                ?: if (bottomBarCanMount) BiliPaiNavKey.MainHost else (currentNavigation3Key ?: BiliPaiNavKey.MainHost)
             CompositionLocalProvider(
                 LocalNavigationSharedContainerSources provides navigationSharedSources,
-                LocalSettingsContainerOwner provides BiliPaiNavKey.MainHost,
+                LocalSettingsContainerOwner provides nowPlayingContainerOwner,
             ) {
             if (bottomBarCanMount) {
                 val bottomBarModifier = Modifier

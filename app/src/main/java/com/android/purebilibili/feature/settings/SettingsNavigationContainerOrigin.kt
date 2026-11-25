@@ -41,8 +41,10 @@ internal fun SettingsNavigationContainerOrigin(
         adaptivePreferenceGroupContainerColor()
     }
     val origin = remember(target, sources, owner) {
-        sources.sources[target]?.takeIf { it.owner == owner } ?: SettingsSharedContainerOrigin(owner, color)
+        sources.sources[target]?.takeIf { it.owner == owner && it.coordinates?.isAttached != true }
+            ?: SettingsSharedContainerOrigin(owner, color)
     }
+    val ownedCoordinates = remember(origin) { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     val radius = if (isFlatGroup) 0.dp else
         rememberAdaptiveListVisualCapabilities().componentSpec.groupCornerRadiusDp.dp
     SideEffect {
@@ -52,16 +54,24 @@ internal fun SettingsNavigationContainerOrigin(
     }
     DisposableEffect(origin) {
         onDispose {
-            origin.coordinates = null
-            origin.available = false
-            origin.returnLanding.clear()
+            // 列表项重组复用同一 origin 时，只释放仍属于当前实例的坐标，
+            // 避免旧节点晚一步 dispose 把新节点的 coordinates 与 available 误清导致返回退化为淡出。
+            if (origin.coordinates === ownedCoordinates[0]) {
+                origin.coordinates = null
+                origin.available = false
+                origin.returnLanding.clear()
+            }
+            ownedCoordinates[0] = null
         }
     }
     content(
         Modifier
             .onGloballyPositioned {
+                ownedCoordinates[0] = it
                 origin.coordinates = it
-                origin.available = sources.isAvailable(it)
+                if (origin.sharedBounds != null) {
+                    origin.available = sources.isAvailable(it)
+                }
             }
             .navigationReturnLanding(origin.returnLanding, sharedBoundsReleased = origin.sharedBounds == null) {
                 origin.coordinates.isVisibleReturnLanding()
