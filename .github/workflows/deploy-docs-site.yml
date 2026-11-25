@@ -1,13 +1,7 @@
 name: Deploy BiliPai Extension Docs Site
 
+# 内部打磨阶段仅保留手动触发，准备就绪后再手动发布或恢复 push 自动部署。
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'docs-site/**'
-      - 'plugins/bpx-cookbook/**'
-      - 'plugins/tools/validate-bpx.mjs'
-      - '.github/workflows/deploy-docs-site.yml'
   workflow_dispatch:
 
 permissions:
