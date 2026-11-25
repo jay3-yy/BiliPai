@@ -12,7 +12,9 @@ import com.google.zxing.common.HybridBinarizer
 object BiliPaiQrDecoder {
     fun decode(bytes: ByteArray, width: Int, height: Int, rotation: Int = 0): String? {
         return decodeRaw(bytes, width, height, rotation)?.takeIf {
-            it.startsWith("bilipai://transfer/") || parseBilibiliLoginQr(it) != null
+            it.startsWith("bilipai://transfer/") ||
+                it.startsWith("bilipai://ext/") ||
+                parseBilibiliLoginQr(it) != null
         }
     }
 
@@ -38,7 +40,12 @@ object BiliPaiQrDecoder {
             } finally {
                 if (oriented !== bitmap) oriented.recycle()
             } ?: continue
-            if (acceptAny || text.startsWith("bilipai://transfer/") || parseBilibiliLoginQr(text) != null) {
+            if (
+                acceptAny ||
+                text.startsWith("bilipai://transfer/") ||
+                text.startsWith("bilipai://ext/") ||
+                parseBilibiliLoginQr(text) != null
+            ) {
                 return text
             }
             // An unrelated result must not abort the remaining orientation attempts.

@@ -97,16 +97,44 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.purebilibili.core.util.PinyinUtils
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.collections.immutable.toImmutableSet
+import kotlinx.collections.immutable.toPersistentSet
 
 // UI 状态
+@Immutable
 sealed class FollowingListUiState {
+    @Immutable
     object Loading : FollowingListUiState()
+
+    @Immutable
     data class Success(
-        val users: List<FollowingUser>,
+        val users: ImmutableList<FollowingUser>,
         val total: Int,
         val isLoadingMore: Boolean = false,
         val hasMore: Boolean = true
-    ) : FollowingListUiState()
+    ) : FollowingListUiState() {
+        constructor(
+            users: List<FollowingUser>,
+            total: Int,
+            isLoadingMore: Boolean = false,
+            hasMore: Boolean = true
+        ) : this(
+            users = (users as? ImmutableList<FollowingUser>) ?: users.toImmutableList(),
+            total = total,
+            isLoadingMore = isLoadingMore,
+            hasMore = hasMore
+        )
+    }
+
+    @Immutable
     data class Error(val message: String) : FollowingListUiState()
 }
 
@@ -138,9 +166,10 @@ internal fun buildBatchUnfollowResultMessage(successCount: Int, failedCount: Int
     }
 }
 
+@Immutable
 data class BatchFollowGroupDialogData(
-    val tags: List<RelationTagItem>,
-    val initialSelection: Set<Long>,
+    val tags: ImmutableList<RelationTagItem>,
+    val initialSelection: ImmutableSet<Long>,
     val hasMixedSelection: Boolean
 )
 
@@ -220,7 +249,7 @@ class FollowingListViewModel : ViewModel() {
     private val _isBatchUnfollowing = MutableStateFlow(false)
     val isBatchUnfollowing = _isBatchUnfollowing.asStateFlow()
 
-    private val _followGroupTags = MutableStateFlow<List<RelationTagItem>>(emptyList())
+    private val _followGroupTags = MutableStateFlow<ImmutableList<RelationTagItem>>(persistentListOf())
     val followGroupTags = _followGroupTags.asStateFlow()
     private var preferredGroupOrder: Pair<AccountSessionIdentity, List<Long>>? = null
     private var groupOrderRevision = 0L
@@ -238,17 +267,21 @@ class FollowingListViewModel : ViewModel() {
         val deletedIds = _followGroupTags.value.filter { isSortableFollowGroup(it.tagid) && it.tagid !in validIds }.map { it.tagid }.toSet()
         groupOrderRevision++
         preferredGroupOrder = identity to ordered.map { it.tagid }
-        _followGroupTags.update { current -> orderForCurrentAccount(replaceSavedFollowGroups(current, ordered)) }
+        _followGroupTags.update { current ->
+            orderForCurrentAccount(replaceSavedFollowGroups(current, ordered)).toImmutableList()
+        }
         if (deletedIds.isNotEmpty()) {
             // 旧成员查询可能仍携带已删除分组，先停止回填，再清理现有映射。
             followGroupRefreshJob?.cancel()
             followGroupRefreshJob = null
             _isFollowGroupMetaLoading.value = false
-            _userFollowGroupIds.update { mappings -> mappings.mapValues { (_, ids) -> ids - deletedIds } }
+            _userFollowGroupIds.update { mappings ->
+                mappings.mapValues { (_, ids) -> (ids - deletedIds).toImmutableSet() }.toImmutableMap()
+            }
         }
     }
 
-    private val _userFollowGroupIds = MutableStateFlow<Map<Long, Set<Long>>>(emptyMap())
+    private val _userFollowGroupIds = MutableStateFlow<ImmutableMap<Long, ImmutableSet<Long>>>(persistentMapOf())
     val userFollowGroupIds = _userFollowGroupIds.asStateFlow()
 
     private val _isFollowGroupMetaLoading = MutableStateFlow(false)
@@ -278,7 +311,7 @@ class FollowingListViewModel : ViewModel() {
         loadRemainingPagesJob = null
         followingCacheSaveJob?.cancel()
         followingCacheSaveJob = null
-        _userFollowGroupIds.value = emptyMap()
+        _userFollowGroupIds.value = persistentMapOf()
         _isFollowGroupMetaLoading.value = false
 
         viewModelScope.launch {
@@ -299,7 +332,7 @@ class FollowingListViewModel : ViewModel() {
                         .filterNot { removedUserMids.contains(it.mid) }
                     val total = checkedResponseData.total
                     _uiState.value = FollowingListUiState.Success(
-                        users = initialUsers,
+                        users = initialUsers.toImmutableList(),
                         total = total,
                         hasMore = initialUsers.size < total // 还有更多数据需要加载
                     )
@@ -351,7 +384,7 @@ class FollowingListViewModel : ViewModel() {
         if (users.isEmpty()) return false
 
         _uiState.value = FollowingListUiState.Success(
-            users = users,
+            users = users.toImmutableList(),
             total = snapshot.total.coerceAtLeast(users.size),
             isLoadingMore = false,
             hasMore = false
@@ -380,7 +413,9 @@ class FollowingListViewModel : ViewModel() {
         val current = _uiState.value as? FollowingListUiState.Success ?: return false
         if (generation != followingGeneration || followingRequestActive || !current.hasMore) return false
         followingRequestActive = true
-        _uiState.value = current.copy(isLoadingMore = true)
+        _uiState.update { state ->
+            (state as? FollowingListUiState.Success)?.copy(isLoadingMore = true) ?: state
+        }
         val mid = currentMid
         val page = nextFollowingPage
         try {
@@ -395,7 +430,7 @@ class FollowingListViewModel : ViewModel() {
             if (generation != followingGeneration) return false
             nextFollowingPage = page + 1
             publishFollowingUsers(mid, data.total, merged, isLoadingMore = false)
-            val published = _uiState.value as? FollowingListUiState.Success ?: return false
+            if (_uiState.value !is FollowingListUiState.Success) return false
             // 只有「本页有内容」且「合并后确有新增」才继续，避免服务器重复返回同一页时无限翻页。
             val hasProgress = shouldContinueFollowingPagination(
                 previousCount = previousCount,
@@ -403,7 +438,9 @@ class FollowingListViewModel : ViewModel() {
                 incomingCount = incoming.size,
                 total = data.total
             )
-            _uiState.value = published.copy(hasMore = hasProgress)
+            _uiState.update { state ->
+                (state as? FollowingListUiState.Success)?.copy(hasMore = hasProgress) ?: state
+            }
             refreshFollowGroupMetadata(merged)
             return true
         } catch (e: CancellationException) {
@@ -413,8 +450,8 @@ class FollowingListViewModel : ViewModel() {
         } finally {
             if (generation == followingGeneration) {
                 followingRequestActive = false
-                (_uiState.value as? FollowingListUiState.Success)?.let {
-                    _uiState.value = it.copy(isLoadingMore = false)
+                _uiState.update { state ->
+                    (state as? FollowingListUiState.Success)?.copy(isLoadingMore = false) ?: state
                 }
             }
         }
@@ -454,7 +491,7 @@ class FollowingListViewModel : ViewModel() {
     ) {
         val safeTotal = total.coerceAtLeast(users.size)
         _uiState.value = FollowingListUiState.Success(
-            users = users.toList(),
+            users = users.toImmutableList(),
             total = safeTotal,
             hasMore = isFollowingListIncomplete(users.size, safeTotal),
             isLoadingMore = isLoadingMore
@@ -522,17 +559,22 @@ class FollowingListViewModel : ViewModel() {
     }
 
     private fun applyRemovedUsers(removedMids: Set<Long>) {
-        val current = _uiState.value as? FollowingListUiState.Success ?: return
-        val remainingUsers = current.users.filterNot { removedMids.contains(it.mid) }
-        val reducedTotal = (current.total - removedMids.size).coerceAtLeast(remainingUsers.size)
+        if (_uiState.value !is FollowingListUiState.Success) return
         _userFollowGroupIds.update { currentMap ->
-            currentMap - removedMids
+            (currentMap - removedMids).toImmutableMap()
         }
-        _uiState.value = current.copy(
-            users = remainingUsers,
-            total = reducedTotal
-        )
-        persistFollowingCache(mid = currentMid, total = reducedTotal, users = remainingUsers)
+        _uiState.update { state ->
+            val current = state as? FollowingListUiState.Success ?: return@update state
+            val remainingUsers = current.users.filterNot { removedMids.contains(it.mid) }.toImmutableList()
+            val reducedTotal = (current.total - removedMids.size).coerceAtLeast(remainingUsers.size)
+            current.copy(
+                users = remainingUsers,
+                total = reducedTotal
+            )
+        }
+        (_uiState.value as? FollowingListUiState.Success)?.let { updated ->
+            persistFollowingCache(mid = currentMid, total = updated.total, users = updated.users)
+        }
     }
 
     private fun persistFollowingCache(mid: Long, total: Int, users: List<FollowingUser>) {
@@ -568,7 +610,7 @@ class FollowingListViewModel : ViewModel() {
                     if (requestIdentity != TokenManager.accountIdentity.value || requestMid != currentMid || requestOrderRevision != groupOrderRevision) return@onSuccess
                     _followGroupTags.value = orderForCurrentAccount(tags
                         .filter { it.tagid != DEFAULT_FOLLOW_TAG_ID }
-                        .sortedBy { it.tagid != SPECIAL_FOLLOW_TAG_ID })
+                        .sortedBy { it.tagid != SPECIAL_FOLLOW_TAG_ID }).toImmutableList()
                 }
             }
 
@@ -582,7 +624,7 @@ class FollowingListViewModel : ViewModel() {
 
                 // 每轮重建当前列表的“已命中分组”映射，避免旧结果残留。
                 _userFollowGroupIds.update { currentMap ->
-                    currentMap - userMidSet
+                    (currentMap - userMidSet).toImmutableMap()
                 }
 
                 var allTagsFetched = true
@@ -598,9 +640,9 @@ class FollowingListViewModel : ViewModel() {
                             mids.forEach { mid ->
                                 val existing = mutable[mid].orEmpty().toMutableSet()
                                 existing.add(tagId)
-                                mutable[mid] = existing
+                                mutable[mid] = existing.toImmutableSet()
                             }
-                            mutable
+                            mutable.toImmutableMap()
                         }
                     }.onFailure { error ->
                         allTagsFetched = false
@@ -623,10 +665,10 @@ class FollowingListViewModel : ViewModel() {
                             .toMutableMap()
                         users.forEach { user ->
                             if (!mutable.containsKey(user.mid)) {
-                                mutable[user.mid] = emptySet()
+                                mutable[user.mid] = persistentSetOf()
                             }
                         }
-                        mutable
+                        mutable.toImmutableMap()
                     }
                 }
             } finally {
@@ -641,8 +683,8 @@ class FollowingListViewModel : ViewModel() {
             val mids = targetMids.toSet().toList()
             if (mids.isEmpty()) {
                 return@runCatching BatchFollowGroupDialogData(
-                    tags = emptyList(),
-                    initialSelection = emptySet(),
+                    tags = persistentListOf(),
+                    initialSelection = persistentSetOf(),
                     hasMixedSelection = false
                 )
             }
@@ -671,14 +713,15 @@ class FollowingListViewModel : ViewModel() {
                 }
             }
             if (fetched.isNotEmpty()) {
-                _userFollowGroupIds.update { it + fetched }
+                val immutableFetched = fetched.mapValues { (_, ids) -> ids.toImmutableSet() }
+                _userFollowGroupIds.update { (it + immutableFetched).toImmutableMap() }
             }
             val mergedGroups = _userFollowGroupIds.value + fetched
             val groupSets = mids.map { mid -> mergedGroups[mid] ?: emptySet() }
 
             BatchFollowGroupDialogData(
-                tags = tags,
-                initialSelection = resolveFollowGroupInitialSelection(groupSets),
+                tags = tags.toImmutableList(),
+                initialSelection = resolveFollowGroupInitialSelection(groupSets).toImmutableSet(),
                 hasMixedSelection = hasMixedFollowGroupSelection(groupSets)
             )
         }
@@ -728,12 +771,12 @@ fun FollowingListScreen(
     var showBatchGroupDialog by remember { mutableStateOf(false) }
     var groupDialogLoading by remember { mutableStateOf(false) }
     var groupDialogSaving by remember { mutableStateOf(false) }
-    var groupDialogTags by remember { mutableStateOf<List<RelationTagItem>>(emptyList()) }
-    var groupDialogSelection by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var groupDialogTags by remember { mutableStateOf<ImmutableList<RelationTagItem>>(persistentListOf()) }
+    var groupDialogSelection by remember { mutableStateOf<ImmutableSet<Long>>(persistentSetOf()) }
     var groupDialogMixed by remember { mutableStateOf(false) }
 
     val successState = uiState as? FollowingListUiState.Success
-    val followedUsers = successState?.users.orEmpty()
+    val followedUsers = successState?.users ?: persistentListOf()
     val usersByGroup = remember(followedUsers, selectedGroupFilter, userFollowGroupIds) {
         filterUsersBySelectedFollowGroup(
             users = followedUsers,
@@ -1212,9 +1255,9 @@ fun FollowingListScreen(
                                                             .fillMaxWidth()
                                                             .clickable {
                                                                 groupDialogSelection = if (groupDialogSelection.contains(tag.tagid)) {
-                                                                    groupDialogSelection - tag.tagid
+                                                                    groupDialogSelection.toPersistentSet().remove(tag.tagid)
                                                                 } else {
-                                                                    groupDialogSelection + tag.tagid
+                                                                    groupDialogSelection.toPersistentSet().add(tag.tagid)
                                                                 }
                                                             }
                                                             .padding(vertical = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro),
@@ -1224,9 +1267,9 @@ fun FollowingListScreen(
                                                             checked = groupDialogSelection.contains(tag.tagid),
                                                             onCheckedChange = { checked ->
                                                                 groupDialogSelection = if (checked == true) {
-                                                                    groupDialogSelection + tag.tagid
+                                                                    groupDialogSelection.toPersistentSet().add(tag.tagid)
                                                                 } else {
-                                                                    groupDialogSelection - tag.tagid
+                                                                    groupDialogSelection.toPersistentSet().remove(tag.tagid)
                                                                 }
                                                             }
                                                         )

@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.following
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.coroutines.AccountScopedRequests
@@ -8,26 +9,36 @@ import com.android.purebilibili.core.store.AccountSessionIdentity
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.data.repository.FanManagementRepository
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@Immutable
 internal data class FansListState(
     val identity: AccountSessionIdentity = TokenManager.accountIdentity.value,
-    val users: List<FollowingUser> = emptyList(),
+    val users: ImmutableList<FollowingUser> = persistentListOf(),
     val total: Int? = null,
     val loading: Boolean = false,
     val hasMore: Boolean = true,
     val error: String? = null,
     val canManage: Boolean = false,
     val removingMid: Long? = null,
-    val operationMessage: String? = null,
 )
 
-internal fun mergeFansPage(existing: List<FollowingUser>, incoming: List<FollowingUser>, removed: Set<Long>): List<FollowingUser> =
-    (existing + incoming).distinctBy { it.mid }.filterNot { it.mid in removed }
+internal fun mergeFansPage(
+    existing: List<FollowingUser>,
+    incoming: List<FollowingUser>,
+    removed: Set<Long>,
+): ImmutableList<FollowingUser> =
+    (existing + incoming).distinctBy { it.mid }.filterNot { it.mid in removed }.toImmutableList()
 
 internal fun shouldLoadMoreFans(
     page: Int,
@@ -49,6 +60,8 @@ internal class FansListViewModel(private val mid: Long) : ViewModel() {
     private fun initial() = FansListState(identity = requests.identity, canManage = mid > 0L && mid == requests.identity.mid)
     private val mutableState = MutableStateFlow(initial())
     val state = mutableState.asStateFlow()
+    private val _events = Channel<String>(Channel.BUFFERED)
+    val events: Flow<String> = _events.receiveAsFlow()
     private var page = 1
     private var failedRequest: FansPageRequest? = null
     private var removalVersion = 0L
@@ -72,9 +85,8 @@ internal class FansListViewModel(private val mid: Long) : ViewModel() {
                     // 移除会改变服务端页偏移；保留已加载条目，后续从首段补齐可能前移的用户。
                     page = 1
                     mutableState.update { state -> state.copy(
-                        users = state.users.filterNot { it.mid == event.mid },
+                        users = state.users.filterNot { it.mid == event.mid }.toImmutableList(),
                         total = state.total?.let { (it - 1).coerceAtLeast(0) },
-                        operationMessage = "已移除粉丝",
                     ) }
                 }
             }
@@ -133,14 +145,12 @@ internal class FansListViewModel(private val mid: Long) : ViewModel() {
     fun removeFan(targetMid: Long) {
         val current = mutableState.value
         if (!requests.isCurrent(current.identity) || !current.canManage || current.removingMid != null || current.users.none { it.mid == targetMid }) return
-        mutableState.update { it.copy(removingMid = targetMid, operationMessage = null) }
+        mutableState.update { it.copy(removingMid = targetMid) }
         requests.launch {
             val result = FanManagementRepository.remove(current.identity, targetMid)
             if (!requests.isCurrent(current.identity)) return@launch
-            mutableState.update { it.copy(
-                removingMid = null,
-                operationMessage = result.exceptionOrNull()?.message ?: "已移除粉丝",
-            ) }
+            mutableState.update { it.copy(removingMid = null) }
+            _events.trySend(result.exceptionOrNull()?.message ?: "已移除粉丝")
         }
     }
 }

@@ -23,8 +23,11 @@ internal fun ChatSettingsScreen(
     onBack: () -> Unit,
     onOpenLink: (String) -> Unit,
 ) {
-    BackHandler(onBack = onBack)
+    com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = true) { onBack() }
     LaunchedEffect(talkerId) { model.loadChatUser(); model.loadSessionControlInfo() }
+    DisposableEffect(model) {
+        onDispose { model.clearSessionControlError() }
+    }
     var confirmBlock by remember { mutableStateOf(false) }
     var confirmIntercept by remember { mutableStateOf(false) }
     val info = state.sessionControlInfo
@@ -53,7 +56,13 @@ internal fun ChatSettingsScreen(
             MessageSettingRow("举报", onClick = { onOpenLink("https://account.bilibili.com/h5/account-h5/gr/report?navhide=1&targetmid=$talkerId&$webThemeQuery") })
             if (info.isLimit == true) AppText("会话受限", Modifier.padding(16.dp))
             if (info.reportLimit == true) AppText("举报受限", Modifier.padding(16.dp))
-            state.sendError?.let { AppText(it, Modifier.padding(16.dp)) }
+            state.sessionControlError?.let { errorEvent ->
+                LaunchedEffect(errorEvent.id, model) {
+                    kotlinx.coroutines.delay(3_000L)
+                    model.consumeSessionControlError(errorEvent.id)
+                }
+                AppText(errorEvent.message, Modifier.padding(16.dp))
+            }
             AppTextButton(onClick = model::loadSessionControlInfo, enabled = !state.isSessionControlLoading) { AppText("刷新状态") }
         }
     }

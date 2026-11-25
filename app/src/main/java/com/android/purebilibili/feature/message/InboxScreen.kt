@@ -135,7 +135,7 @@ fun InboxScreen(
     var auxiliaryPages by rememberSaveable(accountIdentity) { mutableStateOf<List<String>>(emptyList()) }
     var pendingBatch by remember(accountIdentity) { mutableStateOf<Int?>(null) }
     val goBack = { if (!viewModel.back()) onBack() }
-    BackHandler(enabled = uiState.pageType != 1, onBack = { goBack() })
+    com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = uiState.pageType != 1) { goBack() }
     if (auxiliaryPages.isNotEmpty()) {
         MessageAuxiliaryPage(
             page = auxiliaryPages.last(),
@@ -193,7 +193,9 @@ fun InboxScreen(
                         if (uiState.pageType == 1) {
                             AppIconButton(onClick = { onOpenLink("https://www.bilibili.com/h5/follow/newFans?navhide=1&$webThemeQuery") }) { AppIcon(Icons.Outlined.PersonAdd, "新增粉丝") }
                         }
-                        val visibleOutside = uiState.outside.filter { it.type in setOf(1, 2, 4, 8, 9) }.take(outsideActionLimit)
+                        val visibleOutside = remember(uiState.outside, outsideActionLimit) {
+                            uiState.outside.filter { it.type in setOf(1, 2, 4, 8, 9) }.take(outsideActionLimit)
+                        }
                         visibleOutside.forEach { item ->
                             val icon = when (item.type) {
                                 1 -> Icons.Outlined.DoneAll
@@ -204,7 +206,9 @@ fun InboxScreen(
                             }
                             AppIconButton(onClick = { openMenuItem(item) }, enabled = !uiState.isBatchOperating) { AppIcon(icon, item.title) }
                         }
-                        val overflow = uiState.menu + uiState.outside.filter { it !in visibleOutside }
+                        val overflow = remember(uiState.menu, uiState.outside, visibleOutside) {
+                            uiState.menu + uiState.outside.filter { it !in visibleOutside }
+                        }
                         var expanded by remember { mutableStateOf(false) }
                         if (overflow.isNotEmpty()) {
                             com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { expanded = true }) {
@@ -236,8 +240,13 @@ fun InboxScreen(
                 ) {
                     if (uiState.pageType == 1) {
                         item(key = "message_center_shortcut_row") {
+                            val shortcutItems = remember(uiState.feedUnreadData, disabledLikes) {
+                                buildMessageCenterTopItems(uiState.feedUnreadData).map {
+                                    if (disabledLikes && it.destination == MessageCenterDestination.LikeMe) it.copy(unreadCount = 0) else it
+                                }
+                            }
                             MessageCenterTopShortcutRow(
-                                items = buildMessageCenterTopItems(uiState.feedUnreadData).map { if (disabledLikes && it.destination == MessageCenterDestination.LikeMe) it.copy(unreadCount = 0) else it },
+                                items = shortcutItems,
                                 onItemClick = { destination ->
                                     if (disabledLikes && destination == MessageCenterDestination.LikeMe) android.widget.Toast.makeText(context, "已禁用", android.widget.Toast.LENGTH_SHORT).show()
                                     else onTopItemClick(destination)
@@ -397,18 +406,22 @@ fun InboxScreen(
                 }
             }
 
-            uiState.operationError?.let { error ->
+            uiState.operationError?.let { errorEvent ->
+                LaunchedEffect(errorEvent.id, viewModel) {
+                    kotlinx.coroutines.delay(3_000L)
+                    viewModel.consumeOperationError(errorEvent.id)
+                }
                 AppSnackbar(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(16.dp),
                     action = {
-                        AppTextButton(onClick = { viewModel.clearOperationError() }) {
+                        AppTextButton(onClick = { viewModel.consumeOperationError(errorEvent.id) }) {
                             AppText("知道了")
                         }
                     }
                 ) {
-                    AppText(error)
+                    AppText(errorEvent.message)
                 }
             }
         }
@@ -452,9 +465,10 @@ private fun MessageCenterTopShortcutRow(
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         val columns = 4
+        val rows = remember(items, columns) { items.chunked(columns) }
 
         Column {
-            items.chunked(columns).forEachIndexed { rowIndex, rowItems ->
+            rows.forEachIndexed { rowIndex, rowItems ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -472,7 +486,7 @@ private fun MessageCenterTopShortcutRow(
                     }
                 }
 
-                if (rowIndex != items.chunked(columns).lastIndex) {
+                if (rowIndex != rows.lastIndex) {
                     Spacer(modifier = Modifier.height(10.dp))
                 }
             }

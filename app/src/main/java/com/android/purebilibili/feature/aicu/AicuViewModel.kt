@@ -19,6 +19,7 @@ import java.net.SocketTimeoutException
 internal enum class AicuConsentState { CHECKING, REQUIRED, ACCEPTED, ERROR }
 internal enum class AicuLoadState { IDLE, QUEUING, LOADING, CONTENT, EMPTY, ERROR }
 
+@androidx.compose.runtime.Immutable
 internal data class AicuUiState(
     val uid: String = "",
     val category: AicuCategory = AicuCategory.COMMENT,

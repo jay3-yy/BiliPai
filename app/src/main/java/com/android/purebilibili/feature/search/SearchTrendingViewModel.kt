@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
+@androidx.compose.runtime.Immutable
 data class SearchTrendingUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,

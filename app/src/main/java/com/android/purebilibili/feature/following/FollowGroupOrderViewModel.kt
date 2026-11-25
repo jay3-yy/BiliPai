@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.following
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.coroutines.AccountScopedRequests
@@ -7,14 +8,18 @@ import com.android.purebilibili.core.store.AccountSessionIdentity
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.RelationTagItem
 import com.android.purebilibili.data.repository.FollowGroupOrderRepository
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+@Immutable
 internal data class FollowGroupOrderState(
     val identity: AccountSessionIdentity = TokenManager.accountIdentity.value,
-    val original: List<RelationTagItem>? = null,
-    val draft: List<RelationTagItem> = emptyList(),
+    val original: ImmutableList<RelationTagItem>? = null,
+    val draft: ImmutableList<RelationTagItem> = persistentListOf(),
     val loading: Boolean = false,
     val saving: Boolean = false,
     val error: String? = null,
@@ -39,7 +44,7 @@ internal class FollowGroupOrderViewModel : ViewModel() {
             if (!requests.isCurrent(current.identity)) return@launch
             result.fold(
                 onSuccess = { groups ->
-                    val custom = groups.filter { isSortableFollowGroup(it.tagid) }
+                    val custom = groups.filter { isSortableFollowGroup(it.tagid) }.toImmutableList()
                     mutableState.update { it.copy(original = custom, draft = custom, loading = false) }
                 },
                 onFailure = { error -> mutableState.update { it.copy(loading = false, error = error.message ?: "加载分组失败") } },
@@ -50,7 +55,7 @@ internal class FollowGroupOrderViewModel : ViewModel() {
     fun move(fromId: Long, toId: Long) {
         mutableState.update { current ->
             if (!requests.isCurrent(current.identity) || current.loading || current.saving) current
-            else current.copy(draft = moveFollowGroup(current.draft, fromId, toId), error = null)
+            else current.copy(draft = moveFollowGroup(current.draft, fromId, toId).toImmutableList(), error = null)
         }
     }
 

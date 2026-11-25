@@ -36,9 +36,12 @@ internal fun ChatEmotePanel(
                 }
                 packages.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { AppText("暂无可用表情") }
                 else -> {
+                    val tabOptions = remember(packages) {
+                        packages.map { AppSegmentOption(it.id, it.text) }
+                    }
                     AppThemeAdaptiveTabRow(
                         role = AppTabRowRole.SECONDARY,
-                        options = packages.map { AppSegmentOption(it.id, it.text) },
+                        options = tabOptions,
                         selectedValue = selected?.id ?: 0L,
                         onSelectionChange = { selectedId = it },
                         scrollable = true,

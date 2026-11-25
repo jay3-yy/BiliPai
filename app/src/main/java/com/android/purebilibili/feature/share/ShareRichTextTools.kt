@@ -10,6 +10,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.semantics.Role
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.plugin.skin.LocalUiSkinState
+import com.android.purebilibili.core.plugin.skin.toSkinEmotePackage
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.feature.dynamic.components.DynamicEmoteCatalog
@@ -33,7 +35,12 @@ internal fun ShareRichTextTools(
     var selectedUsers by remember(contentKey) { mutableStateOf<List<MentionSearchUser>>(emptyList()) }
     var mentionLimitError by remember(contentKey) { mutableStateOf(false) }
     var topics by remember(contentKey) { mutableStateOf<List<DynamicTopicSearchItem>>(emptyList()) }
-    var packages by remember { mutableStateOf(DynamicEmoteCatalog.snapshotPackages()) }
+    val uiSkinState = LocalUiSkinState.current
+    val skinEmotePkg = remember(uiSkinState) { uiSkinState.toSkinEmotePackage() }
+    var remotePackages by remember { mutableStateOf(DynamicEmoteCatalog.snapshotPackages()) }
+    val packages = remember(skinEmotePkg, remotePackages) {
+        listOfNotNull(skinEmotePkg) + remotePackages
+    }
     var loading by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
@@ -44,7 +51,7 @@ internal fun ShareRichTextTools(
         try {
             if (panel == "emoji") {
                 DynamicEmoteCatalog.ensureLoaded()
-                packages = DynamicEmoteCatalog.snapshotPackages()
+                remotePackages = DynamicEmoteCatalog.snapshotPackages()
             } else {
                 delay(250)
                 if (panel == "mention") {

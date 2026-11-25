@@ -1168,7 +1168,18 @@ fun SearchScreen(
         }
     }
 
-    BackHandler(enabled = backEnabled, onBack = handleSearchBack)
+    val interceptSearchBack = backEnabled && (
+        resolveSearchBackAction(
+            showResults = state.showResults,
+            suggestionsVisible = searchState.value.suggestions.isNotEmpty(),
+            searchFieldFocused = searchFieldFocused,
+            openedWithKeyword = openedWithKeyword,
+        ) == SearchBackAction.RETURN_TO_LANDING || exitMotionSpec != null
+    )
+    com.android.purebilibili.core.ui.LocalNavigationBackHandler(
+        enabled = interceptSearchBack,
+        onBackCompleted = handleSearchBack,
+    )
 
     // Entering results must drop focus so the keyboard cannot reappear.
     LaunchedEffect(state.showResults) {
@@ -2176,11 +2187,15 @@ private fun SearchResultTypeTabRow(
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
     val selectedIndex = pagerState.tabSelectedPage.coerceIn(0, tabs.lastIndex)
-    val tabLabels = tabs.map { type ->
-        resolveSearchTypeTabLabel(type.displayName, counts[type])
+    val tabLabels = remember(tabs, counts) {
+        tabs.map { type ->
+            resolveSearchTypeTabLabel(type.displayName, counts[type])
+        }
     }
-    val glassMeasurementLabels = tabs.map { type ->
-        resolveSearchTypeTabMeasurementLabel(type, counts[type])
+    val glassMeasurementLabels = remember(tabs, counts) {
+        tabs.map { type ->
+            resolveSearchTypeTabMeasurementLabel(type, counts[type])
+        }
     }
 
     BoxWithConstraints(
@@ -2586,11 +2601,12 @@ fun SearchFilterBar(
                 }
 
                 if (SearchFilterControl.ARTICLE_CATEGORY in filterControls) {
+                    val articleCategoryOptions = remember { SearchArticleCategory.entries.map { it.displayName } }
                     SearchCategoryMenu(
                         label = currentArticleCategory.displayName,
                         highlighted = currentArticleCategory != SearchArticleCategory.ALL,
                         expanded = showArticleCategoryMenu,
-                        options = SearchArticleCategory.entries.map { it.displayName },
+                        options = articleCategoryOptions,
                         onExpandedChange = { showArticleCategoryMenu = it },
                         onSelected = { index ->
                             SearchArticleCategory.entries.getOrNull(index)?.let(onArticleCategoryChange)
@@ -2599,21 +2615,23 @@ fun SearchFilterBar(
                 }
 
                 if (SearchFilterControl.PHOTO_ORDER in filterControls) {
+                    val photoOrderOptions = remember { SearchOrder.entries.filter { it != SearchOrder.ATTENTION } }
                     SearchOrderMenu(
                         current = currentPhotoOrder,
                         expanded = showPhotoOrderMenu,
-                        options = SearchOrder.entries.filter { it != SearchOrder.ATTENTION },
+                        options = photoOrderOptions,
                         onExpandedChange = { showPhotoOrderMenu = it },
                         onSelected = onPhotoOrderChange
                     )
                 }
 
                 if (SearchFilterControl.PHOTO_CATEGORY in filterControls) {
+                    val photoCategoryOptions = remember { SearchPhotoCategory.entries.map { it.displayName } }
                     SearchCategoryMenu(
                         label = currentPhotoCategory.displayName,
                         highlighted = currentPhotoCategory != SearchPhotoCategory.ALL,
                         expanded = showPhotoCategoryMenu,
-                        options = SearchPhotoCategory.entries.map { it.displayName },
+                        options = photoCategoryOptions,
                         onExpandedChange = { showPhotoCategoryMenu = it },
                         onSelected = { index ->
                             SearchPhotoCategory.entries.getOrNull(index)?.let(onPhotoCategoryChange)

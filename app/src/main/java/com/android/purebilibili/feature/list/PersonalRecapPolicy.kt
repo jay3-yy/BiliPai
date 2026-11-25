@@ -31,12 +31,14 @@ fun resolvePersonalRecapWindowStart(nowMs: Long, window: PersonalRecapWindow): L
     }
 }
 
+@androidx.compose.runtime.Immutable
 data class PersonalRssRecapStats(
     val readCount: Int = 0,
     val topSourceKey: String? = null,
     val readTimestampsMs: List<Long> = emptyList(),
 )
 
+@androidx.compose.runtime.Immutable
 @kotlinx.serialization.Serializable
 data class PersonalUpRecap(
     val mid: Long,
@@ -46,6 +48,7 @@ data class PersonalUpRecap(
     val totalDurationSec: Long,
 )
 
+@androidx.compose.runtime.Immutable
 @kotlinx.serialization.Serializable
 data class PersonalVideoRecapStats(
     val videoCount: Int = 0,

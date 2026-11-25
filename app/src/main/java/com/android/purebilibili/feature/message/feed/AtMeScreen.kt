@@ -25,8 +25,10 @@ import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import android.widget.Toast
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,24 +42,32 @@ import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.data.model.response.MessageFeedAtItem
 import com.android.purebilibili.data.repository.MessageRepository
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import com.android.purebilibili.core.coroutines.AccountScopedRequests
 import com.android.purebilibili.core.store.TokenManager
 
+@Immutable
 data class AtMeUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val isLoadingMore: Boolean = false,
-    val items: List<MessageFeedAtItem> = emptyList(),
+    val items: ImmutableList<MessageFeedAtItem> = persistentListOf(),
     val cursor: Long? = null,
     val cursorTime: Long? = null,
     val hasMore: Boolean = false,
     val error: String? = null,
-    val operationError: String? = null,
     val operationBusy: Boolean = false,
     val loadMoreError: String? = null,
 )
@@ -65,6 +75,8 @@ data class AtMeUiState(
 class AtMeViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(AtMeUiState())
     val uiState: StateFlow<AtMeUiState> = _uiState.asStateFlow()
+    private val _events = Channel<String>(Channel.BUFFERED)
+    val events: Flow<String> = _events.receiveAsFlow()
     private val accountRequests = AccountScopedRequests(viewModelScope)
     private var listJob: Job? = null
     private var moreJob: Job? = null
@@ -82,21 +94,27 @@ class AtMeViewModel : ViewModel() {
     fun loadInitial() {
         listJob?.cancel()
         moreJob?.cancel()
-        requestVersion++
+        val version = ++requestVersion
         listJob = accountRequests.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, isLoadingMore = false, error = null, loadMoreError = null)
+            _uiState.update { it.copy(isLoading = true, isLoadingMore = false, error = null, loadMoreError = null) }
             MessageRepository.getAtFeed().fold(
                 onSuccess = { data ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        items = data.items.orEmpty(),
-                        cursor = data.cursor?.id,
-                        cursorTime = data.cursor?.time,
-                        hasMore = data.cursor?.isEnd != true && !data.items.isNullOrEmpty()
-                    )
+                    if (version != requestVersion) return@fold
+                    val loaded = data.items.orEmpty().toImmutableList()
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            items = loaded,
+                            cursor = data.cursor?.id,
+                            cursorTime = data.cursor?.time,
+                            hasMore = data.cursor?.isEnd != true && loaded.isNotEmpty()
+                        )
+                    }
                 },
                 onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = error.message ?: "加载失败")
+                    if (error is CancellationException) throw error
+                    if (version != requestVersion) return@fold
+                    _uiState.update { it.copy(isLoading = false, error = error.message ?: "加载失败") }
                 }
             )
         }
@@ -105,21 +123,27 @@ class AtMeViewModel : ViewModel() {
     fun refresh() {
         listJob?.cancel()
         moreJob?.cancel()
-        requestVersion++
+        val version = ++requestVersion
         listJob = accountRequests.launch {
-            _uiState.value = _uiState.value.copy(isRefreshing = true, isLoadingMore = false, error = null, loadMoreError = null)
+            _uiState.update { it.copy(isRefreshing = true, isLoadingMore = false, error = null, loadMoreError = null) }
             MessageRepository.getAtFeed().fold(
                 onSuccess = { data ->
-                    _uiState.value = _uiState.value.copy(
-                        isRefreshing = false,
-                        items = data.items.orEmpty(),
-                        cursor = data.cursor?.id,
-                        cursorTime = data.cursor?.time,
-                        hasMore = data.cursor?.isEnd != true && !data.items.isNullOrEmpty()
-                    )
+                    if (version != requestVersion) return@fold
+                    val loaded = data.items.orEmpty().toImmutableList()
+                    _uiState.update {
+                        it.copy(
+                            isRefreshing = false,
+                            items = loaded,
+                            cursor = data.cursor?.id,
+                            cursorTime = data.cursor?.time,
+                            hasMore = data.cursor?.isEnd != true && loaded.isNotEmpty()
+                        )
+                    }
                 },
                 onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(isRefreshing = false, error = error.message ?: "刷新失败")
+                    if (error is CancellationException) throw error
+                    if (version != requestVersion) return@fold
+                    _uiState.update { it.copy(isRefreshing = false, error = error.message ?: "刷新失败") }
                 }
             )
         }
@@ -129,42 +153,57 @@ class AtMeViewModel : ViewModel() {
         val current = _uiState.value
         if (current.isLoadingMore || current.isLoading || current.isRefreshing || !current.hasMore) return
         val version = requestVersion
+        val requestCursor = current.cursor
+        val requestCursorTime = current.cursorTime
         moreJob = accountRequests.launch {
-            _uiState.value = current.copy(isLoadingMore = true, loadMoreError = null)
-            MessageRepository.getAtFeed(cursor = current.cursor, cursorTime = current.cursorTime).fold(
+            _uiState.update { it.copy(isLoadingMore = true, loadMoreError = null) }
+            MessageRepository.getAtFeed(cursor = requestCursor, cursorTime = requestCursorTime).fold(
                 onSuccess = { data ->
                     if (version != requestVersion) return@fold
-                    _uiState.value = _uiState.value.copy(
-                        isLoadingMore = false,
-                        items = (_uiState.value.items + data.items.orEmpty()).distinctBy { it.id },
-                        cursor = data.cursor?.id,
-                        cursorTime = data.cursor?.time,
-                        hasMore = data.cursor?.isEnd != true && !data.items.isNullOrEmpty() && (data.cursor?.id != current.cursor || data.cursor?.time != current.cursorTime)
-                    )
+                    _uiState.update { state ->
+                        state.copy(
+                            isLoadingMore = false,
+                            items = (state.items + data.items.orEmpty()).distinctBy { it.id }.toImmutableList(),
+                            cursor = data.cursor?.id,
+                            cursorTime = data.cursor?.time,
+                            hasMore = data.cursor?.isEnd != true && !data.items.isNullOrEmpty() && (data.cursor?.id != requestCursor || data.cursor?.time != requestCursorTime)
+                        )
+                    }
                 },
                 onFailure = { error ->
+                    if (error is CancellationException) throw error
                     if (version != requestVersion) return@fold
-                    _uiState.value = _uiState.value.copy(isLoadingMore = false, loadMoreError = error.message ?: "加载更多失败")
+                    _uiState.update { it.copy(isLoadingMore = false, loadMoreError = error.message ?: "加载更多失败") }
                 }
             )
         }
     }
 
     fun remove(id: Long) {
-        if (_uiState.value.operationBusy) return
-        _uiState.value = _uiState.value.copy(operationBusy = true, operationError = null)
-        accountRequests.launch {
-            MessageRepository.deleteFeedItem(type = 2, id = id).onSuccess {
-                _uiState.value = _uiState.value.copy(
-                    items = _uiState.value.items.filterNot { it.id == id }
-                )
-            }.onFailure { error ->
-                _uiState.value = _uiState.value.copy(operationError = error.message ?: "操作失败")
+        var started = false
+        _uiState.update { current ->
+            if (current.operationBusy) current
+            else {
+                started = true
+                current.copy(operationBusy = true)
             }
-            _uiState.value = _uiState.value.copy(operationBusy = false)
+        }
+        if (!started) return
+        accountRequests.launch {
+            try {
+                MessageRepository.deleteFeedItem(type = 2, id = id).onSuccess {
+                    _uiState.update { state ->
+                        state.copy(items = state.items.filterNot { it.id == id }.toImmutableList())
+                    }
+                }.onFailure { error ->
+                    if (error is CancellationException) throw error
+                    _events.trySend(error.message ?: "操作失败")
+                }
+            } finally {
+                _uiState.update { it.copy(operationBusy = false) }
+            }
         }
     }
-    fun clearOperationError() { _uiState.value = _uiState.value.copy(operationError = null) }
 
 }
 
@@ -176,8 +215,13 @@ fun AtMeScreen(
     onOpenSpace: (Long) -> Unit,
     viewModel: AtMeViewModel = viewModel(key = "message_AtMe_" + TokenManager.accountIdentity.collectAsStateWithLifecycle().value)
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    uiState.operationError?.let { error -> MessageConfirmDialog("操作失败", error, onDismiss = viewModel::clearOperationError, onConfirm = viewModel::clearOperationError) }
+    LaunchedEffect(viewModel, context) {
+        viewModel.events.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     AppScaffold(
         blurContentReady = !uiState.isLoading,

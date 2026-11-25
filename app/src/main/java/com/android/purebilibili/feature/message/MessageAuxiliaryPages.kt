@@ -160,7 +160,7 @@ internal fun MessageAuxiliaryPage(
     var pendingWord by remember(page, account) { mutableStateOf<String?>(null) }
     var pendingUnblock by remember(page, account) { mutableStateOf<FollowingUser?>(null) }
     var search by remember(page, account) { mutableStateOf("") }
-    BackHandler(onBack = onBack)
+    com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = true) { onBack() }
     Box(modifier) {
         MessageAppScaffold(topBar = {
             AppTopBar(title = state.title, navigationIcon = { AppIconButton(onClick = onBack) { AppIcon(rememberAppBackIcon(), "返回") } })

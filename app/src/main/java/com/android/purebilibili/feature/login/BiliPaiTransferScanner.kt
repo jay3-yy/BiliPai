@@ -114,7 +114,10 @@ fun BiliPaiTransferScanner(
             }
             when {
                 text == null -> currentOnError("未能识别图片中的二维码，请选择清晰、完整的二维码截图")
-                acceptAnyQr || text.startsWith("bilipai://transfer/") || parseBilibiliLoginQr(text) != null ->
+                acceptAnyQr ||
+                    text.startsWith("bilipai://transfer/") ||
+                    text.startsWith("bilipai://ext/") ||
+                    parseBilibiliLoginQr(text) != null ->
                     currentOnCode(text)
                 else -> currentOnError("已识别二维码，但它不是受支持的 B 站登录或哔哩派转移二维码")
             }

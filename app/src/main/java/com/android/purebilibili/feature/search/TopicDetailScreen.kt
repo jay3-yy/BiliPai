@@ -229,8 +229,11 @@ fun TopicDetailScreen(
                         }
                         if (state.sortOptions.isNotEmpty()) {
                             item(key = "topic_sort") {
+                                val sortLabels = remember(state.sortOptions) {
+                                    state.sortOptions.map { it.sortName.ifBlank { "动态" } }
+                                }
                                 TopicSortControl(
-                                    options = state.sortOptions.map { it.sortName.ifBlank { "动态" } },
+                                    options = sortLabels,
                                     selectedIndex = state.sortOptions
                                         .indexOfFirst { it.sortBy == state.selectedSortBy }
                                         .coerceAtLeast(0),
@@ -244,6 +247,25 @@ fun TopicDetailScreen(
                                 )
                             }
                         }
+                        val cardActions = DynamicCardActions(
+                            navigation = DynamicCardNavigationActions(
+                                onVideoClick = onVideoClick,
+                                onBangumiClick = onBangumiClick,
+                                onUserClick = onUserClick,
+                                onTopicClick = onTopicClick,
+                                onTopicKeywordClick = onTopicKeywordClick,
+                                onLiveClick = onLiveClick,
+                                onMusicClick = onMusicClick,
+                                onCollectionClick = onCollectionClick,
+                                onCourseClick = onCourseClick,
+                                onArticleClick = onArticleClick,
+                                onDynamicDetailClick = onDynamicDetailClick,
+                                onMatchClick = onMatchClick,
+                            ),
+                            interaction = DynamicCardInteractionActions(
+                                onCommentClick = onDynamicDetailClick,
+                            ),
+                        )
                         itemsIndexed(
                             state.items,
                             key = { _, item -> item.id_str },
@@ -253,25 +275,7 @@ fun TopicDetailScreen(
                                 DynamicCardV2(
                                     item = item,
                                     gifImageLoader = context.imageLoader,
-                                    actions = DynamicCardActions(
-                                        navigation = DynamicCardNavigationActions(
-                                            onVideoClick = onVideoClick,
-                                            onBangumiClick = onBangumiClick,
-                                            onUserClick = onUserClick,
-                                            onTopicClick = onTopicClick,
-                                            onTopicKeywordClick = onTopicKeywordClick,
-                                            onLiveClick = onLiveClick,
-                                            onMusicClick = onMusicClick,
-                                            onCollectionClick = onCollectionClick,
-                                            onCourseClick = onCourseClick,
-                                            onArticleClick = onArticleClick,
-                                            onDynamicDetailClick = onDynamicDetailClick,
-                                            onMatchClick = onMatchClick,
-                                        ),
-                                        interaction = DynamicCardInteractionActions(
-                                            onCommentClick = onDynamicDetailClick,
-                                        ),
-                                    ),
+                                    actions = cardActions,
                                 )
                             }
                             if (index == state.items.size - 3 && state.hasMore && !state.isLoadingMore) {

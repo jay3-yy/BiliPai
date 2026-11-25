@@ -121,7 +121,9 @@ fun CommentDetailScreen(
     }
 
     // 只有页内会话需要拦截；整页返回交给导航宿主提供跟手预览。
-    BackHandler(enabled = subReplyState.conversationAnchor != null && subReplyState.rootReply != null) {
+    com.android.purebilibili.core.ui.LocalNavigationBackHandler(
+        enabled = subReplyState.conversationAnchor != null && subReplyState.rootReply != null
+    ) {
         viewModel.closeConversation()
     }
 

@@ -329,6 +329,7 @@ internal fun resolvePartitionSideRailIndicatorHorizontalPadding(
     )
 }
 
+@androidx.compose.runtime.Immutable
 data class PartitionFeedUiState(
     val selectedPartition: PartitionCategory = partitionTabs.first(),
     val videos: List<VideoItem> = emptyList(),
@@ -454,6 +455,7 @@ class PartitionFeedViewModel : ViewModel() {
                     }
                 }
                 .onFailure { error ->
+                    if (error is kotlinx.coroutines.CancellationException) throw error
                     _uiState.update {
                         it.copy(
                             isLoading = false,

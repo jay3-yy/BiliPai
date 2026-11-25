@@ -79,7 +79,13 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * [保留] 原 Web 端二维码登录 (作为备用)
      */
+    private var webPollJob: kotlinx.coroutines.Job? = null
+    private var tvPollJob: kotlinx.coroutines.Job? = null
+
     fun loadWebQrCode() {
+        webPollJob?.cancel()
+        tvPollJob?.cancel()
+        isTvPolling = false
         isPolling = true
         viewModelScope.launch {
             try {
@@ -101,6 +107,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 _state.value = LoginState.QrCode(bitmap)
 
                 startPolling()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 com.android.purebilibili.core.util.Logger.e("LoginDebug", "获取二维码失败", e)
                 _state.value = LoginState.Error(e.message ?: "网络错误")
@@ -111,7 +119,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private var currentBitmap: Bitmap? = null //  保存当前二维码用于 Scanned 状态
 
     private fun startPolling() {
-        viewModelScope.launch {
+        webPollJob?.cancel()
+        webPollJob = viewModelScope.launch {
             Logger.d("LoginDebug", "3. 开始轮询...")
             while (isPolling) {
                 delay(2000) //  缩短轮询间隔，更快响应
@@ -207,6 +216,10 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     fun stopPolling() {
         isPolling = false
         isTvPolling = false
+        webPollJob?.cancel()
+        webPollJob = null
+        tvPollJob?.cancel()
+        tvPollJob = null
     }
 
     fun showLoginError(message: String) {
@@ -1006,6 +1019,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     Logger.d("TvLogin", "获取 TV 二维码失败: code=${response.code}, msg=${response.message}")
                     _state.value = LoginState.Error("获取二维码失败: ${response.message}")
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 com.android.purebilibili.core.util.Logger.e("TvLogin", "获取 TV 二维码异常", e)
                 _state.value = LoginState.Error(e.message ?: "网络错误")
@@ -1017,7 +1032,9 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
      * 轮询 TV 登录状态
      */
     private fun startTvPolling() {
-        viewModelScope.launch {
+        webPollJob?.cancel()
+        tvPollJob?.cancel()
+        tvPollJob = viewModelScope.launch {
             Logger.d("TvLogin", "3. 开始 TV 轮询...")
             while (isTvPolling) {
                 delay(2000)
@@ -1093,6 +1110,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun stopTvPolling() {
         isTvPolling = false
+        tvPollJob?.cancel()
+        tvPollJob = null
     }
 
 }

@@ -46,8 +46,8 @@ class CategoryUiStateSingleSourceStructureTest {
             Regex("""_uiState\.update\s*\{""").findAll(source).count() >= 3,
             "expected multiple single-copy transactions via _uiState.update"
         )
-        // 成功回包时用整体赋值一次性发布，避免中间帧
-        assertTrue(source.contains("_uiState.value = nextState"))
+        // 成功回包时通过原子 CAS 一次性产出最新状态并写回缓存，避免中间帧与并发覆盖
+        assertTrue(source.contains("val nextState = _uiState.updateAndGet"))
     }
 
     @Test

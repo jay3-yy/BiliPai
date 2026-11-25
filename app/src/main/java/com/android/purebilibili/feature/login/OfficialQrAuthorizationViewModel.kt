@@ -10,6 +10,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 internal sealed interface QrAuthorizationState {
@@ -91,7 +92,9 @@ internal class OfficialQrAuthorizationViewModel : ViewModel() {
 
     @MainThread
     fun scannerFailed(message: String) {
-        if (_state.value == QrAuthorizationState.Idle) _state.value = QrAuthorizationState.Failed(message)
+        _state.update { current ->
+            if (current == QrAuthorizationState.Idle) QrAuthorizationState.Failed(message) else current
+        }
     }
 
     @MainThread

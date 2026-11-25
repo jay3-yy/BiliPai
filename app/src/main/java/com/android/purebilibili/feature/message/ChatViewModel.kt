@@ -4,6 +4,7 @@ package com.android.purebilibili.feature.message
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -18,6 +19,13 @@ import com.android.purebilibili.data.repository.MessageManagementRepository
 import com.android.purebilibili.data.model.response.EmotePackage
 import com.android.purebilibili.data.repository.MessageRepository
 import com.android.purebilibili.data.repository.VideoRepository
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,6 +44,7 @@ private const val MAX_PRIVATE_IMAGE_BYTES = 15 * 1024 * 1024
 /**
  * 视频预览信息 (用于链接预览)
  */
+@Immutable
 data class VideoPreviewInfo(
     val bvid: String,
     val title: String,
@@ -46,6 +55,7 @@ data class VideoPreviewInfo(
     val duration: Long = 0
 )
 
+@Immutable
 data class ChatUiState(
     val accountIdentity: AccountSessionIdentity = TokenManager.accountIdentity.value,
     val isLoading: Boolean = true,
@@ -53,8 +63,8 @@ data class ChatUiState(
     val isUploadingImage: Boolean = false,
     val isLoadingMore: Boolean = false,
     val withdrawingMessageKey: Long? = null,
-    val messages: List<PrivateMessageItem> = emptyList(),
-    val emoteInfos: List<EmoteInfo> = emptyList(),
+    val messages: ImmutableList<PrivateMessageItem> = persistentListOf(),
+    val emoteInfos: ImmutableList<EmoteInfo> = persistentListOf(),
     val hasMore: Boolean = false,
     val minSeqno: Long = 0,
     val messagesLoaded: Boolean = false,
@@ -62,10 +72,10 @@ data class ChatUiState(
     val error: String? = null,
     val refreshError: String? = null,
     val loadMoreError: String? = null,
-    val sendError: String? = null,
+    val sendNotice: UiTextEvent? = null,
+    val sessionControlError: UiTextEvent? = null,
     val sentText: String? = null,
-    val notice: String? = null,
-    val emotePackages: List<EmotePackage> = emptyList(),
+    val emotePackages: ImmutableList<EmotePackage> = persistentListOf(),
     val isEmoteLoading: Boolean = false,
     val emoteError: String? = null,
     val userInfo: UserBasicInfo? = null,
@@ -75,7 +85,7 @@ data class ChatUiState(
     val sessionControlInfo: MessageSessionControlInfo = MessageSessionControlInfo(),
     val isSessionControlLoading: Boolean = false,
     val isSessionControlUpdating: Boolean = false,
-    val videoPreviews: Map<String, VideoPreviewInfo> = emptyMap()  // bvid -> VideoPreviewInfo
+    val videoPreviews: ImmutableMap<String, VideoPreviewInfo> = persistentMapOf()  // bvid -> VideoPreviewInfo
 )
 
 class ChatViewModel(
@@ -86,6 +96,10 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
     private val accountRequests = AccountScopedRequests(viewModelScope)
+    private val eventIds = AtomicLong(0L)
+
+    private fun nextEvent(message: String): UiTextEvent =
+        UiTextEvent(id = eventIds.incrementAndGet(), message = message)
     private var messageLoadMutex = Mutex()
     private var readAckMutex = Mutex()
     private var latestMessagesJob: Job? = null
@@ -179,13 +193,14 @@ class ChatViewModel(
                     gapCursor = gapPage.min_seqno
                 }
                 if (!accountRequests.isCurrent(requestedIdentity)) return@withLock
+                val previewsSnapshot = videoPreviewCache.toImmutableMap()
                 _uiState.update { current ->
                     val replaceCursor = current.messages.isEmpty()
                     current.copy(
                         isLoading = false,
                         messagesLoaded = true,
-                        messages = mergeChatMessages(current.messages, incoming),
-                        emoteInfos = (current.emoteInfos + emotes).distinctBy { it.text },
+                        messages = mergeChatMessages(current.messages, incoming).toImmutableList(),
+                        emoteInfos = (current.emoteInfos + emotes).distinctBy { it.text }.toImmutableList(),
                         hasMore = if (replaceCursor) {
                             incoming.isNotEmpty() && data.has_more == 1 && data.min_seqno > 0L
                         } else current.hasMore,
@@ -193,7 +208,7 @@ class ChatViewModel(
                         error = null,
                         refreshError = null,
                         scrollToLatestVersion = current.scrollToLatestVersion + if (scrollToLatest) 1L else 0L,
-                        videoPreviews = videoPreviewCache.toMap(),
+                        videoPreviews = previewsSnapshot,
                     )
                 }
                 resolveChatReadSeqno(data.messages.orEmpty(), data.max_seqno)?.let { readSeqno ->
@@ -262,11 +277,9 @@ class ChatViewModel(
                         duration = viewInfo.pages.firstOrNull()?.duration ?: 0
                     )
                     videoPreviewCache[bvid] = preview
-                    
+                    val previewsSnapshot = videoPreviewCache.toImmutableMap()
                     // 更新 UI
-                    _uiState.value = _uiState.value.copy(
-                        videoPreviews = videoPreviewCache.toMap()
-                    )
+                    _uiState.update { it.copy(videoPreviews = previewsSnapshot) }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -330,8 +343,8 @@ class ChatViewModel(
                     val older = data.messages.orEmpty().reversed()
                     _uiState.update {
                         it.copy(
-                            messages = mergeChatMessages(older, it.messages),
-                            emoteInfos = (it.emoteInfos + data.e_infos.orEmpty()).distinctBy { emote -> emote.text },
+                            messages = mergeChatMessages(older, it.messages).toImmutableList(),
+                            emoteInfos = (it.emoteInfos + data.e_infos.orEmpty()).distinctBy { emote -> emote.text }.toImmutableList(),
                             hasMore = older.isNotEmpty() && data.has_more == 1 && data.min_seqno in 1L until cursor,
                             minSeqno = data.min_seqno,
                             loadMoreError = null,
@@ -354,7 +367,7 @@ class ChatViewModel(
      */
     fun sendMessage(content: String) {
         if (content.isBlank() || _uiState.value.isSending || _uiState.value.isUploadingImage) return
-        _uiState.update { it.copy(isSending = true, sendError = null) }
+        _uiState.update { it.copy(isSending = true, sendNotice = null) }
         
         accountRequests.launch {
             try {
@@ -368,7 +381,8 @@ class ChatViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(sendError = e.message ?: "发送失败") }
+                val event = nextEvent(e.message ?: "发送失败")
+                _uiState.update { it.copy(sendNotice = event) }
             } finally {
                 _uiState.update { it.copy(isSending = false) }
             }
@@ -383,64 +397,69 @@ class ChatViewModel(
         if (_uiState.value.isUploadingImage || _uiState.value.isSending) return
 
         accountRequests.launch {
-            _uiState.value = _uiState.value.copy(isUploadingImage = true, sendError = null)
+            _uiState.update { it.copy(isUploadingImage = true, sendNotice = null) }
+            try {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        val bytes = readPrivateImageBytes(context, imageUri)
 
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    val bytes = readPrivateImageBytes(context, imageUri)
+                        if (bytes.isEmpty()) {
+                            error("图片内容为空")
+                        }
 
-                    if (bytes.isEmpty()) {
-                        error("图片内容为空")
+                        val mimeType = context.contentResolver.getType(imageUri) ?: "image/jpeg"
+                        val fileName = queryDisplayName(context, imageUri)
+                            ?: "message_${System.currentTimeMillis()}.jpg"
+
+                        val uploadData = MessageRepository.uploadPrivateImage(
+                            fileName = fileName,
+                            mimeType = mimeType,
+                            bytes = bytes
+                        ).getOrElse { throw it }
+
+                        MessageRepository.sendImageMessage(
+                            receiverId = talkerId,
+                            imageUrl = uploadData.imageUrl,
+                            width = uploadData.imageWidth,
+                            height = uploadData.imageHeight,
+                            imageType = mimeType.substringAfter('/', "jpg"),
+                            size = uploadData.imgSize,
+                            receiverType = sessionType
+                        ).getOrElse { throw it }
                     }
-
-                    val mimeType = context.contentResolver.getType(imageUri) ?: "image/jpeg"
-                    val fileName = queryDisplayName(context, imageUri)
-                        ?: "message_${System.currentTimeMillis()}.jpg"
-
-                    val uploadData = MessageRepository.uploadPrivateImage(
-                        fileName = fileName,
-                        mimeType = mimeType,
-                        bytes = bytes
-                    ).getOrElse { throw it }
-
-                    MessageRepository.sendImageMessage(
-                        receiverId = talkerId,
-                        imageUrl = uploadData.imageUrl,
-                        width = uploadData.imageWidth,
-                        height = uploadData.imageHeight,
-                        imageType = mimeType.substringAfter('/', "jpg"),
-                        size = uploadData.imgSize,
-                        receiverType = sessionType
-                    ).getOrElse { throw it }
-                }
-            }.fold(
-                onSuccess = {
-                    _uiState.value = _uiState.value.copy(isUploadingImage = false)
-                    loadMessages(scrollToLatest = true)
-                },
-                onFailure = { error ->
-                    if (error is CancellationException) throw error
-                    _uiState.value = _uiState.value.copy(
-                        isUploadingImage = false,
-                        sendError = error.message ?: "图片发送失败"
-                    )
-                }
-            )
+                }.fold(
+                    onSuccess = {
+                        loadMessages(scrollToLatest = true)
+                    },
+                    onFailure = { error ->
+                        if (error is CancellationException) throw error
+                        val event = nextEvent(error.message ?: "图片发送失败")
+                        _uiState.update {
+                            it.copy(sendNotice = event)
+                        }
+                    }
+                )
+            } finally {
+                _uiState.update { it.copy(isUploadingImage = false) }
+            }
         }
     }
 
     fun loadSessionControlInfo() {
         accountRequests.launch {
-            _uiState.value = _uiState.value.copy(isSessionControlLoading = true)
+            _uiState.update { it.copy(isSessionControlLoading = true) }
             MessageRepository.getSessionControlInfo(talkerId, sessionType)
                 .onSuccess { info ->
-                    _uiState.value = _uiState.value.copy(
-                        sessionControlInfo = info,
-                        isSessionControlLoading = false
-                    )
+                    _uiState.update {
+                        it.copy(
+                            sessionControlInfo = info,
+                            isSessionControlLoading = false
+                        )
+                    }
                 }
-                .onFailure {
-                    _uiState.value = _uiState.value.copy(isSessionControlLoading = false)
+                .onFailure { error ->
+                    if (error is CancellationException) throw error
+                    _uiState.update { it.copy(isSessionControlLoading = false) }
                 }
         }
     }
@@ -450,8 +469,14 @@ class ChatViewModel(
         _uiState.update { it.copy(isEmoteLoading = true, emoteError = null) }
         accountRequests.launch {
             MessageManagementRepository.emotes().fold(
-                onSuccess = { packages -> _uiState.update { it.copy(isEmoteLoading = false, emotePackages = packages) } },
-                onFailure = { error -> _uiState.update { it.copy(isEmoteLoading = false, emoteError = error.message ?: "加载表情失败") } },
+                onSuccess = { packages ->
+                    val immutablePackages = packages.toImmutableList()
+                    _uiState.update { it.copy(isEmoteLoading = false, emotePackages = immutablePackages) }
+                },
+                onFailure = { error ->
+                    if (error is CancellationException) throw error
+                    _uiState.update { it.copy(isEmoteLoading = false, emoteError = error.message ?: "加载表情失败") }
+                },
             )
         }
     }
@@ -482,8 +507,20 @@ class ChatViewModel(
         _uiState.update { it.copy(isReporting = true, reportError = null) }
         accountRequests.launch {
             MessageManagementRepository.report(accusedUid, messageKey, reason, description).fold(
-                onSuccess = { _uiState.update { it.copy(isReporting = false, reportSuccessVersion = it.reportSuccessVersion + 1, notice = "举报已提交") } },
-                onFailure = { error -> _uiState.update { it.copy(isReporting = false, reportError = error.message ?: "举报失败") } },
+                onSuccess = {
+                    val event = nextEvent("举报已提交")
+                    _uiState.update {
+                        it.copy(
+                            isReporting = false,
+                            reportSuccessVersion = it.reportSuccessVersion + 1,
+                            sendNotice = event,
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    if (error is CancellationException) throw error
+                    _uiState.update { it.copy(isReporting = false, reportError = error.message ?: "举报失败") }
+                },
             )
         }
     }
@@ -514,19 +551,23 @@ class ChatViewModel(
     private fun updateSessionControl(action: suspend () -> Result<Unit>) {
         if (_uiState.value.isSessionControlUpdating) return
         accountRequests.launch {
-            _uiState.value = _uiState.value.copy(isSessionControlUpdating = true, sendError = null)
-            action().fold(
-                onSuccess = {
-                    _uiState.value = _uiState.value.copy(isSessionControlUpdating = false)
-                    loadSessionControlInfo()
-                },
-                onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isSessionControlUpdating = false,
-                        sendError = error.message ?: "更新会话设置失败"
-                    )
-                }
-            )
+            _uiState.update { it.copy(isSessionControlUpdating = true, sessionControlError = null) }
+            try {
+                action().fold(
+                    onSuccess = {
+                        loadSessionControlInfo()
+                    },
+                    onFailure = { error ->
+                        if (error is CancellationException) throw error
+                        val event = nextEvent(error.message ?: "更新会话设置失败")
+                        _uiState.update {
+                            it.copy(sessionControlError = event)
+                        }
+                    }
+                )
+            } finally {
+                _uiState.update { it.copy(isSessionControlUpdating = false) }
+            }
         }
     }
 
@@ -534,32 +575,39 @@ class ChatViewModel(
         if (message.msg_key <= 0L || message.msg_status == 1 || _uiState.value.withdrawingMessageKey != null) return
 
         accountRequests.launch {
-            _uiState.value = _uiState.value.copy(
-                withdrawingMessageKey = message.msg_key,
-                sendError = null
-            )
-
-            MessageRepository.withdrawMessage(
-                receiverId = talkerId,
-                msgKey = message.msg_key,
-                receiverType = sessionType
-            ).fold(
-                onSuccess = {
-                    _uiState.value = _uiState.value.copy(
-                        withdrawingMessageKey = null,
-                        messages = ChatMessageMutationPolicy.markWithdrawn(
-                            messages = _uiState.value.messages,
-                            msgKey = message.msg_key
-                        )
-                    )
-                },
-                onFailure = { e ->
-                    _uiState.value = _uiState.value.copy(
-                        withdrawingMessageKey = null,
-                        sendError = e.message ?: "撤回失败"
-                    )
-                }
-            )
+            _uiState.update {
+                it.copy(
+                    withdrawingMessageKey = message.msg_key,
+                    sendNotice = null
+                )
+            }
+            try {
+                MessageRepository.withdrawMessage(
+                    receiverId = talkerId,
+                    msgKey = message.msg_key,
+                    receiverType = sessionType
+                ).fold(
+                    onSuccess = {
+                        _uiState.update { current ->
+                            current.copy(
+                                messages = ChatMessageMutationPolicy.markWithdrawn(
+                                    messages = current.messages,
+                                    msgKey = message.msg_key
+                                ).toImmutableList()
+                            )
+                        }
+                    },
+                    onFailure = { e ->
+                        if (e is CancellationException) throw e
+                        val event = nextEvent(e.message ?: "撤回失败")
+                        _uiState.update {
+                            it.copy(sendNotice = event)
+                        }
+                    }
+                )
+            } finally {
+                _uiState.update { it.copy(withdrawingMessageKey = null) }
+            }
         }
     }
     
@@ -582,17 +630,33 @@ class ChatViewModel(
                 result.onSuccess {
                     lastReadSeqno = maxOf(lastReadSeqno, targetSeqno)
                 }.onFailure { error ->
+                    if (error is CancellationException) throw error
                     _uiState.update { it.copy(refreshError = "标记已读失败：${error.message ?: "请稍后重试"}") }
                 }
             }
         }
     }
     
-    /**
-     * 清除发送错误
-     */
-    fun clearSendError() {
-        _uiState.value = _uiState.value.copy(sendError = null, notice = null)
+    fun consumeSendNotice(id: Long) {
+        _uiState.update { if (it.sendNotice?.id == id) it.copy(sendNotice = null) else it }
+    }
+
+    fun consumeSessionControlError(id: Long) {
+        _uiState.update { if (it.sessionControlError?.id == id) it.copy(sessionControlError = null) else it }
+    }
+
+    fun consumeChatFeedback(id: Long) {
+        _uiState.update { state ->
+            when {
+                state.sendNotice?.id == id -> state.copy(sendNotice = null)
+                state.sessionControlError?.id == id -> state.copy(sessionControlError = null)
+                else -> state
+            }
+        }
+    }
+
+    fun clearSessionControlError() {
+        _uiState.update { if (it.sessionControlError != null) it.copy(sessionControlError = null) else it }
     }
 
     private fun queryDisplayName(context: Context, uri: Uri): String? {

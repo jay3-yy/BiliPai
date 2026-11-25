@@ -15,10 +15,12 @@ import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.PersonRemove
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import android.widget.Toast
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -38,10 +40,16 @@ fun FansListScreen(mid: Long, onBack: () -> Unit, onUserClick: (Long) -> Unit, o
         key = "fans_$mid",
         factory = viewModelFactory { initializer { FansListViewModel(mid) } },
     )
+    val context = LocalContext.current
     val identity by com.android.purebilibili.core.store.TokenManager.accountIdentity.collectAsStateWithLifecycle()
     val rawState by model.state.collectAsStateWithLifecycle()
     val state = rawState.takeIf { it.identity == identity } ?: FansListState(identity = identity, loading = true)
     LaunchedEffect(model) { model.load() }
+    LaunchedEffect(model, context) {
+        model.events.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
     FansListContent(state, onBack, onUserClick, onFansClick, onRefresh = { model.load(true) }, onLoadMore = { model.load() }, onRemoveFan = model::removeFan)
 }
 
@@ -75,7 +83,6 @@ private fun FansListContent(
             contentPadding = PaddingValues(bottom = 32.dp),
         ) {
             item { AppText(state.total?.let { "共 $it 位粉丝" } ?: "粉丝数量待加载", modifier = Modifier.padding(16.dp)) }
-            state.operationMessage?.let { message -> item(key = "operation_message") { AppText(message, Modifier.padding(16.dp)) } }
             items(state.users, key = { it.mid }) { user ->
                 val userControl = rememberSystemWindowNavigationControl(
                     BiliPaiNavKey.Space(user.mid),

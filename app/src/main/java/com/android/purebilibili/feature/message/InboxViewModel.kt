@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.message
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.coroutines.AccountScopedRequests
@@ -12,6 +13,13 @@ import com.android.purebilibili.data.repository.ImSession
 import com.android.purebilibili.data.repository.MessageImRepository
 import com.android.purebilibili.data.repository.MessageRepository
 import com.android.purebilibili.data.repository.MessageReadEvent
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,32 +27,40 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@Immutable
+data class UiTextEvent(
+    val id: Long,
+    val message: String,
+)
+
+@Immutable
 data class InboxUiState(
     val accountIdentity: AccountSessionIdentity = TokenManager.accountIdentity.value,
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
-    val sessions: List<SessionItem> = emptyList(),
-    val entries: Map<String, ImSession> = emptyMap(),
+    val sessions: ImmutableList<SessionItem> = persistentListOf(),
+    val entries: ImmutableMap<String, ImSession> = persistentMapOf(),
     val feedUnreadData: MessageFeedUnreadData? = null,
     val hasMore: Boolean = false,
     val isLoadingMore: Boolean = false,
     val isBatchOperating: Boolean = false,
     val error: String? = null,
     val loadMoreError: String? = null,
-    val operationError: String? = null,
+    val operationError: UiTextEvent? = null,
     val page: Int = 1,
     val endTs: Long = 0,
-    val userInfoMap: Map<Long, UserBasicInfo> = emptyMap(),
+    val userInfoMap: ImmutableMap<Long, UserBasicInfo> = persistentMapOf(),
     val pageType: Int = 1,
     val title: String = "消息",
-    val menu: List<ImMenuItem> = emptyList(),
-    val outside: List<ImMenuItem> = emptyList(),
+    val menu: ImmutableList<ImMenuItem> = persistentListOf(),
+    val outside: ImmutableList<ImMenuItem> = persistentListOf(),
 )
 
 class InboxViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(InboxUiState())
     val uiState = _uiState.asStateFlow()
     private val requests = AccountScopedRequests(viewModelScope)
+    private val eventIds = AtomicLong(0L)
     private var generation = 0L
     private var listJob: Job? = null
     private var moreJob: Job? = null
@@ -85,12 +101,12 @@ class InboxViewModel : ViewModel() {
                 if (entry.item.talker_id == event.talkerId && entry.item.session_type == event.sessionType) {
                     mergeReadAck(entry, event.ackSeqno)
                 } else entry
-            }
+            }.toImmutableMap()
             state.copy(
                 entries = entries,
                 sessions = state.sessions.map { session ->
                     entries[InboxSessionPaginationPolicy.resolveSessionKey(session)]?.item ?: session
-                },
+                }.toImmutableList(),
             )
         }
     }
@@ -111,11 +127,11 @@ class InboxViewModel : ViewModel() {
         return mergeReadAck(entry, _uiState.value.entries[key]?.item?.ack_seqno ?: 0L)
     }
 
-    private fun rememberSessionUsers(items: List<SessionItem>): Map<Long, UserBasicInfo> =
+    private fun rememberSessionUsers(items: List<SessionItem>): ImmutableMap<Long, UserBasicInfo> =
         items.mapNotNull { item ->
             val user = InboxUserInfoResolver.sessionUserInfo(item) ?: return@mapNotNull null
             MessageUserInfoLoader.remember(user)?.let { item.talker_id to it }
-        }.toMap()
+        }.toMap().toImmutableMap()
 
     fun openFolder(session: SessionItem): Boolean {
         val folder = entry(session)?.folderPage ?: return false
@@ -172,12 +188,16 @@ class InboxViewModel : ViewModel() {
                 result.fold(onSuccess = { data ->
                     pagination = data.pagination
                     val entries = data.sessions.distinctBy { it.key }.map(::retainReadAck)
-                    val items = entries.map { it.item }
+                    val items = entries.map { it.item }.toImmutableList()
+                    val entryMap = entries.associateBy { InboxSessionPaginationPolicy.resolveSessionKey(it.item) }.toImmutableMap()
+                    val userMap = rememberSessionUsers(items)
+                    val menuItems = data.menu.toImmutableList()
+                    val outsideItems = data.outside.toImmutableList()
                     _uiState.update { it.copy(
                         isLoading = false, isRefreshing = false, isBatchOperating = false,
-                        sessions = items, entries = entries.associateBy { InboxSessionPaginationPolicy.resolveSessionKey(it.item) },
-                        userInfoMap = rememberSessionUsers(items),
-                        menu = data.menu, outside = data.outside, hasMore = data.hasMore,
+                        sessions = items, entries = entryMap,
+                        userInfoMap = userMap,
+                        menu = menuItems, outside = outsideItems, hasMore = data.hasMore,
                         page = 1, endTs = it.endTs + 1,
                     ) }
                 }, onFailure = { error ->
@@ -203,9 +223,9 @@ class InboxViewModel : ViewModel() {
                     InboxSessionPaginationPolicy.resolveSessionKey(retained.item) to retained
                 }
                 _uiState.update { state ->
-                    val entries = state.entries + incoming
+                    val entries = (state.entries + incoming).toImmutableMap()
                     val orderedKeys = (state.sessions.map(InboxSessionPaginationPolicy::resolveSessionKey) + incoming.keys).distinct()
-                    val items = orderedKeys.mapNotNull { entries[it]?.item }
+                    val items = orderedKeys.mapNotNull { entries[it]?.item }.toImmutableList()
                     state.copy(
                         isLoadingMore = false, sessions = items, entries = entries,
                         userInfoMap = rememberSessionUsers(items),
@@ -224,7 +244,13 @@ class InboxViewModel : ViewModel() {
         _uiState.update { it.copy(isBatchOperating = true, operationError = null) }
         requests.launch {
             action().fold(onSuccess = { if (version == generation) refresh() }, onFailure = { error ->
-                if (version == generation) _uiState.update { it.copy(isBatchOperating = false, operationError = error.message ?: "操作失败") }
+                if (version == generation) {
+                    val errorEvent = UiTextEvent(
+                        id = eventIds.incrementAndGet(),
+                        message = error.message ?: "操作失败",
+                    )
+                    _uiState.update { it.copy(isBatchOperating = false, operationError = errorEvent) }
+                }
             })
         }
     }
@@ -240,5 +266,7 @@ class InboxViewModel : ViewModel() {
     fun toggleDnd(session: SessionItem) = operate { MessageRepository.setSessionDnd(session.talker_id, session.session_type, session.is_dnd != 1) }
     fun toggleIntercept(session: SessionItem) = operate { MessageRepository.setSessionIntercept(session.talker_id, session.is_intercept != 1) }
     fun clearError() { _uiState.update { it.copy(error = null) } }
-    fun clearOperationError() { _uiState.update { it.copy(operationError = null) } }
+    fun consumeOperationError(id: Long) {
+        _uiState.update { if (it.operationError?.id == id) it.copy(operationError = null) else it }
+    }
 }

@@ -470,11 +470,12 @@ private fun SearchKeywordSection(
         )
         when (sectionMode) {
             SearchLandingSectionMode.CONTENT -> {
+                val rows = remember(items, safeColumns) { items.chunked(safeColumns) }
                 Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
                 Column(
                     verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)
                 ) {
-                    items.chunked(safeColumns).forEach { rowItems ->
+                    rows.forEach { rowItems ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)

@@ -84,8 +84,15 @@ import com.android.purebilibili.feature.personal.PERSONAL_LIST_POSTER_ASPECT_RAT
 import com.android.purebilibili.feature.personal.PersonalMediaCardFrame
 import com.android.purebilibili.core.coroutines.AccountScopedRequests
 import com.android.purebilibili.core.store.TokenManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -93,9 +100,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+@androidx.compose.runtime.Immutable
 data class FavoriteCategoryUiState(
     val section: FavoriteSection = FavoriteSection.BANGUMI,
-    val items: List<FavoriteCategoryItem> = emptyList(),
+    val items: ImmutableList<FavoriteCategoryItem> = persistentListOf(),
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val isRefreshing: Boolean = false,
@@ -104,7 +112,7 @@ data class FavoriteCategoryUiState(
     val hasMore: Boolean = false,
     val pgcStatus: FavoritePgcStatus = FavoritePgcStatus.WATCHING,
     val publishedNotes: Boolean = false,
-    val selectedIds: Set<Long> = emptySet(),
+    val selectedIds: ImmutableSet<Long> = persistentSetOf(),
     val isSelectingPgc: Boolean = false,
     val isUpdatingPgc: Boolean = false,
 ) {
@@ -130,7 +138,7 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
             loadGeneration += 1L
             pgcLists.clear()
             pgcListsWithShiftedPages.clear()
-            _uiState.value = FavoriteCategoryUiState(section = _uiState.value.section)
+            _uiState.update { FavoriteCategoryUiState(section = it.section) }
             if (hasSelectedSection) load(reset = true)
         }
     }
@@ -141,12 +149,14 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
         hasSelectedSection = true
         pgcLists.clear()
         pgcListsWithShiftedPages.clear()
-        _uiState.value = FavoriteCategoryUiState(
-            section = section,
-            pgcStatus = _uiState.value.pgcStatus,
-            publishedNotes = _uiState.value.publishedNotes,
-            isLoading = true,
-        )
+        _uiState.update {
+            FavoriteCategoryUiState(
+                section = section,
+                pgcStatus = it.pgcStatus,
+                publishedNotes = it.publishedNotes,
+                isLoading = true,
+            )
+        }
         load(reset = true)
     }
 
@@ -159,7 +169,7 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
             pgcLists[state.pgcStatus] = state.copy(
                 isLoadingMore = false,
                 isRefreshing = false,
-                selectedIds = emptySet(),
+                selectedIds = persistentSetOf(),
                 isSelectingPgc = false,
             )
         }
@@ -173,7 +183,7 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
 
     fun selectPublishedNotes(published: Boolean) {
         if (_uiState.value.publishedNotes == published) return
-        _uiState.update { it.copy(publishedNotes = published, selectedIds = emptySet()) }
+        _uiState.update { it.copy(publishedNotes = published, selectedIds = persistentSetOf()) }
         load(reset = true)
     }
 
@@ -197,7 +207,7 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
         if (id <= 0L || _uiState.value.isUpdatingPgc) return
         _uiState.update { state ->
             state.copy(
-                selectedIds = if (id in state.selectedIds) state.selectedIds - id else state.selectedIds + id,
+                selectedIds = (if (id in state.selectedIds) state.selectedIds - id else state.selectedIds + id).toImmutableSet(),
                 isSelectingPgc = state.isPgc,
             )
         }
@@ -207,15 +217,15 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
         if (_uiState.value.isUpdatingPgc) return
         _uiState.update { state ->
             state.copy(
-                selectedIds = if (state.selectedIds.containsAll(visibleIds)) {
+                selectedIds = (if (state.selectedIds.containsAll(visibleIds)) {
                     state.selectedIds - visibleIds
-                } else state.selectedIds + visibleIds,
+                } else state.selectedIds + visibleIds).toImmutableSet(),
             )
         }
     }
 
     fun clearSelection() {
-        _uiState.update { it.copy(selectedIds = emptySet(), isSelectingPgc = false) }
+        _uiState.update { it.copy(selectedIds = persistentSetOf(), isSelectingPgc = false) }
     }
 
     fun remove(item: FavoriteCategoryItem) {
@@ -236,7 +246,7 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
             ensureActive()
             if (!accountRequests.isCurrent(identity) || generation != loadGeneration) return@launch
             if (result.isSuccess) {
-                _uiState.update { it.copy(items = it.items.filterNot { candidate -> candidate.id == item.id }) }
+                _uiState.update { it.copy(items = it.items.filterNot { candidate -> candidate.id == item.id }.toImmutableList()) }
             } else {
                 _uiState.update { it.copy(error = result.exceptionOrNull()?.message ?: "移除失败") }
             }
@@ -264,8 +274,8 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
             if (failures == 0) {
                 _uiState.update {
                     it.copy(
-                        items = it.items.filterNot { item -> item.id in state.selectedIds },
-                        selectedIds = emptySet(),
+                        items = it.items.filterNot { item -> item.id in state.selectedIds }.toImmutableList(),
+                        selectedIds = persistentSetOf(),
                     )
                 }
             } else {
@@ -300,39 +310,50 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
         val identity = accountRequests.identity
         _uiState.update { it.copy(isUpdatingPgc = true) }
         accountRequests.launch {
-            val result = request()
+            val result = try {
+                request()
+            } catch (e: CancellationException) {
+                if (accountRequests.isCurrent(identity)) {
+                    _uiState.update { current -> current.copy(isUpdatingPgc = false) }
+                }
+                throw e
+            }
             ensureActive()
             if (!accountRequests.isCurrent(identity)) return@launch
             result.fold(
                 onSuccess = {
                     loadJob?.cancel()
                     loadGeneration++
-                    val current = _uiState.value
                     val movedItems = state.items.filter { it.id in ids }
                     val target = targetStatus?.let(pgcLists::get)
                     if (target != null) {
                         pgcLists[target.pgcStatus] = target.copy(
-                            items = movedItems + target.items.filterNot { it.id in ids },
+                            items = (movedItems + target.items.filterNot { it.id in ids }).toImmutableList(),
                             error = null,
                         )
                         if (target.hasMore) pgcListsWithShiftedPages.add(target.pgcStatus)
                     }
-                    if (current.hasMore) pgcListsWithShiftedPages.add(current.pgcStatus)
-                    val remaining = current.items.filterNot { it.id in ids }
-                    _uiState.value = current.copy(
-                        items = remaining,
-                        isLoading = false,
-                        isLoadingMore = false,
-                        isRefreshing = false,
-                        error = null,
-                        selectedIds = emptySet(),
-                        isSelectingPgc = false,
-                        isUpdatingPgc = false,
-                    )
-                    if (remaining.isEmpty() && current.hasMore) loadMore()
+                    val currentSnapshot = _uiState.value
+                    if (currentSnapshot.hasMore) pgcListsWithShiftedPages.add(currentSnapshot.pgcStatus)
+                    _uiState.update { latest ->
+                        val remaining = latest.items.filterNot { it.id in ids }.toImmutableList()
+                        latest.copy(
+                            items = remaining,
+                            isLoading = false,
+                            isLoadingMore = false,
+                            isRefreshing = false,
+                            error = null,
+                            selectedIds = persistentSetOf(),
+                            isSelectingPgc = false,
+                            isUpdatingPgc = false,
+                        )
+                    }
+                    val after = _uiState.value
+                    if (after.items.isEmpty() && after.hasMore) loadMore()
                     _messages.emit(successMessage)
                 },
                 onFailure = {
+                    if (it is CancellationException) throw it
                     _uiState.update { current -> current.copy(isUpdatingPgc = false) }
                     _messages.emit(it.message ?: "更新状态失败")
                 },
@@ -342,7 +363,7 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
 
     private fun load(reset: Boolean, refresh: Boolean = false) {
         if (TokenManager.sessDataCache.isNullOrEmpty()) {
-            _uiState.value = FavoriteCategoryUiState(section = _uiState.value.section)
+            _uiState.update { FavoriteCategoryUiState(section = it.section) }
             return
         }
         loadJob?.cancel()
@@ -353,8 +374,8 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
         val rebase = !reset && requestState.isPgc && requestState.pgcStatus in pgcListsWithShiftedPages
         _uiState.update {
             if (reset) it.copy(
-                items = if (refresh) it.items else emptyList(),
-                selectedIds = emptySet(),
+                items = if (refresh) it.items else persistentListOf(),
+                selectedIds = persistentSetOf(),
                 isSelectingPgc = false,
                 isLoading = !refresh,
                 isLoadingMore = false,
@@ -387,8 +408,8 @@ class FavoriteCategoryViewModel(application: Application) : AndroidViewModel(app
                     if (reset || rebase) pgcListsWithShiftedPages.remove(requestState.pgcStatus)
                     _uiState.update { current ->
                         current.copy(
-                            items = if (reset || rebase) page.items
-                            else (current.items + page.items).distinctBy { it.id },
+                            items = (if (reset || rebase) page.items
+                            else (current.items + page.items).distinctBy { it.id }).toImmutableList(),
                             isLoading = false,
                             isLoadingMore = false,
                             isRefreshing = false,
@@ -578,10 +599,18 @@ private fun FavoriteCategoryContent(
     onWebClick: (String, String) -> Unit,
     onCheeseClick: ((Long) -> Unit)? = null,
 ) {
-    val visibleItems = state.items.filter { item ->
-        query.isBlank() || item.title.contains(query, ignoreCase = true) ||
-            item.subtitle.contains(query, ignoreCase = true)
+    val visibleItems = remember(state.items, query) {
+        if (query.isBlank()) {
+            state.items
+        } else {
+            state.items.filter { item ->
+                item.title.contains(query, ignoreCase = true) ||
+                    item.subtitle.contains(query, ignoreCase = true)
+            }.toImmutableList()
+        }
     }
+    val pgcLabels = remember { FavoritePgcStatus.entries.map { it.label } }
+    val noteLabels = remember { listOf("未发布笔记", "公开笔记") }
     val headerInset = contentPadding.calculateTopPadding()
     val hasFilterRow = state.isPgc || state.section == FavoriteSection.NOTE
     val stickyChromeReserve = headerInset +
@@ -619,7 +648,8 @@ private fun FavoriteCategoryContent(
                     )
                 }
                 else -> FavoriteCategoryGrid(
-                    state = state.copy(items = visibleItems),
+                    state = state,
+                    items = visibleItems,
                     gridState = gridState,
                     topPadding = stickyChromeReserve,
                     bottomPadding = contentPadding.calculateBottomPadding() +
@@ -644,26 +674,29 @@ private fun FavoriteCategoryContent(
         ) {
             if (state.isPgc) {
                 FavoriteCategoryFilterRow(
-                    labels = FavoritePgcStatus.entries.map { it.label },
+                    labels = pgcLabels,
                     selectedIndex = FavoritePgcStatus.entries.indexOf(state.pgcStatus),
                     enabled = !state.isUpdatingPgc,
                     onSelected = { FavoritePgcStatus.entries.getOrNull(it)?.let(onPgcStatusSelected) },
                 )
             } else if (state.section == FavoriteSection.NOTE) {
                 FavoriteCategoryFilterRow(
-                    labels = listOf("未发布笔记", "公开笔记"),
+                    labels = noteLabels,
                     selectedIndex = if (state.publishedNotes) 1 else 0,
                     onSelected = { onPublishedNotesSelected(it == 1) },
                 )
             }
         }
         if (state.isSelecting) {
+            val visibleIds = remember(visibleItems) { visibleItems.mapTo(mutableSetOf()) { it.id } }
+            val otherPgcStatuses = remember(state.pgcStatus) {
+                FavoritePgcStatus.entries.filter { it != state.pgcStatus }
+            }
             AppFloatingToolbar(
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .padding(start = 12.dp, end = 12.dp, bottom = contentPadding.calculateBottomPadding() + 12.dp),
             ) {
                 if (state.isPgc) {
-                    val visibleIds = visibleItems.mapTo(mutableSetOf()) { it.id }
                     val allSelected = visibleIds.isNotEmpty() && state.selectedIds.containsAll(visibleIds)
                     AppTextButton(
                         onClick = { onToggleAllPgcSelection(visibleIds) },
@@ -671,7 +704,7 @@ private fun FavoriteCategoryContent(
                     ) {
                         AppText(if (allSelected) "取消全选" else "全选")
                     }
-                    FavoritePgcStatus.entries.filter { it != state.pgcStatus }.forEach { status ->
+                    otherPgcStatuses.forEach { status ->
                         AppTextButton(
                             onClick = { onUpdateSelectedPgcStatus(status) },
                             enabled = !state.isUpdatingPgc && state.selectedIds.isNotEmpty(),
@@ -743,6 +776,7 @@ private fun FavoriteCategoryFilterRow(
 @Composable
 private fun FavoriteCategoryGrid(
     state: FavoriteCategoryUiState,
+    items: ImmutableList<FavoriteCategoryItem>,
     gridState: androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState,
     topPadding: Dp,
     bottomPadding: Dp,
@@ -757,6 +791,7 @@ private fun FavoriteCategoryGrid(
     onWebClick: (String, String) -> Unit,
     onCheeseClick: ((Long) -> Unit)? = null,
 ) {
+    val itemKeys = remember(items) { items.map { "${it.section}_${it.id}" } }
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val columns = resolveFavoriteCategoryColumnCount(state.section, maxWidth.value)
         val alignRows = columns > 1 && !com.android.purebilibili.core.ui.LocalFullVideoCardContentVisible.current
@@ -772,15 +807,14 @@ private fun FavoriteCategoryGrid(
             horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
             verticalItemSpacing = AppSpacingTokens.Medium,
         ) {
-            val itemKeys = state.items.map { "${it.section}_${it.id}" }
             val renderCard: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
-                val item = state.items[index]
+                val item = items[index]
                 if (
-                    index == state.items.lastIndex && pageActive && state.hasMore &&
+                    index == items.lastIndex && pageActive && state.hasMore &&
                     !state.isLoadingMore && !state.isRefreshing && !state.isUpdatingPgc &&
                     (!state.isPgc || state.error == null)
                 ) {
-                    LaunchedEffect(gridState, state.page, state.items.size) { onLoadMore() }
+                    LaunchedEffect(gridState, state.page, items.size) { onLoadMore() }
                 }
                 when (state.section) {
                     FavoriteSection.BANGUMI, FavoriteSection.CINEMA -> FavoritePgcCard(
@@ -833,11 +867,11 @@ private fun FavoriteCategoryGrid(
                 }
             }
             if (!alignRows) {
-                itemsIndexed(state.items, key = { index, _ -> itemKeys[index] }) { index, _ ->
+                itemsIndexed(items, key = { index, _ -> itemKeys[index] }) { index, _ ->
                     renderCard(index, Modifier)
                 }
             } else {
-                com.android.purebilibili.feature.home.resolveHomeFeedAlignedRows(state.items.size, columns)
+                com.android.purebilibili.feature.home.resolveHomeFeedAlignedRows(items.size, columns)
                     .forEach { row ->
                         item(key = "favorite_category_row_${itemKeys[row.first]}", span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
                             com.android.purebilibili.feature.home.HomeAlignedVideoRow(

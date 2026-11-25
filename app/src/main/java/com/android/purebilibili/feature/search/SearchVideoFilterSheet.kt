@@ -190,10 +190,7 @@ fun SearchVideoFilterActions(
                     .clip(CircleShape)
                     .appActionClickable(
                         interactionSource = filterInteraction,
-                        indication = if (liquidChromeActive) null else ripple(
-                            bounded = false,
-                            radius = 20.dp
-                        ),
+                        indication = if (liquidChromeActive) null else androidx.compose.foundation.LocalIndication.current,
                         role = Role.Button,
                         onClick = { showFilterSheet = true }
                     ),

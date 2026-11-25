@@ -472,6 +472,11 @@ internal fun SearchResultPageContent(
                     )
                     .then(if (searchHazeEnabled) Modifier.hazeSourceCompat(state = hazeState) else Modifier)
             val showFullCardContent = com.android.purebilibili.core.ui.LocalFullVideoCardContentVisible.current
+            val searchVideoKeys = remember(pageResultState.searchResults, targetSearchType) {
+                pageResultState.searchResults.mapIndexed { index, video ->
+                    resolveSearchResultLazyItemKey(targetSearchType, index, video.bvid, video.id)
+                }
+            }
             LazyVerticalStaggeredGrid(
                 columns = StaggeredGridCells.Fixed(effectiveSearchGridColumns),
                 state = activePageGridState,
@@ -506,7 +511,9 @@ internal fun SearchResultPageContent(
                                     { key -> openResult(up.mid, key) }
                                 },
                             )
-                            val relatedVideos = up.res.orEmpty().take(6).map { it.toVideoItem() }
+                            val relatedVideos = remember(up.res) {
+                                up.res.orEmpty().take(6).map { it.toVideoItem() }
+                            }
                             if (relatedVideos.isNotEmpty()) {
                                 Row(
                                     modifier = Modifier
@@ -563,8 +570,8 @@ internal fun SearchResultPageContent(
                         }
                     }
                 }
-                if (pageResultState.matchResults.isNotEmpty()) {
-                    itemsIndexed(pageResultState.matchResults.drop(1), key = { _, item -> "all_match_${item.id}" }, span = { _, _ -> StaggeredGridItemSpan.FullLine }) { _, item ->
+                if (pageResultState.matchResults.size > 1) {
+                    itemsIndexed(pageResultState.matchResults.subList(1, pageResultState.matchResults.size), key = { _, item -> "all_match_${item.id}" }, span = { _, _ -> StaggeredGridItemSpan.FullLine }) { _, item ->
                         MatchSearchResultCard(
                             item = item,
                             appearance = genericResultCardAppearance,
@@ -591,9 +598,6 @@ internal fun SearchResultPageContent(
                         )
                     }
                 }
-            }
-            val searchVideoKeys = pageResultState.searchResults.mapIndexed { index, video ->
-                resolveSearchResultLazyItemKey(targetSearchType, index, video.bvid, video.id)
             }
             val renderSearchVideo: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
                     val video = pageResultState.searchResults[index]

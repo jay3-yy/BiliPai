@@ -26,8 +26,10 @@ import com.android.purebilibili.feature.message.*
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import android.widget.Toast
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,25 +43,33 @@ import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.data.model.response.MessageFeedLikeItem
 import com.android.purebilibili.data.repository.MessageRepository
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import com.android.purebilibili.core.coroutines.AccountScopedRequests
 import com.android.purebilibili.core.store.TokenManager
 
+@Immutable
 data class LikeMeUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val isLoadingMore: Boolean = false,
-    val latestItems: List<MessageFeedLikeItem> = emptyList(),
-    val totalItems: List<MessageFeedLikeItem> = emptyList(),
+    val latestItems: ImmutableList<MessageFeedLikeItem> = persistentListOf(),
+    val totalItems: ImmutableList<MessageFeedLikeItem> = persistentListOf(),
     val cursor: Long? = null,
     val cursorTime: Long? = null,
     val hasMore: Boolean = false,
     val error: String? = null,
-    val operationError: String? = null,
     val operationBusy: Boolean = false,
     val loadMoreError: String? = null,
 )
@@ -67,18 +77,20 @@ data class LikeMeUiState(
 private fun mergeLikeItems(
     existing: List<MessageFeedLikeItem>,
     incoming: List<MessageFeedLikeItem>
-): List<MessageFeedLikeItem> {
+): ImmutableList<MessageFeedLikeItem> {
     val seen = linkedSetOf<Long>()
     return buildList {
         (existing + incoming).forEach { item ->
             if (seen.add(item.id)) add(item)
         }
-    }
+    }.toImmutableList()
 }
 
 class LikeMeViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(LikeMeUiState())
     val uiState: StateFlow<LikeMeUiState> = _uiState.asStateFlow()
+    private val _events = Channel<String>(Channel.BUFFERED)
+    val events: Flow<String> = _events.receiveAsFlow()
     private val accountRequests = AccountScopedRequests(viewModelScope)
     private var listJob: Job? = null
     private var moreJob: Job? = null
@@ -96,22 +108,29 @@ class LikeMeViewModel : ViewModel() {
     fun loadInitial() {
         listJob?.cancel()
         moreJob?.cancel()
-        requestVersion++
+        val version = ++requestVersion
         listJob = accountRequests.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, isLoadingMore = false, error = null, loadMoreError = null)
+            _uiState.update { it.copy(isLoading = true, isLoadingMore = false, error = null, loadMoreError = null) }
             MessageRepository.getLikeFeed().fold(
                 onSuccess = { data ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        latestItems = data.latest?.items.orEmpty(),
-                        totalItems = data.total?.items.orEmpty(),
-                        cursor = data.total?.cursor?.id,
-                        cursorTime = data.total?.cursor?.time,
-                        hasMore = data.total?.cursor?.isEnd != true && !data.total?.items.isNullOrEmpty()
-                    )
+                    if (version != requestVersion) return@fold
+                    val latest = data.latest?.items.orEmpty().toImmutableList()
+                    val total = data.total?.items.orEmpty().toImmutableList()
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            latestItems = latest,
+                            totalItems = total,
+                            cursor = data.total?.cursor?.id,
+                            cursorTime = data.total?.cursor?.time,
+                            hasMore = data.total?.cursor?.isEnd != true && total.isNotEmpty()
+                        )
+                    }
                 },
                 onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = error.message ?: "加载失败")
+                    if (error is CancellationException) throw error
+                    if (version != requestVersion) return@fold
+                    _uiState.update { it.copy(isLoading = false, error = error.message ?: "加载失败") }
                 }
             )
         }
@@ -120,22 +139,29 @@ class LikeMeViewModel : ViewModel() {
     fun refresh() {
         listJob?.cancel()
         moreJob?.cancel()
-        requestVersion++
+        val version = ++requestVersion
         listJob = accountRequests.launch {
-            _uiState.value = _uiState.value.copy(isRefreshing = true, isLoadingMore = false, error = null, loadMoreError = null)
+            _uiState.update { it.copy(isRefreshing = true, isLoadingMore = false, error = null, loadMoreError = null) }
             MessageRepository.getLikeFeed().fold(
                 onSuccess = { data ->
-                    _uiState.value = _uiState.value.copy(
-                        isRefreshing = false,
-                        latestItems = data.latest?.items.orEmpty(),
-                        totalItems = data.total?.items.orEmpty(),
-                        cursor = data.total?.cursor?.id,
-                        cursorTime = data.total?.cursor?.time,
-                        hasMore = data.total?.cursor?.isEnd != true && !data.total?.items.isNullOrEmpty()
-                    )
+                    if (version != requestVersion) return@fold
+                    val latest = data.latest?.items.orEmpty().toImmutableList()
+                    val total = data.total?.items.orEmpty().toImmutableList()
+                    _uiState.update {
+                        it.copy(
+                            isRefreshing = false,
+                            latestItems = latest,
+                            totalItems = total,
+                            cursor = data.total?.cursor?.id,
+                            cursorTime = data.total?.cursor?.time,
+                            hasMore = data.total?.cursor?.isEnd != true && total.isNotEmpty()
+                        )
+                    }
                 },
                 onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(isRefreshing = false, error = error.message ?: "刷新失败")
+                    if (error is CancellationException) throw error
+                    if (version != requestVersion) return@fold
+                    _uiState.update { it.copy(isRefreshing = false, error = error.message ?: "刷新失败") }
                 }
             )
         }
@@ -145,71 +171,101 @@ class LikeMeViewModel : ViewModel() {
         val current = _uiState.value
         if (current.isLoadingMore || current.isLoading || current.isRefreshing || !current.hasMore) return
         val version = requestVersion
+        val requestCursor = current.cursor
+        val requestCursorTime = current.cursorTime
         moreJob = accountRequests.launch {
-            _uiState.value = current.copy(isLoadingMore = true, loadMoreError = null)
-            MessageRepository.getLikeFeed(cursor = current.cursor, cursorTime = current.cursorTime).fold(
+            _uiState.update { it.copy(isLoadingMore = true, loadMoreError = null) }
+            MessageRepository.getLikeFeed(cursor = requestCursor, cursorTime = requestCursorTime).fold(
                 onSuccess = { data ->
                     if (version != requestVersion) return@fold
-                    _uiState.value = _uiState.value.copy(
-                        isLoadingMore = false,
-                        latestItems = mergeLikeItems(_uiState.value.latestItems, data.latest?.items.orEmpty()),
-                        totalItems = mergeLikeItems(_uiState.value.totalItems, data.total?.items.orEmpty()),
-                        cursor = data.total?.cursor?.id,
-                        cursorTime = data.total?.cursor?.time,
-                        hasMore = data.total?.cursor?.isEnd != true && !data.total?.items.isNullOrEmpty() && (data.total?.cursor?.id != current.cursor || data.total?.cursor?.time != current.cursorTime)
-                    )
+                    _uiState.update { state ->
+                        state.copy(
+                            isLoadingMore = false,
+                            latestItems = mergeLikeItems(state.latestItems, data.latest?.items.orEmpty()),
+                            totalItems = mergeLikeItems(state.totalItems, data.total?.items.orEmpty()),
+                            cursor = data.total?.cursor?.id,
+                            cursorTime = data.total?.cursor?.time,
+                            hasMore = data.total?.cursor?.isEnd != true && !data.total?.items.isNullOrEmpty() && (data.total?.cursor?.id != requestCursor || data.total?.cursor?.time != requestCursorTime)
+                        )
+                    }
                 },
                 onFailure = { error ->
+                    if (error is CancellationException) throw error
                     if (version != requestVersion) return@fold
-                    _uiState.value = _uiState.value.copy(isLoadingMore = false, loadMoreError = error.message ?: "加载更多失败")
+                    _uiState.update { it.copy(isLoadingMore = false, loadMoreError = error.message ?: "加载更多失败") }
                 }
             )
         }
     }
 
     fun remove(id: Long, latest: Boolean) {
-        if (_uiState.value.operationBusy) return
-        _uiState.value = _uiState.value.copy(operationBusy = true, operationError = null)
-        accountRequests.launch {
-            MessageRepository.deleteFeedItem(type = 0, id = id).onSuccess {
-                _uiState.value = _uiState.value.copy(
-                    latestItems = if (latest) _uiState.value.latestItems.filterNot { it.id == id } else _uiState.value.latestItems,
-                    totalItems = if (latest) _uiState.value.totalItems else _uiState.value.totalItems.filterNot { it.id == id }
-                )
-            }.onFailure { error ->
-                _uiState.value = _uiState.value.copy(operationError = error.message ?: "操作失败")
+        var started = false
+        _uiState.update { current ->
+            if (current.operationBusy) current
+            else {
+                started = true
+                current.copy(operationBusy = true)
             }
-            _uiState.value = _uiState.value.copy(operationBusy = false)
+        }
+        if (!started) return
+        accountRequests.launch {
+            try {
+                MessageRepository.deleteFeedItem(type = 0, id = id).onSuccess {
+                    _uiState.update { state ->
+                        state.copy(
+                            latestItems = if (latest) state.latestItems.filterNot { it.id == id }.toImmutableList() else state.latestItems,
+                            totalItems = if (latest) state.totalItems else state.totalItems.filterNot { it.id == id }.toImmutableList()
+                        )
+                    }
+                }.onFailure { error ->
+                    if (error is CancellationException) throw error
+                    _events.trySend(error.message ?: "操作失败")
+                }
+            } finally {
+                _uiState.update { it.copy(operationBusy = false) }
+            }
         }
     }
 
     fun toggleNotice(item: MessageFeedLikeItem) {
-        if (_uiState.value.operationBusy) return
-        _uiState.value = _uiState.value.copy(operationBusy = true, operationError = null)
-        accountRequests.launch {
-            val enableNotifications = item.noticeState == 1
-            MessageRepository.setLikeFeedNotice(id = item.id, enabled = enableNotifications).onSuccess {
-                fun update(list: List<MessageFeedLikeItem>): List<MessageFeedLikeItem> {
-                    return list.map {
-                        if (it.id == item.id) {
-                            it.copy(noticeState = if (enableNotifications) 0 else 1)
-                        } else {
-                            it
-                        }
-                    }
-                }
-
-                _uiState.value = _uiState.value.copy(
-                    latestItems = update(_uiState.value.latestItems),
-                    totalItems = update(_uiState.value.totalItems)
-                )
-            }.onFailure { error ->
-                _uiState.value = _uiState.value.copy(operationError = error.message ?: "操作失败")
+        var started = false
+        _uiState.update { current ->
+            if (current.operationBusy) current
+            else {
+                started = true
+                current.copy(operationBusy = true)
             }
-            _uiState.value = _uiState.value.copy(operationBusy = false)
+        }
+        if (!started) return
+        accountRequests.launch {
+            try {
+                val enableNotifications = item.noticeState == 1
+                MessageRepository.setLikeFeedNotice(id = item.id, enabled = enableNotifications).onSuccess {
+                    fun updateList(list: List<MessageFeedLikeItem>): ImmutableList<MessageFeedLikeItem> {
+                        return list.map {
+                            if (it.id == item.id) {
+                                it.copy(noticeState = if (enableNotifications) 0 else 1)
+                            } else {
+                                it
+                            }
+                        }.toImmutableList()
+                    }
+
+                    _uiState.update { state ->
+                        state.copy(
+                            latestItems = updateList(state.latestItems),
+                            totalItems = updateList(state.totalItems)
+                        )
+                    }
+                }.onFailure { error ->
+                    if (error is CancellationException) throw error
+                    _events.trySend(error.message ?: "操作失败")
+                }
+            } finally {
+                _uiState.update { it.copy(operationBusy = false) }
+            }
         }
     }
-    fun clearOperationError() { _uiState.value = _uiState.value.copy(operationError = null) }
 
 }
 
@@ -221,8 +277,13 @@ fun LikeMeScreen(
     onOpenSpace: (Long) -> Unit,
     viewModel: LikeMeViewModel = viewModel(key = "message_LikeMe_" + TokenManager.accountIdentity.collectAsStateWithLifecycle().value)
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    uiState.operationError?.let { error -> MessageConfirmDialog("操作失败", error, onDismiss = viewModel::clearOperationError, onConfirm = viewModel::clearOperationError) }
+    LaunchedEffect(viewModel, context) {
+        viewModel.events.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
     val account by com.android.purebilibili.core.store.TokenManager.accountIdentity.collectAsStateWithLifecycle()
     var detailId by rememberSaveable(account) { mutableLongStateOf(0L) }
     var detailLink by rememberSaveable(account) { mutableStateOf("") }

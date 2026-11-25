@@ -303,6 +303,11 @@ fun CommonListScreen(
     // Fix: 手机端(Compact)使用较小的最小宽度以保证2列显示 (360dp / 170dp = 2.1 -> 2列)
     // 平板端(Expanded)使用较大的最小宽度以避免卡片过小
     val context = LocalContext.current
+    LaunchedEffect(viewModel) {
+        viewModel.actionEvents.collect { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
     val density = LocalDensity.current
     val showOnlineCount by remember(context) { SettingsManager.getShowCardOnlineCount(context) }.collectAsStateWithLifecycle(initialValue = false
         )
@@ -603,7 +608,9 @@ fun CommonListScreen(
     var showFavoriteFolderDeleteConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var isFavoriteFolderSelectionMode by rememberSaveable { mutableStateOf(false) }
     var selectedFavoriteFolderIds by rememberSaveable { mutableStateOf(setOf<Long>()) }
-    val selectedFavoriteFolders = foldersState.filter { resolveFavoriteFolderMediaId(it) in selectedFavoriteFolderIds }
+    val selectedFavoriteFolders = remember(foldersState, selectedFavoriteFolderIds) {
+        foldersState.filter { resolveFavoriteFolderMediaId(it) in selectedFavoriteFolderIds }
+    }
     val favoriteFolderPermissions = favoriteFolderBatchPermissions(
         selectedFavoriteFolders,
         foldersState.firstOrNull()?.let(::resolveFavoriteFolderMediaId),
@@ -1734,7 +1741,7 @@ fun CommonListScreen(
                     else -> exitFavoriteDetailBatchMode()
                 }
             }
-            androidx.activity.compose.BackHandler(enabled = isCurrentPage && isBatchActionMode) {
+            com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = isCurrentPage && isBatchActionMode) {
                 exitBatchActionMode()
             }
             val batchActions: @Composable () -> Unit = {

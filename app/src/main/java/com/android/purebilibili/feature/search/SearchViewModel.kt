@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+@androidx.compose.runtime.Immutable
 data class SearchUiState(
     val query: String = "",
     // Draft edits never change the keyword owning result pages and requests.
@@ -113,6 +114,7 @@ data class SearchUiState(
     val resultPages: Map<SearchType, SearchResultPageUiState> = emptyMap()
 )
 
+@androidx.compose.runtime.Immutable
 data class SearchResultPageUiState(
     val query: String = "",
     val isSearching: Boolean = false,
@@ -362,48 +364,54 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     
     //  切换搜索类型
     fun setSearchType(type: SearchType) {
-        val beforeSwitch = _uiState.value
-        if (beforeSwitch.searchType == type) return
+        val snapshot = _uiState.value
+        if (snapshot.searchType == type) return
 
-        val normalizedQuery = beforeSwitch.submittedQuery
-        val cachedState = beforeSwitch.resultPages[type]
+        val normalizedQuery = snapshot.submittedQuery
+        val cachedState = snapshot.resultPages[type]
         if (
-            beforeSwitch.showResults &&
+            snapshot.showResults &&
             cachedState != null &&
             cachedState.query == normalizedQuery &&
             cachedState.hasLoaded
         ) {
-            _uiState.value = beforeSwitch
-                .withCurrentSearchResultPageCached()
-                .withSearchResultPageMirrored(type, cachedState)
-                .copy(totalResults = beforeSwitch.searchTypeCounts[type] ?: -1)
+            _uiState.update { beforeSwitch ->
+                val latestCached = beforeSwitch.resultPages[type] ?: cachedState
+                beforeSwitch
+                    .withCurrentSearchResultPageCached()
+                    .withSearchResultPageMirrored(type, latestCached)
+                    .copy(totalResults = beforeSwitch.searchTypeCounts[type] ?: -1)
+            }
             return
         }
 
-        _uiState.value = beforeSwitch
-            .withCurrentSearchResultPageCached()
-            .copy(
-                searchType = type,
-                isSearching = beforeSwitch.showResults && normalizedQuery.isNotBlank(),
-                isLoadingMore = false,
-                loadMoreError = null,
-                error = null,
-                currentPage = 1,
-                totalPages = 1,
-                hasMoreResults = false,
-                emptyStateReason = SearchEmptyStateReason.NONE,
-                searchResults = emptyList(),
-                upResults = emptyList(),
-                bangumiResults = emptyList(),
-                matchResults = emptyList(),
-                liveResults = emptyList(),
-                liveUserResults = emptyList(),
-                articleResults = emptyList(),
-                topicResults = emptyList(),
-                photoResults = emptyList()
-            )
+        _uiState.update { beforeSwitch ->
+            val latestQuery = beforeSwitch.submittedQuery
+            beforeSwitch
+                .withCurrentSearchResultPageCached()
+                .copy(
+                    searchType = type,
+                    isSearching = beforeSwitch.showResults && latestQuery.isNotBlank(),
+                    isLoadingMore = false,
+                    loadMoreError = null,
+                    error = null,
+                    currentPage = 1,
+                    totalPages = 1,
+                    hasMoreResults = false,
+                    emptyStateReason = SearchEmptyStateReason.NONE,
+                    searchResults = emptyList(),
+                    upResults = emptyList(),
+                    bangumiResults = emptyList(),
+                    matchResults = emptyList(),
+                    liveResults = emptyList(),
+                    liveUserResults = emptyList(),
+                    articleResults = emptyList(),
+                    topicResults = emptyList(),
+                    photoResults = emptyList()
+                )
+        }
 
-        if (normalizedQuery.isNotBlank() && beforeSwitch.showResults) {
+        if (normalizedQuery.isNotBlank() && snapshot.showResults) {
             search(normalizedQuery, updateDraft = false)
         }
     }
@@ -789,6 +797,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
         }.onFailure {
+            if (it is CancellationException) throw it
             _uiState.update { state ->
                 state.copy(
                     isRefreshingHotList = false,
@@ -812,6 +821,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
         }.onFailure {
+            if (it is CancellationException) throw it
             _uiState.update { state ->
                 state.copy(
                     isRefreshingDiscoverList = false,

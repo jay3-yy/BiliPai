@@ -59,6 +59,7 @@ class CaptchaManager(private val activity: Activity) {
         onCancel: () -> Unit = {}
     ) {
         try {
+            destroy()
             Logger.d(TAG, "Starting WebView captcha")
             val isDarkMode = (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             hideKeyboard()
@@ -116,6 +117,15 @@ class CaptchaManager(private val activity: Activity) {
                 setOnCancelListener {
                     geetestConfigCall?.cancel()
                     onCancel()
+                }
+                setOnDismissListener {
+                    geetestConfigCall?.cancel()
+                    geetestConfigCall = null
+                    webView?.stopLoading()
+                    webView?.clearCache(false)
+                    webView?.destroy()
+                    webView = null
+                    dialog = null
                 }
             }
             

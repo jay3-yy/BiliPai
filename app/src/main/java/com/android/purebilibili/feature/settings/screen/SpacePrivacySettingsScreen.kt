@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
@@ -11,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -29,10 +31,16 @@ internal fun SpacePrivacySettingsScreen(
     modifier: Modifier = Modifier,
     model: SpacePrivacyViewModel = viewModel(),
 ) {
+    val context = LocalContext.current
     val identity by TokenManager.accountIdentity.collectAsStateWithLifecycle()
     val rawState by model.state.collectAsStateWithLifecycle()
     val state = rawState.takeIf { it.identity == identity } ?: SpacePrivacyUiState(identity = identity, loading = true)
     LaunchedEffect(model) { model.load() }
+    LaunchedEffect(model, context) {
+        model.events.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
     SpacePrivacySettingsContent(state, model::change, model::save, model::load, onBack, modifier)
 }
 
@@ -72,7 +80,7 @@ internal fun SpacePrivacySettingsContent(
                     modifier = Modifier.padding(16.dp),
                 )
             }
-            state.message?.let { message -> item(key = "message") { AppText(message, Modifier.padding(16.dp)) } }
+            state.error?.let { error -> item(key = "error") { AppText(error, Modifier.padding(16.dp)) } }
             if (state.loading) {
                 item(key = "loading") { AppText("正在读取空间公开范围…", Modifier.padding(16.dp)) }
             }

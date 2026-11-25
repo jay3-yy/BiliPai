@@ -24,8 +24,10 @@ import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import android.widget.Toast
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -42,23 +44,31 @@ import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.data.model.response.SystemNoticeItem
 import com.android.purebilibili.data.repository.MessageRepository
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import com.android.purebilibili.core.coroutines.AccountScopedRequests
 import com.android.purebilibili.core.store.TokenManager
 
+@Immutable
 data class SystemNoticeUiState(
     val isLoading: Boolean = true,
     val isRefreshing: Boolean = false,
     val isLoadingMore: Boolean = false,
-    val items: List<SystemNoticeItem> = emptyList(),
+    val items: ImmutableList<SystemNoticeItem> = persistentListOf(),
     val cursor: Long? = null,
     val hasMore: Boolean = false,
     val error: String? = null,
-    val operationError: String? = null,
     val operationBusy: Boolean = false,
     val loadMoreError: String? = null,
 )
@@ -66,6 +76,8 @@ data class SystemNoticeUiState(
 class SystemNoticeViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(SystemNoticeUiState())
     val uiState: StateFlow<SystemNoticeUiState> = _uiState.asStateFlow()
+    private val _events = Channel<String>(Channel.BUFFERED)
+    val events: Flow<String> = _events.receiveAsFlow()
     private val accountRequests = AccountScopedRequests(viewModelScope)
     private var listJob: Job? = null
     private var moreJob: Job? = null
@@ -83,23 +95,29 @@ class SystemNoticeViewModel : ViewModel() {
     fun loadInitial() {
         listJob?.cancel()
         moreJob?.cancel()
-        requestVersion++
+        val version = ++requestVersion
         listJob = accountRequests.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, isLoadingMore = false, error = null, loadMoreError = null)
+            _uiState.update { it.copy(isLoading = true, isLoadingMore = false, error = null, loadMoreError = null) }
             MessageRepository.getSystemNotices().fold(
                 onSuccess = { items ->
+                    if (version != requestVersion) return@fold
                     items.firstOrNull()?.cursor?.takeIf { it > 0 }?.let {
                         MessageRepository.updateSystemNoticeCursor(it)
                     }
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        items = items,
-                        cursor = items.lastOrNull()?.cursor,
-                        hasMore = items.isNotEmpty()
-                    )
+                    val immutableItems = items.toImmutableList()
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            items = immutableItems,
+                            cursor = immutableItems.lastOrNull()?.cursor,
+                            hasMore = immutableItems.isNotEmpty()
+                        )
+                    }
                 },
                 onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = error.message ?: "加载失败")
+                    if (error is CancellationException) throw error
+                    if (version != requestVersion) return@fold
+                    _uiState.update { it.copy(isLoading = false, error = error.message ?: "加载失败") }
                 }
             )
         }
@@ -108,60 +126,86 @@ class SystemNoticeViewModel : ViewModel() {
     fun refresh() {
         listJob?.cancel()
         moreJob?.cancel()
-        requestVersion++
+        val version = ++requestVersion
         listJob = accountRequests.launch {
-            _uiState.value = _uiState.value.copy(isRefreshing = true, isLoadingMore = false, error = null, loadMoreError = null)
+            _uiState.update { it.copy(isRefreshing = true, isLoadingMore = false, error = null, loadMoreError = null) }
             MessageRepository.getSystemNotices().fold(
                 onSuccess = { items ->
+                    if (version != requestVersion) return@fold
                     items.firstOrNull()?.cursor?.takeIf { it > 0 }?.let {
                         MessageRepository.updateSystemNoticeCursor(it)
                     }
-                    _uiState.value = _uiState.value.copy(
-                        isRefreshing = false,
-                        items = items,
-                        cursor = items.lastOrNull()?.cursor,
-                        hasMore = items.isNotEmpty()
-                    )
+                    val immutableItems = items.toImmutableList()
+                    _uiState.update {
+                        it.copy(
+                            isRefreshing = false,
+                            items = immutableItems,
+                            cursor = immutableItems.lastOrNull()?.cursor,
+                            hasMore = immutableItems.isNotEmpty()
+                        )
+                    }
                 },
                 onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(isRefreshing = false, error = error.message ?: "刷新失败")
+                    if (error is CancellationException) throw error
+                    if (version != requestVersion) return@fold
+                    _uiState.update { it.copy(isRefreshing = false, error = error.message ?: "刷新失败") }
                 }
             )
         }
     }
 
     fun remove(id: Int) {
-        if (_uiState.value.operationBusy) return
-        _uiState.value = _uiState.value.copy(operationBusy = true, operationError = null)
+        var started = false
+        _uiState.update { current ->
+            if (current.operationBusy) current
+            else {
+                started = true
+                current.copy(operationBusy = true)
+            }
+        }
+        if (!started) return
         accountRequests.launch {
-            MessageManagementRepository.deleteSystemNotice(id.toLong()).fold(
-                onSuccess = { _uiState.value = _uiState.value.copy(items = _uiState.value.items.filterNot { it.id == id }) },
-                onFailure = { error -> _uiState.value = _uiState.value.copy(operationError = error.message ?: "删除通知失败") },
-            )
-            _uiState.value = _uiState.value.copy(operationBusy = false)
+            try {
+                MessageManagementRepository.deleteSystemNotice(id.toLong()).fold(
+                    onSuccess = {
+                        _uiState.update { state ->
+                            state.copy(items = state.items.filterNot { it.id == id }.toImmutableList())
+                        }
+                    },
+                    onFailure = { error ->
+                        if (error is CancellationException) throw error
+                        _events.trySend(error.message ?: "删除通知失败")
+                    },
+                )
+            } finally {
+                _uiState.update { it.copy(operationBusy = false) }
+            }
         }
     }
-    fun clearOperationError() { _uiState.value = _uiState.value.copy(operationError = null) }
 
     fun loadMore() {
         val current = _uiState.value
         if (current.isLoadingMore || current.isLoading || current.isRefreshing || !current.hasMore) return
         val version = requestVersion
+        val requestCursor = current.cursor
         moreJob = accountRequests.launch {
-            _uiState.value = current.copy(isLoadingMore = true, loadMoreError = null)
-            MessageRepository.getSystemNotices(cursor = current.cursor).fold(
+            _uiState.update { it.copy(isLoadingMore = true, loadMoreError = null) }
+            MessageRepository.getSystemNotices(cursor = requestCursor).fold(
                 onSuccess = { items ->
                     if (version != requestVersion) return@fold
-                    _uiState.value = _uiState.value.copy(
-                        isLoadingMore = false,
-                        items = (_uiState.value.items + items).distinctBy { it.id },
-                        cursor = items.lastOrNull()?.cursor ?: current.cursor,
-                        hasMore = items.isNotEmpty() && items.lastOrNull()?.cursor != current.cursor
-                    )
+                    _uiState.update { state ->
+                        state.copy(
+                            isLoadingMore = false,
+                            items = (state.items + items).distinctBy { it.id }.toImmutableList(),
+                            cursor = items.lastOrNull()?.cursor ?: requestCursor,
+                            hasMore = items.isNotEmpty() && items.lastOrNull()?.cursor != requestCursor
+                        )
+                    }
                 },
                 onFailure = { error ->
+                    if (error is CancellationException) throw error
                     if (version != requestVersion) return@fold
-                    _uiState.value = _uiState.value.copy(isLoadingMore = false, loadMoreError = error.message ?: "加载更多失败")
+                    _uiState.update { it.copy(isLoadingMore = false, loadMoreError = error.message ?: "加载更多失败") }
                 }
             )
         }
@@ -175,10 +219,15 @@ fun SystemNoticeScreen(
     onOpenLink: (String) -> Unit,
     viewModel: SystemNoticeViewModel = viewModel(key = "message_SystemNotice_" + TokenManager.accountIdentity.collectAsStateWithLifecycle().value)
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var pendingDelete by remember(TokenManager.accountIdentity.collectAsStateWithLifecycle().value) { mutableStateOf<Int?>(null) }
     pendingDelete?.let { id -> MessageConfirmDialog("删除通知", "确定删除该通知？", onDismiss = { pendingDelete = null }) { pendingDelete = null; viewModel.remove(id) } }
-    uiState.operationError?.let { error -> MessageConfirmDialog("操作失败", error, onDismiss = viewModel::clearOperationError, onConfirm = viewModel::clearOperationError) }
+    LaunchedEffect(viewModel, context) {
+        viewModel.events.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     AppScaffold(
         blurContentReady = !uiState.isLoading,

@@ -34,6 +34,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
@@ -44,6 +45,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 // 通用的 UI 状态
+@androidx.compose.runtime.Immutable
 data class ListUiState(
     val title: String = "",
     val items: List<VideoItem> = emptyList(),
@@ -57,6 +59,8 @@ data class ListUiState(
 abstract class BaseListViewModel(application: Application, private val pageTitle: String) : AndroidViewModel(application) {
     protected val _uiState = MutableStateFlow(ListUiState(title = pageTitle, isLoading = true))
     val uiState = _uiState.asStateFlow()
+    protected val _actionEvents = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.BUFFERED)
+    val actionEvents: kotlinx.coroutines.flow.Flow<String> = _actionEvents.receiveAsFlow()
     internal val accountRequests = AccountScopedRequests(viewModelScope)
 
     init {
@@ -86,7 +90,7 @@ abstract class BaseListViewModel(application: Application, private val pageTitle
                 throw e
             } catch (e: Exception) {
                 e.printStackTrace()
-                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "加载失败")
+                _uiState.update { it.copy(isLoading = false, error = e.message ?: "加载失败") }
             }
         }
     }
@@ -415,11 +419,17 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
                 // Also cover navigation/viewport changes before a lazy row ever mounts.
                 // The normal per-card watchdog completes earlier; this bounds the whole session.
                 delay(6_000L)
-                val current = _deleteSession.value
-                if (current != null && current.targetKeys === session.targetKeys) {
-                    _deleteSession.value = null
-                    deleteHistoryItems(current.targetKeys)
+                var keysToDelete: Set<String>? = null
+                _deleteSession.update { current ->
+                    if (current != null && current.targetKeys === session.targetKeys) {
+                        keysToDelete = current.targetKeys
+                        null
+                    } else {
+                        keysToDelete = null
+                        current
+                    }
                 }
+                keysToDelete?.let(::deleteHistoryItems)
             }
         }
     }
@@ -427,16 +437,21 @@ class HistoryViewModel(application: Application) : BaseListViewModel(application
     fun completeVideoDissolve(renderKey: String) {
         val key = renderKey.trim()
         if (key.isEmpty()) return
-        val currentSession = _deleteSession.value ?: return
-        if (key !in currentSession.targetKeys) return
-
-        val nextSession = reduceHistoryDeleteSessionOnAnimationComplete(currentSession, key)
-        if (shouldFinalizeHistoryDeleteSession(nextSession)) {
-            deleteHistoryItems(nextSession.targetKeys)
-            _deleteSession.value = null
-        } else {
-            _deleteSession.value = nextSession
+        var keysToDelete: Set<String>? = null
+        _deleteSession.update { currentSession ->
+            keysToDelete = null
+            if (currentSession == null || key !in currentSession.targetKeys) {
+                return@update currentSession
+            }
+            val nextSession = reduceHistoryDeleteSessionOnAnimationComplete(currentSession, key)
+            if (shouldFinalizeHistoryDeleteSession(nextSession)) {
+                keysToDelete = nextSession.targetKeys
+                null
+            } else {
+                nextSession
+            }
         }
+        keysToDelete?.let(::deleteHistoryItems)
     }
 
     private fun enrichHistoryProgress(
@@ -857,18 +872,23 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
             com.android.purebilibili.core.refresh.FavoriteFolderUpdateBus.changes.collect { update ->
                 val accountMid = TokenManager.midCache
                 if (accountMid == null || accountMid <= 0L || accountMid != update.ownerMid) return@collect
-                val folderIndex = _folders.value.indexOfFirst { folder ->
-                    resolveFavoriteFolderMediaId(folder) == update.mediaId
+                _folders.update { currentFolders ->
+                    val folderIndex = currentFolders.indexOfFirst { folder ->
+                        resolveFavoriteFolderMediaId(folder) == update.mediaId
+                    }
+                    if (folderIndex < 0) {
+                        currentFolders
+                    } else {
+                        val updatedFolders = currentFolders.toMutableList()
+                        updatedFolders[folderIndex] = updatedFolders[folderIndex].copy(
+                            title = update.info.title,
+                            intro = update.info.intro,
+                            cover = update.info.cover,
+                            attr = update.info.attr,
+                        )
+                        updatedFolders
+                    }
                 }
-                if (folderIndex < 0) return@collect
-                val updatedFolders = _folders.value.toMutableList()
-                updatedFolders[folderIndex] = updatedFolders[folderIndex].copy(
-                    title = update.info.title,
-                    intro = update.info.intro,
-                    cover = update.info.cover,
-                    attr = update.info.attr,
-                )
-                _folders.value = updatedFolders
             }
         }
     }
@@ -979,7 +999,7 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
             return
         }
         val generation = ++searchGeneration
-        _searchUiState.value = _searchUiState.value.copy(isLoading = true, error = null)
+        _searchUiState.update { it.copy(isLoading = true, error = null) }
         accountRequests.launch {
             try {
                 fetchFolders()
@@ -1070,11 +1090,11 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
                             val refreshError = (states.refresh as? LoadState.Error)?.error
                             val appendError = (states.append as? LoadState.Error)?.error
                             val refreshReady = states.refresh is LoadState.NotLoading && pages.isNotEmpty()
-                            val items = if (refreshReady) pages.flatMap { it.items }
-                                .filter { it.id !in removedFolderItems[mediaId].orEmpty() } else state.value.items
+                            val refreshedItems = if (refreshReady) pages.flatMap { it.items }
+                                .filter { it.id !in removedFolderItems[mediaId].orEmpty() } else null
                             state.update { it.copy(
                                 title = folder?.title ?: it.title,
-                                items = items,
+                                items = refreshedItems ?: it.items,
                                 isLoading = states.refresh is LoadState.Loading,
                                 error = refreshError?.let(::resolveFavoriteErrorMessage),
                                 loadMoreError = appendError?.let(::resolveFavoriteErrorMessage),
@@ -1285,20 +1305,28 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
             onChanged = { pages, states ->
                 if (subscribedPagingSession === session && accountRequests.isCurrent(identity) && states != null) {
                     val failure = (states.refresh as? LoadState.Error)?.error ?: (states.append as? LoadState.Error)?.error
-                    if (states.refresh is LoadState.NotLoading && pages.isNotEmpty()) {
-                        _subscribedFolders.value = (retained + pages.flatMap { it.folders })
+                    val refreshedFolders = if (states.refresh is LoadState.NotLoading && pages.isNotEmpty()) {
+                        (retained + pages.flatMap { it.folders })
                             .distinctBy(::resolveSubscribedFavoriteFolderKey)
+                    } else {
+                        null
                     }
+                    if (refreshedFolders != null) {
+                        _subscribedFolders.value = refreshedFolders
+                    }
+                    val loadedCount = (refreshedFolders ?: _subscribedFolders.value).size
                     val last = pages.lastOrNull()
-                    _subscribedFolderProgressState.value = SubscribedFolderProgressState(
-                        loadedCount = _subscribedFolders.value.size,
-                        totalCount = last?.totalCount ?: _subscribedFolderProgressState.value.totalCount,
-                        currentPage = last?.number ?: 1,
-                        lastAddedCount = last?.folders?.size ?: 0,
-                        hasMore = !states.append.endOfPaginationReached,
-                        isLoadingMore = states.refresh is LoadState.Loading || states.append is LoadState.Loading,
-                        error = failure?.let(::resolveFavoriteErrorMessage),
-                    )
+                    _subscribedFolderProgressState.update { current ->
+                        SubscribedFolderProgressState(
+                            loadedCount = loadedCount,
+                            totalCount = last?.totalCount ?: current.totalCount,
+                            currentPage = last?.number ?: 1,
+                            lastAddedCount = last?.folders?.size ?: 0,
+                            hasMore = !states.append.endOfPaginationReached,
+                            isLoadingMore = states.refresh is LoadState.Loading || states.append is LoadState.Loading,
+                            error = failure?.let(::resolveFavoriteErrorMessage),
+                        )
+                    }
                 }
             },
         )
@@ -1372,8 +1400,8 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
         _subscribedFolderActions.update {
             it + (key to SubscribedFolderActionState(isSubscribed = subscribed, isLoading = isLoading))
         }
-        if (_subscribedFolders.value.none { resolveSubscribedFavoriteFolderKey(it) == key }) {
-            _subscribedFolders.update { it + folder }
+        _subscribedFolders.update { current ->
+            if (current.none { resolveSubscribedFavoriteFolderKey(it) == key }) current + folder else current
         }
         // 订阅改变服务端页码偏移；保留撤销行，用新的 Paging 源从第一页重新校准。
         startSubscribedFolderPaging(preserveRows = true)
@@ -1423,15 +1451,17 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
                     if (_selectedFolderIndex.value == index) publishSelectedFolderPagingState()
                     val uniqueItems = items.distinctBy { it.id }.filter { it.id !in removedFolderItems[mediaId].orEmpty() }
                     val stateFlow = _folderStates[index] ?: return@launch
-                    stateFlow.value = stateFlow.value.copy(items = uniqueItems, isLoading = false, error = null, loadMoreError = null)
+                    stateFlow.update {
+                        it.copy(items = uniqueItems, isLoading = false, error = null, loadMoreError = null)
+                    }
                     onLoaded(uniqueItems)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 if (!isCurrentFolderRequest(index, requestGeneration, mediaId, requestedOrder)) return@launch
-                _folderStates[index]?.let { stateFlow ->
-                    stateFlow.value = stateFlow.value.copy(
+                _folderStates[index]?.update {
+                    it.copy(
                         error = e.message?.takeIf(String::isNotBlank) ?: "加载收藏夹失败"
                     )
                 }
@@ -1541,12 +1571,16 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
         if (_isFavoriteManagingState.value || title.isBlank()) return
         _isFavoriteManagingState.value = true
         accountRequests.launch {
-            val result = com.android.purebilibili.data.repository.ActionRepository.createFavFolder(
-                title = title.trim(),
-                intro = intro.trim(),
-                isPrivate = isPrivate,
-            )
-            finishFolderMutation(result.map { Unit }, "已创建收藏夹")
+            try {
+                val result = com.android.purebilibili.data.repository.ActionRepository.createFavFolder(
+                    title = title.trim(),
+                    intro = intro.trim(),
+                    isPrivate = isPrivate,
+                )
+                finishFolderMutation(result.map { Unit }, "已创建收藏夹")
+            } finally {
+                _isFavoriteManagingState.value = false
+            }
         }
     }
 
@@ -1612,38 +1646,41 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
         val sourceMediaId = allFolderIds.getOrNull(folderIndex) ?: return
         _isFavoriteManagingState.value = true
         accountRequests.launch {
-            val result = if (targetMediaId == null) {
-                com.android.purebilibili.data.repository.FavoriteRepository.removeResources(
-                    mediaId = sourceMediaId,
-                    resourceIds = resourceIds,
-                )
-            } else {
-                com.android.purebilibili.data.repository.FavoriteRepository.copyOrMoveResources(
-                    sourceMediaId = sourceMediaId,
-                    targetMediaId = targetMediaId,
-                    mid = currentUserMid,
-                    resourceIds = resourceIds,
-                    copy = copy,
-                )
+            try {
+                val result = if (targetMediaId == null) {
+                    com.android.purebilibili.data.repository.FavoriteRepository.removeResources(
+                        mediaId = sourceMediaId,
+                        resourceIds = resourceIds,
+                    )
+                } else {
+                    com.android.purebilibili.data.repository.FavoriteRepository.copyOrMoveResources(
+                        sourceMediaId = sourceMediaId,
+                        targetMediaId = targetMediaId,
+                        mid = currentUserMid,
+                        resourceIds = resourceIds,
+                        copy = copy,
+                    )
+                }
+                android.widget.Toast.makeText(
+                    getApplication(),
+                    result.fold(
+                        onSuccess = {
+                            when {
+                                targetMediaId == null -> "已删除 ${resourceIds.size} 个内容"
+                                copy -> "已复制 ${resourceIds.size} 个内容"
+                                else -> "已移动 ${resourceIds.size} 个内容"
+                            }
+                        },
+                        onFailure = { it.message ?: "操作失败" },
+                    ),
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+                if (result.isSuccess && (targetMediaId == null || !copy)) {
+                    reloadFavoriteFolder(folderIndex)
+                }
+            } finally {
+                _isFavoriteManagingState.value = false
             }
-            android.widget.Toast.makeText(
-                getApplication(),
-                result.fold(
-                    onSuccess = {
-                        when {
-                            targetMediaId == null -> "已删除 ${resourceIds.size} 个内容"
-                            copy -> "已复制 ${resourceIds.size} 个内容"
-                            else -> "已移动 ${resourceIds.size} 个内容"
-                        }
-                    },
-                    onFailure = { it.message ?: "操作失败" },
-                ),
-                android.widget.Toast.LENGTH_SHORT,
-            ).show()
-            if (result.isSuccess && (targetMediaId == null || !copy)) {
-                reloadFavoriteFolder(folderIndex)
-            }
-            _isFavoriteManagingState.value = false
         }
     }
 
@@ -1657,10 +1694,12 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
         folderLoadedOrders.remove(index)
         invalidateFolderRequest(index)
         val stateFlow = _folderStates.getOrPut(index) { MutableStateFlow(ListUiState(isLoading = true)) }
-        stateFlow.value = stateFlow.value.copy(
-            isLoading = true,
-            error = null
-        )
+        stateFlow.update {
+            it.copy(
+                isLoading = true,
+                error = null
+            )
+        }
         loadFolder(index)
     }
 
@@ -1728,10 +1767,11 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
                     }
                 }
                 removedFolderItems[currentMediaId]?.remove(video.id)
-                stateFlow.update { it.copy(items = restore(it.items), error = message) }
+                stateFlow.update { it.copy(items = restore(it.items)) }
                 if (_selectedFolderIndex.value == folderIndex) {
-                    _uiState.update { it.copy(items = restore(it.items), error = message) }
+                    _uiState.update { it.copy(items = restore(it.items)) }
                 }
+                _actionEvents.trySend(message)
             }
             try {
                 removedFolderItems.getOrPut(currentMediaId) { mutableSetOf() }.add(video.id)

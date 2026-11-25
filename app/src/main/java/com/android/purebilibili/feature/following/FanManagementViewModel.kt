@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.following
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.coroutines.AccountScopedRequests
@@ -7,22 +8,27 @@ import com.android.purebilibili.core.store.AccountSessionIdentity
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.repository.FanManagementRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@Immutable
 internal data class FanManagementState(
     val identity: AccountSessionIdentity = TokenManager.accountIdentity.value,
     val isFan: Boolean? = null,
     val removing: Boolean = false,
-    val message: String? = null,
 )
 
 internal class FanManagementViewModel(private val mid: Long) : ViewModel() {
     private val requests = AccountScopedRequests(viewModelScope)
     private val mutableState = MutableStateFlow(FanManagementState())
     val state = mutableState.asStateFlow()
+    private val _events = Channel<String>(Channel.BUFFERED)
+    val events: Flow<String> = _events.receiveAsFlow()
     private var relationJob: Job? = null
 
     init {
@@ -54,17 +60,15 @@ internal class FanManagementViewModel(private val mid: Long) : ViewModel() {
         val current = mutableState.value
         if (!requests.isCurrent(current.identity) || current.isFan != true || current.removing) return
         relationJob?.cancel()
-        mutableState.update { it.copy(removing = true, message = null) }
+        mutableState.update { it.copy(removing = true) }
         requests.launch {
             val result = FanManagementRepository.remove(current.identity, mid)
             if (!requests.isCurrent(current.identity)) return@launch
             mutableState.update { it.copy(
                 isFan = if (result.isSuccess) false else it.isFan,
                 removing = false,
-                message = result.exceptionOrNull()?.message ?: "已移除粉丝",
             ) }
+            _events.trySend(result.exceptionOrNull()?.message ?: "已移除粉丝")
         }
     }
-
-    fun clearMessage() { mutableState.update { it.copy(message = null) } }
 }

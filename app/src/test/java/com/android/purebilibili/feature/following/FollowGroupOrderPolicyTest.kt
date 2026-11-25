@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.following
 
 import com.android.purebilibili.data.model.response.RelationTagItem
+import kotlinx.collections.immutable.toImmutableList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -39,8 +40,8 @@ class FollowGroupOrderPolicyTest {
 
     @Test
     fun returningToOriginalOrderClearsDirtyState() {
-        val original = groups(1, 2, 3)
-        assertTrue(FollowGroupOrderState(identity = com.android.purebilibili.core.store.AccountSessionIdentity(), original = original, draft = moveFollowGroup(original, 1, 2)).dirty)
+        val original = groups(1, 2, 3).toImmutableList()
+        assertTrue(FollowGroupOrderState(identity = com.android.purebilibili.core.store.AccountSessionIdentity(), original = original, draft = moveFollowGroup(original, 1, 2).toImmutableList()).dirty)
         assertFalse(FollowGroupOrderState(identity = com.android.purebilibili.core.store.AccountSessionIdentity(), original = original, draft = original).dirty)
         assertFalse(FollowGroupOrderState(identity = com.android.purebilibili.core.store.AccountSessionIdentity(), original = null, draft = original).dirty)
     }

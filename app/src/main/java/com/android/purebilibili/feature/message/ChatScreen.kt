@@ -451,6 +451,9 @@ fun ChatScreen(
                             )
                         }
                         else -> {
+                            val reversedMessages = remember(uiState.messages) {
+                                uiState.messages.asReversed()
+                            }
                             LazyColumn(
                                 state = listState,
                                 reverseLayout = true,
@@ -477,7 +480,7 @@ fun ChatScreen(
                                     }
                                 }
                                 items(
-                                    items = uiState.messages.asReversed(),
+                                    items = reversedMessages,
                                     key = ::chatMessageKey,
                                 ) { message ->
                                     MessageBubble(
@@ -542,19 +545,24 @@ fun ChatScreen(
                         }
                     }
 
-                    // 发送错误提示
-                    (uiState.sendError ?: uiState.notice)?.let { error ->
+                    // 发送/举报/会话控制反馈提示
+                    val feedbackEvent = uiState.sendNotice ?: uiState.sessionControlError
+                    feedbackEvent?.let { event ->
+                        LaunchedEffect(event.id, viewModel) {
+                            delay(3_000L)
+                            viewModel.consumeChatFeedback(event.id)
+                        }
                         AppSnackbar(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(16.dp),
                             action = {
-                                AppTextButton(onClick = { viewModel.clearSendError() }) {
+                                AppTextButton(onClick = { viewModel.consumeChatFeedback(event.id) }) {
                                     AppText("知道了")
                                 }
                             }
                         ) {
-                            AppText(error)
+                            AppText(event.message)
                         }
                     }
                 }

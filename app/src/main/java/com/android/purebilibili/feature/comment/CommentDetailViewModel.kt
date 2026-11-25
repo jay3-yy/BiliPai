@@ -29,6 +29,8 @@ import com.android.purebilibili.feature.video.viewmodel.resolveSubReplyRemoteTot
 import com.android.purebilibili.feature.video.viewmodel.resolveSentSubReply
 import com.android.purebilibili.feature.video.viewmodel.withSentSubReply
 import com.android.purebilibili.feature.video.viewmodel.shouldApplySentSubReplyResult
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toPersistentSet
 import kotlinx.coroutines.Job
@@ -52,10 +54,10 @@ class CommentDetailViewModel : ViewModel() {
     private val _subReplyState = MutableStateFlow(SubReplyUiState())
     val subReplyState = _subReplyState.filteredSubReplies(viewModelScope)
 
-    private val _likedComments = MutableStateFlow<Set<Long>>(emptySet())
+    private val _likedComments = MutableStateFlow<ImmutableSet<Long>>(persistentSetOf())
     val likedComments = _likedComments.asStateFlow()
 
-    private val _hatedComments = MutableStateFlow<Set<Long>>(emptySet())
+    private val _hatedComments = MutableStateFlow<ImmutableSet<Long>>(persistentSetOf())
     val hatedComments = _hatedComments.asStateFlow()
 
     private val _showCommentInput = MutableStateFlow(false)
@@ -151,10 +153,10 @@ class CommentDetailViewModel : ViewModel() {
         _composerDrafts.update { it.reset() }
         hideReplyInput()
         _isSending.value = false
-        _likedComments.value = emptySet()
-        _hatedComments.value = emptySet()
+        _likedComments.value = persistentSetOf()
+        _hatedComments.value = persistentSetOf()
         // Successful sends and deletions remain in the subject store across UI sessions.
-        _subReplyState.value = SubReplyUiState(totalCount = _subReplyState.value.totalCount)
+        _subReplyState.update { SubReplyUiState(totalCount = it.totalCount) }
     }
 
     fun loadInitial(
@@ -199,16 +201,18 @@ class CommentDetailViewModel : ViewModel() {
 
         val localItems = store.repliesFor(rootId).toImmutableList()
         val localRoot = store.rootFor(rootId)
-        _subReplyState.value = SubReplyUiState(
-            visible = true,
-            rootReply = localRoot,
-            items = localItems,
-            baseItems = localItems,
-            totalCount = maxOf(_subReplyState.value.totalCount, localRoot?.count ?: 0, localRoot?.rcount ?: 0, localItems.size),
-            isLoading = true,
-            error = null,
-            targetReplyId = targetReplyId
-        )
+        _subReplyState.update { prev ->
+            SubReplyUiState(
+                visible = true,
+                rootReply = localRoot,
+                items = localItems,
+                baseItems = localItems,
+                totalCount = maxOf(prev.totalCount, localRoot?.count ?: 0, localRoot?.rcount ?: 0, localItems.size),
+                isLoading = true,
+                error = null,
+                targetReplyId = targetReplyId
+            )
+        }
 
         startSubReplyPaging()
     }
@@ -229,11 +233,13 @@ class CommentDetailViewModel : ViewModel() {
         val anchor = state.conversationAnchor.takeUnless { state.hasUnavailableFloor }
         dialogPagingSession = null
         dialogLoadJob?.cancel()
-        _subReplyState.value = state.copy(
-            isLoading = true, isRefreshing = true, error = null,
-            conversationAnchor = anchor,
-            targetReplyId = if (state.hasUnavailableFloor) state.targetReplyId else 0L,
-        )
+        _subReplyState.update { current ->
+            current.copy(
+                isLoading = true, isRefreshing = true, error = null,
+                conversationAnchor = anchor,
+                targetReplyId = if (current.hasUnavailableFloor) current.targetReplyId else 0L,
+            )
+        }
         if (anchor != null) {
             loadConversationReplies(anchor, page = 1)
         } else {
@@ -255,7 +261,7 @@ class CommentDetailViewModel : ViewModel() {
         if (state.rootReply == null) return
         if (pagingSession == null) {
             // Returning from a conversation dropped the session; reload from the first page.
-            _subReplyState.value = state.copy(isLoading = true, error = null)
+            _subReplyState.update { it.copy(isLoading = true, error = null) }
             startSubReplyPaging()
             return
         }
@@ -301,14 +307,16 @@ class CommentDetailViewModel : ViewModel() {
                 ) {
                     val failure = (states.refresh as? LoadState.Error)?.error ?: (states.append as? LoadState.Error)?.error
                     val ready = states.refresh is LoadState.NotLoading && pages.size > appliedPages
+                    if (ready) {
+                        currentRootId = threadRootId
+                        currentTargetReplyId = pages.first().data.resolvedTargetReplyId.takeIf { it > 0L }
+                            ?: target.takeIf { it != threadRootId } ?: 0L
+                    }
                     var recoveredConversationTarget: ReplyItem? = null
                     _subReplyState.update { current ->
                         var next = current
                         if (ready) {
                             val last = pages.last()
-                            currentRootId = threadRootId
-                            currentTargetReplyId = pages.first().data.resolvedTargetReplyId.takeIf { it > 0L }
-                                ?: target.takeIf { it != threadRootId } ?: 0L
                             val remoteRoot = resolveRoutedCommentRootReply(emptyList(), last.data, threadRootId)
                                 ?: current.rootReply?.takeIf { it.rpid == threadRootId } ?: seedRoot?.takeIf { it.rpid == threadRootId }
                             val root = remoteRoot?.let { store.merge(listOf(it)).firstOrNull { reply -> reply.rpid == threadRootId } }
@@ -335,9 +343,9 @@ class CommentDetailViewModel : ViewModel() {
                                     retryRequest = null
                                 )
                                 // An unreadable floor falls back to the recovered target's conversation.
-                                if (root == null) {
-                                    recoveredConversationTarget = items.firstOrNull { it.rpid == next.targetReplyId }
-                                }
+                                recoveredConversationTarget = if (root == null) {
+                                    items.firstOrNull { it.rpid == next.targetReplyId }
+                                } else null
                             }
                         }
                         next.copy(
@@ -359,42 +367,45 @@ class CommentDetailViewModel : ViewModel() {
     }
 
     fun openConversation(reply: ReplyItem) {
-        val current = _subReplyState.value
-        if (!current.visible || reply.root <= 0L || reply.dialog <= 0L ||
-            reply.parent == reply.root || reply.root != current.threadRootId
+        val snapshot = _subReplyState.value
+        if (!snapshot.visible || reply.root <= 0L || reply.dialog <= 0L ||
+            reply.parent == reply.root || reply.root != snapshot.threadRootId
         ) return
-        val baseItems = if (current.conversationAnchor == null) current.items else current.baseItems
         val dialogId = reply.dialog
         val parentId = reply.parent
         val anchorId = reply.rpid
-        val localItems = baseItems.filter { candidate ->
-            candidate.rpid == anchorId ||
-                (dialogId > 0 && (
-                    candidate.dialog == dialogId ||
-                        candidate.rpid == dialogId ||
-                        candidate.parent == dialogId
-                    )) ||
-                (parentId > 0 && (
-                    candidate.rpid == parentId ||
-                        candidate.parent == parentId
-                    ))
-        }.ifEmpty { listOf(reply) }.distinctBy { it.rpid }
         dialogPagingSession = null
-        _subReplyState.value = current.copy(
-            items = localItems.toImmutableList(),
-            baseItems = baseItems.toImmutableList(),
-            basePage = current.page,
-            baseIsEnd = current.isEnd,
-            baseGrpcNextOffset = current.grpcNextOffset,
-            conversationAnchor = reply,
-            page = 1,
-            isEnd = false,
-            isLoading = true,
-            isRefreshing = false,
-            retryRequest = null,
-            error = null,
-            grpcNextOffset = null,
-        )
+        _subReplyState.update { current ->
+            if (!current.visible || reply.root != current.threadRootId) return@update current
+            val baseItems = if (current.conversationAnchor == null) current.items else current.baseItems
+            val localItems = baseItems.filter { candidate ->
+                candidate.rpid == anchorId ||
+                    (dialogId > 0 && (
+                        candidate.dialog == dialogId ||
+                            candidate.rpid == dialogId ||
+                            candidate.parent == dialogId
+                        )) ||
+                    (parentId > 0 && (
+                        candidate.rpid == parentId ||
+                            candidate.parent == parentId
+                        ))
+            }.ifEmpty { listOf(reply) }.distinctBy { it.rpid }
+            current.copy(
+                items = localItems.toImmutableList(),
+                baseItems = baseItems.toImmutableList(),
+                basePage = current.page,
+                baseIsEnd = current.isEnd,
+                baseGrpcNextOffset = current.grpcNextOffset,
+                conversationAnchor = reply,
+                page = 1,
+                isEnd = false,
+                isLoading = true,
+                isRefreshing = false,
+                retryRequest = null,
+                error = null,
+                grpcNextOffset = null,
+            )
+        }
         loadConversationReplies(reply, page = 1)
     }
 
@@ -407,17 +418,20 @@ class CommentDetailViewModel : ViewModel() {
             close()
             return
         }
-        _subReplyState.value = current.copy(
-            items = current.baseItems,
-            page = current.basePage,
-            isEnd = current.baseIsEnd,
-            grpcNextOffset = current.baseGrpcNextOffset,
-            conversationAnchor = null,
-            isLoading = false,
-            isRefreshing = false,
-            retryRequest = null,
-            error = null,
-        )
+        _subReplyState.update { state ->
+            if (state.conversationAnchor == null) state
+            else state.copy(
+                items = state.baseItems,
+                page = state.basePage,
+                isEnd = state.baseIsEnd,
+                grpcNextOffset = state.baseGrpcNextOffset,
+                conversationAnchor = null,
+                isLoading = false,
+                isRefreshing = false,
+                retryRequest = null,
+                error = null,
+            )
+        }
     }
 
     private fun loadConversationReplies(anchorReply: ReplyItem, page: Int) {
@@ -446,24 +460,27 @@ class CommentDetailViewModel : ViewModel() {
                 if (dialogPagingSession === session && threadSession == sessionId &&
                     accountIdentity.value == account && _subReplyState.value.conversationAnchor?.let { it.rpid } == anchorReply.rpid
                 ) {
-                    val current = _subReplyState.value
                     val newItems = data.replies.orEmpty()
                     val nextOffset = data.grpcNextOffset.takeIf { it.isNotBlank() }
                     remoteItems = if (request.page == 1) newItems else remoteItems + newItems
-                    // DialogList can omit the known target from its first page.
-                    val knownTarget = if (current.rootReply == null) anchorReply else null
-                    val updatedItems = mergeSentSubReplies(remoteItems, listOfNotNull(knownTarget))
-                        .filterNot { sentReplyStore?.isReplyRemoved(it.rpid) == true }
-                    _subReplyState.value = current.copy(
-                        items = updatedItems.ifEmpty { current.items }.toImmutableList(),
-                        isLoading = false,
-                        isRefreshing = false,
-                        page = request.page,
-                        isEnd = data.cursor.isEnd,
-                        error = null,
-                        retryRequest = null,
-                        grpcNextOffset = nextOffset,
-                    )
+                    val snapshotRemote = remoteItems
+                    _subReplyState.update { current ->
+                        if (current.conversationAnchor?.rpid != anchorReply.rpid) return@update current
+                        // DialogList can omit the known target from its first page.
+                        val knownTarget = if (current.rootReply == null) anchorReply else null
+                        val updatedItems = mergeSentSubReplies(snapshotRemote, listOfNotNull(knownTarget))
+                            .filterNot { sentReplyStore?.isReplyRemoved(it.rpid) == true }
+                        current.copy(
+                            items = updatedItems.ifEmpty { current.items }.toImmutableList(),
+                            isLoading = false,
+                            isRefreshing = false,
+                            page = request.page,
+                            isEnd = data.cursor.isEnd,
+                            error = null,
+                            retryRequest = null,
+                            grpcNextOffset = nextOffset,
+                        )
+                    }
                 }
             },
             onState = { loading, end, failure ->
@@ -503,8 +520,9 @@ class CommentDetailViewModel : ViewModel() {
         imageUris: List<Uri>,
         syncToDynamic: Boolean
     ) {
+        val immutableUris = imageUris.toImmutableList()
         _composerDrafts.update {
-            it.update(sessionId, replyRpid, CommentComposerDraft(text, imageUris, syncToDynamic))
+            it.update(sessionId, replyRpid, CommentComposerDraft(text, immutableUris, syncToDynamic))
         }
     }
 
@@ -581,13 +599,18 @@ class CommentDetailViewModel : ViewModel() {
         val isCurrentlyLiked = _likedComments.value.contains(rpid)
         val oid = currentOid
         val type = currentType
-        _likedComments.update { if (isCurrentlyLiked) it - rpid else it + rpid }
+        _likedComments.update {
+            if (isCurrentlyLiked) it.toPersistentSet().remove(rpid) else it.toPersistentSet().add(rpid)
+        }
         if (!isCurrentlyLiked) {
-            _hatedComments.update { it - rpid }
+            _hatedComments.update { it.toPersistentSet().remove(rpid) }
         }
         viewModelScope.launch {
-            CommentRepository.likeCommentForSubject(oid, type, rpid, !isCurrentlyLiked).onFailure {
-                _likedComments.update { if (isCurrentlyLiked) it + rpid else it - rpid }
+            CommentRepository.likeCommentForSubject(oid, type, rpid, !isCurrentlyLiked).onFailure { error ->
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                _likedComments.update {
+                    if (isCurrentlyLiked) it.toPersistentSet().add(rpid) else it.toPersistentSet().remove(rpid)
+                }
             }
         }
     }
@@ -596,13 +619,18 @@ class CommentDetailViewModel : ViewModel() {
         val isCurrentlyHated = _hatedComments.value.contains(rpid)
         val oid = currentOid
         val type = currentType
-        _hatedComments.update { if (isCurrentlyHated) it - rpid else it + rpid }
+        _hatedComments.update {
+            if (isCurrentlyHated) it.toPersistentSet().remove(rpid) else it.toPersistentSet().add(rpid)
+        }
         if (!isCurrentlyHated) {
-            _likedComments.update { it - rpid }
+            _likedComments.update { it.toPersistentSet().remove(rpid) }
         }
         viewModelScope.launch {
-            CommentRepository.hateCommentForSubject(oid, type, rpid, !isCurrentlyHated).onFailure {
-                _hatedComments.update { if (isCurrentlyHated) it + rpid else it - rpid }
+            CommentRepository.hateCommentForSubject(oid, type, rpid, !isCurrentlyHated).onFailure { error ->
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                _hatedComments.update {
+                    if (isCurrentlyHated) it.toPersistentSet().add(rpid) else it.toPersistentSet().remove(rpid)
+                }
             }
         }
     }
@@ -629,13 +657,14 @@ class CommentDetailViewModel : ViewModel() {
                 }
                 if (store.isReplyRemoved(rpid)) return@onSuccess
                 store.removeReply(currentRootId, rpid)
-                val currentItems = _subReplyState.value.items
-                _subReplyState.value = _subReplyState.value.copy(
-                    items = currentItems.filterNot { it.rpid == rpid }.toImmutableList(),
-                    baseItems = _subReplyState.value.baseItems.filterNot { it.rpid == rpid }.toImmutableList(),
-                    conversationAnchor = _subReplyState.value.conversationAnchor?.takeUnless { it.rpid == rpid },
-                    totalCount = (_subReplyState.value.totalCount - 1).coerceAtLeast(0)
-                )
+                _subReplyState.update { current ->
+                    current.copy(
+                        items = current.items.filterNot { it.rpid == rpid }.toImmutableList(),
+                        baseItems = current.baseItems.filterNot { it.rpid == rpid }.toImmutableList(),
+                        conversationAnchor = current.conversationAnchor?.takeUnless { it.rpid == rpid },
+                        totalCount = (current.totalCount - 1).coerceAtLeast(0)
+                    )
+                }
             }
         }
     }
@@ -663,7 +692,10 @@ class CommentDetailViewModel : ViewModel() {
                 reason = reason,
             ).fold(
                 onSuccess = { onResult(true, "举报成功") },
-                onFailure = { onResult(false, it.message ?: "举报失败") },
+                onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    onResult(false, it.message ?: "举报失败")
+                },
             )
         }
     }
@@ -703,7 +735,10 @@ class CommentDetailViewModel : ViewModel() {
                     }
                     onResult(true, if (isCurrentlyTop) "已取消置顶" else "已置顶")
                 },
-                onFailure = { onResult(false, it.message ?: "置顶操作失败") },
+                onFailure = {
+                    if (it is kotlinx.coroutines.CancellationException) throw it
+                    onResult(false, it.message ?: "置顶操作失败")
+                },
             )
         }
     }

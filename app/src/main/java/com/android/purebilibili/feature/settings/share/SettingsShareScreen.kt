@@ -114,7 +114,7 @@ fun SettingsShareScreen(
                 Toast.LENGTH_SHORT
             ).show()
         }
-        viewModel.consumeShareUri()
+        viewModel.consumeShareUri(shareUri)
     }
 
     val bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()

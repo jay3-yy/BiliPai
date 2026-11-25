@@ -11,7 +11,10 @@ import com.android.purebilibili.data.repository.SearchUpOrder
 import com.android.purebilibili.data.repository.SearchUserType
 import com.android.purebilibili.core.database.entity.SearchHistory
 
+import androidx.compose.runtime.Immutable
+
 /** 页面壳只观察导航、筛选和输入是否为空；正文和联想数据由各自宿主读取。 */
+@Immutable
 internal data class SearchScreenState(
     val hasQuery: Boolean,
     val articleCategory: SearchArticleCategory,
@@ -64,6 +67,7 @@ internal fun SearchUiState.toSearchScreenState() = SearchScreenState(
     videoTid = videoTid,
 )
 
+@Immutable
 internal data class SearchLandingState(
     val hotList: List<SearchKeywordUiModel>,
     val hotListError: String?,
