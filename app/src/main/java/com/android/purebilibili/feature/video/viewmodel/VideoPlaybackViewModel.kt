@@ -59,6 +59,7 @@ import com.android.purebilibili.plugin.sdk.CdnLineDiagnostic
 import com.android.purebilibili.plugin.sdk.PlaybackCdnPlugin
 import com.android.purebilibili.feature.plugin.PlaybackCdnPreference
 import com.android.purebilibili.feature.plugin.applyPlaybackCdnPreference
+import com.android.purebilibili.feature.plugin.rebindAdaptiveDashSourceForCdnSelection
 import com.android.purebilibili.feature.plugin.buildPlaybackCdnCacheKeys
 import com.android.purebilibili.feature.plugin.buildCdnLineDiagnostics
 import com.android.purebilibili.feature.plugin.buildCdnTrackCacheKey
@@ -9992,12 +9993,25 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         val allAudioUrls = preferredCandidates.map { it.audioUrl.orEmpty() }
         val selectedVideoUrl = allVideoUrls.firstOrNull() ?: videoUrl
         val selectedAudioUrl = allAudioUrls.firstOrNull()?.takeIf { it.isNotBlank() } ?: audioUrl
-        val selectedAdaptiveDashSource =
-            if (selectedVideoUrl == videoUrl && selectedAudioUrl == audioUrl) {
-                adaptiveDashSource
-            } else {
-                null
-            }
+        val selectedAdaptiveDashSource = rebindAdaptiveDashSourceForCdnSelection(
+            source = adaptiveDashSource,
+            originalVideoUrl = videoUrl,
+            originalAudioUrl = audioUrl,
+            selectedVideoUrl = selectedVideoUrl,
+            selectedAudioUrl = selectedAudioUrl,
+        )
+        if (CdnTransferRuntime.enabled) {
+            val extraVideoUrls = selectedAdaptiveDashSource?.videoTracks
+                ?.flatMap { listOf(it.baseUrl) + it.backupUrl.orEmpty() }
+                .orEmpty()
+            val extraAudioUrls = selectedAdaptiveDashSource?.audioTracks
+                ?.flatMap { listOf(it.baseUrl) + it.backupUrl.orEmpty() }
+                .orEmpty()
+            CdnTransferRuntime.registerAdaptiveTracks(
+                video = (listOf(selectedVideoUrl) + extraVideoUrls).distinct(),
+                audio = (listOfNotNull(selectedAudioUrl) + extraAudioUrls).distinct(),
+            )
+        }
 
         return PlaybackCdnCandidateSelection(
             playUrl = selectedVideoUrl,
@@ -10005,7 +10019,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             adaptiveDashSource = selectedAdaptiveDashSource,
             allVideoUrls = allVideoUrls,
             allAudioUrls = allAudioUrls,
-            cdnCacheKeysByUrl = buildPlaybackCdnCacheKeys(preferredCandidates),
+            cdnCacheKeysByUrl = buildPlaybackCdnCacheKeys(preferredCandidates, selectedAdaptiveDashSource),
             candidateSources = preferredCandidates.map { it.source },
             regionLabel = cdnRewrite?.regionLabel,
             lineDiagnostics = cdnPlugin?.buildPlaybackCdnDiagnostics(

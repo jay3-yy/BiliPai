@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.player.dash.AdaptiveDashPlaybackSource
 import com.android.purebilibili.plugin.sdk.PlaybackCdnCandidate
 
 import java.net.URI
@@ -83,7 +84,10 @@ internal fun sortSafeSignedPlaybackCandidates(
     )
 }
 
-internal fun buildPlaybackCdnCacheKeys(candidates: List<PlaybackCdnCandidate>): Map<String, String> {
+internal fun buildPlaybackCdnCacheKeys(
+    candidates: List<PlaybackCdnCandidate>,
+    adaptiveDashSource: AdaptiveDashPlaybackSource? = null,
+): Map<String, String> {
     return buildMap {
         candidates.forEach { candidate ->
             if (candidate.videoUrl.isNotBlank()) {
@@ -93,7 +97,121 @@ internal fun buildPlaybackCdnCacheKeys(candidates: List<PlaybackCdnCandidate>): 
                 put(audioUrl, buildCdnTrackCacheKey(trackId = "audio", url = audioUrl))
             }
         }
+        adaptiveDashSource?.videoTracks?.forEach { track ->
+            val url = track.getValidUrl()
+            if (url.isNotBlank()) {
+                put(url, buildCdnTrackCacheKey(trackId = "video", url = url))
+            }
+        }
+        adaptiveDashSource?.audioTracks?.forEach { track ->
+            val url = track.getValidUrl()
+            if (url.isNotBlank()) {
+                put(url, buildCdnTrackCacheKey(trackId = "audio", url = url))
+            }
+        }
     }
+}
+
+internal fun rebindAdaptiveDashSourceForCdnSelection(
+    source: AdaptiveDashPlaybackSource?,
+    originalVideoUrl: String,
+    originalAudioUrl: String?,
+    selectedVideoUrl: String,
+    selectedAudioUrl: String?,
+): AdaptiveDashPlaybackSource? {
+    if (source == null) return null
+    if (selectedVideoUrl == originalVideoUrl && selectedAudioUrl == originalAudioUrl) {
+        return source
+    }
+    if (selectedVideoUrl.isBlank()) return null
+
+    fun escapeXml(value: String): String = value
+        .replace("&", "&amp;")
+        .replace("\"", "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+
+    var manifest = source.manifest
+    val originalVideoTag = "<BaseURL>${escapeXml(originalVideoUrl)}</BaseURL>"
+    val selectedVideoTag = "<BaseURL>${escapeXml(selectedVideoUrl)}</BaseURL>"
+    if (originalVideoUrl.isNotBlank() && selectedVideoUrl != originalVideoUrl) {
+        if (!manifest.contains(originalVideoTag)) return null
+        manifest = manifest.replace(originalVideoTag, selectedVideoTag)
+    }
+
+    val targetVideoHost = hostFromCdnUrl(selectedVideoUrl).takeIf {
+        it.isNotBlank() &&
+            isHostPortableCdnUrl(selectedVideoUrl) &&
+            isHostPortableCdnUrl(originalVideoUrl) &&
+            !it.equals(hostFromCdnUrl(originalVideoUrl), ignoreCase = true)
+    }
+
+    val updatedVideoTracks = source.videoTracks.map { track ->
+        val validUrl = track.getValidUrl()
+        val rewrittenUrl = when {
+            validUrl == originalVideoUrl -> selectedVideoUrl
+            targetVideoHost != null && isHostPortableCdnUrl(validUrl) ->
+                rewriteBilivideoHost(validUrl, targetVideoHost) ?: validUrl
+            else -> validUrl
+        }
+        if (rewrittenUrl != validUrl && validUrl.isNotBlank()) {
+            val oldTag = "<BaseURL>${escapeXml(validUrl)}</BaseURL>"
+            val newTag = "<BaseURL>${escapeXml(rewrittenUrl)}</BaseURL>"
+            if (manifest.contains(oldTag)) {
+                manifest = manifest.replace(oldTag, newTag)
+            }
+            track.copy(baseUrl = rewrittenUrl)
+        } else {
+            track
+        }
+    }
+
+    val audioChanged = !originalAudioUrl.isNullOrBlank() &&
+        !selectedAudioUrl.isNullOrBlank() &&
+        selectedAudioUrl != originalAudioUrl
+    if (audioChanged) {
+        val originalAudioTag = "<BaseURL>${escapeXml(originalAudioUrl!!)}</BaseURL>"
+        val selectedAudioTag = "<BaseURL>${escapeXml(selectedAudioUrl!!)}</BaseURL>"
+        if (!manifest.contains(originalAudioTag)) return null
+        manifest = manifest.replace(originalAudioTag, selectedAudioTag)
+    }
+
+    val targetAudioHost = if (audioChanged) {
+        hostFromCdnUrl(selectedAudioUrl!!).takeIf {
+            it.isNotBlank() &&
+                isHostPortableCdnUrl(selectedAudioUrl) &&
+                isHostPortableCdnUrl(originalAudioUrl!!) &&
+                !it.equals(hostFromCdnUrl(originalAudioUrl), ignoreCase = true)
+        }
+    } else {
+        null
+    }
+
+    val updatedAudioTracks = source.audioTracks.map { track ->
+        val validUrl = track.getValidUrl()
+        val rewrittenUrl = when {
+            audioChanged && validUrl == originalAudioUrl -> selectedAudioUrl!!
+            targetAudioHost != null && isHostPortableCdnUrl(validUrl) ->
+                rewriteBilivideoHost(validUrl, targetAudioHost) ?: validUrl
+            else -> validUrl
+        }
+        if (rewrittenUrl != validUrl && validUrl.isNotBlank()) {
+            val oldTag = "<BaseURL>${escapeXml(validUrl)}</BaseURL>"
+            val newTag = "<BaseURL>${escapeXml(rewrittenUrl)}</BaseURL>"
+            if (manifest.contains(oldTag)) {
+                manifest = manifest.replace(oldTag, newTag)
+            }
+            track.copy(baseUrl = rewrittenUrl)
+        } else {
+            track
+        }
+    }
+
+    return source.copy(
+        manifest = manifest,
+        videoTracks = updatedVideoTracks,
+        audioTracks = updatedAudioTracks,
+    )
 }
 
 /** 常规镜像也可能通过 os=mcdn 标记资源来源，只看域名会漏判。 */

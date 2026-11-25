@@ -88,7 +88,7 @@ private data class CdnActivePlaybackSession(
 class CdnRegionPlugin : BuiltinPlugin, PlaybackCdnPlugin, CdnTransferControls {
     override val id: String = BuiltinPluginIds.PLAYBACK_CDN
     override val name: String = "CDN 智能选线"
-    override val description: String = "在 B 站当前授权的签名 CDN 候选中选线，并可选预缓存未来 DASH 分片"
+    override val description: String = "在 B 站当前授权的签名 CDN 候选中选线，支持多节点并发分块加速与可选分片预缓存"
     override val version: String = "1.5.0"
     override val author: String = "BiliPai项目组"
     override val icon: ImageVector = Icons.Outlined.Dns
@@ -125,7 +125,7 @@ class CdnRegionPlugin : BuiltinPlugin, PlaybackCdnPlugin, CdnTransferControls {
         val context = PluginManager.getContext()
         catalog = loadCdnRegionCatalog(context)
         cache = CdnRegionPluginStore.read(context)
-        CdnTransferRuntime.configure(running, cache.parallelDownloadEnabled && !cache.experimentalRewriteEnabled)
+        CdnTransferRuntime.configure(buildParallelConfig(running, cache))
         compiledCustomRules = compileCdnCustomRules(cache.customRules)
         AppScope.ioScope.launch {
             delay(1_500L)
@@ -146,7 +146,7 @@ class CdnRegionPlugin : BuiltinPlugin, PlaybackCdnPlugin, CdnTransferControls {
         audioUrls: List<String>
     ): PlaybackCdnRewriteResult {
         val snapshot = cache
-        CdnTransferRuntime.configure(running, snapshot.parallelDownloadEnabled && !snapshot.experimentalRewriteEnabled)
+        CdnTransferRuntime.configure(buildParallelConfig(running, snapshot))
         CdnTransferRuntime.register(videoUrls, audioUrls)
         val originalCandidates = buildPlaybackCdnCandidates(videoUrls, audioUrls)
         publishActivePlaybackCandidates(originalCandidates)
@@ -261,10 +261,39 @@ class CdnRegionPlugin : BuiltinPlugin, PlaybackCdnPlugin, CdnTransferControls {
     override fun canUseParallelDownload(): Boolean = running && !cache.experimentalRewriteEnabled
 
     override suspend fun setParallelDownloadEnabled(enabled: Boolean) {
-        val next = cache.copy(parallelDownloadEnabled = enabled)
+        updateParallelCache { it.copy(parallelDownloadEnabled = enabled) }
+    }
+
+    override fun currentParallelConfig(): CdnParallelConfig = buildParallelConfig(running, cache)
+
+    override suspend fun setParallelMirrorMode(mode: CdnParallelMirrorMode) {
+        updateParallelCache { it.copy(parallelMirrorMode = mode.storageValue) }
+    }
+
+    override suspend fun setParallelConcurrencyPreset(preset: CdnConcurrencyPreset) {
+        updateParallelCache { it.copy(parallelConcurrency = preset.storageValue) }
+    }
+
+    override suspend fun setParallelAllowCellular(allow: Boolean) {
+        updateParallelCache { it.copy(parallelAllowCellular = allow) }
+    }
+
+    private suspend fun updateParallelCache(transform: (CdnRegionPluginCache) -> CdnRegionPluginCache) {
+        val next = transform(cache)
         CdnRegionPluginStore.write(PluginManager.getContext(), next)
         cache = next
-        CdnTransferRuntime.configure(running, enabled && !next.experimentalRewriteEnabled)
+        CdnTransferRuntime.configure(buildParallelConfig(running, next))
+    }
+
+    private fun buildParallelConfig(active: Boolean, snapshot: CdnRegionPluginCache): CdnParallelConfig {
+        return CdnParallelConfig(
+            active = active,
+            parallel = snapshot.parallelDownloadEnabled && !snapshot.experimentalRewriteEnabled,
+            mirrorMode = CdnParallelMirrorMode.fromStorageValue(snapshot.parallelMirrorMode),
+            concurrencyPreset = CdnConcurrencyPreset.fromStorageValue(snapshot.parallelConcurrency),
+            allowCellular = snapshot.parallelAllowCellular,
+            customHosts = snapshot.parallelCustomHosts,
+        )
     }
 
     override fun isAdaptivePrefetchEnabled(): Boolean {
@@ -287,6 +316,10 @@ class CdnRegionPlugin : BuiltinPlugin, PlaybackCdnPlugin, CdnTransferControls {
             mutableStateOf(snapshot.experimentalRewriteEnabled)
         }
         var customRuleError by remember { mutableStateOf<String?>(null) }
+        var customParallelHostsInput by remember(snapshot.parallelCustomHosts) {
+            mutableStateOf(snapshot.parallelCustomHosts.joinToString("\n"))
+        }
+        var customParallelHostsError by remember { mutableStateOf<String?>(null) }
         var activeCandidates by remember { mutableStateOf<List<PlaybackCdnCandidate>>(emptyList()) }
         var liveDiagnostics by remember { mutableStateOf<List<CdnLineDiagnostic>>(emptyList()) }
 
@@ -333,6 +366,8 @@ class CdnRegionPlugin : BuiltinPlugin, PlaybackCdnPlugin, CdnTransferControls {
                 color = AppContentColors.secondaryText()
             )
             Spacer(modifier = Modifier.height(10.dp))
+            val mirrorMode = CdnParallelMirrorMode.fromStorageValue(snapshot.parallelMirrorMode)
+            val concurrencyPreset = CdnConcurrencyPreset.fromStorageValue(snapshot.parallelConcurrency)
             CdnTransferPanel(
                 state = transfers,
                 diagnostics = liveDiagnostics,
@@ -344,7 +379,31 @@ class CdnRegionPlugin : BuiltinPlugin, PlaybackCdnPlugin, CdnTransferControls {
                     val next = snapshot.copy(parallelDownloadEnabled = enabled)
                     snapshot = next
                     cache = next
-                    CdnTransferRuntime.configure(running, enabled && !next.experimentalRewriteEnabled)
+                    CdnTransferRuntime.configure(buildParallelConfig(running, next))
+                    scope.launch { CdnRegionPluginStore.write(context, next) }
+                },
+                mirrorMode = mirrorMode,
+                concurrencyPreset = concurrencyPreset,
+                allowCellular = snapshot.parallelAllowCellular,
+                onMirrorModeChange = { nextMode ->
+                    val next = snapshot.copy(parallelMirrorMode = nextMode.storageValue)
+                    snapshot = next
+                    cache = next
+                    CdnTransferRuntime.configure(buildParallelConfig(running, next))
+                    scope.launch { CdnRegionPluginStore.write(context, next) }
+                },
+                onConcurrencyPresetChange = { nextPreset ->
+                    val next = snapshot.copy(parallelConcurrency = nextPreset.storageValue)
+                    snapshot = next
+                    cache = next
+                    CdnTransferRuntime.configure(buildParallelConfig(running, next))
+                    scope.launch { CdnRegionPluginStore.write(context, next) }
+                },
+                onAllowCellularChange = { allow ->
+                    val next = snapshot.copy(parallelAllowCellular = allow)
+                    snapshot = next
+                    cache = next
+                    CdnTransferRuntime.configure(buildParallelConfig(running, next))
                     scope.launch { CdnRegionPluginStore.write(context, next) }
                 },
                 onCheck = {
@@ -364,6 +423,46 @@ class CdnRegionPlugin : BuiltinPlugin, PlaybackCdnPlugin, CdnTransferControls {
                 onRestore = CdnTransferRuntime::restoreRoutes,
                 modifier = Modifier.fillMaxWidth()
             )
+            if (snapshot.parallelDownloadEnabled &&
+                !snapshot.experimentalRewriteEnabled &&
+                mirrorMode == CdnParallelMirrorMode.CUSTOM_HOSTS
+            ) {
+                Spacer(modifier = Modifier.height(8.dp))
+                AppOutlinedTextField(
+                    value = customParallelHostsInput,
+                    onValueChange = {
+                        customParallelHostsInput = it
+                        customParallelHostsError = null
+                    },
+                    label = { AppText("自定义并发节点（每行或逗号分隔，仅限 B 站 CDN 域名）") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                customParallelHostsError?.let { error ->
+                    AppText(
+                        text = error,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppContentColors.error()
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                AppButton(
+                    onClick = {
+                        val (validHosts, invalidEntries) = parseCustomCdnHosts(customParallelHostsInput)
+                        if (invalidEntries.isNotEmpty()) {
+                            customParallelHostsError = "仅支持 bilivideo.com / bilivideo.cn / akamaized.net 域名：${invalidEntries.first()}"
+                        } else {
+                            val next = snapshot.copy(parallelCustomHosts = validHosts)
+                            snapshot = next
+                            cache = next
+                            customParallelHostsInput = validHosts.joinToString("\n")
+                            CdnTransferRuntime.configure(buildParallelConfig(running, next))
+                            scope.launch { CdnRegionPluginStore.write(context, next) }
+                        }
+                    }
+                ) {
+                    AppText("保存并发节点")
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
                 AppText(
@@ -399,7 +498,7 @@ class CdnRegionPlugin : BuiltinPlugin, PlaybackCdnPlugin, CdnTransferControls {
                     onCheckedChange = { enabled ->
                         experimentalRewriteEnabled = enabled
                         val next = snapshot.copy(experimentalRewriteEnabled = enabled)
-                        CdnTransferRuntime.configure(running, next.parallelDownloadEnabled && !enabled)
+                        CdnTransferRuntime.configure(buildParallelConfig(running, next))
                         snapshot = next
                         cache = next
                         scope.launch { CdnRegionPluginStore.write(context, next) }
@@ -830,7 +929,11 @@ internal data class CdnRegionPluginCache(
     val strictCustomCdn: Boolean = false,
     val prefetchEnabled: Boolean = false,
     val parallelDownloadEnabled: Boolean = false,
-    val experimentalRewriteEnabled: Boolean = false
+    val experimentalRewriteEnabled: Boolean = false,
+    val parallelMirrorMode: String = CdnParallelMirrorMode.SAFE_SIGNED.storageValue,
+    val parallelConcurrency: Int = CdnConcurrencyPreset.CONSERVATIVE.storageValue,
+    val parallelAllowCellular: Boolean = false,
+    val parallelCustomHosts: List<String> = emptyList()
 )
 
 internal object CdnRegionPluginStore {

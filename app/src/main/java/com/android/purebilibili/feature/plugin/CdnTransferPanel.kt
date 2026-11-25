@@ -45,6 +45,12 @@ internal fun CdnTransferPanel(
     onAvoid: (String) -> Unit,
     onRestore: () -> Unit,
     parallelUnavailableReason: String? = null,
+    mirrorMode: CdnParallelMirrorMode = state.mirrorMode,
+    concurrencyPreset: CdnConcurrencyPreset = state.concurrencyPreset,
+    allowCellular: Boolean = state.allowCellular,
+    onMirrorModeChange: ((CdnParallelMirrorMode) -> Unit)? = null,
+    onConcurrencyPresetChange: ((CdnConcurrencyPreset) -> Unit)? = null,
+    onAllowCellularChange: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var expandedHost by remember { mutableStateOf<String?>(null) }
@@ -63,6 +69,7 @@ internal fun CdnTransferPanel(
         ),
     )
     val highestSpeed = state.nodes.maxOfOrNull { it.speedBps }?.coerceAtLeast(1) ?: 1L
+    val hasTemporarilyDisabledNodes = state.nodes.any { it.cooldownUntilMs > state.updatedAtMs || it.banned }
     AppCard(modifier = modifier) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AppText("播放加速", style = MaterialTheme.typography.titleSmall)
@@ -84,7 +91,17 @@ internal fun CdnTransferPanel(
                 Column(modifier = Modifier.weight(1f)) {
                     AppText("并发下载", style = MaterialTheme.typography.bodyMedium)
                     AppText(
-                        if (experimentalRewriteEnabled) parallelUnavailableReason ?: "先关闭实验性 URL 改写，再使用并发下载" else "Wi-Fi 下按缓冲自动调节，最多 4 个分块请求；失败自动回退",
+                        if (experimentalRewriteEnabled) {
+                            parallelUnavailableReason ?: "先关闭实验性 URL 改写，再使用并发下载"
+                        } else {
+                            val networkScope = if (allowCellular) "Wi-Fi 与移动网络" else "仅 Wi-Fi"
+                            val threadDesc = if (concurrencyPreset.isAuto) {
+                                "自动阶梯并发（最高 ${concurrencyPreset.maxConnections} 线程）"
+                            } else {
+                                "最多 ${concurrencyPreset.maxConnections} 个分块请求"
+                            }
+                            "$networkScope · ${mirrorMode.label} · $threadDesc；失败自动回退"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = AppContentColors.secondaryText()
                     )
@@ -96,8 +113,63 @@ internal fun CdnTransferPanel(
                     modifier = Modifier.semantics { stateDescription = if (parallelEnabled) "并发下载已开启" else "并发下载已关闭" }
                 )
             }
+            if (parallelEnabled && !experimentalRewriteEnabled) {
+                if (onMirrorModeChange != null) {
+                    AppText("多节点模式", style = MaterialTheme.typography.bodyMedium)
+                    AppSegmentedControl(
+                        options = remember {
+                            CdnParallelMirrorMode.entries.map { AppSegmentOption(it, it.label) }
+                        },
+                        selectedValue = mirrorMode,
+                        modifier = Modifier.fillMaxWidth(),
+                        onSelectionChange = onMirrorModeChange,
+                    )
+                    AppText(
+                        mirrorMode.description,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppContentColors.secondaryText(),
+                    )
+                }
+                if (onConcurrencyPresetChange != null) {
+                    AppText("并发线程上限", style = MaterialTheme.typography.bodyMedium)
+                    AppSegmentedControl(
+                        options = remember {
+                            CdnConcurrencyPreset.entries.map { AppSegmentOption(it, it.label) }
+                        },
+                        selectedValue = concurrencyPreset,
+                        modifier = Modifier.fillMaxWidth(),
+                        onSelectionChange = onConcurrencyPresetChange,
+                    )
+                    val reasonSuffix = state.autoConcurrencyReason.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
+                    AppText(
+                        "当前并发上限 ${state.connections} 线程$reasonSuffix",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppContentColors.secondaryText(),
+                    )
+                }
+                if (onAllowCellularChange != null) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            AppText("允许移动网络并发", style = MaterialTheme.typography.bodyMedium)
+                            AppText(
+                                "默认仅在 Wi-Fi 下启用并发加速，避免在移动网络产生额外重传流量",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = AppContentColors.secondaryText(),
+                            )
+                        }
+                        AppSwitch(
+                            checked = allowCellular,
+                            onCheckedChange = onAllowCellularChange,
+                            modifier = Modifier.semantics {
+                                stateDescription = if (allowCellular) "移动网络并发已开启" else "移动网络并发已关闭"
+                            }
+                        )
+                    }
+                }
+            }
             AppText(
-                "网络读取 ${cdnBytes(state.networkBytes)} · 慢块补救 ${state.rescueCount} 次 · 续传 ${state.resumedCount} 次 · 单连接回退 ${state.fallbackCount} 次",
+                "网络读取 ${cdnBytes(state.networkBytes)} · 慢块补救 ${state.rescueCount} 次 · 续传 ${state.resumedCount} 次 · 单连接回退 ${state.fallbackCount} 次" +
+                    if (state.bannedHostCount > 0) " · 本视频已停用 ${state.bannedHostCount} 节点" else "",
                 style = MaterialTheme.typography.labelSmall,
                 color = AppContentColors.secondaryText()
             )
@@ -121,7 +193,7 @@ internal fun CdnTransferPanel(
                 }
             }
             AppHorizontalDivider()
-            AppText("授权节点", style = MaterialTheme.typography.titleSmall)
+            AppText("加速节点", style = MaterialTheme.typography.titleSmall)
             if (hosts.isEmpty()) {
                 AppText("播放视频后显示节点表现；缓存命中时不会额外测速。", style = MaterialTheme.typography.bodySmall)
             } else {
@@ -132,6 +204,7 @@ internal fun CdnTransferPanel(
                     val node = nodeByHost[host]
                     val diagnostic = diagnosticByHost[host]
                     val cooling = (node?.cooldownUntilMs ?: 0) > state.updatedAtMs
+                    val banned = node?.banned == true
                     AppCard(
                         onClick = { expandedHost = if (expandedHost == host) null else host },
                         modifier = Modifier.fillMaxWidth().semantics {
@@ -142,6 +215,7 @@ internal fun CdnTransferPanel(
                             AppText(host, style = MaterialTheme.typography.bodySmall)
                             AppText(
                                 when {
+                                    banned -> "本视频已停用 · 连续零字节失败"
                                     node != null && node.active > 0 -> "取流中 · ${node.active} 个请求 · ${cdnSpeed(node.speedBps)}"
                                     cooling -> "暂时降低优先级"
                                     node != null && node.speedBps > 0 -> "可用 · 最近 ${cdnSpeed(node.speedBps)}"
@@ -150,7 +224,7 @@ internal fun CdnTransferPanel(
                                     else -> "等待传输样本"
                                 },
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (cooling) AppContentColors.error() else AppContentColors.secondaryText()
+                                color = if (cooling || banned) AppContentColors.error() else AppContentColors.secondaryText()
                             )
                             if (sort == CdnResultSort.MOST_USED) CdnCompletedRequestsLabel(node?.completed)
                             AppLinearProgressIndicator(
@@ -166,7 +240,7 @@ internal fun CdnTransferPanel(
                                     "累计 ${cdnBytes(node?.bytes ?: 0)}${node?.lastStatus?.let { " · 最近响应 HTTP $it" }.orEmpty()}",
                                     style = MaterialTheme.typography.labelSmall
                                 )
-                                AppButton(onClick = { onAvoid(host) }, enabled = !cooling) { AppText("降低优先级 1 分钟") }
+                                AppButton(onClick = { onAvoid(host) }, enabled = !cooling && !banned) { AppText("降低优先级 1 分钟") }
                             }
                         }
                     }
@@ -184,8 +258,8 @@ internal fun CdnTransferPanel(
                     color = AppContentColors.secondaryText()
                 )
             }
-            AppButton(onClick = onRestore, enabled = state.nodes.any { it.cooldownUntilMs > state.updatedAtMs }, modifier = Modifier.fillMaxWidth()) {
-                AppText(if (state.nodes.any { it.cooldownUntilMs > state.updatedAtMs }) "恢复自动选线" else "当前选线正常，无需恢复")
+            AppButton(onClick = onRestore, enabled = hasTemporarilyDisabledNodes, modifier = Modifier.fillMaxWidth()) {
+                AppText(if (hasTemporarilyDisabledNodes) "恢复自动选线" else "当前选线正常，无需恢复")
             }
             AppText(
                 "统计从本次应用启动累计，仅保留节点域名。手动检测每条线路最多读取 32 KiB；降低优先级将在后续请求生效。",

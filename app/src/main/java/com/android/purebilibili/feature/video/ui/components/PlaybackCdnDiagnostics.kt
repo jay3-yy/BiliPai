@@ -68,7 +68,12 @@ internal fun PlaybackCdnDiagnostics(
                 scope.launch {
                     try {
                         plugin?.setParallelDownloadEnabled(enabled)
-                        message = if (enabled) "并发下载已开启，仅在 Wi-Fi 下生效" else "并发下载已关闭"
+                        val cellular = plugin?.currentParallelConfig()?.allowCellular == true
+                        message = if (enabled) {
+                            if (cellular) "并发下载已开启，已在 Wi-Fi 与移动网络生效" else "并发下载已开启，仅在 Wi-Fi 下生效"
+                        } else {
+                            "并发下载已关闭"
+                        }
                     } catch (error: CancellationException) {
                         throw error
                     } catch (_: Exception) {
@@ -76,6 +81,46 @@ internal fun PlaybackCdnDiagnostics(
                     }
                 }
             },
+            onMirrorModeChange = if (plugin != null) { mode ->
+                scope.launch {
+                    try {
+                        plugin.setParallelMirrorMode(mode)
+                        message = "多节点模式已切换为${mode.label}"
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        message = "保存失败，请重试"
+                    }
+                }
+            } else null,
+            onConcurrencyPresetChange = if (plugin != null) { preset ->
+                scope.launch {
+                    try {
+                        plugin.setParallelConcurrencyPreset(preset)
+                        message = if (preset.isAuto) {
+                            "并发线程已切换为自动（最高 ${preset.maxConnections} 线程）"
+                        } else {
+                            "并发上限已设为 ${preset.maxConnections} 线程"
+                        }
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        message = "保存失败，请重试"
+                    }
+                }
+            } else null,
+            onAllowCellularChange = if (plugin != null) { allow ->
+                scope.launch {
+                    try {
+                        plugin.setParallelAllowCellular(allow)
+                        message = if (allow) "已允许在移动网络使用并发下载" else "已恢复仅在 Wi-Fi 下使用并发下载"
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        message = "保存失败，请重试"
+                    }
+                }
+            } else null,
             onCheck = onCheck,
             onAvoid = CdnTransferRuntime::avoid,
             onRestore = CdnTransferRuntime::restoreRoutes,

@@ -129,3 +129,15 @@ The original copyright and license headers are preserved in each file. The full
 license is in `artwork/curated-icons/LICENSE`; archive and file SHA-256 hashes are
 recorded in `artwork/curated-icons/sources.json`. The base icon API remains supplied
 by the upstream `material-icons-core` dependency.
+
+## Multi-node parallel CDN scheduling references
+
+`CdnMirrorPoolPolicy.kt`, `CdnAutoConcurrencyController.kt`, and the parallel
+sliding-window transport in `CdnPlaybackDataSource.kt` adapt multi-node UPOS
+mirror synthesis, session node/address/pair ban attribution, speed-weighted
+piece assignment, pace-aware straggler hedging, and the adaptive concurrency
+ladder from [Bilibili-thread-ripper](https://github.com/MrTangLuyao/Bilibili-thread-ripper)
+at revision `3671da8f` (`src/cdn-resolver.js` and `src/idm-downloader.js`),
+copyright 2026 Bilibili-thread-ripper contributors, licensed under the MIT
+License. The bundled license is in
+`app/src/main/assets/licenses/bilibili-thread-ripper.LICENSE`.
