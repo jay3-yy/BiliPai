@@ -4,6 +4,9 @@ package com.android.purebilibili.core.player
 import android.content.Context
 import android.content.SharedPreferences
 import com.android.purebilibili.core.network.CoreDataLog as Logger
+import com.android.purebilibili.core.store.AccountPurpose
+import com.android.purebilibili.core.store.AccountSessionStore
+import com.android.purebilibili.core.store.TokenManager
 
 /**
  * Playback Progress Manager
@@ -16,11 +19,15 @@ import com.android.purebilibili.core.network.CoreDataLog as Logger
  * 
  * Requirement Reference: AC1.4 - Progress managed by PlaybackProgressManager
  */
-class PlaybackProgressManager {
+class PlaybackProgressManager internal constructor(
+    private val accountMidProvider: (() -> Long)? = null,
+) {
+    constructor() : this(accountMidProvider = null)
     
     companion object {
         private const val TAG = "PlaybackProgressManager"
         private const val PREFS_NAME = "video_progress"
+        private const val GUEST_SCOPE_PREFIX = "guest:"
         private const val MIN_PROGRESS_TO_SAVE = 5000L // 5秒以上才保存
         // 有界化上限：每看一个视频最多写 2 个 key（cid 级 + bvid 级），4096 条覆盖极长的
         // 观看历史；超过后按最旧淘汰，内存与磁盘 XML 都保持有界。
@@ -42,21 +49,42 @@ class PlaybackProgressManager {
     // savedAtMs 仅用于内存淘汰排序，不落盘；loadFromPrefs 里按加载顺序编号。
     private data class ProgressEntry(val positionMs: Long, val savedAtMs: Long)
 
+    private var appContext: Context? = null
     private var prefs: SharedPreferences? = null
 
     // [性能优化] 使用 ConcurrentHashMap 保障主线程在滑动渲染热路径上的无锁极速读取（O(1) Lock-free）
     private val memoryCache = java.util.concurrent.ConcurrentHashMap<String, ProgressEntry>()
 
-    private fun buildProgressKey(bvid: String, cid: Long): String {
+    private fun effectiveAccountMid(): Long {
+        accountMidProvider?.let { return it().coerceAtLeast(0L) }
+        val context = appContext
+        val purposeMid = if (context != null) {
+            AccountSessionStore.getPurposeAccountMid(context, AccountPurpose.WATCH_HISTORY)
+        } else {
+            null
+        }
+        return (purposeMid ?: TokenManager.accountIdentity.value.mid ?: TokenManager.midCache ?: 0L)
+            .coerceAtLeast(0L)
+    }
+
+    private fun buildLegacyProgressKey(bvid: String, cid: Long): String {
         return if (cid > 0L) "$bvid#$cid" else bvid
+    }
+
+    private fun buildScopedProgressKey(accountMid: Long, bvid: String, cid: Long): String {
+        val prefix = if (accountMid > 0L) "$accountMid:" else GUEST_SCOPE_PREFIX
+        return "$prefix${buildLegacyProgressKey(bvid, cid)}"
     }
     
     /**
      * Initialize with context (for SharedPreferences)
      */
     fun init(context: Context) {
+        val application = context.applicationContext
+        appContext = application
         if (prefs == null) {
-            prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            prefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            AccountSessionStore.getPurposeAccountMid(application, AccountPurpose.WATCH_HISTORY)
             loadFromPrefs()
             Logger.d(TAG, "Initialized with ${memoryCache.size} cached positions")
         }
@@ -67,7 +95,8 @@ class PlaybackProgressManager {
      */
     fun savePosition(bvid: String, cid: Long, positionMs: Long, durationMs: Long = 0L) {
         if (bvid.isEmpty() || positionMs < MIN_PROGRESS_TO_SAVE) return
-        val key = buildProgressKey(bvid, cid)
+        val accountMid = effectiveAccountMid()
+        val key = buildScopedProgressKey(accountMid, bvid, cid)
         
         // 至少 95% 且距片尾不超过 60 秒，才视为已看完并清除记录
         val completionPositionMs = resolvePlaybackCompletionPositionMs(durationMs)
@@ -79,16 +108,17 @@ class PlaybackProgressManager {
 
         val savedAtMs = System.currentTimeMillis()
         memoryCache[key] = ProgressEntry(positionMs, savedAtMs)
-        if (cid > 0L) {
-            memoryCache[buildProgressKey(bvid, cid = 0L)] = ProgressEntry(positionMs, savedAtMs)
+        val bvidFallbackKey = if (cid > 0L) buildScopedProgressKey(accountMid, bvid, cid = 0L) else null
+        if (bvidFallbackKey != null) {
+            memoryCache[bvidFallbackKey] = ProgressEntry(positionMs, savedAtMs)
         }
         evictOldestIfNeeded()
 
         prefs?.edit()?.apply {
             putLong(key, positionMs)
-            if (cid > 0L) {
+            if (bvidFallbackKey != null) {
                 // 空间页等入口拿不到 cid 时，用 bvid 级进度兜底；播放器加载后仍优先 cid 精确进度。
-                putLong(buildProgressKey(bvid, cid = 0L), positionMs)
+                putLong(bvidFallbackKey, positionMs)
             }
         }?.apply()
         Logger.d(TAG, "Saved position for $key: ${positionMs}ms")
@@ -111,8 +141,14 @@ class PlaybackProgressManager {
      */
     fun getCachedPosition(bvid: String, cid: Long): Long {
         if (bvid.isEmpty()) return 0L
-        val key = buildProgressKey(bvid, cid)
-        return memoryCache[key]?.positionMs?.takeIf { it > 0L } ?: 0L
+        val accountMid = effectiveAccountMid()
+        val key = buildScopedProgressKey(accountMid, bvid, cid)
+        memoryCache[key]?.positionMs?.takeIf { it > 0L }?.let { return it }
+        if (accountMid == 0L) {
+            val legacyKey = buildLegacyProgressKey(bvid, cid)
+            return memoryCache[legacyKey]?.positionMs?.takeIf { it > 0L } ?: 0L
+        }
+        return 0L
     }
 
     fun getCachedPosition(bvid: String): Long {
@@ -123,18 +159,20 @@ class PlaybackProgressManager {
      * Clear position cache for a specific video
      */
     fun clearPosition(bvid: String, cid: Long) {
-        val key = buildProgressKey(bvid, cid)
+        val accountMid = effectiveAccountMid()
+        val key = buildScopedProgressKey(accountMid, bvid, cid)
+        val bvidKey = if (cid > 0L) buildScopedProgressKey(accountMid, bvid, cid = 0L) else null
+        val legacyKey = if (accountMid == 0L) buildLegacyProgressKey(bvid, cid) else null
+        val legacyBvidKey = if (accountMid == 0L && cid > 0L) buildLegacyProgressKey(bvid, cid = 0L) else null
         memoryCache.remove(key)
-        if (cid > 0L) {
-            val bvidKey = buildProgressKey(bvid, cid = 0L)
-            memoryCache.remove(bvidKey)
-        }
+        bvidKey?.let(memoryCache::remove)
+        legacyKey?.let(memoryCache::remove)
+        legacyBvidKey?.let(memoryCache::remove)
         prefs?.edit()?.apply {
             remove(key)
-            if (cid > 0L) {
-                val bvidKey = buildProgressKey(bvid, cid = 0L)
-                remove(bvidKey)
-            }
+            bvidKey?.let(::remove)
+            legacyKey?.let(::remove)
+            legacyBvidKey?.let(::remove)
         }?.apply()
         Logger.d(TAG, "Cleared position for $key")
     }
@@ -180,6 +218,12 @@ class PlaybackProgressManager {
             if (value is Long && value > 0) {
                 memoryCache[key] = ProgressEntry(value, loadOrder++)
             }
+        }
+    }
+
+    internal fun seedLegacyEntryForTest(rawKey: String, positionMs: Long) {
+        if (positionMs > 0L) {
+            memoryCache[rawKey] = ProgressEntry(positionMs, 0L)
         }
     }
 

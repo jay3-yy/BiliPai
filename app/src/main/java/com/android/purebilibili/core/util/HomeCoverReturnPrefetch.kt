@@ -46,6 +46,7 @@ internal object HomeCoverReturnPrefetchRegistry {
     private val entries = LinkedHashMap<String, HomeCoverReturnPrefetchEntry>()
 
     /** 首页卡片可见时上报。幂等：同 cacheKey 重复上报只刷新顺序，不产生重复项。 */
+    @Synchronized
     fun onCardVisible(entry: HomeCoverReturnPrefetchEntry) {
         if (entry.url.isBlank() || entry.cacheKey.isBlank()) return
         if (entry.estimatedDecodeBytes() == null) return
@@ -59,8 +60,10 @@ internal object HomeCoverReturnPrefetchRegistry {
         }
     }
 
+    @Synchronized
     fun snapshot(): List<HomeCoverReturnPrefetchEntry> = entries.values.toList().asReversed()
 
+    @Synchronized
     internal fun clearForTest() {
         entries.clear()
     }

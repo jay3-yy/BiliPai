@@ -3,11 +3,14 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.AppSignUtils
 import com.android.purebilibili.core.refresh.WatchLaterRefreshBus
+import com.android.purebilibili.core.store.AccountSessionIdentity
 import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.core.util.IdUtils
 import com.android.purebilibili.data.model.response.FollowingUser
 import com.android.purebilibili.data.model.response.RecommendationFeedbackMetadata
 import com.android.purebilibili.data.model.response.RecommendationFeedbackReason
 import com.android.purebilibili.data.model.response.RecommendationFeedbackType
+import com.android.purebilibili.data.model.response.VideoRelationData
 import com.android.purebilibili.data.model.response.WatchLaterItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -107,8 +110,33 @@ internal fun buildCollectionSubscriptionRequest(
 
 data class FollowStateChange(
     val mid: Long,
-    val isFollowing: Boolean
+    val isFollowing: Boolean,
+    val sessionIdentity: AccountSessionIdentity = TokenManager.accountIdentity.value,
 )
+
+internal data class VideoRelationKey(
+    val session: Any,
+    val normalizedBvid: String?,
+    val normalizedAid: Long?,
+)
+
+internal fun buildVideoRelationKey(
+    session: Any,
+    bvid: String?,
+    aid: Long,
+): VideoRelationKey? {
+    val trimmedBvid = bvid?.trim()?.takeIf { it.isNotEmpty() }
+    val resolvedAid = aid.takeIf { it > 0L }
+        ?: trimmedBvid?.let { IdUtils.bv2av(it).takeIf { av -> av > 0L } }
+    val resolvedBvid = trimmedBvid
+        ?: resolvedAid?.let { IdUtils.av2bv(it).takeIf { bv -> bv.isNotEmpty() } }
+    if (resolvedBvid == null && resolvedAid == null) return null
+    return VideoRelationKey(
+        session = session,
+        normalizedBvid = resolvedBvid,
+        normalizedAid = resolvedAid,
+    )
+}
 
 /**
  * 用户操作相关 Repository
@@ -275,6 +303,73 @@ internal class FollowingSnapshotGuard {
 object ActionRepository {
     private val interactionCache = VideoInteractionStatusCache()
     private val followingGuard = FollowingSnapshotGuard()
+    private val videoRelationCache = OnDemandRequestCache<VideoRelationKey, VideoRelationData?>(
+        maxEntries = 32,
+        maxAgeMs = 5_000L,
+        canCache = { it != null },
+    )
+
+    fun invalidateVideoRelation(aid: Long = 0L, bvid: String? = null) {
+        val trimmedBvid = bvid?.trim()?.takeIf { it.isNotEmpty() }
+        val resolvedAid = aid.takeIf { it > 0L }
+            ?: trimmedBvid?.let { IdUtils.bv2av(it).takeIf { av -> av > 0L } }
+        val resolvedBvid = trimmedBvid
+            ?: resolvedAid?.let { IdUtils.av2bv(it).takeIf { bv -> bv.isNotEmpty() } }
+        if (resolvedAid == null && resolvedBvid == null) return
+        videoRelationCache.invalidateWhere { key ->
+            (resolvedAid != null && key.normalizedAid == resolvedAid) ||
+                (resolvedBvid != null && key.normalizedBvid == resolvedBvid)
+        }
+    }
+
+    fun clearVideoRelationCache() {
+        videoRelationCache.invalidateWhere { true }
+    }
+
+    internal suspend fun queryVideoRelation(bvid: String? = null, aid: Long = 0L): Result<VideoRelationData> =
+        withContext(Dispatchers.IO) {
+            try {
+                TokenManager.awaitRestore()
+                val session = interactionSession()
+                val key = buildVideoRelationKey(session = session, bvid = bvid, aid = aid)
+                    ?: return@withContext Result.failure(IllegalArgumentException("缺少视频标识"))
+                videoRelationCache.peek(key)?.let { cached ->
+                    if (session == interactionSession()) {
+                        return@withContext Result.success(cached)
+                    }
+                }
+                var failure: Throwable? = null
+                val data = videoRelationCache.getOrLoad(key) {
+                    val response = api.getVideoRelation(
+                        aid = key.normalizedAid,
+                        bvid = key.normalizedBvid,
+                    )
+                    if (session != interactionSession()) {
+                        failure = IllegalStateException("交互账号已变更")
+                        null
+                    } else if (response.code == 0 && response.data != null) {
+                        response.data
+                    } else {
+                        failure = IllegalStateException(
+                            response.message.ifBlank { "无法获取视频互动状态" }
+                        )
+                        null
+                    }
+                }
+                if (session != interactionSession()) {
+                    Result.failure(IllegalStateException("交互账号已变更"))
+                } else if (data != null) {
+                    Result.success(data)
+                } else {
+                    Result.failure(failure ?: IllegalStateException("无法获取视频互动状态"))
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+        }
+
     fun followingStatusRevision(account: Any): Long? = followingGuard.snapshotVersion(account)
     fun acceptFollowingSnapshot(account: Any, version: Long, publish: () -> Unit): Boolean =
         followingGuard.accept(account, version, publish)
@@ -318,22 +413,19 @@ object ActionRepository {
             ?: return@withContext interactionCache.confirmedOperationValue(session, "follow:$mid")
                 ?.let { Result.success(it) }
                 ?: Result.failure(IllegalStateException("关注操作尚未完成"))
-        try {
-            val response = api.getRelation(mid)
-            val data = response.data
-            if (response.code != 0 || data == null) {
-                Result.failure(Exception(response.message.ifBlank { "关注状态获取失败" }))
-            } else {
-                val following = data.isFollowing
-                if (session != interactionSession() || !interactionCache.publish(session, "follow:$mid", following, version, query = true)) {
-                    Result.failure(IllegalStateException("关注查询已过期"))
-                } else Result.success(following)
-            }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        UserActionRepository.relation(mid).rethrowCancellation().fold(
+            onSuccess = { data ->
+                if (data == null) {
+                    Result.failure(Exception("关注状态获取失败"))
+                } else {
+                    val following = data.isFollowing
+                    if (session != interactionSession() || !interactionCache.publish(session, "follow:$mid", following, version, query = true)) {
+                        Result.failure(IllegalStateException("关注查询已过期"))
+                    } else Result.success(following)
+                }
+            },
+            onFailure = { Result.failure(it) },
+        )
     }
 
     private val api = NetworkModule.api
@@ -481,6 +573,7 @@ object ActionRepository {
      */
     suspend fun followUser(mid: Long, follow: Boolean, emitBrandFeedback: Boolean = true): Result<Boolean> {
         val session = interactionSession()
+        val identity = TokenManager.accountIdentity.value
         followingGuard.beginOperation(session)
         return try {
             val version = interactionCache.beginOperation(session, "follow:$mid")
@@ -489,7 +582,13 @@ object ActionRepository {
                     if (session != interactionSession() || !interactionCache.publish(session, "follow:$mid", follow, version)) {
                         throw IllegalStateException("关注操作结果已过期")
                     }
-                    _followStateChanges.tryEmit(FollowStateChange(mid = mid, isFollowing = follow))
+                    _followStateChanges.tryEmit(
+                        FollowStateChange(
+                            mid = mid,
+                            isFollowing = follow,
+                            sessionIdentity = identity,
+                        )
+                    )
                     if (emitBrandFeedback) com.android.purebilibili.core.events.BrandSuccessEvents.followChanged(follow)
                     follow
                 }
@@ -513,8 +612,12 @@ object ActionRepository {
         folderId: Long? = null,
         showSuccessFeedback: Boolean = true
     ): Result<Boolean> {
+        val session = interactionSession()
         return withContext(Dispatchers.IO) {
             try {
+                if (session != interactionSession()) {
+                    return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                }
                 val csrf = TokenManager.csrfCache ?: ""
                 if (csrf.isEmpty()) {
                     return@withContext Result.failure(Exception("请先登录"))
@@ -522,6 +625,9 @@ object ActionRepository {
                 
                 // 如果没有指定收藏夹，需要先获取默认收藏夹
                 val targetFolderId = folderId ?: getDefaultFolderId()
+                if (session != interactionSession()) {
+                    return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                }
                 if (targetFolderId == null) {
                     return@withContext Result.failure(Exception("无法获取收藏夹"))
                 }
@@ -533,6 +639,11 @@ object ActionRepository {
                 }
                 
                 if (response.code == 0) {
+                    invalidateVideoRelation(aid = aid)
+                    UserActionRepository.invalidateFolders(aid)
+                    if (session != interactionSession()) {
+                        return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                    }
                     if (favorite && showSuccessFeedback) {
                         com.android.purebilibili.core.events.BrandSuccessEvents.favoriteSaved()
                     }
@@ -560,10 +671,14 @@ object ActionRepository {
         seasonId: Long,
         subscribe: Boolean
     ): Result<Boolean> {
+        val session = interactionSession()
         return withContext(Dispatchers.IO) {
             try {
                 if (seasonId <= 0L) {
                     return@withContext Result.failure(Exception("合集 ID 无效"))
+                }
+                if (session != interactionSession()) {
+                    return@withContext Result.failure(IllegalStateException("交互账号已变更"))
                 }
                 val csrf = TokenManager.csrfCache ?: ""
                 if (csrf.isEmpty()) {
@@ -589,6 +704,10 @@ object ActionRepository {
                 }
 
                 if (response.code == 0) {
+                    clearVideoRelationCache()
+                    if (session != interactionSession()) {
+                        return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                    }
                     Result.success(subscribe)
                 } else {
                     Result.failure(Exception(response.message.ifEmpty { "操作失败: ${response.code}" }))
@@ -610,28 +729,7 @@ object ActionRepository {
         bvid: String,
         aid: Long = 0L
     ): Result<Boolean> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val normalizedBvid = bvid.trim().takeIf { it.isNotEmpty() }
-                val normalizedAid = aid.takeIf { it > 0L }
-                if (normalizedBvid == null && normalizedAid == null) {
-                    return@withContext Result.failure(Exception("缺少视频标识"))
-                }
-                val response = api.getVideoRelation(
-                    aid = normalizedAid,
-                    bvid = normalizedBvid
-                )
-                if (response.code == 0) {
-                    Result.success(response.data?.seasonFav ?: false)
-                } else {
-                    Result.failure(Exception(response.message.ifEmpty { "状态获取失败: ${response.code}" }))
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                android.util.Log.e("ActionRepository", "checkCollectionSubscriptionStatus failed", e)
-                Result.failure(e)
-            }
-        }
+        return queryVideoRelation(bvid = bvid, aid = aid).map { it.seasonFav }
     }
 
     /**
@@ -640,8 +738,7 @@ object ActionRepository {
     private suspend fun getDefaultFolderId(): Long? {
         return try {
             val mid = TokenManager.midCache ?: return null
-            val response = api.getFavFolders(mid)
-            response.data?.list?.firstOrNull()?.id
+            FavoriteRepository.getFavFolders(mid).rethrowCancellation().getOrNull()?.firstOrNull()?.id
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             android.util.Log.e("ActionRepository", "getDefaultFolderId failed", e)
@@ -659,6 +756,7 @@ object ActionRepository {
     ): Result<Boolean> {
         if (addFolderIds.isEmpty() && removeFolderIds.isEmpty()) return Result.success(true)
         return UserActionRepository.favorite(aid, addFolderIds, removeFolderIds).onSuccess {
+            invalidateVideoRelation(aid = aid)
             if (addFolderIds.isNotEmpty()) com.android.purebilibili.core.events.BrandSuccessEvents.favoriteSaved()
         }
     }
@@ -667,20 +765,7 @@ object ActionRepository {
      * 获取与 UP 主的详细关注关系数据
      */
     suspend fun getRelationDetail(mid: Long): com.android.purebilibili.data.model.response.RelationData? {
-        return withContext(Dispatchers.IO) {
-            try {
-                val response = api.getRelation(mid)
-                if (response.code == 0) {
-                    response.data
-                } else {
-                    null
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                android.util.Log.e("ActionRepository", "getRelationDetail failed", e)
-                null
-            }
-        }
+        return UserActionRepository.relation(mid).rethrowCancellation().getOrNull()
     }
 
     /**
@@ -836,9 +921,13 @@ object ActionRepository {
         targetMids: Set<Long>,
         selectedTagIds: Set<Long>
     ): Result<Boolean> {
+        val session = interactionSession()
         return withContext(Dispatchers.IO) {
             try {
                 if (targetMids.isEmpty()) return@withContext Result.success(true)
+                if (session != interactionSession()) {
+                    return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                }
                 val csrf = TokenManager.csrfCache ?: ""
                 if (csrf.isEmpty()) {
                     return@withContext Result.failure(Exception("请先登录"))
@@ -849,6 +938,9 @@ object ActionRepository {
                 val selectedTagIdsJoined = normalizedSelection.joinToString(",")
 
                 midChunks.forEachIndexed { index, mids ->
+                    if (session != interactionSession()) {
+                        return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                    }
                     val fids = mids.joinToString(",")
 
                     // 先移动到默认分组，确保“完全覆盖”生效。
@@ -864,6 +956,9 @@ object ActionRepository {
                     }
 
                     if (normalizedSelection.isNotEmpty()) {
+                        if (session != interactionSession()) {
+                            return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                        }
                         val applyResult = addUsersToRelationTagsWithRetry(
                             fids = fids,
                             tagIds = selectedTagIdsJoined,
@@ -881,6 +976,9 @@ object ActionRepository {
                     }
                 }
 
+                if (session != interactionSession()) {
+                    return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                }
                 Result.success(true)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
@@ -920,9 +1018,13 @@ object ActionRepository {
      * 创建收藏夹
      */
     suspend fun createFavFolder(title: String, intro: String = "", isPrivate: Boolean = false): Result<Boolean> {
+        val session = interactionSession()
         return withContext(Dispatchers.IO) {
             try {
                 if (title.isBlank()) return@withContext Result.failure(Exception("标题不能为空"))
+                if (session != interactionSession()) {
+                    return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                }
                 val privacy = if (isPrivate) 1 else 0
                 val csrf = TokenManager.csrfCache ?: return@withContext Result.failure(Exception("未登录"))
                 
@@ -934,6 +1036,8 @@ object ActionRepository {
                 )
                 
                 if (response.code == 0) {
+                    FavoriteRepository.invalidateFavFolders()
+                    UserActionRepository.invalidateFolders()
                     Result.success(true)
                 } else {
                     Result.failure(Exception(response.message))
@@ -953,6 +1057,7 @@ object ActionRepository {
         val version = interactionCache.beginOperation(session, "like:$aid")
         return try {
             UserActionRepository.like(aid, like).rethrowCancellation().mapCatching {
+                invalidateVideoRelation(aid = aid)
                 if (session != interactionSession() || !interactionCache.publish(session, "like:$aid", like, version)) {
                     throw IllegalStateException("点赞操作结果已过期")
                 }
@@ -972,14 +1077,20 @@ object ActionRepository {
      *  点踩/取消点踩视频（App 端接口，65007=已踩过、65005=未点踩过视为幂等成功）
      */
     suspend fun dislikeVideo(aid: Long, dislike: Boolean): Result<Boolean> {
+        val session = interactionSession()
         return withContext(Dispatchers.IO) {
             try {
-                if (TokenManager.sessDataCache.isNullOrEmpty()) {
-                    return@withContext Result.failure(Exception("请先登录"))
+                if (session != interactionSession()) {
+                    return@withContext Result.failure(IllegalStateException("交互账号已变更"))
                 }
-
-                val csrf = TokenManager.csrfCache ?: ""
-                if (csrf.isEmpty()) {
+                val (sessData, csrf, accessKey) = synchronized(TokenManager) {
+                    Triple(
+                        TokenManager.sessDataCache,
+                        TokenManager.csrfCache.orEmpty(),
+                        TokenManager.accessTokenCache,
+                    )
+                }
+                if (sessData.isNullOrEmpty() || csrf.isEmpty()) {
                     return@withContext Result.failure(Exception("请先登录"))
                 }
                 val dislikeAction = if (dislike) 0 else 1
@@ -987,13 +1098,18 @@ object ActionRepository {
                     aid = aid,
                     dislike = dislikeAction,
                     csrf = csrf,
-                    accessKey = TokenManager.accessTokenCache
+                    accessKey = accessKey
                 )
                 com.android.purebilibili.core.util.Logger.d("ActionRepository", " dislikeVideo: aid=$aid, dislike=$dislike, code=${response.code}")
 
                 when {
-                    response.code == 0 || response.code == 65007 || response.code == 65005 ->
+                    response.code == 0 || response.code == 65007 || response.code == 65005 -> {
+                        invalidateVideoRelation(aid = aid)
+                        if (session != interactionSession()) {
+                            return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                        }
                         Result.success(dislike)
+                    }
                     response.code == -101 -> Result.failure(
                         Exception("视频点踩需要 APP 鉴权，请先在登录页完成高画质（TV）鉴权登录")
                     )
@@ -1011,20 +1127,7 @@ object ActionRepository {
      *  检查是否已点踩（复用 archive/relation 的 dislike 字段）
      */
     suspend fun checkDislikeStatus(aid: Long): Boolean {
-        return withContext(Dispatchers.IO) {
-            try {
-                val response = api.getVideoRelation(aid = aid)
-                if (response.code == 0) {
-                    response.data?.dislike ?: false
-                } else {
-                    false
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                android.util.Log.e("ActionRepository", "checkDislikeStatus failed", e)
-                false
-            }
-        }
+        return queryVideoRelation(aid = aid).rethrowCancellation().getOrNull()?.dislike ?: false
     }
     
     /**
@@ -1036,13 +1139,19 @@ object ActionRepository {
         return try {
             withContext(Dispatchers.IO) {
             try {
+                if (session != interactionSession()) {
+                    return@withContext Result.failure(IllegalStateException("交互账号已变更"))
+                }
                 val selectLike = if (alsoLike) 1 else 0
+                val (accessToken, csrf) = synchronized(TokenManager) {
+                    TokenManager.accessTokenCache to TokenManager.csrfCache.orEmpty()
+                }
                 // App 端点（access_key + appkey/ts/sign）优先：Web 端点 coin/add 对第三方
                 // 客户端风控严格，常返回"非法访问"；无 App token（纯网页 Cookie 登录）时回退 Web。
-                val response = if (!TokenManager.accessTokenCache.isNullOrBlank()) {
+                val response = if (!accessToken.isNullOrBlank()) {
                     val signed = AppSignUtils.signForAndroidHdLogin(
                         mapOf(
-                            "access_key" to TokenManager.accessTokenCache.orEmpty(),
+                            "access_key" to accessToken,
                             "aid" to aid.toString(),
                             "multiply" to count.toString(),
                             "select_like" to selectLike.toString(),
@@ -1059,7 +1168,6 @@ object ActionRepository {
                         sign = signed.getValue("sign"),
                     )
                 } else {
-                    val csrf = TokenManager.csrfCache ?: ""
                     if (csrf.isEmpty()) {
                         return@withContext Result.failure(Exception("请先登录"))
                     }
@@ -1069,6 +1177,7 @@ object ActionRepository {
 
                 when (response.code) {
                     0 -> {
+                        invalidateVideoRelation(aid = aid)
                         if (session != interactionSession() ||
                             (version != null && !interactionCache.publish(session, "like:$aid", true, version))) {
                             return@withContext Result.failure(IllegalStateException("投币操作结果已过期"))
@@ -1076,7 +1185,10 @@ object ActionRepository {
                         Result.success(true)
                     }
                     34004 -> Result.failure(Exception("操作太频繁，请稍后重试"))
-                    34005 -> Result.failure(Exception("已投满2个硬币"))
+                    34005 -> {
+                        invalidateVideoRelation(aid = aid)
+                        Result.failure(Exception("已投满2个硬币"))
+                    }
                     -104 -> Result.failure(Exception("硬币余额不足"))
                     else -> Result.failure(Exception(response.message.ifEmpty { "投币失败: ${response.code}" }))
                 }
@@ -1163,14 +1275,25 @@ object ActionRepository {
      */
     suspend fun toggleWatchLater(aid: Long, add: Boolean): Result<Boolean> {
         val result = if (add) WatchLaterRepository.add(aid) else WatchLaterRepository.remove(aid)
-        return result.onSuccess { WatchLaterRefreshBus.notifyChanged() }.map { add }
+        return result.rethrowCancellation().onSuccess {
+            WatchLaterRepository.invalidateWatchLaterListCache()
+            WatchLaterRefreshBus.notifyChanged()
+        }.map { add }
     }
 
     suspend fun checkWatchLaterStatus(aid: Long): Boolean = withContext(Dispatchers.IO) {
-        if (aid <= 0L || TokenManager.sessDataCache.isNullOrEmpty()) return@withContext false
-        runCatching {
-            val response = api.getWatchLaterList()
-            response.code == 0 && isWatchLaterAid(response.data?.list.orEmpty(), aid)
-        }.getOrDefault(false)
+        if (aid <= 0L) return@withContext false
+        TokenManager.awaitRestore()
+        val session = interactionSession()
+        if (TokenManager.sessDataCache.isNullOrEmpty()) return@withContext false
+        try {
+            val items = WatchLaterRepository.getWatchLaterItems(session).rethrowCancellation().getOrNull()
+                ?: return@withContext false
+            isWatchLaterAid(items, aid)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            false
+        }
     }
 }

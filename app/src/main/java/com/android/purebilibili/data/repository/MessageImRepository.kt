@@ -2,6 +2,7 @@ package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.network.grpc.BiliGrpcClient
 import com.android.purebilibili.core.network.grpc.ProtoWire
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.SessionAccountInfo
 import com.android.purebilibili.data.model.response.SessionItem
 import com.android.purebilibili.data.model.response.SessionMessage
@@ -131,12 +132,43 @@ internal object MessageImRepository {
         )
     }
 
+    internal const val GATEWAY_UNAVAILABLE_TTL_MS = 5 * 60_000L
+
+    internal data class GatewayUnavailableState(
+        val unavailableUntilMs: Long = 0L,
+        val unavailableMid: Long? = null,
+    ) {
+        fun isUnavailableFor(currentMid: Long?, nowMs: Long): Boolean =
+            unavailableUntilMs > nowMs && unavailableMid == currentMid
+    }
+
     @Volatile
-    private var gatewayUnavailable = false
+    private var gatewayUnavailableState = GatewayUnavailableState()
+
+    internal fun isGatewayUnavailable(
+        currentMid: Long? = TokenManager.midCache,
+        nowMs: Long = System.nanoTime() / 1_000_000L,
+    ): Boolean = gatewayUnavailableState.isUnavailableFor(currentMid, nowMs)
+
+    internal fun markGatewayUnavailable(
+        currentMid: Long? = TokenManager.midCache,
+        nowMs: Long = System.nanoTime() / 1_000_000L,
+    ) {
+        gatewayUnavailableState = GatewayUnavailableState(
+            unavailableUntilMs = nowMs + GATEWAY_UNAVAILABLE_TTL_MS,
+            unavailableMid = currentMid,
+        )
+    }
+
+    internal fun resetGatewayUnavailable() {
+        gatewayUnavailableState = GatewayUnavailableState()
+    }
 
     /** 消息中心未读：官方 gateway 优先，失败回退 ImInterface。 */
     suspend fun messageCenterUnread(): Result<ImMessageCenterUnread> {
-        if (!gatewayUnavailable) {
+        TokenManager.awaitRestore()
+        val requestMid = TokenManager.midCache
+        if (!isGatewayUnavailable(currentMid = requestMid)) {
             val gateway = gatewayRequest(
                 "GetTotalUnread",
                 ProtoWire.message(
@@ -145,8 +177,13 @@ internal object MessageImRepository {
                     ProtoWire.int32(3, 0),
                 ),
             ) { parseMessageCenter(it) }
-            if (gateway.isSuccess) return gateway
-            gatewayUnavailable = true
+            if (gateway.isSuccess) {
+                resetGatewayUnavailable()
+                return gateway
+            }
+            if (TokenManager.midCache == requestMid) {
+                markGatewayUnavailable(currentMid = requestMid)
+            }
         }
         return interfaceRequest(
             "GetTotalUnread",

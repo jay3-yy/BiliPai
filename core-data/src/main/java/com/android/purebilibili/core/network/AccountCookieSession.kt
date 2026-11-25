@@ -159,7 +159,10 @@ internal fun bindPlaybackAccountCookieSession(
     val session = AccountCookieSession.from(account).copy(
         explicitCookie = request.tag(AccountCookieSession::class.java)?.explicitCookie == true,
     )
-    return request.newBuilder().tag(AccountCookieSession::class.java, session).build()
+    return request.newBuilder()
+        .cacheControl(okhttp3.CacheControl.FORCE_NETWORK)
+        .tag(AccountCookieSession::class.java, session)
+        .build()
 }
 
 /** 播放与设备激活使用同一请求身份，账号头跟随最终发送的 Cookie。 */

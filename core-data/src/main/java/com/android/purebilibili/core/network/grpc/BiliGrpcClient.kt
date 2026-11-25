@@ -50,14 +50,62 @@ object BiliGrpcClient {
             .build()
     }
 
+    internal data class GrpcAccountSnapshot(
+        val buvid: String,
+        val sessData: String?,
+        val csrf: String?,
+        val mid: Long?,
+        val accessToken: String?,
+    )
+
+    internal fun snapshotAccountCredentials(
+        includeAccount: Boolean,
+        expectedAccountMid: Long? = null,
+    ): GrpcAccountSnapshot {
+        if (includeAccount) {
+            TokenManager.awaitRestore()
+        }
+        return synchronized(TokenManager) {
+            val buvid = resolveBuvid()
+            if (!includeAccount) {
+                GrpcAccountSnapshot(
+                    buvid = buvid,
+                    sessData = null,
+                    csrf = null,
+                    mid = null,
+                    accessToken = null,
+                )
+            } else {
+                val mid = TokenManager.midCache?.takeIf { it > 0L }
+                if (expectedAccountMid != null) {
+                    check(mid == expectedAccountMid) { "账号已切换，请重新操作" }
+                }
+                GrpcAccountSnapshot(
+                    buvid = buvid,
+                    sessData = TokenManager.sessDataCache?.takeIf { it.isNotBlank() },
+                    csrf = TokenManager.csrfCache?.takeIf { it.isNotBlank() },
+                    mid = mid,
+                    accessToken = TokenManager.accessTokenCache?.takeIf { it.isNotBlank() },
+                )
+            }
+        }
+    }
+
     /** 请求随调用方协程取消，取消关联覆盖响应体读取阶段。 */
     suspend fun requestCancellable(
         path: String,
         message: ByteArray,
         profile: BiliGrpcProfile = BiliGrpcProfile.ANDROID_HD,
         baseUrl: String = "https://app.bilibili.com",
+        expectedAccountMid: Long? = null,
     ): ByteArray {
-        val request = buildRequest(path, ProtoWire.frame(message).toRequestBody(grpcMediaType), profile, baseUrl)
+        val request = buildRequest(
+            path = path,
+            body = ProtoWire.frame(message).toRequestBody(grpcMediaType),
+            profile = profile,
+            baseUrl = baseUrl,
+            expectedAccountMid = expectedAccountMid,
+        )
         val client = if (profile.includeAccount) NetworkModule.okHttpClient else dynamicPreviewClient
         return client.newCall(request).awaitGrpcPayload(path)
     }
@@ -67,9 +115,14 @@ object BiliGrpcClient {
         body: okhttp3.RequestBody,
         profile: BiliGrpcProfile = BiliGrpcProfile.ANDROID_HD,
         baseUrl: String = "https://app.bilibili.com",
+        expectedAccountMid: Long? = null,
     ): Request {
         val url = "$baseUrl$path"
-        val buvid = resolveBuvid()
+        val snapshot = snapshotAccountCredentials(
+            includeAccount = profile.includeAccount,
+            expectedAccountMid = expectedAccountMid,
+        )
+        val buvid = snapshot.buvid
         return Request.Builder()
             .url(url)
             .post(body)
@@ -80,17 +133,15 @@ object BiliGrpcClient {
             .header("bili-http-engine", "cronet")
             .header("x-bili-trace-id", TRACE_ID)
             .header("buvid", buvid)
-            .header("cookie", if (profile.includeAccount) buildCookieHeader() else "buvid3=$buvid")
-            .header("x-bili-metadata-bin", buildMetadataHeader(buvid, profile))
+            .header("cookie", if (profile.includeAccount) buildCookieHeader(snapshot) else "buvid3=$buvid")
+            .header("x-bili-metadata-bin", buildMetadataHeader(buvid, profile, snapshot.accessToken))
             .header("x-bili-device-bin", buildDeviceHeader(buvid, profile))
             .header("x-bili-fawkes-req-bin", buildFawkesHeader())
             .header("x-bili-network-bin", buildNetworkHeader())
             .header("x-bili-locale-bin", buildLocaleHeader())
             .apply {
-                if (profile.includeAccount) {
-                    TokenManager.accessTokenCache
-                        ?.takeIf { it.isNotBlank() }
-                        ?.let { header("authorization", "identify_v1 $it") }
+                if (profile.includeAccount && !snapshot.accessToken.isNullOrBlank()) {
+                    header("authorization", "identify_v1 ${snapshot.accessToken}")
                 }
             }
             .build()
@@ -99,8 +150,9 @@ object BiliGrpcClient {
     internal fun buildMetadataHeader(
         buvid: String = resolveBuvid(),
         profile: BiliGrpcProfile = BiliGrpcProfile.ANDROID_HD,
+        accessToken: String? = TokenManager.accessTokenCache,
     ): String {
-        val accessKey = TokenManager.accessTokenCache?.takeIf { profile.includeAccount && it.isNotBlank() }
+        val accessKey = accessToken?.takeIf { profile.includeAccount && it.isNotBlank() }
         val fields = mutableListOf<ByteArray>()
         if (!accessKey.isNullOrBlank()) {
             fields += ProtoWire.string(1, accessKey)
@@ -162,15 +214,17 @@ object BiliGrpcClient {
         return encodeBase64(locale)
     }
 
-    internal fun buildCookieHeader(): String {
-        val cookies = mutableListOf("buvid3=${resolveBuvid()}")
-        TokenManager.sessDataCache?.takeIf { it.isNotBlank() }?.let {
+    internal fun buildCookieHeader(
+        snapshot: GrpcAccountSnapshot = snapshotAccountCredentials(includeAccount = true),
+    ): String {
+        val cookies = mutableListOf("buvid3=${snapshot.buvid}")
+        snapshot.sessData?.takeIf { it.isNotBlank() }?.let {
             cookies += "SESSDATA=$it"
         }
-        TokenManager.csrfCache?.takeIf { it.isNotBlank() }?.let {
+        snapshot.csrf?.takeIf { it.isNotBlank() }?.let {
             cookies += "bili_jct=$it"
         }
-        TokenManager.midCache?.takeIf { it > 0L }?.let {
+        snapshot.mid?.takeIf { it > 0L }?.let {
             cookies += "DedeUserID=$it"
         }
         return cookies.joinToString("; ")

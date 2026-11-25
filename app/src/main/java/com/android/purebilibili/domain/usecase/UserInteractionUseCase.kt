@@ -2,6 +2,9 @@
 package com.android.purebilibili.domain.usecase
 
 import com.android.purebilibili.data.repository.ActionRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /**
  * 三连操作结果
@@ -99,17 +102,49 @@ class UserInteractionUseCase {
     suspend fun checkInteractionStatus(
         aid: Long,
         upMid: Long
-    ): InteractionStatus {
-        val isLiked = try { ActionRepository.checkLikeStatus(aid) } catch (e: Exception) { false }
-        val coinCount = try { ActionRepository.checkCoinStatus(aid) } catch (e: Exception) { 0 }
-        val isFavorited = try { ActionRepository.checkFavoriteStatus(aid) } catch (e: Exception) { false }
-        val isFollowing = try { ActionRepository.checkFollowStatus(upMid) } catch (e: Exception) { false }
-        
-        return InteractionStatus(
-            isLiked = isLiked,
-            coinCount = coinCount,
-            isFavorited = isFavorited,
-            isFollowing = isFollowing
+    ): InteractionStatus = coroutineScope {
+        val likedDeferred = async {
+            try {
+                ActionRepository.checkLikeStatus(aid)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+        }
+        val coinDeferred = async {
+            try {
+                ActionRepository.checkCoinStatus(aid)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                0
+            }
+        }
+        val favoritedDeferred = async {
+            try {
+                ActionRepository.checkFavoriteStatus(aid)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+        }
+        val followingDeferred = async {
+            try {
+                ActionRepository.checkFollowStatus(upMid)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        InteractionStatus(
+            isLiked = likedDeferred.await(),
+            coinCount = coinDeferred.await(),
+            isFavorited = favoritedDeferred.await(),
+            isFollowing = followingDeferred.await(),
         )
     }
 }

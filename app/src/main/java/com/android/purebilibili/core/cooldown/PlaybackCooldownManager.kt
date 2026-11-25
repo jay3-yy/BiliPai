@@ -2,6 +2,7 @@
 package com.android.purebilibili.core.cooldown
 
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.data.repository.videoPlaybackAccountScope
 
 /**
  *  播放冷却管理器
@@ -51,6 +52,24 @@ object PlaybackCooldownManager {
     
     /** 上次成功的时间 */
     private var lastSuccessTime = 0L
+
+    /** 当前冷却状态绑定的播放账号作用域；切换播放账号或登录状态时自动重置。 */
+    private var currentAccountScope: String? = null
+
+    internal var accountScopeProvider: () -> String = { videoPlaybackAccountScope() }
+    internal var nowMsProvider: () -> Long = { System.currentTimeMillis() }
+
+    private fun syncAccountScopeLocked() {
+        val scope = accountScopeProvider()
+        if (currentAccountScope != null && currentAccountScope != scope) {
+            failedVideos.clear()
+            failureCounts.clear()
+            consecutiveFailures = 0
+            globalCooldownStart = 0L
+            Logger.d(TAG, "播放账号作用域已变更，重置冷却状态")
+        }
+        currentAccountScope = scope
+    }
     
     // ========== Public API ==========
     
@@ -62,7 +81,8 @@ object PlaybackCooldownManager {
      */
     @Synchronized
     fun recordFailure(bvid: String, reason: String = "") {
-        val now = System.currentTimeMillis()
+        syncAccountScopeLocked()
+        val now = nowMsProvider()
         
         // 记录单视频失败
         val currentCount = (failureCounts[bvid] ?: 0) + 1
@@ -98,42 +118,24 @@ object PlaybackCooldownManager {
      */
     @Synchronized
     fun recordSuccess() {
+        syncAccountScopeLocked()
         if (consecutiveFailures > 0) {
             Logger.d(TAG, " 加载成功，重置失败计数 ($consecutiveFailures -> 0)")
         }
         consecutiveFailures = 0
         globalCooldownStart = 0L
-        lastSuccessTime = System.currentTimeMillis()
-        // 清除单视频失败计数
-        // 注意：这里无法获取 bvid，只能清除全局计数。
-        // 由于 recordSuccess 在 UseCase 层调用，并没有传 bvid。
-        // 我们需要修改 recordSuccess 签名或者接受无法清除单视频计数的事实？
-        // 实际上 UseCase 在成功时可以清除。
-        // 但为了简单，我们暂不在此处清除具体的 failureCounts[bvid]，
-        // 而是依靠 TTL 清理或下一次成功加载（如果逻辑允许）。
-        // 不过好的做法是让 recordSuccess 接收 bvid。
-        // 鉴于不能修改 UseCase 的所有调用处（可能很多），
-        // 我们先保持现状，依赖 getCooldownStatus 里的 Ready 或者是 clearForVideo。
-        // 
-        // 等等，UseCase.loadVideo 成功时调用 recordSuccess()。
-        // 如果我们想重置 failureCounts，最好给 recordSuccess 加个参数。
-        // 查看 UseCase，它确实调用了 PlaybackCooldownManager.recordSuccess()。
-        // 我们给 recordSuccess 加个默认参数 bvid: String? = null 以兼容现有代码 (如果有其他调用者)
-        // 但 Kotlin 甚至不需要默认参数如果我更新所有调用者。
-        // 让我们先只改这里，稍后如果有编译错误再修。
-        // 
-        // 不，查看前面的 UseCase 代码，是在 loadVideo 成功时调用的。
-        // 我们可以安全地修改 recordSuccess 增加参数，或者增加重载。
+        lastSuccessTime = nowMsProvider()
     }
     
     @Synchronized
     fun recordSuccess(bvid: String? = null) {
+        syncAccountScopeLocked()
         if (consecutiveFailures > 0) {
             Logger.d(TAG, " 加载成功，重置失败计数 ($consecutiveFailures -> 0)")
         }
         consecutiveFailures = 0
         globalCooldownStart = 0L
-        lastSuccessTime = System.currentTimeMillis()
+        lastSuccessTime = nowMsProvider()
         
         bvid?.let {
             failureCounts.remove(it)
@@ -148,7 +150,8 @@ object PlaybackCooldownManager {
      */
     @Synchronized
     fun getCooldownStatus(bvid: String): CooldownStatus {
-        val now = System.currentTimeMillis()
+        syncAccountScopeLocked()
+        val now = nowMsProvider()
         
         // 1. 检查全局冷却
         if (globalCooldownStart > 0) {
@@ -194,6 +197,7 @@ object PlaybackCooldownManager {
      */
     @Synchronized
     fun clearAll() {
+        syncAccountScopeLocked()
         failedVideos.clear()
         failureCounts.clear()
         consecutiveFailures = 0
@@ -206,6 +210,7 @@ object PlaybackCooldownManager {
      */
     @Synchronized
     fun clearForVideo(bvid: String) {
+        syncAccountScopeLocked()
         failedVideos.remove(bvid)
         failureCounts.remove(bvid)
         Logger.d(TAG, " 已清除视频冷却状态: $bvid")
@@ -214,7 +219,11 @@ object PlaybackCooldownManager {
     /**
      * 获取当前连续失败次数
      */
-    fun getConsecutiveFailures(): Int = consecutiveFailures
+    @Synchronized
+    fun getConsecutiveFailures(): Int {
+        syncAccountScopeLocked()
+        return consecutiveFailures
+    }
     
     // ========== Private ==========
     

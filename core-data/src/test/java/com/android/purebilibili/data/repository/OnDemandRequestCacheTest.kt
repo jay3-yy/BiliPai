@@ -1,14 +1,17 @@
 package com.android.purebilibili.data.repository
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -169,6 +172,43 @@ class OnDemandRequestCacheTest {
         gate.complete(Unit)
         assertEquals("details", request.await())
         assertNull(cache.peek("video"))
+    }
+
+    @Test
+    fun completedUncachedEntryIsNotReusedBeforePreviousWaiterFinalizes() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val unconfined = UnconfinedTestDispatcher(testScheduler)
+        var calls = 0
+        val cache = OnDemandRequestCache<String, String>(
+            maxEntries = 2,
+            maxAgeMs = 0L,
+            scope = CoroutineScope(backgroundScope.coroutineContext + unconfined),
+        )
+        val first = async {
+            cache.getOrLoad("video") {
+                calls += 1
+                gate.await()
+                "first"
+            }
+        }
+        runCurrent()
+        assertEquals(1, calls)
+
+        // Completing the gate finishes the shared Deferred immediately on UnconfinedTestDispatcher
+        // while `first` is still queued on StandardTestDispatcher (its `finally` has not run yet).
+        gate.complete(Unit)
+        assertFalse(first.isCompleted)
+
+        val second = async(unconfined) {
+            cache.getOrLoad("video") {
+                calls += 1
+                "second"
+            }
+        }
+
+        assertEquals("second", second.await())
+        assertEquals("first", first.await())
+        assertEquals(2, calls)
     }
 
     @Test

@@ -112,7 +112,9 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             if (StartupRecovery.isRecoveryMode) return
             // 转场离屏快照与源卡位图仅用于前后台可见时的开合动画，切后台即可释放。
             releaseTransitionVisualCaches()
-            if (!releaseBackgroundPageImages()) return
+            // 即使当前处于 PiP 过渡豁免窗口，可重建数据缓存与 15 秒深度后台回收仍需照常安排；
+            // 避免 pendingPlaybackRoutePip 瞬态标志导致整次后台驻留跳过回收。
+            releaseBackgroundPageImages()
             releaseRebuildableMemoryCaches()
             scheduleDeepBackgroundMemoryTrim()
         }
@@ -131,23 +133,25 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         // 避免大内存设备上系统迟迟不发 TRIM_MEMORY_BACKGROUND 导致后台体积长期居高不下。
         deepBackgroundTrimJob = AppScope.ioScope.launch {
             delay(15_000L)
-            if (!BackgroundManager.isInBackground) return@launch
-            val miniPlayer = com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstanceOrNull()
-            if (miniPlayer?.shouldKeepPlaybackForPipTransition() == true) return@launch
-            kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
-                if (!BackgroundManager.isInBackground) return@withContext
+            val shouldEvictIdleConnections = kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
+                if (!BackgroundManager.isInBackground) return@withContext false
+                val miniPlayer = com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstanceOrNull()
+                if (miniPlayer?.shouldKeepPlaybackForPipTransition() == true) return@withContext false
                 releaseTransitionVisualCaches()
+                releaseBackgroundPageImages()
                 com.android.purebilibili.core.util.CardPositionManager.clear()
                 _imageLoader?.memoryCache?.clear()
                 com.android.purebilibili.core.plugin.feed.PublicContentImageLoader.clearMemoryCache()
+                com.android.purebilibili.feature.video.danmaku.DanmakuSessionFactory.trimCachesForBackground()
                 releaseRebuildableMemoryCaches()
                 miniPlayer?.onMemoryPressureTrim(
                     level = ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
                     requestIdlePlaybackRelease = true,
                 )
+                val isAudioPlaying = miniPlayer?.let { it.isActive && it.player?.isPlaying == true } ?: false
+                !isAudioPlaying
             }
-            val isAudioPlaying = miniPlayer?.let { it.isActive && it.player?.isPlaying == true } ?: false
-            if (!isAudioPlaying) {
+            if (shouldEvictIdleConnections) {
                 NetworkModule.evictIdleConnections()
             }
         }
@@ -384,6 +388,8 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
                     releaseTransitionVisualCaches()
                     releaseBackgroundPageImages()
                     _imageLoader?.memoryCache?.clear()
+                    com.android.purebilibili.core.plugin.feed.PublicContentImageLoader.clearMemoryCache()
+                    com.android.purebilibili.feature.video.danmaku.DanmakuSessionFactory.trimCachesForBackground()
                 }
                 releaseRebuildableMemoryCaches()
                 // 预警只清可重建缓存，不重置播放器、音频会话、画中画或活跃网络连接。
@@ -737,6 +743,9 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         // （BACKGROUND / MODERATE / COMPLETE）或前台临界（RUNNING_CRITICAL）时执行。
         // 壁纸调色板与封面代表色表体积可忽略，重建代价却是「解码 + Palette 聚类」，故不清理。
         if (plan.releaseDerivedCaches) {
+            if (BackgroundManager.isInBackground) {
+                com.android.purebilibili.feature.video.danmaku.DanmakuSessionFactory.trimCachesForBackground()
+            }
             releaseRebuildableMemoryCaches()
         }
 
@@ -766,6 +775,12 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         com.android.purebilibili.data.repository.VideoRepository.clearSubtitleCueCache()
         com.android.purebilibili.data.repository.VideoCatalogRepository.clearRelatedVideosCache()
         com.android.purebilibili.data.repository.VideoCatalogRepository.clearCreatorCardStatsCache()
+        com.android.purebilibili.feature.message.MessageUserInfoLoader.clear()
+        com.android.purebilibili.feature.video.danmaku.clearDanmakuBlockRuleMatcherCache()
+        com.android.purebilibili.feature.video.viewmodel.sharedVideoCommentCache.clear()
+        com.android.purebilibili.feature.video.ui.components.clearReplyPreviewCache()
+        com.android.purebilibili.feature.dynamic.components.DynamicEmoteCatalog.clear()
+        com.android.purebilibili.core.plugin.js.ExternalMediaLaunchStore.trimToSize(4)
     }
 
     override fun onLowMemory() {
@@ -779,7 +794,8 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         releaseBackgroundPageImages()
         _imageLoader?.memoryCache?.clear()
         com.android.purebilibili.core.plugin.feed.PublicContentImageLoader.clearMemoryCache()
-        com.android.purebilibili.data.repository.DanmakuContentRepository.clearCache()
+        com.android.purebilibili.feature.video.danmaku.DanmakuSessionFactory.trimCachesForBackground()
+        releaseRebuildableMemoryCaches()
         if (plan.notifyPlayerHeavyOptimization) {
             com.android.purebilibili.feature.video.player.MiniPlayerManager
                 .getInstanceOrNull()
@@ -788,16 +804,6 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
                     requestIdlePlaybackRelease = plan.requestIdlePlaybackRelease
                 )
         }
-        // 同 releaseRebuildableMemoryCaches：容量 512 已被扩过，trimToSize(64) 是"砍到 1/8"，
-        // 单次淘汰比例比容量 128 时代更大，回收更激进。淘汰到 64 之后上限仍是 512，
-        // 会随使用自然回涨 —— 预期行为，不要改成 clear()。
-        com.android.purebilibili.feature.home.components.cards.VideoCardCoverColorStore
-            .trimToSize(BACKGROUND_COVER_COLOR_CACHE_MAX_ENTRIES)
-        com.android.purebilibili.core.cache.PlayUrlCache.clear()
-        com.android.purebilibili.data.repository.VideoRepository.clearVideoDetailCaches()
-        com.android.purebilibili.data.repository.VideoRepository.clearSubtitleCueCache()
-        com.android.purebilibili.data.repository.VideoCatalogRepository.clearRelatedVideosCache()
-        com.android.purebilibili.data.repository.VideoCatalogRepository.clearCreatorCardStatsCache()
         NetworkModule.evictIdleConnections()
         Logger.d(PureApplicationRuntimeConfig.TAG, "🚨 onLowMemory, cleared all caches")
     }

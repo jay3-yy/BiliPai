@@ -2,6 +2,7 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.store.TokenManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -17,9 +18,15 @@ data class DanmakuCacheStats(
     val totalBytes: Long
 )
 
+private data class DanmakuRawCacheKey(
+    val cid: Long,
+    val authenticated: Boolean,
+)
+
 private data class DanmakuSegmentCacheKey(
     val cid: Long,
-    val segmentIndex: Int
+    val segmentIndex: Int,
+    val authenticated: Boolean,
 )
 
 /**
@@ -37,37 +44,54 @@ object DanmakuContentRepository {
     private const val DANMAKU_SEGMENT_SAFE_FALLBACK_COUNT = 3
 
     // 弹幕数据缓存 - 避免横竖屏切换等场景重复下载
-    private val danmakuCache = LinkedHashMap<Long, ByteArray>(5, 0.75f, true)
+    private val danmakuCache = LinkedHashMap<DanmakuRawCacheKey, ByteArray>(5, 0.75f, true)
     private const val MAX_DANMAKU_CACHE_COUNT = 3  // 最多缓存3个视频的弹幕
     private const val MAX_DANMAKU_CACHE_BYTES = 4L * 1024 * 1024
     private var danmakuCacheBytes = 0L
+    private var danmakuRawCacheGeneration = 0L
 
     // Protobuf 弹幕分段缓存
     private val danmakuSegmentCache =
         LinkedHashMap<DanmakuSegmentCacheKey, ByteArray>(12, 0.75f, true)
+    private val danmakuSegmentRequests = OnDemandRequestCache<DanmakuSegmentCacheKey, ByteArray?>(
+        maxEntries = 1,
+        maxAgeMs = 0L,
+    )
     private const val MAX_SEGMENT_CACHE_COUNT = 12
     private const val MAX_SEGMENT_CACHE_BYTES = 12L * 1024 * 1024
     private const val MAX_SEGMENT_PARALLELISM = 3
     private var danmakuSegmentCacheBytes = 0L
+    private var danmakuSegmentCacheGeneration = 0L
+
+    private fun isDanmakuRequestAuthenticated(): Boolean {
+        TokenManager.awaitRestore()
+        return !TokenManager.sessDataCache.isNullOrBlank()
+    }
 
     /** 清除弹幕缓存 */
     fun clearCache() {
         synchronized(danmakuCache) {
             danmakuCache.clear()
             danmakuCacheBytes = 0L
+            danmakuRawCacheGeneration++
         }
         synchronized(danmakuSegmentCache) {
             danmakuSegmentCache.clear()
             danmakuSegmentCacheBytes = 0L
+            danmakuSegmentCacheGeneration++
         }
+        danmakuSegmentRequests.clearCompleted()
         android.util.Log.d("DanmakuRepo", "Danmaku cache cleared")
     }
 
     /** Evict only a segment whose bytes failed protocol parsing. */
     fun invalidateDanmakuSegment(cid: Long, segmentIndex: Int) {
+        danmakuSegmentRequests.invalidateWhere { it.cid == cid && it.segmentIndex == segmentIndex }
         synchronized(danmakuSegmentCache) {
-            danmakuSegmentCache.remove(DanmakuSegmentCacheKey(cid, segmentIndex))?.let {
-                danmakuSegmentCacheBytes -= it.size.toLong()
+            listOf(true, false).forEach { authenticated ->
+                danmakuSegmentCache.remove(DanmakuSegmentCacheKey(cid, segmentIndex, authenticated))?.let {
+                    danmakuSegmentCacheBytes -= it.size.toLong()
+                }
             }
         }
     }
@@ -109,9 +133,11 @@ object DanmakuContentRepository {
      * 获取 XML 格式弹幕原始数据（旧版 API，后备路径）
      */
     suspend fun getDanmakuRawData(cid: Long): ByteArray? = withContext(Dispatchers.IO) {
+        val cacheKey = DanmakuRawCacheKey(cid = cid, authenticated = isDanmakuRequestAuthenticated())
         // 先检查缓存
-        synchronized(danmakuCache) {
-            danmakuCache[cid]?.let { return@withContext it }
+        val expectedGeneration = synchronized(danmakuCache) {
+            danmakuCache[cacheKey]?.let { return@withContext it }
+            danmakuRawCacheGeneration
         }
 
         try {
@@ -153,23 +179,25 @@ object DanmakuContentRepository {
             }
 
             // 存入缓存（限制条目数与字节数）
-            if (result != null && result.isNotEmpty()) {
+            if (result != null && result.isNotEmpty() && cacheKey.authenticated == !TokenManager.sessDataCache.isNullOrBlank()) {
                 val entrySize = result.size.toLong()
                 if (entrySize <= MAX_DANMAKU_CACHE_BYTES) {
                     synchronized(danmakuCache) {
-                        danmakuCache.remove(cid)?.let { danmakuCacheBytes -= it.size.toLong() }
+                        if (danmakuRawCacheGeneration == expectedGeneration) {
+                            danmakuCache.remove(cacheKey)?.let { danmakuCacheBytes -= it.size.toLong() }
 
-                        val iterator = danmakuCache.entries.iterator()
-                        while (iterator.hasNext() &&
-                            (danmakuCache.size >= MAX_DANMAKU_CACHE_COUNT ||
-                                danmakuCacheBytes + entrySize > MAX_DANMAKU_CACHE_BYTES)
-                        ) {
-                            val eldest = iterator.next()
-                            danmakuCacheBytes -= eldest.value.size.toLong()
-                            iterator.remove()
+                            val iterator = danmakuCache.entries.iterator()
+                            while (iterator.hasNext() &&
+                                (danmakuCache.size >= MAX_DANMAKU_CACHE_COUNT ||
+                                    danmakuCacheBytes + entrySize > MAX_DANMAKU_CACHE_BYTES)
+                            ) {
+                                val eldest = iterator.next()
+                                danmakuCacheBytes -= eldest.value.size.toLong()
+                                iterator.remove()
+                            }
+                            danmakuCache[cacheKey] = result
+                            danmakuCacheBytes += entrySize
                         }
-                        danmakuCache[cid] = result
-                        danmakuCacheBytes += entrySize
                     }
                 }
             }
@@ -191,43 +219,56 @@ object DanmakuContentRepository {
         segmentIndex: Int
     ): ByteArray? = withContext(Dispatchers.IO) {
         require(segmentIndex >= 1) { "segmentIndex must be one-based" }
-        val cacheKey = DanmakuSegmentCacheKey(cid, segmentIndex)
+        val cacheKey = DanmakuSegmentCacheKey(
+            cid = cid,
+            segmentIndex = segmentIndex,
+            authenticated = isDanmakuRequestAuthenticated(),
+        )
         synchronized(danmakuSegmentCache) {
             danmakuSegmentCache[cacheKey]?.let { return@withContext it }
         }
 
-        val bytes = try {
-            api.getDanmakuSeg(oid = cid, segmentIndex = segmentIndex).bytes()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            android.util.Log.w("DanmakuRepo", "Segment $segmentIndex failed: ${e.message}")
-            return@withContext null
-        }
-        // A successful empty protobuf body is a valid segment with no comments.
-        // Reserve null for fetch failures so playback can retry those segments.
-
-        val entrySize = bytes.size.toLong()
-        if (entrySize <= MAX_SEGMENT_CACHE_BYTES) {
-            synchronized(danmakuSegmentCache) {
-                danmakuSegmentCache.remove(cacheKey)?.let { removed ->
-                    danmakuSegmentCacheBytes -= removed.size.toLong()
-                }
-                val iterator = danmakuSegmentCache.entries.iterator()
-                while (
-                    iterator.hasNext() &&
-                    (danmakuSegmentCache.size >= MAX_SEGMENT_CACHE_COUNT ||
-                        danmakuSegmentCacheBytes + entrySize > MAX_SEGMENT_CACHE_BYTES)
-                ) {
-                    val eldest = iterator.next()
-                    danmakuSegmentCacheBytes -= eldest.value.size.toLong()
-                    iterator.remove()
-                }
-                danmakuSegmentCache[cacheKey] = bytes
-                danmakuSegmentCacheBytes += entrySize
+        danmakuSegmentRequests.getOrLoad(cacheKey) {
+            val expectedGeneration = synchronized(danmakuSegmentCache) {
+                danmakuSegmentCache[cacheKey]?.let { return@getOrLoad it }
+                danmakuSegmentCacheGeneration
             }
+
+            val bytes = try {
+                api.getDanmakuSeg(oid = cid, segmentIndex = segmentIndex).bytes()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("DanmakuRepo", "Segment $segmentIndex failed: ${e.message}")
+                return@getOrLoad null
+            }
+            // A successful empty protobuf body is a valid segment with no comments.
+            // Reserve null for fetch failures so playback can retry those segments.
+
+            val entrySize = bytes.size.toLong()
+            if (entrySize <= MAX_SEGMENT_CACHE_BYTES && cacheKey.authenticated == !TokenManager.sessDataCache.isNullOrBlank()) {
+                synchronized(danmakuSegmentCache) {
+                    if (danmakuSegmentCacheGeneration == expectedGeneration) {
+                        danmakuSegmentCache.remove(cacheKey)?.let { removed ->
+                            danmakuSegmentCacheBytes -= removed.size.toLong()
+                        }
+                        val iterator = danmakuSegmentCache.entries.iterator()
+                        while (
+                            iterator.hasNext() &&
+                            (danmakuSegmentCache.size >= MAX_SEGMENT_CACHE_COUNT ||
+                                danmakuSegmentCacheBytes + entrySize > MAX_SEGMENT_CACHE_BYTES)
+                        ) {
+                            val eldest = iterator.next()
+                            danmakuSegmentCacheBytes -= eldest.value.size.toLong()
+                            iterator.remove()
+                        }
+                        danmakuSegmentCache[cacheKey] = bytes
+                        danmakuSegmentCacheBytes += entrySize
+                    }
+                }
+            }
+            bytes
         }
-        bytes
     }
 
     /**

@@ -212,10 +212,11 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
             
-            <!-- 🚀 App Shortcuts Deep Links -->
+            <!-- 🚀 App Shortcuts & Offline Extension Deep Links -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="bilipai" />
             </intent-filter>
 

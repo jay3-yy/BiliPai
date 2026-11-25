@@ -117,10 +117,19 @@ object CommentRepository {
     private const val MAX_COMMENT_IMAGE_BYTES = 15L * 1024 * 1024
     private const val IMAGE_TOO_LARGE_MESSAGE = "图片过大（单张最大 15MB）"
 
-    // WBI Key 缓存
-    private var wbiKeysCache: Pair<String, String>? = null
-    private var wbiKeysTimestamp: Long = 0
+    private data class CachedCommentWbiKeys(
+        val keys: Pair<String, String>,
+        val timestampMs: Long,
+    )
+
+    // WBI Key 缓存（单次不可变快照，避免多线程 IO 并发读写撕裂）
+    @Volatile
+    private var cachedWbiKeys: CachedCommentWbiKeys? = null
     private const val WBI_CACHE_DURATION = 1000 * 60 * 30 // 30分钟缓存
+
+    private inline fun <T> Result<T>.rethrowCancellation(): Result<T> = onFailure { error ->
+        if (error is kotlinx.coroutines.CancellationException) throw error
+    }
 
     @Serializable
     private data class CommentPicturePayload(
@@ -135,34 +144,32 @@ object CommentRepository {
      */
     private suspend fun getWbiKeysOrNull(navApi: BilibiliApi = api): Pair<String, String>? {
         val currentCheck = System.currentTimeMillis()
-        val cached = wbiKeysCache
-        if (cached != null && (currentCheck - wbiKeysTimestamp < WBI_CACHE_DURATION)) {
-            return cached
+        val cached = cachedWbiKeys
+        if (cached != null && (currentCheck - cached.timestampMs < WBI_CACHE_DURATION)) {
+            return cached.keys
         }
         val fromManager = runCatching {
             com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrNull()
-        }.getOrNull()
+        }.rethrowCancellation().getOrNull()
         if (fromManager != null) {
-            wbiKeysCache = fromManager
-            wbiKeysTimestamp = currentCheck
+            cachedWbiKeys = CachedCommentWbiKeys(fromManager, currentCheck)
             return fromManager
         }
-        return runCatching { getWbiKeys(navApi) }.getOrNull()
+        return runCatching { getWbiKeys(navApi) }.rethrowCancellation().getOrNull()
     }
 
     private suspend fun getWbiKeys(navApi: BilibiliApi = api): Pair<String, String> {
         val currentCheck = System.currentTimeMillis()
-        val cached = wbiKeysCache
-        if (cached != null && (currentCheck - wbiKeysTimestamp < WBI_CACHE_DURATION)) {
-            return cached
+        val cached = cachedWbiKeys
+        if (cached != null && (currentCheck - cached.timestampMs < WBI_CACHE_DURATION)) {
+            return cached.keys
         }
 
         val fromManager = runCatching {
             com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrNull()
-        }.getOrNull()
+        }.rethrowCancellation().getOrNull()
         if (fromManager != null) {
-            wbiKeysCache = fromManager
-            wbiKeysTimestamp = currentCheck
+            cachedWbiKeys = CachedCommentWbiKeys(fromManager, currentCheck)
             return fromManager
         }
 
@@ -177,12 +184,13 @@ object CommentRepository {
                 if (wbiImg != null) {
                     val imgKey = wbiImg.img_url.substringAfterLast("/").substringBefore(".")
                     val subKey = wbiImg.sub_url.substringAfterLast("/").substringBefore(".")
-                    
-                    wbiKeysCache = Pair(imgKey, subKey)
-                    wbiKeysTimestamp = System.currentTimeMillis()
+                    val resolved = Pair(imgKey, subKey)
+                    cachedWbiKeys = CachedCommentWbiKeys(resolved, System.currentTimeMillis())
                     CoreDataLog.d("CommentRepo", " WBI Keys obtained successfully (attempt $attempt)")
-                    return wbiKeysCache!!
+                    return resolved
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 lastError = e
                 android.util.Log.w("CommentRepo", "getWbiKeys attempt $attempt failed: ${e.message}")
@@ -211,18 +219,18 @@ object CommentRepository {
         mainListMode: Int,
         params: Map<String, String>
     ): ReplyResponse {
-        val mainResponse = runCatching { apiClient.getReplyListMain(params) }.getOrNull()
+        val mainResponse = runCatching { apiClient.getReplyListMain(params) }.rethrowCancellation().getOrNull()
         if (mainResponse != null && (mainResponse.code == 0 || hasRenderableCommentPayload(mainResponse.data))) {
             return mainResponse
         }
-        val guestMainResponse = runCatching { guestApi.getReplyListMain(params) }.getOrNull()
+        val guestMainResponse = runCatching { guestApi.getReplyListMain(params) }.rethrowCancellation().getOrNull()
         if (guestMainResponse != null && (guestMainResponse.code == 0 || hasRenderableCommentPayload(guestMainResponse.data))) {
             return guestMainResponse
         }
         val legacySort = if (mainListMode == CommentGrpcRepository.MODE_TIME) 0 else 1
         val legacyResponse = runCatching {
             apiClient.getReplyListLegacy(oid = oid, type = type, pn = page, ps = ps, sort = legacySort)
-        }.getOrNull()
+        }.rethrowCancellation().getOrNull()
         if (legacyResponse != null && (legacyResponse.code == 0 || hasRenderableCommentPayload(legacyResponse.data))) {
             return legacyResponse
         }
@@ -623,6 +631,8 @@ object CommentRepository {
                 android.util.Log.e("CommentRepo", " getComments failed: oid=$oid, type=$type, ${finalResponse.code} - ${finalResponse.message}")
                 Result.failure(error)
             }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             if (fallbackGrpcResult != null) {
                 CoreDataLog.w("CommentRepo", "getComments REST exception (${e.message}), restoring valid gRPC payload")

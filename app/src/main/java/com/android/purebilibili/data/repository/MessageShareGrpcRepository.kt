@@ -44,19 +44,32 @@ internal object MessageShareGrpcRepository {
         runCatching {
             require(receiverId > 0L) { "无效的接收者" }
             require(content.isNotBlank()) { "分享内容为空" }
-            val senderUid = TokenManager.midCache?.takeIf { it > 0L }
-                ?: error("无法获取用户信息，请重新登录")
+            TokenManager.awaitRestore()
+            val (identity, senderUid) = synchronized(TokenManager) {
+                TokenManager.accountIdentity.value to (
+                    TokenManager.midCache?.takeIf { it > 0L }
+                        ?: error("无法获取用户信息，请重新登录")
+                    )
+            }
+            check(TokenManager.accountIdentity.value == identity && identity.mid == senderUid) {
+                "账号已切换，请重新发送"
+            }
+            val payload = buildDynamicShareSendRequest(
+                senderUid = senderUid,
+                receiverId = receiverId,
+                content = content,
+                messageType = messageType,
+                timestampSeconds = System.currentTimeMillis() / 1000,
+                deviceId = UUID.randomUUID().toString(),
+            )
             val response = BiliGrpcClient.requestCancellable(
                 path = SEND_MESSAGE_PATH,
-                message = buildDynamicShareSendRequest(
-                    senderUid = senderUid,
-                    receiverId = receiverId,
-                    content = content,
-                    messageType = messageType,
-                    timestampSeconds = System.currentTimeMillis() / 1000,
-                    deviceId = UUID.randomUUID().toString(),
-                ),
+                message = payload,
+                expectedAccountMid = senderUid,
             )
+            check(TokenManager.accountIdentity.value == identity) {
+                "账号已切换，请重新发送"
+            }
             ProtoWire.parseFields(response)
                 .firstOrNull { it.number == 1 && it.wireType == ProtoWire.WIRE_VARINT }
                 ?.varint

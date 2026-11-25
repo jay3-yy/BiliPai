@@ -10,6 +10,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
@@ -64,6 +65,7 @@ class AccountCookieSessionTest {
         val original = Request.Builder().url("https://api.bilibili.com/x/player/wbi/playurl")
             .tag(AccountCookieSession::class.java, main).build()
         val playback = bindPlaybackAccountCookieSession(original, vipAccount)
+        assertTrue(playback.cacheControl.noCache)
         val bound = playback.tag(AccountCookieSession::class.java)!!
         assertEquals(vipAccount.sessData, bound.sessData)
         assertTrue(vipAccount.isVip)
@@ -131,6 +133,16 @@ class AccountCookieSessionTest {
             assertEquals(null, sent.header("Cookie"))
             response(sent)
         }.close()
+    }
+
+    @Test
+    fun `grpc credential snapshot rejects mismatched expected sender mid`() {
+        assertFailsWith<IllegalStateException> {
+            com.android.purebilibili.core.network.grpc.BiliGrpcClient.snapshotAccountCredentials(
+                includeAccount = true,
+                expectedAccountMid = 999_999_999L,
+            )
+        }
     }
 
     private fun response(request: Request, cookie: String? = null): Response = Response.Builder()

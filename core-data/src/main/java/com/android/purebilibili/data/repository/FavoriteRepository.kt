@@ -68,6 +68,15 @@ fun resolveFavoriteResourceRequestParams(
 
 object FavoriteRepository {
     private val api = NetworkModule.api
+    private data class FavFoldersKey(val accountScope: String, val targetMid: Long)
+    private val favFoldersRequests = OnDemandRequestCache<FavFoldersKey, Result<List<FavFolder>>>(
+        maxEntries = 8,
+        maxAgeMs = 0L,
+    )
+
+    fun invalidateFavFolders(mid: Long? = null) {
+        favFoldersRequests.invalidateWhere { mid == null || it.targetMid == mid }
+    }
 
     data class CollectedFavFoldersPage(
         val folders: List<FavFolder>,
@@ -77,28 +86,40 @@ object FavoriteRepository {
     suspend fun getFavFolders(mid: Long): Result<List<FavFolder>> {
         return withContext(Dispatchers.IO) {
             try {
-                val response = api.getFavFolders(mid)
-                if (response.code == 0) {
-                    Result.success(
-                        response.data?.list
-                            ?.map { it.copy(source = FavFolderSource.OWNED) }
-                            ?: emptyList()
-                    )
-                } else {
-                    Result.failure(
-                        favoriteApiFailure(
-                            operation = "获取收藏夹失败",
-                            code = response.code,
-                            message = response.message
-                        )
-                    )
+                TokenManager.awaitRestore()
+                val key = FavFoldersKey(videoMetadataAccountScope(), mid)
+                val result = favFoldersRequests.getOrLoad(key) {
+                    try {
+                        val response = api.getFavFolders(mid)
+                        if (response.code == 0) {
+                            check(key.accountScope == videoMetadataAccountScope()) { "Account changed" }
+                            Result.success(
+                                response.data?.list
+                                    ?.map { it.copy(source = FavFolderSource.OWNED) }
+                                    ?: emptyList()
+                            )
+                        } else {
+                            Result.failure(
+                                favoriteApiFailure(
+                                    operation = "获取收藏夹失败",
+                                    code = response.code,
+                                    message = response.message
+                                )
+                            )
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: HttpException) {
+                        Result.failure(favoriteHttpFailure("获取收藏夹失败", e))
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
                 }
+                if (key.accountScope == videoMetadataAccountScope()) result
+                else Result.failure(IllegalStateException("Account changed"))
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: HttpException) {
-                Result.failure(favoriteHttpFailure("获取收藏夹失败", e))
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
                 Result.failure(e)
             }
         }
@@ -138,8 +159,10 @@ object FavoriteRepository {
                 cover = cover,
                 csrf = csrf,
             )
-            if (response.code == 0) Result.success(Unit)
-            else Result.failure(Exception(response.message.ifBlank { "编辑收藏夹失败" }))
+            if (response.code == 0) {
+                invalidateFavFolders()
+                Result.success(Unit)
+            } else Result.failure(Exception(response.message.ifBlank { "编辑收藏夹失败" }))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -153,8 +176,10 @@ object FavoriteRepository {
             val csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty()
             if (csrf.isBlank()) return@withContext Result.failure(Exception("请先登录"))
             val response = api.deleteFavFolders(mediaIds = mediaId.toString(), csrf = csrf)
-            if (response.code == 0) Result.success(Unit)
-            else Result.failure(Exception(response.message.ifBlank { "删除收藏夹失败" }))
+            if (response.code == 0) {
+                invalidateFavFolders()
+                Result.success(Unit)
+            } else Result.failure(Exception(response.message.ifBlank { "删除收藏夹失败" }))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

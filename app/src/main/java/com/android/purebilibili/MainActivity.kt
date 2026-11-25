@@ -265,10 +265,14 @@ internal fun resolvePluginInstallDeepLink(rawDeepLink: String): PluginInstallDee
     val normalizedHost = uri.host?.lowercase() ?: return null
     val normalizedPath = uri.path?.trim()?.trimEnd('/') ?: ""
 
+    if (normalizedScheme == "bilipai" && normalizedHost == "ext" && normalizedPath == "/preview") {
+        return PluginInstallDeepLinkRequest(pluginUrl = rawDeepLink.trim())
+    }
+
     val installLinkMatched = when (normalizedScheme) {
-        "bilipai" -> normalizedHost == "plugin" && normalizedPath == "/install"
+        "bilipai" -> (normalizedHost == "plugin" || normalizedHost == "ext") && normalizedPath == "/install"
         "https", "http" -> normalizedHost in PLUGIN_INSTALL_HTTPS_HOSTS &&
-            normalizedPath in setOf("/plugin/install", "/plugins/install")
+            normalizedPath in setOf("/plugin/install", "/plugins/install", "/ext/install")
         else -> false
     }
     if (!installLinkMatched) return null

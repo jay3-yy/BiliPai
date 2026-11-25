@@ -29,8 +29,10 @@ object BackgroundManager : DefaultLifecycleObserver {
      * 初始化 - 在 Application.onCreate() 中调用
      */
     fun init(context: Context) {
-        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
-        Logger.d(TAG, "✅ BackgroundManager initialized")
+        val lifecycle = ProcessLifecycleOwner.get().lifecycle
+        isInBackground = !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
+        lifecycle.addObserver(this)
+        Logger.d(TAG, "✅ BackgroundManager initialized (isInBackground=$isInBackground)")
     }
     
     /**

@@ -349,14 +349,18 @@ object DynamicRepository {
         rid: String? = null,
         type: Int? = null
     ): DynamicItem? {
-        return runCatching {
+        return try {
             val response = NetworkModule.dynamicApi.getDynamicDetail(
                 id = id,
                 rid = rid,
                 type = type
             )
             response.data?.item?.takeIf { response.code == 0 }
-        }.getOrNull()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private data class OpusDetailFetch(
@@ -365,7 +369,7 @@ object DynamicRepository {
     )
 
     private suspend fun fetchOpusDetail(dynamicId: String): OpusDetailFetch {
-        return runCatching {
+        return try {
             val response = NetworkModule.dynamicApi.getOpusDetail(
                 signDynamicWbi(
                     mapOf(
@@ -376,13 +380,16 @@ object DynamicRepository {
                 )
             )
             if (response.code != 0) {
-                return@runCatching OpusDetailFetch(item = null, fallbackCvId = null)
+                OpusDetailFetch(item = null, fallbackCvId = null)
+            } else {
+                OpusDetailFetch(
+                    item = response.data?.item,
+                    fallbackCvId = response.data?.fallback?.id?.takeIf { it > 0L }
+                )
             }
-            OpusDetailFetch(
-                item = response.data?.item,
-                fallbackCvId = response.data?.fallback?.id?.takeIf { it > 0L }
-            )
-        }.getOrElse { error ->
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
             Logger.w(
                 tag = "DynamicRepository",
                 message = "解析图文动态全文失败: dynamicId=$dynamicId",
@@ -394,25 +401,37 @@ object DynamicRepository {
 
     private suspend fun signDynamicWbi(params: Map<String, String>): Map<String, String> {
         return try {
-            val navResp = NetworkModule.api.getNavInfo()
-            val wbiImg = navResp.data?.wbi_img
-            val imgKey = wbiImg?.img_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
-            val subKey = wbiImg?.sub_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
+            val cachedKeys = com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrNull()
+            val (imgKey, subKey) = if (cachedKeys != null) {
+                cachedKeys
+            } else {
+                val navResp = NetworkModule.api.getNavInfo()
+                val wbiImg = navResp.data?.wbi_img
+                val img = wbiImg?.img_url?.substringAfterLast("/")?.substringBefore(".").orEmpty()
+                val sub = wbiImg?.sub_url?.substringAfterLast("/")?.substringBefore(".").orEmpty()
+                img to sub
+            }
             if (imgKey.isNotEmpty() && subKey.isNotEmpty()) {
                 WbiUtils.sign(params, imgKey, subKey)
             } else {
                 params
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             params
         }
     }
 
     private suspend fun fetchDesktopDetailItem(dynamicId: String): DynamicItem? {
-        return runCatching {
+        return try {
             val response = NetworkModule.dynamicApi.getDynamicDetailFallback(id = dynamicId)
             response.data?.item?.takeIf { response.code == 0 }
-        }.getOrNull()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
     }
     
     /**
@@ -449,7 +468,10 @@ object DynamicRepository {
         type: String = "all",
         advanceBaseline: Boolean = true
     ): Result<Int> = withContext(Dispatchers.IO) {
+        val account = paginationForAccount()
+        val feedPagination = account.feed
         try {
+            ensureCurrentAccount(account.identity)
             val updateBaseline = feedPagination.updateBaseline(scope, type)
             if (!advanceBaseline) {
                 // 轻量未读接口：只返回新动态条数，避免轮询时拉全量 feed。
@@ -457,6 +479,7 @@ object DynamicRepository {
                     type = type,
                     updateBaseline = updateBaseline
                 )
+                ensureCurrentAccount(account.identity)
                 if (updateResponse.code != 0) {
                     return@withContext Result.failure(
                         Exception(
@@ -472,14 +495,17 @@ object DynamicRepository {
                 return@withContext Result.success(updateData.update_num.coerceAtLeast(0))
             }
             val response = fetchDynamicFeedPageWithRetry {
+                ensureCurrentAccount(account.identity)
                 NetworkModule.dynamicApi.getDynamicFeed(
                     type = type,
                     offset = "",
                     updateBaseline = updateBaseline
                 )
             }.getOrElse { error ->
+                if (error is CancellationException) throw error
                 return@withContext Result.failure(error)
             }
+            ensureCurrentAccount(account.identity)
             val data = response.data ?: return@withContext Result.failure(Exception("动态更新数为空"))
             val nextBaseline = resolveDynamicUpdateCountBaseline(
                 currentBaseline = updateBaseline,
@@ -494,8 +520,9 @@ object DynamicRepository {
                 )
             }
             Result.success(data.update_num.coerceAtLeast(0))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
             e.printStackTrace()
             Result.failure(e)
         }

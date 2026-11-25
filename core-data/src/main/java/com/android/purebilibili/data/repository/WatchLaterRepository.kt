@@ -8,6 +8,7 @@ import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.data.model.response.WatchLaterItem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,11 +35,50 @@ fun buildWatchLaterPageParams(
 )
 
 object WatchLaterRepository {
+    private val watchLaterListCache = OnDemandRequestCache<Any, Result<List<WatchLaterItem>>>(
+        maxEntries = 2,
+        maxAgeMs = 15_000L,
+        canCache = { it.isSuccess },
+    )
+
+    private fun currentWatchLaterSession(): Any =
+        TokenManager.accountIdentity.value to TokenManager.sessDataCache
+
+    fun invalidateWatchLaterListCache() {
+        watchLaterListCache.invalidateWhere { true }
+    }
+
+    suspend fun getWatchLaterItems(session: Any = currentWatchLaterSession()): Result<List<WatchLaterItem>> =
+        withContext(Dispatchers.IO) {
+            try {
+                TokenManager.awaitRestore()
+                val effectiveSession = if (session == currentWatchLaterSession()) session else currentWatchLaterSession()
+                if (TokenManager.sessDataCache.isNullOrEmpty()) {
+                    return@withContext Result.success(emptyList())
+                }
+                val result = watchLaterListCache.getOrLoad(effectiveSession) {
+                    dataRequest {
+                        val response = api.getWatchLaterList()
+                        if (response.code != 0) throw ContentRequestException(response.code, response.message)
+                        check(effectiveSession == currentWatchLaterSession()) { "Account changed" }
+                        response.data?.list.orEmpty()
+                    }
+                }
+                if (effectiveSession == currentWatchLaterSession()) result
+                else Result.failure(IllegalStateException("Account changed"))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+        }
+
     suspend fun add(aid: Long): Result<Boolean> = dataRequest {
         val response = api.addToWatchLater(aid, requireCsrf())
         if (response.code != 0) throw ContentRequestException(response.code, when (response.code) {
             90001 -> "稍后再看列表已满"; 90003 -> "视频已被删除"; else -> response.message
         })
+        invalidateWatchLaterListCache()
         true
     }
     suspend fun remove(aid: Long): Result<Boolean> = dataRequest {
@@ -46,6 +86,7 @@ object WatchLaterRepository {
         if (response.code != 0) throw ContentRequestException(response.code, when (response.code) {
             90001 -> "稍后再看列表已满"; 90003 -> "视频已被删除"; else -> response.message
         })
+        invalidateWatchLaterListCache()
         true
     }
     private const val PAGE_SIZE = 30
@@ -113,6 +154,7 @@ object WatchLaterRepository {
         apiCall {
             val response = api.clearWatchLater(cleanType = cleanType, csrf = requireCsrf())
             check(response.code == 0) { response.message.ifBlank { "清理稍后再看失败" } }
+            invalidateWatchLaterListCache()
         }
     }
 
@@ -142,6 +184,7 @@ object WatchLaterRepository {
             check(response.code == 0) {
                 response.message.ifBlank { if (copy) "复制失败" else "移动失败" }
             }
+            if (!copy) invalidateWatchLaterListCache()
         }
     }
 

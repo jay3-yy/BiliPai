@@ -47,20 +47,29 @@ class OnDemandRequestCache<Key : Any, Value>(
             val entry = cached.get(key)
             if (entry != null && nowMs() < entry.expiresAtMs) return entry.value
             cached.remove(key)
-            val existing = inFlight[key]
+            val existing = inFlight[key]?.takeIf { !it.deferred.isCompleted }
             val selected = existing ?: InFlight<Value>().also { created ->
                 val generation = cacheGeneration
                 created.deferred = scope.async(start = CoroutineStart.LAZY) {
-                    val value = load()
-                    currentCoroutineContext().ensureActive()
-                    if (maxAgeMs > 0L && canCache(value)) {
+                    try {
+                        val value = load()
+                        currentCoroutineContext().ensureActive()
                         synchronized(lock) {
-                            if (inFlight[key] === created && cacheGeneration == generation) {
-                                cached.put(key, Cached(value, nowMs() + maxAgeMs))
+                            if (inFlight[key] === created) {
+                                if (maxAgeMs > 0L && canCache(value) && cacheGeneration == generation) {
+                                    cached.put(key, Cached(value, nowMs() + maxAgeMs))
+                                }
+                                inFlight.remove(key)
+                            }
+                        }
+                        value
+                    } finally {
+                        synchronized(lock) {
+                            if (inFlight[key] === created) {
+                                inFlight.remove(key)
                             }
                         }
                     }
-                    value
                 }
                 inFlight[key] = created
             }

@@ -507,24 +507,47 @@ private fun JsonObject.array(name: String): JsonArray? {
     return this[name] as? JsonArray
 }
 
+internal const val AREA_INDEX_TTL_MS = 60_000L
+
+internal fun createLiveAreaIndexCache(
+    scope: kotlinx.coroutines.CoroutineScope = AppScope.ioScope,
+    nowMs: () -> Long = { System.nanoTime() / 1_000_000L },
+): OnDemandRequestCache<Unit, Result<List<LiveAreaParent>>> = OnDemandRequestCache(
+    maxEntries = 1,
+    maxAgeMs = AREA_INDEX_TTL_MS,
+    scope = scope,
+    nowMs = nowMs,
+    canCache = { it.isSuccess },
+)
+
 /**
  * 直播相关数据仓库
  * 从 VideoRepository 拆分出来，专注于直播功能
  */
 object LiveRepository {
     private val api = NetworkModule.api
+    private const val ROOM_INIT_TTL_MS = 30_000L
+    private val roomInitCache = OnDemandRequestCache<Long, LiveRoomInitData?>(
+        maxEntries = 32,
+        maxAgeMs = ROOM_INIT_TTL_MS,
+        canCache = { it != null },
+    )
 
-    private suspend fun resolveRealRoomId(roomId: Long): Long =
-        getRoomInitData(roomId)?.roomId?.takeIf { it > 0L } ?: roomId
+    internal suspend fun resolveRealRoomId(roomId: Long): Long =
+        if (roomId <= 0L) roomId else getRoomInitData(roomId)?.roomId?.takeIf { it > 0L } ?: roomId
 
-    private suspend fun getRoomInitData(roomId: Long): LiveRoomInitData? {
-        return try {
-            val resp = api.getLiveRoomInit(roomId)
-            resp.takeIf { it.code == 0 }?.data
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            android.util.Log.w("LiveRepo", "Room identity request failed: ${e.message}")
-            null
+    internal suspend fun getRoomInitData(roomId: Long): LiveRoomInitData? {
+        if (roomId <= 0L) return null
+        return roomInitCache.getOrLoad(roomId) {
+            try {
+                val resp = api.getLiveRoomInit(roomId)
+                resp.takeIf { it.code == 0 }?.data
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("LiveRepo", "Room identity request failed: ${e.message}")
+                null
+            }
         }
     }
 
@@ -890,40 +913,10 @@ object LiveRepository {
 
     // 分区索引复用：并发调用共享同一个 in-flight 请求（去重），成功结果缓存短 TTL，
     // 失败不入缓存——下次调用会重新请求，避免把一次失败固化成长期空数据。
-    private val areaIndexMutex = kotlinx.coroutines.sync.Mutex()
-    private var areaIndexCache: List<LiveAreaParent>? = null
-    private var areaIndexCachedAt = 0L
-    private var areaIndexInFlight: kotlinx.coroutines.Deferred<Result<List<LiveAreaParent>>>? = null
+    private val areaIndexRequests = createLiveAreaIndexCache()
 
-    private const val AREA_INDEX_TTL_MS = 60_000L
-
-    suspend fun getLiveAreaIndex(): Result<List<LiveAreaParent>> {
-        // 先在锁内决定：命中缓存 / 复用 in-flight / 新建共享请求。
-        val start = areaIndexMutex.withLock {
-            val now = android.os.SystemClock.elapsedRealtime()
-            areaIndexCache?.takeIf { now - areaIndexCachedAt < AREA_INDEX_TTL_MS }?.let {
-                return Result.success(it)
-            }
-            val inFlight = areaIndexInFlight
-            if (inFlight != null) {
-                inFlight
-            } else {
-                val created = AppScope.ioScope.async { fetchLiveAreaIndex() }
-                areaIndexInFlight = created
-                created
-            }
-        }
-        val result = start.await()
-        areaIndexMutex.withLock {
-            // 无论成功失败都清 in-flight；只有成功才写缓存（失败不入缓存）。
-            if (areaIndexInFlight === start) areaIndexInFlight = null
-            result.getOrNull()?.let { areas ->
-                areaIndexCache = areas
-                areaIndexCachedAt = android.os.SystemClock.elapsedRealtime()
-            }
-        }
-        return result
-    }
+    suspend fun getLiveAreaIndex(): Result<List<LiveAreaParent>> =
+        areaIndexRequests.getOrLoad(Unit) { fetchLiveAreaIndex() }
 
     private suspend fun fetchLiveAreaIndex(): Result<List<LiveAreaParent>> = withContext(Dispatchers.IO) {
         try {

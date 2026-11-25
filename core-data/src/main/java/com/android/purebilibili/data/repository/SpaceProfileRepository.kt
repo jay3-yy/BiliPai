@@ -15,11 +15,11 @@ object SpaceProfileRepository {
         val csrf = TokenManager.csrfCache.orEmpty()
         val response = if (add) NetworkModule.api.addSpaceSpecialFollow(mid, csrf) else NetworkModule.api.removeSpaceSpecialFollow(mid, csrf)
         if (response.code != 0) throw ContentRequestException(response.code, response.message)
+        UserActionRepository.invalidateRelation(mid)
     }
     suspend fun followTime(mid: Long): Result<Long> = dataRequest {
-        val response = NetworkModule.api.getRelation(mid)
-        if (response.code != 0) throw ContentRequestException(response.code, response.message)
-        response.data?.mtime?.takeIf { it > 0 } ?: error("暂无可查询的关注时间")
+        val data = UserActionRepository.relation(mid).getOrThrow()
+        data?.mtime?.takeIf { it > 0 } ?: error("暂无可查询的关注时间")
     }
 
     suspend fun reserve(sid: Long, cancel: Boolean): Result<Unit> = dataRequest {

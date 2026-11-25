@@ -43,20 +43,42 @@ fun resolveHistoryCursorQuery(
 
 object HistoryRepository {
     private val api = NetworkModule.api
+    private data class PlaybackHistoryKey(
+        val sessionStorageKey: String,
+        val bvid: String,
+        val cid: Long,
+    )
+    private val playbackHistoryRequests = OnDemandRequestCache<PlaybackHistoryKey, Result<com.android.purebilibili.data.model.response.PlayerInfoData>>(
+        maxEntries = 4,
+        maxAgeMs = 0L,
+    )
 
     /** 进度使用观看记录账号实时读取，不复用取流账号或播放地址缓存。 */
-    suspend fun getPlaybackHistory(bvid: String, cid: Long): Result<com.android.purebilibili.data.model.response.PlayerInfoData> = dataRequest {
-        val account = com.android.purebilibili.core.network.purposeAccount(com.android.purebilibili.core.store.AccountPurpose.WATCH_HISTORY)
-        val session = account?.let(com.android.purebilibili.core.network.AccountCookieSession::from)
-            ?: com.android.purebilibili.core.network.AccountCookieSession.main()
-        val keys = com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrThrow()
-        val params = com.android.purebilibili.core.network.WbiUtils.sign(
-            mapOf("bvid" to bvid, "cid" to cid.toString()), keys.first, keys.second,
-        )
-        val response = api.getPlaybackHistory(params, session)
-        if (response.code != 0) throw ContentRequestException(response.code, response.message)
-        response.data ?: error("播放历史信息为空")
-    }
+    suspend fun getPlaybackHistory(bvid: String, cid: Long): Result<com.android.purebilibili.data.model.response.PlayerInfoData> =
+        withContext(Dispatchers.IO) {
+            try {
+                val account = com.android.purebilibili.core.network.purposeAccount(com.android.purebilibili.core.store.AccountPurpose.WATCH_HISTORY)
+                val session = account?.let(com.android.purebilibili.core.network.AccountCookieSession::from)
+                    ?: com.android.purebilibili.core.network.AccountCookieSession.main()
+                val normalizedBvid = bvid.trim()
+                val key = PlaybackHistoryKey(session.storageKey, normalizedBvid, cid)
+                playbackHistoryRequests.getOrLoad(key) {
+                    dataRequest {
+                        val keys = com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrThrow()
+                        val params = com.android.purebilibili.core.network.WbiUtils.sign(
+                            mapOf("bvid" to normalizedBvid, "cid" to cid.toString()), keys.first, keys.second,
+                        )
+                        val response = api.getPlaybackHistory(params, session)
+                        if (response.code != 0) throw ContentRequestException(response.code, response.message)
+                        response.data ?: error("播放历史信息为空")
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
 
     /**
      * 获取历史记录列表（支持游标分页）

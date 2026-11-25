@@ -175,12 +175,16 @@ object TokenManager {
     @Volatile
     private var restoreCompleted = false
     private val restoreLatch = CountDownLatch(1)
+    private val initStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val tokenScope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
 
     fun init(context: Context) {
+        if (!initStarted.compareAndSet(false, true)) return
+        val appContext = context.applicationContext
         restoreStarted = true
-        CoroutineScope(Dispatchers.IO).launch {
+        tokenScope.launch {
             try {
-                restoreSessionBackup(context)
+                restoreSessionBackup(appContext)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 com.android.purebilibili.core.network.CoreDataLog.e("TokenManager", "Unable to restore session backup", e)
@@ -190,10 +194,10 @@ object TokenManager {
             }
 
             // 2. 启动 DataStore 监听 (主要数据源)——保持先恢复备份、后监听 DataStore 的顺序
-            context.dataStore.data.collect {
+            appContext.dataStore.data.collect {
                 sessionMutationMutex.withLock {
                     // 在登录整组保存完成后读取最新快照，旧通知不能回写旧账号。
-                    val prefs = context.dataStore.data.first()
+                    val prefs = appContext.dataStore.data.first()
                     val dsSess = prefs[SESSDATA_KEY]?.let(SessionStorageCipher::decrypt)
                     val dsBuvid = prefs[BUVID3_KEY]?.let(SessionStorageCipher::decrypt)
 
@@ -204,12 +208,12 @@ object TokenManager {
 
                     if (dsBuvid == null) {
                         val newBuvid = generateBuvid3()
-                        saveBuvid3(context, newBuvid)
+                        saveBuvid3(appContext, newBuvid)
                     } else {
                         buvid3Cache = dsBuvid
                     }
 
-                    val sp = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+                    val sp = appContext.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
                     //  数据同步：如果 DataStore 有值但 SP 没值 (或值不同)，同步写入 SP (从 V1 迁移到 V2)
                     if (sessDataCache != null && sessDataCache != sp.getString(SP_KEY_SESS, null)) {
                         sessDataCache?.let(SessionStorageCipher::encrypt)?.let { encrypted ->
@@ -239,34 +243,44 @@ object TokenManager {
     private fun restoreSessionBackup(context: Context) {
         // 1. 读取 SP 备份并解密到内存
         val sp = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
-        sessDataCache = sp.getString(SP_KEY_SESS, null)?.let(SessionStorageCipher::decrypt)
-        buvid3Cache = sp.getString(SP_KEY_BUVID, null)?.let(SessionStorageCipher::decrypt)
-        csrfCache = sp.getString(SP_KEY_CSRF, null)?.let(SessionStorageCipher::decrypt)  //  读取 CSRF
-        midCache = sp.getLong(SP_KEY_MID, 0L).takeIf { it > 0 }  //  读取 MID
-        accessTokenCache = sp.getString(SP_KEY_ACCESS_TOKEN, null)?.let(SessionStorageCipher::decrypt)  //  读取 access_token
-        refreshTokenCache = sp.getString(SP_KEY_REFRESH_TOKEN, null)?.let(SessionStorageCipher::decrypt)  //  读取 refresh_token
-        accessTokenPlatformCache = sp.getString(
+        val restoredSess = sp.getString(SP_KEY_SESS, null)?.let(SessionStorageCipher::decrypt)
+        val restoredBuvid = sp.getString(SP_KEY_BUVID, null)?.let(SessionStorageCipher::decrypt)
+        val restoredCsrf = sp.getString(SP_KEY_CSRF, null)?.let(SessionStorageCipher::decrypt)
+        val restoredMid = sp.getLong(SP_KEY_MID, 0L).takeIf { it > 0 }
+        val restoredAccess = sp.getString(SP_KEY_ACCESS_TOKEN, null)?.let(SessionStorageCipher::decrypt)
+        val restoredRefresh = sp.getString(SP_KEY_REFRESH_TOKEN, null)?.let(SessionStorageCipher::decrypt)
+        val restoredPlatform = sp.getString(
             SP_KEY_ACCESS_TOKEN_PLATFORM,
             ACCESS_TOKEN_PLATFORM_TV
         ) ?: ACCESS_TOKEN_PLATFORM_TV
+
+        synchronized(this) {
+            sessDataCache = restoredSess
+            buvid3Cache = restoredBuvid
+            csrfCache = restoredCsrf
+            midCache = restoredMid
+            accessTokenCache = restoredAccess
+            refreshTokenCache = restoredRefresh
+            accessTokenPlatformCache = restoredPlatform
+        }
 
         publishAccountIdentity()
 
         com.android.purebilibili.core.network.AccountCookieStore.read(
             context,
             com.android.purebilibili.core.network.AccountCookieSession.from(
-                sessDataCache.orEmpty(), csrfCache.orEmpty(), midCache ?: 0L, buvid3Cache.orEmpty()
+                restoredSess.orEmpty(), restoredCsrf.orEmpty(), restoredMid ?: 0L, restoredBuvid.orEmpty()
             ),
         )
         com.android.purebilibili.core.network.CoreDataLog.d(
             "TokenManager",
-            "init: hasSession=${!sessDataCache.isNullOrBlank()}, hasAccessToken=${!accessTokenCache.isNullOrBlank()}, mid=$midCache"
+            "init: hasSession=${!restoredSess.isNullOrBlank()}, hasAccessToken=${!restoredAccess.isNullOrBlank()}, mid=$restoredMid"
         )
     }
     
     //  [新增] 保存 CSRF Token
     suspend fun saveCsrf(context: Context, csrf: String) {
-        csrfCache = csrf
+        synchronized(this) { csrfCache = csrf }
         val encryptedCsrf = SessionStorageCipher.encrypt(csrf)
         encryptedCsrf?.let { encrypted ->
             context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
@@ -280,10 +294,11 @@ object TokenManager {
     
     //  [新增] 保存用户 MID
     suspend fun saveMid(context: Context, mid: Long) {
-        midCache = mid.takeIf { it > 0L }
+        val resolvedMid = mid.takeIf { it > 0L }
+        synchronized(this) { midCache = resolvedMid }
         context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
             .edit().putLong(SP_KEY_MID, mid).apply()
-        context.dataStore.edit { it[MID_KEY] = midCache ?: 0L }
+        context.dataStore.edit { it[MID_KEY] = resolvedMid ?: 0L }
         publishAccountIdentity()
         com.android.purebilibili.core.network.CoreDataLog.d("TokenManager", " saveMid: $mid")
     }
@@ -295,9 +310,11 @@ object TokenManager {
         refreshToken: String,
         platform: String = ACCESS_TOKEN_PLATFORM_TV
     ) {
-        accessTokenCache = accessToken
-        refreshTokenCache = refreshToken
-        accessTokenPlatformCache = platform
+        synchronized(this) {
+            accessTokenCache = accessToken
+            refreshTokenCache = refreshToken
+            accessTokenPlatformCache = platform
+        }
         val encryptedAccessToken = SessionStorageCipher.encrypt(accessToken)
         val encryptedRefreshToken = SessionStorageCipher.encrypt(refreshToken)
         val editor = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).edit()
@@ -313,9 +330,11 @@ object TokenManager {
     }
 
     suspend fun clearAccessToken(context: Context) {
-        accessTokenCache = null
-        refreshTokenCache = null
-        accessTokenPlatformCache = ACCESS_TOKEN_PLATFORM_TV
+        synchronized(this) {
+            accessTokenCache = null
+            refreshTokenCache = null
+            accessTokenPlatformCache = ACCESS_TOKEN_PLATFORM_TV
+        }
         context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
             .edit()
             .remove(SP_KEY_ACCESS_TOKEN)
@@ -330,11 +349,11 @@ object TokenManager {
     }
 
     fun saveVipStatus(isVip: Boolean) {
-        isVipCache = isVip
+        synchronized(this) { isVipCache = isVip }
     }
 
     suspend fun saveCookies(context: Context, sessData: String) {
-        sessDataCache = sessData
+        synchronized(this) { sessDataCache = sessData }
         com.android.purebilibili.core.network.CoreDataLog.d("TokenManager", "saveCookies")
         
         // 1. 存入 SP (同步/快速)
@@ -350,7 +369,7 @@ object TokenManager {
     }
 
     suspend fun saveBuvid3(context: Context, buvid3: String) {
-        buvid3Cache = buvid3
+        synchronized(this) { buvid3Cache = buvid3 }
         
         // 1. 存入 SP
         SessionStorageCipher.encrypt(buvid3)?.let { encrypted ->
@@ -381,19 +400,26 @@ object TokenManager {
         val encryptedRefresh = SessionStorageCipher.encrypt(refreshToken)
         val selectedBuvid = buvid3.ifBlank { buvid3Cache?.takeIf { it.isNotBlank() } ?: generateBuvid3() }
         val encryptedBuvid = SessionStorageCipher.encrypt(selectedBuvid)
+        val resolvedMid = mid.takeIf { it > 0L }
+        val accountChanged: Boolean
         synchronized(this) {
+            accountChanged = sessDataCache != sessData || midCache != resolvedMid
             sessDataCache = sessData
             csrfCache = csrf.ifBlank { null }
-            midCache = mid.takeIf { it > 0L }
+            midCache = resolvedMid
             buvid3Cache = selectedBuvid
             accessTokenCache = accessToken.ifBlank { null }
             refreshTokenCache = refreshToken.ifBlank { null }
             this.accessTokenPlatformCache = accessTokenPlatform
             isVipCache = isVip
         }
+        if (accountChanged) {
+            com.android.purebilibili.core.network.NetworkModule.clearRuntimeCookies()
+            com.android.purebilibili.core.network.NetworkModule.evictHttpCache(context)
+        }
 
         val editor = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).edit()
-            .putLong(SP_KEY_MID, midCache ?: 0L)
+            .putLong(SP_KEY_MID, resolvedMid ?: 0L)
             .putString(SP_KEY_ACCESS_TOKEN_PLATFORM, accessTokenPlatformCache)
         encryptedSession?.let { editor.putString(SP_KEY_SESS, it) }
         encryptedBuvid?.let { editor.putString(SP_KEY_BUVID, it) }
@@ -410,7 +436,7 @@ object TokenManager {
             if (encryptedCsrf != null) prefs[CSRF_KEY] = encryptedCsrf else prefs.remove(CSRF_KEY)
             if (encryptedAccess != null) prefs[ACCESS_KEY] = encryptedAccess else prefs.remove(ACCESS_KEY)
             if (encryptedRefresh != null) prefs[REFRESH_KEY] = encryptedRefresh else prefs.remove(REFRESH_KEY)
-            prefs[MID_KEY] = midCache ?: 0L
+            prefs[MID_KEY] = resolvedMid ?: 0L
             prefs[PLATFORM_KEY] = accessTokenPlatformCache
         }
         publishAccountIdentity()
@@ -421,14 +447,20 @@ object TokenManager {
     }
 
     suspend fun clear(context: Context): Unit = sessionMutationMutex.withLock {
-        sessDataCache = null
-        buvid3Cache = null
-        csrfCache = null
-        midCache = null
-        isVipCache = false
-        accessTokenCache = null  //  [新增] 清除 access_token
-        refreshTokenCache = null
-        accessTokenPlatformCache = ACCESS_TOKEN_PLATFORM_TV
+        synchronized(this) {
+            sessDataCache = null
+            buvid3Cache = null
+            csrfCache = null
+            midCache = null
+            isVipCache = false
+            accessTokenCache = null  //  [新增] 清除 access_token
+            refreshTokenCache = null
+            accessTokenPlatformCache = ACCESS_TOKEN_PLATFORM_TV
+            lastNotificationPreferences = null
+        }
+        com.android.purebilibili.core.network.NetworkModule.clearRuntimeCookies()
+        com.android.purebilibili.core.network.NetworkModule.clearPlaybackAccountClient()
+        com.android.purebilibili.core.network.NetworkModule.evictHttpCache(context)
         publishAccountIdentity()
         
         // 清除 SP

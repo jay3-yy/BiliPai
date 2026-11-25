@@ -3342,6 +3342,19 @@ object NetworkModule {
     }
 
     /**
+     * 账号切换或退出登录时清空共享 HTTP 磁盘缓存，防止 URL 键缓存跨账号回放私有响应；
+     * 若客户端尚未初始化则直接清理缓存目录，避免在单元测试或冷启动早期触发初始化。
+     */
+    fun evictHttpCache(context: Context? = appContext) {
+        if (okHttpClientInitialized) {
+            runCatching { okHttpClient.cache?.evictAll() }
+            return
+        }
+        val dir = context?.applicationContext?.let { java.io.File(it.cacheDir, "okhttp_cache") } ?: return
+        runCatching { if (dir.exists()) dir.deleteRecursively() }
+    }
+
+    /**
      * 后台或内存整理时主动释放空闲的 TCP / TLS 连接与底层 Socket 缓冲区。
      */
     fun evictIdleConnections() {
@@ -3424,6 +3437,7 @@ object NetworkModule {
      */
     private fun buildPlaybackAccountClientsLocked(account: StoredAccountSession, key: String) {
         val client = okHttpClient.newBuilder()
+            .cache(null)
             .cookieJar(okhttp3.CookieJar.NO_COOKIES)
             .addInterceptor { chain ->
                 chain.proceed(bindPlaybackAccountCookieSession(chain.request(), account))
@@ -3510,6 +3524,9 @@ object NetworkModule {
     // "failed to create directory: /tmp/okhttp_cache" 并阻断清理缓存流程。
     private fun resolveHttpCacheDirectory(name: String): java.io.File? =
         appContext?.let { java.io.File(it.cacheDir, name) }
+
+    @Volatile
+    private var okHttpClientInitialized = false
 
     val okHttpClient: OkHttpClient by lazy {
         val builder = OkHttpClient.Builder()
@@ -3753,6 +3770,7 @@ object NetworkModule {
             .addInterceptor(GithubMirrorInterceptor())
             .addNetworkInterceptor(AccountCookieInterceptor())
             .build()
+            .also { okHttpClientInitialized = true }
     }
 
     val playbackOkHttpClient: OkHttpClient by lazy {

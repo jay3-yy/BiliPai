@@ -20,7 +20,7 @@ package com.bytedance.danmaku.render.engine.control
  */
 abstract class AbsConfig {
 
-    private val mListenerList = mutableListOf<ConfigChangeListener>()
+    private val mListenerList = java.util.concurrent.CopyOnWriteArrayList<ConfigChangeListener>()
 
     fun addListener(listener: ConfigChangeListener) {
         mListenerList.add(listener)

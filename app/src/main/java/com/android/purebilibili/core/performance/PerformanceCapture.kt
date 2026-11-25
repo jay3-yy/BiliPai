@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -363,9 +364,10 @@ internal object PerformanceCapture {
                 .put("reviewFromOffsetMs", (timelineOffset(current) - 30_000).coerceAtLeast(0))
                 .put("windowId", registeredWindows[owner]?.id ?: JSONObject.NULL)
                 .put("page", registeredWindows[owner]?.page ?: JSONObject.NULL))
-            mutableStatus.value = status.value.copy(message = "已标记问题时间点（${current.markers.length()}）；采集继续")
+            val markerCount = current.markers.length()
+            mutableStatus.update { it.copy(message = "已标记问题时间点（$markerCount）；采集继续") }
         } else {
-            mutableStatus.value = status.value.copy(message = "已保留 100 个问题标记；采集继续")
+            mutableStatus.update { it.copy(message = "已保留 100 个问题标记；采集继续") }
         }
     }
 

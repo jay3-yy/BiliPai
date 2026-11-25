@@ -182,9 +182,25 @@ object AccountSessionStore {
         return true
     }
 
-    fun getPurposeAccountMid(context: Context, purpose: AccountPurpose): Long? =
-        context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+    private const val UNINITIALIZED_PURPOSE_MID = Long.MIN_VALUE
+
+    @Volatile
+    private var cachedWatchHistoryPurposeMid: Long = UNINITIALIZED_PURPOSE_MID
+
+    fun getPurposeAccountMid(context: Context, purpose: AccountPurpose): Long? {
+        if (purpose == AccountPurpose.WATCH_HISTORY) {
+            val cached = cachedWatchHistoryPurposeMid
+            if (cached != UNINITIALIZED_PURPOSE_MID) {
+                return cached.takeIf { it > 0L }
+            }
+            val loaded = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+                .getLong(purpose.storageKey, 0L)
+            cachedWatchHistoryPurposeMid = loaded
+            return loaded.takeIf { it > 0L }
+        }
+        return context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
             .getLong(purpose.storageKey, 0L).takeIf { it > 0L }
+    }
 
     fun getPurposeAccount(context: Context, purpose: AccountPurpose): StoredAccountSession? {
         if (purpose == AccountPurpose.PLAYBACK) return getPlaybackAccount(context)
@@ -198,6 +214,9 @@ object AccountSessionStore {
         context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).edit().apply {
             if (mid == null) remove(purpose.storageKey) else putLong(purpose.storageKey, mid)
         }.apply()
+        if (purpose == AccountPurpose.WATCH_HISTORY) {
+            cachedWatchHistoryPurposeMid = mid ?: 0L
+        }
         return true
     }
 
@@ -207,6 +226,7 @@ object AccountSessionStore {
             .remove(KEY_ACTIVE_MID)
             .apply()
         NetworkModule.clearRuntimeCookies()
+        NetworkModule.evictHttpCache(context)
     }
 
     fun removeAccount(context: Context, mid: Long): Boolean {
@@ -230,7 +250,12 @@ object AccountSessionStore {
             NetworkModule.clearPlaybackAccountClient()
         }
         AccountPurpose.entries.forEach { purpose ->
-            if (getPurposeAccountMid(context, purpose) == mid) editor.remove(purpose.storageKey)
+            if (getPurposeAccountMid(context, purpose) == mid) {
+                editor.remove(purpose.storageKey)
+                if (purpose == AccountPurpose.WATCH_HISTORY) {
+                    cachedWatchHistoryPurposeMid = 0L
+                }
+            }
         }
         editor.apply()
         return true
@@ -284,6 +309,7 @@ object AccountSessionStore {
         if (target.sessData.isBlank()) return false
 
         NetworkModule.clearRuntimeCookies()
+        NetworkModule.evictHttpCache(context)
         TokenManager.applyStoredSession(
             context = context,
             sessData = target.sessData,
@@ -312,6 +338,7 @@ object AccountSessionStore {
     ): Boolean {
         if (bundle.mid <= 0L || bundle.sessData.isBlank()) return false
         NetworkModule.clearRuntimeCookies()
+        NetworkModule.evictHttpCache(context)
         TokenManager.applyStoredSession(
             context = context,
             sessData = bundle.sessData,

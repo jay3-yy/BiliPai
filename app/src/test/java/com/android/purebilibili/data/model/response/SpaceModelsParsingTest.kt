@@ -532,4 +532,31 @@ class SpaceModelsParsingTest {
         assertEquals(1314000L, topic?.id)
         assertEquals("新机来了！", topic?.name)
     }
+
+    @Test
+    fun decodeSpaceDynamicResponse_preservesPinnedModuleTag() {
+        val payload = """
+            {
+              "code": 0,
+              "data": {
+                "items": [
+                  {
+                    "id_str": "123456",
+                    "type": "DYNAMIC_TYPE_WORD",
+                    "modules": {
+                      "module_tag": {
+                        "text": "置顶"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val tag = json.decodeFromString<SpaceDynamicResponse>(payload)
+            .data?.items?.single()?.modules?.module_tag
+
+        assertEquals("置顶", tag?.text)
+    }
 }

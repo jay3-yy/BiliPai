@@ -177,13 +177,26 @@ internal fun resolveGradeDanmakuSummary(
  */
 object DanmakuRepository {
     private val api = NetworkModule.api
+    private data class DanmakuViewKey(
+        val accountScope: String,
+        val cid: Long,
+        val aid: Long,
+    )
+    private val danmakuViewCache = OnDemandRequestCache<DanmakuViewKey, DanmakuProto.DmWebViewReply?>(
+        maxEntries = 16,
+        maxAgeMs = 15_000L,
+        canCache = { it != null },
+    )
 
     /**
      * 清除弹幕缓存。
      * 读取与缓存的实现已下沉到共享 :core-data 的 [DanmakuContentRepository]，
      * 保留委托以稳定手机端调用方。
      */
-    fun clearDanmakuCache() = DanmakuContentRepository.clearCache()
+    fun clearDanmakuCache() {
+        danmakuViewCache.clearCompleted()
+        DanmakuContentRepository.clearCache()
+    }
 
     fun getDanmakuCacheStats(): DanmakuCacheStats = DanmakuContentRepository.getDanmakuCacheStats()
 
@@ -197,22 +210,41 @@ object DanmakuRepository {
      * 获取弹幕元数据 (High-Energy, Command Dms, etc.)
      */
     suspend fun getDanmakuView(cid: Long, aid: Long): com.android.purebilibili.danmaku.parser.DanmakuProto.DmWebViewReply? = withContext(Dispatchers.IO) {
+        if (cid <= 0L) return@withContext null
         try {
-             com.android.purebilibili.core.util.Logger.d("DanmakuRepo", "🎯 getDanmakuView: cid=$cid, aid=$aid")
-             val responseBody = api.getDanmakuView(oid = cid, pid = aid)
-             val bytes = responseBody.bytes()
-             if (bytes.isNotEmpty()) {
-                 val result = com.android.purebilibili.danmaku.parser.DanmakuParser.parseWebViewReply(bytes)
-                 com.android.purebilibili.core.util.Logger.d("DanmakuRepo", " Metadata parsed: count=${result.count}, special=${result.specialDms.size}, command=${result.commandDms.size}")
-                 result
-             } else {
-                 null
-             }
+            com.android.purebilibili.core.store.TokenManager.awaitRestore()
+            val key = DanmakuViewKey(
+                accountScope = videoMetadataAccountScope(),
+                cid = cid,
+                aid = aid,
+            )
+            val reply = danmakuViewCache.getOrLoad(key) {
+                try {
+                    com.android.purebilibili.core.util.Logger.d("DanmakuRepo", "🎯 getDanmakuView: cid=$cid, aid=$aid")
+                    val responseBody = api.getDanmakuView(oid = cid, pid = aid)
+                    val bytes = responseBody.bytes()
+                    if (key.accountScope != videoMetadataAccountScope()) {
+                        null
+                    } else if (bytes.isNotEmpty()) {
+                        val result = com.android.purebilibili.danmaku.parser.DanmakuParser.parseWebViewReply(bytes)
+                        com.android.purebilibili.core.util.Logger.d("DanmakuRepo", " Metadata parsed: count=${result.count}, special=${result.specialDms.size}, command=${result.commandDms.size}")
+                        result
+                    } else {
+                        null
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    android.util.Log.e("DanmakuRepo", " getDanmakuView failed: ${e.message}")
+                    null
+                }
+            }
+            if (key.accountScope == videoMetadataAccountScope()) reply else null
         } catch (e: CancellationException) {
-             throw e
+            throw e
         } catch (e: Exception) {
-             android.util.Log.e("DanmakuRepo", " getDanmakuView failed: ${e.message}")
-             null
+            android.util.Log.e("DanmakuRepo", " getDanmakuView failed: ${e.message}")
+            null
         }
     }
 
@@ -453,6 +485,8 @@ object DanmakuRepository {
                 android.util.Log.e("DanmakuRepo", "❌ sendDanmaku failed: ${response.code} - ${response.message}")
                 Result.failure(Exception(errorMsg))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("DanmakuRepo", "❌ sendDanmaku exception: ${e.message}", e)
             Result.failure(e)
@@ -495,6 +529,8 @@ object DanmakuRepository {
             } else {
                 Result.failure(Exception(mapSendDanmakuErrorMessage(response.code, response.message)))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("DanmakuRepo", "❌ sendAttentionCommandDanmaku exception: ${e.message}", e)
             Result.failure(e)
@@ -537,6 +573,7 @@ object DanmakuRepository {
                 csrf = csrf
             )
             if (response.code == 0) {
+                danmakuViewCache.invalidateWhere { it.cid == cid && it.aid == aid }
                 com.android.purebilibili.core.util.Logger.d("DanmakuRepo", "✅ Grade danmaku submitted: grade_id=$gradeId score=$gradeScore")
                 Result.success(Unit)
             } else {
@@ -590,6 +627,8 @@ object DanmakuRepository {
                 android.util.Log.e("DanmakuRepo", "❌ recallDanmaku failed: ${response.code} - ${response.message}")
                 Result.failure(Exception(errorMsg))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("DanmakuRepo", "❌ recallDanmaku exception: ${e.message}", e)
             Result.failure(e)
@@ -713,6 +752,8 @@ object DanmakuRepository {
                 android.util.Log.e("DanmakuRepo", "❌ reportDanmaku failed: ${response.code} - ${response.message}")
                 Result.failure(Exception(errorMsg))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("DanmakuRepo", "❌ reportDanmaku exception: ${e.message}", e)
             Result.failure(e)
@@ -737,12 +778,7 @@ object DanmakuRepository {
             VideoRepository.ensureBuvid3()
 
             // 2) 统一解析真实房间号（避免短号导致弹幕 token 或房间参数不一致）
-            val realRoomId = runCatching { api.getLiveRoomInit(roomId) }
-                .getOrNull()
-                ?.data
-                ?.roomId
-                ?.takeIf { it > 0L }
-                ?: roomId
+            val realRoomId = LiveRepository.resolveRealRoomId(roomId)
 
             // 3) 强制使用 WBI 签名请求 getDanmuInfo，不再回退无签名
             val initialWbiKeys = com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrNull()

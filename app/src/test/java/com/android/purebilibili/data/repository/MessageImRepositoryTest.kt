@@ -108,6 +108,25 @@ class MessageImRepositoryTest {
         assertTrue(dot.unreadDot)
     }
 
+    @Test
+    fun gatewayUnavailabilityIsScopedToAccountAndExpiresAfterTtl() {
+        MessageImRepository.resetGatewayUnavailable()
+        try {
+            MessageImRepository.markGatewayUnavailable(currentMid = 1001L, nowMs = 1_000L)
+
+            assertTrue(MessageImRepository.isGatewayUnavailable(currentMid = 1001L, nowMs = 1_000L))
+            assertFalse(MessageImRepository.isGatewayUnavailable(currentMid = 2002L, nowMs = 1_000L))
+            assertFalse(MessageImRepository.isGatewayUnavailable(currentMid = null, nowMs = 1_000L))
+
+            val beforeExpiry = 1_000L + MessageImRepository.GATEWAY_UNAVAILABLE_TTL_MS - 1L
+            val atExpiry = 1_000L + MessageImRepository.GATEWAY_UNAVAILABLE_TTL_MS
+            assertTrue(MessageImRepository.isGatewayUnavailable(currentMid = 1001L, nowMs = beforeExpiry))
+            assertFalse(MessageImRepository.isGatewayUnavailable(currentMid = 1001L, nowMs = atExpiry))
+        } finally {
+            MessageImRepository.resetGatewayUnavailable()
+        }
+    }
+
     private fun session(id: ByteArray, name: String, summary: String): ByteArray = ProtoWire.message(
         ProtoWire.bytes(1, id), ProtoWire.bytes(2, ProtoWire.string(1, name)),
         ProtoWire.bytes(4, ProtoWire.string(1, summary)), ProtoWire.int64(5, 1_770_000_000_000_000),

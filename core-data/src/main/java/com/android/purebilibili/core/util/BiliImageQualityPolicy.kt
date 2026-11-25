@@ -16,6 +16,8 @@ object BiliImageQualityPolicy {
         return cdnWidthBuckets.firstOrNull { it >= targetWidthPx }
     }
 
+    fun supportedCdnWidthBuckets(): List<Int> = cdnWidthBuckets.toList()
+
     fun resolveUrl(url: String, dataSaver: Boolean): String =
         resolveUrl(url, if (dataSaver) DATA_SAVER_QUALITY else HIGH_QUALITY)
 

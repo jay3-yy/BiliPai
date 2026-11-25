@@ -75,9 +75,23 @@ object PlayUrlCache {
         "$accountScope:$bvid:$cid:"
     
     /**
-     * 缓存实例
+     * 缓存实例（淘汰时同步移除二级索引，避免长期前台会话中 variantsByVideo 残留失效键）
      */
-    private val cache: LruCache<String, CachedPlayUrl> = LruCache(MAX_CACHE_SIZE)
+    private val cache: LruCache<String, CachedPlayUrl> = object : LruCache<String, CachedPlayUrl>(MAX_CACHE_SIZE) {
+        override fun entryRemoved(
+            evicted: Boolean,
+            key: String,
+            oldValue: CachedPlayUrl,
+            newValue: CachedPlayUrl?
+        ) {
+            if (evicted && newValue == null) {
+                val parts = key.split(":", limit = 4)
+                if (parts.size >= 3) {
+                    unindexKey(key, "${parts[0]}:${parts[1]}:${parts[2]}:")
+                }
+            }
+        }
+    }
 
     /**
      * 「视频前缀 → 该视频的全部变体键」二级索引。

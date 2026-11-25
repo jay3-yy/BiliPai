@@ -243,9 +243,31 @@ object VideoRepository {
         val quality: Int,
         val audioLang: String?
     )
+    private data class PlayUrlRequestKey(
+        val accountScope: String,
+        val bvid: String,
+        val cid: Long,
+        val qn: Int,
+        val audioLang: String?,
+        val retainOriginalUrls: Boolean,
+        val requestKind: PlayUrlRequestKind,
+    )
     private val initialPlayUrlRequests = OnDemandRequestCache<InitialPlayUrlKey, PlayUrlData?>(
         maxEntries = 1,
         maxAgeMs = 0L
+    )
+    private val playUrlRequests = OnDemandRequestCache<PlayUrlRequestKey, PlayUrlData?>(
+        maxEntries = 4,
+        maxAgeMs = 0L,
+    )
+    private val playbackNavInfoCache = OnDemandRequestCache<String, Result<NavData>>(
+        maxEntries = 4,
+        maxAgeMs = 5_000L,
+        canCache = { it.isSuccess },
+    )
+    private val pageDimensionRequests = OnDemandRequestCache<String, Dimension?>(
+        maxEntries = 16,
+        maxAgeMs = 0L,
     )
 
     fun cachedVideoCid(bvid: String, aid: Long = 0L): Long =
@@ -253,6 +275,8 @@ object VideoRepository {
 
     fun clearVideoDetailCaches() {
         SharedContentRepository.clearDetailCache()
+        SubtitleContentRepository.clearPlayerInfoCache()
+        ActionRepository.clearVideoRelationCache()
         VideoCatalogRepository.clearRelatedVideosCache()
         verticalVideoCache.evictAll()
     }
@@ -263,9 +287,13 @@ object VideoRepository {
         val resolvedCid = cid.takeIf { it > 0L } ?: cachedInfo?.cid ?: 0L
         SharedContentRepository.invalidateDetail(bvid, aid)
         if (canonicalBvid != bvid) SharedContentRepository.invalidateDetail(canonicalBvid)
+        ActionRepository.invalidateVideoRelation(aid = aid, bvid = canonicalBvid)
         VideoCatalogRepository.invalidateRelatedVideos(canonicalBvid)
         if (resolvedCid > 0L) PlayUrlCache.invalidate(canonicalBvid, resolvedCid)
         initialPlayUrlRequests.invalidateWhere {
+            (it.bvid == bvid || it.bvid == canonicalBvid) && (cid <= 0L || it.cid == cid)
+        }
+        playUrlRequests.invalidateWhere {
             (it.bvid == bvid || it.bvid == canonicalBvid) && (cid <= 0L || it.cid == cid)
         }
     }
@@ -283,8 +311,9 @@ object VideoRepository {
     private const val VERTICAL_PREFETCH_CONCURRENCY = 5
     private val QUALITY_CHAIN = listOf(120, 116, 112, 80, 74, 64, 32, 16)
     private const val PLAY_URL_RISK_COOLDOWN_MS = 120_000L
-    @Volatile
+    private val playUrlCooldownLock = Any()
     private var playUrlCooldownUntilMs = 0L
+    private var playUrlCooldownScope: String? = null
     
     internal fun playbackAccount() = NetworkModule.playbackAccount()
 
@@ -327,34 +356,55 @@ object VideoRepository {
     }
 
     // 播放器沿用此查询入口读取 Web 播放校验冷却。
-    internal fun getAppApiCooldownRemainingMs(nowMs: Long = System.currentTimeMillis()): Long {
-        return (playUrlCooldownUntilMs - nowMs).coerceAtLeast(0L)
+    internal fun getAppApiCooldownRemainingMs(
+        nowMs: Long = System.currentTimeMillis(),
+        currentScope: String = videoPlaybackAccountScope(),
+    ): Long = synchronized(playUrlCooldownLock) {
+        if (playUrlCooldownScope != null && playUrlCooldownScope != currentScope) {
+            playUrlCooldownUntilMs = 0L
+            playUrlCooldownScope = null
+            return@synchronized 0L
+        }
+        val remaining = (playUrlCooldownUntilMs - nowMs).coerceAtLeast(0L)
+        if (remaining == 0L) {
+            playUrlCooldownUntilMs = 0L
+            playUrlCooldownScope = null
+        }
+        remaining
     }
 
-    internal fun isAppApiCoolingDown(nowMs: Long = System.currentTimeMillis()): Boolean {
-        return getAppApiCooldownRemainingMs(nowMs) > 0L
+    internal fun isAppApiCoolingDown(
+        nowMs: Long = System.currentTimeMillis(),
+        currentScope: String = videoPlaybackAccountScope(),
+    ): Boolean {
+        return getAppApiCooldownRemainingMs(nowMs, currentScope) > 0L
+    }
+
+    internal fun recordPlayUrlRiskCooldown(
+        nowMs: Long = System.currentTimeMillis(),
+        currentScope: String = videoPlaybackAccountScope(),
+    ) {
+        synchronized(playUrlCooldownLock) {
+            playUrlCooldownScope = currentScope
+            playUrlCooldownUntilMs = nowMs + PLAY_URL_RISK_COOLDOWN_MS
+        }
+    }
+
+    internal fun clearPlayUrlRiskCooldown() {
+        synchronized(playUrlCooldownLock) {
+            playUrlCooldownUntilMs = 0L
+            playUrlCooldownScope = null
+        }
     }
 
     suspend fun getVideoTitle(
         bvid: String,
         aid: Long = 0L
     ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val lookup = resolveVideoInfoLookupInput(rawBvid = bvid, aid = aid)
-                ?: throw Exception("无效的视频标识: bvid=$bvid, aid=$aid")
-            val response = if (lookup.bvid.isNotEmpty()) {
-                api.getVideoInfo(lookup.bvid)
-            } else {
-                api.getVideoInfoByAid(lookup.aid)
-            }
-            val info = response.data ?: throw Exception("视频详情为空: ${response.code}")
+        getVideoInfoOnly(bvid = bvid, aid = aid).mapCatching { info ->
             val title = info.title.trim()
             if (title.isEmpty()) throw Exception("视频标题为空")
-            Result.success(title)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(e)
+            title
         }
     }
     
@@ -575,10 +625,11 @@ object VideoRepository {
                 }
                 return@withContext resolved
             }
+            TokenManager.awaitRestore()
             val cachedPlayData = PlayUrlCache.get(
                 bvid = bvid,
                 cid = cid,
-                requestedQuality = targetQuality
+                requestedQuality = resolveInitialStartQuality(targetQuality)
             )
             if (cachedPlayData != null) {
                 com.android.purebilibili.core.util.Logger.d(
@@ -969,6 +1020,8 @@ object VideoRepository {
                     Result.failure(Exception("错误码: ${resp.code}"))
                 }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -979,23 +1032,32 @@ object VideoRepository {
      * 与 [getNavInfo]（始终主账号）不同，这里跟随 [NetworkModule.playbackApi] 的账号归属。
      */
     internal suspend fun getPlaybackNavInfo(): Result<NavData> = withContext(Dispatchers.IO) {
-        try {
-            val resp = NetworkModule.playbackApi().getNavInfo()
-            if (resp.code == 0 && resp.data != null) {
-                val checkedRespData = requireNotNull(resp.data)
-                Result.success(checkedRespData)
-            } else {
-                if (resp.code == -101) {
-                    Result.success(NavData(isLogin = false))
-                } else {
-                    Result.failure(Exception("错误码: ${resp.code}"))
+        TokenManager.awaitRestore()
+        val accountScope = videoPlaybackAccountScope()
+        val result = playbackNavInfoCache.getOrLoad(accountScope) {
+            try {
+                val resp = NetworkModule.playbackApi().getNavInfo()
+                if (accountScope != videoPlaybackAccountScope()) {
+                    throw CancellationException("Playback account changed")
                 }
+                if (resp.code == 0 && resp.data != null) {
+                    val checkedRespData = requireNotNull(resp.data)
+                    Result.success(checkedRespData)
+                } else {
+                    if (resp.code == -101) {
+                        Result.success(NavData(isLogin = false))
+                    } else {
+                        Result.failure(Exception("错误码: ${resp.code}"))
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                Result.failure(e)
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (e: Exception) {
-            Result.failure(e)
         }
+        if (accountScope == videoPlaybackAccountScope()) result
+        else Result.failure(IllegalStateException("播放账号已切换"))
     }
 
     suspend fun refreshVipStatusForPreferredQualityIfNeeded(
@@ -1050,31 +1112,39 @@ object VideoRepository {
         try {
             val lookup = resolveVideoInfoLookupInput(rawBvid = normalizedBvid, aid = aid)
                 ?: return@withContext false
-            // 优先走轻量的 /x/player/pagelist（只返回分P + dimension），
+            // 优先走已有详情缓存或轻量的 /x/player/pagelist（只返回分P + dimension），
             // 比 x/web-interface/view 快一个数量级，能让详情页更早拿到横竖屏结论。
-            // 失败或没有 bvid 时回退到原接口，行为不退化。
-            val pageDimension = if (lookup.bvid.isNotEmpty()) {
-                runCatching { api.getPageList(lookup.bvid) }.getOrNull()
-                    ?.takeIf { it.code == 0 }
-                    ?.data
-                    ?.firstOrNull()
-                    ?.dimension
-                    ?.takeIf { it.width > 0 && it.height > 0 }
+            val cachedDimension = SharedContentRepository.cachedDetailInfo(lookup.bvid, lookup.aid)
+                ?.dimension
+                ?.takeIf { it.width > 0 && it.height > 0 }
+            val pageDimension = cachedDimension ?: if (lookup.bvid.isNotEmpty()) {
+                pageDimensionRequests.getOrLoad(lookup.bvid) {
+                    try {
+                        api.getPageList(lookup.bvid)
+                            .takeIf { it.code == 0 }
+                            ?.data
+                            ?.firstOrNull()
+                            ?.dimension
+                            ?.takeIf { it.width > 0 && it.height > 0 }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
             } else {
                 null
             }
             val isVertical = if (pageDimension != null) {
                 pageDimension.isVerticalAtRatio(threshold)
             } else {
-                val viewResp = if (lookup.bvid.isNotEmpty()) {
-                    api.getVideoInfo(lookup.bvid)
-                } else {
-                    api.getVideoInfoByAid(lookup.aid)
-                }
-                viewResp.data?.dimension?.isVerticalAtRatio(threshold) == true
+                val info = getVideoInfoOnly(bvid = lookup.bvid, aid = lookup.aid).getOrNull()
+                info?.dimension?.isVerticalAtRatio(threshold) == true
             }
             verticalVideoCache.put(cacheKey, isVertical)
             isVertical
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             false
         }
@@ -1245,21 +1315,60 @@ object VideoRepository {
     /** 取流复用启动恢复的持久密钥及并发刷新，避免另开 nav 请求和串行重试。 */
     private suspend fun getWbiKeys(): Pair<String, String> = WbiKeyManager.getWbiKeys().getOrThrow()
 
+    private suspend fun getCoalescedPlayUrlData(
+        bvid: String,
+        cid: Long,
+        qn: Int,
+        audioLang: String?,
+        retainOriginalUrls: Boolean,
+        requestKind: PlayUrlRequestKind,
+    ): PlayUrlData? = withContext(Dispatchers.IO) {
+        val normalizedBvid = bvid.trim()
+        if (normalizedBvid.isEmpty() || cid <= 0L) return@withContext null
+        TokenManager.awaitRestore()
+        val accountScope = videoPlaybackAccountScope()
+        val key = PlayUrlRequestKey(
+            accountScope = accountScope,
+            bvid = normalizedBvid,
+            cid = cid,
+            qn = qn,
+            audioLang = audioLang,
+            retainOriginalUrls = retainOriginalUrls,
+            requestKind = requestKind,
+        )
+        val result = playUrlRequests.getOrLoad(key) {
+            val fetched = fetchPlaybackUrl(
+                bvid = normalizedBvid,
+                cid = cid,
+                targetQn = qn,
+                audioLang = audioLang,
+                requestKind = requestKind,
+            ) ?: return@getOrLoad null
+            if (accountScope != videoPlaybackAccountScope()) {
+                throw CancellationException("Playback account changed")
+            }
+            fetched.data.withPreferredCdnTracks(retainOriginalUrls)
+        }
+        if (accountScope != videoPlaybackAccountScope()) {
+            throw CancellationException("Playback account changed")
+        }
+        result
+    }
+
     suspend fun getPlayUrlData(
         bvid: String,
         cid: Long,
         qn: Int,
         audioLang: String? = null,
         retainOriginalUrls: Boolean = false,
-    ): PlayUrlData? = withContext(Dispatchers.IO) {
-        fetchPlaybackUrl(
-            bvid = bvid,
-            cid = cid,
-            targetQn = qn,
-            audioLang = audioLang,
-            requestKind = PlayUrlRequestKind.EXPLICIT
-        )?.data?.withPreferredCdnTracks(retainOriginalUrls)
-    }
+    ): PlayUrlData? = getCoalescedPlayUrlData(
+        bvid = bvid,
+        cid = cid,
+        qn = qn,
+        audioLang = audioLang,
+        retainOriginalUrls = retainOriginalUrls,
+        requestKind = PlayUrlRequestKind.EXPLICIT,
+    )
 
     /**
      * 下载场景专用的播放地址查询。
@@ -1274,15 +1383,14 @@ object VideoRepository {
         cid: Long,
         qn: Int = 127,
         audioLang: String? = null
-    ): PlayUrlData? = withContext(Dispatchers.IO) {
-        fetchPlaybackUrl(
-            bvid = bvid,
-            cid = cid,
-            targetQn = qn,
-            audioLang = audioLang,
-            requestKind = PlayUrlRequestKind.INITIAL
-        )?.data?.withPreferredCdnTracks(retainOriginalUrls = true)
-    }
+    ): PlayUrlData? = getCoalescedPlayUrlData(
+        bvid = bvid,
+        cid = cid,
+        qn = qn,
+        audioLang = audioLang,
+        retainOriginalUrls = true,
+        requestKind = PlayUrlRequestKind.INITIAL,
+    )
 
     /**
      * Fetch a playable stream while moving between parts of the same video.
@@ -1402,6 +1510,8 @@ object VideoRepository {
                 return@withContext null
             }
             response.data
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.w("VideoRepo", " tvPlayUrl exception: ${e.message}")
             null
@@ -1573,7 +1683,7 @@ object VideoRepository {
         
         val hasVoucher = !response.data?.vVoucher.isNullOrBlank()
         if (isPlayUrlRiskControlResponse(response.code, hasVoucher)) {
-            playUrlCooldownUntilMs = System.currentTimeMillis() + PLAY_URL_RISK_COOLDOWN_MS
+            recordPlayUrlRiskCooldown()
             com.android.purebilibili.core.util.Logger.w(
                 "VideoRepo",
                 " PlayUrl risk response: code=${response.code}, requestedQn=$qn, hasVoucher=$hasVoucher"
@@ -1636,6 +1746,8 @@ object VideoRepository {
                 com.android.purebilibili.core.util.Logger.d("VideoRepo", "🖼️ Videoshot failed: code=${response.code}")
                 null
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             android.util.Log.w("VideoRepo", "🖼️ Videoshot exception: ${e.message}")
             null
@@ -1663,6 +1775,8 @@ object VideoRepository {
                 aid = aid.takeIf { it > 0L }
             )
             Result.success(parsePbpProgressData(body.string()))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1728,6 +1842,8 @@ object VideoRepository {
             } else {
                 Result.failure(Exception(response.message.ifBlank { "互动分支信息加载失败(${response.code})" }))
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Result.failure(e)
         }

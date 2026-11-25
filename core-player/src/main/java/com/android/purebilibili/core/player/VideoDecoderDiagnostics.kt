@@ -49,18 +49,26 @@ internal fun decoderSelectionReason(preferHardware: Boolean, kind: VideoDecoderK
 
 /** 按播放器保存事件快照，不轮询、不注册逐帧任务；释放播放器后弱键可回收。 */
 object VideoDecoderDiagnostics {
-    private val states = WeakHashMap<ExoPlayer, StateFlow<VideoDecoderDiagnosticState>>()
+    private class PlayerDiagnosticEntry {
+        val state = MutableStateFlow(VideoDecoderDiagnosticState())
+        val view: StateFlow<VideoDecoderDiagnosticState> = state.asStateFlow()
+        var attached = false
+    }
+
+    private val entries = WeakHashMap<ExoPlayer, PlayerDiagnosticEntry>()
 
     @Synchronized
     fun observe(player: ExoPlayer): StateFlow<VideoDecoderDiagnosticState> =
-        states.getOrPut(player) { MutableStateFlow(VideoDecoderDiagnosticState()).asStateFlow() }
+        entries.getOrPut(player) { PlayerDiagnosticEntry() }.view
 
     @Synchronized
     fun attach(player: ExoPlayer, preferHardware: Boolean): ExoPlayer {
-        val previous = states[player]?.value
-        if (previous != null && previous.preference != "未知") return player
-        val state = MutableStateFlow(VideoDecoderDiagnosticState(preference = if (preferHardware) "硬件优先" else "软件优先"))
-        states[player] = state.asStateFlow()
+        val entry = entries.getOrPut(player) { PlayerDiagnosticEntry() }
+        val preferenceLabel = if (preferHardware) "硬件优先" else "软件优先"
+        entry.state.update { it.copy(preference = preferenceLabel) }
+        if (entry.attached) return player
+        entry.attached = true
+        val state = entry.state
         val failures = ArrayDeque<String>()
         player.addAnalyticsListener(object : AnalyticsListener {
             override fun onVideoCodecError(eventTime: AnalyticsListener.EventTime, videoCodecError: Exception) {
@@ -77,8 +85,10 @@ object VideoDecoderDiagnostics {
             override fun onVideoDecoderInitialized(eventTime: AnalyticsListener.EventTime, decoderName: String,
                 initializedTimestampMs: Long, initializationDurationMs: Long) {
                 val kind = VideoDecoderCapabilities.kind(decoderName)
-                state.value = VideoDecoderDiagnosticState(decoderName, kind, state.value.preference,
-                    decoderSelectionReason(preferHardware, kind, failures.toList()))
+                val reason = decoderSelectionReason(preferHardware, kind, failures.toList())
+                state.update { current ->
+                    VideoDecoderDiagnosticState(decoderName, kind, current.preference, reason)
+                }
                 failures.clear()
             }
             override fun onVideoDecoderReleased(eventTime: AnalyticsListener.EventTime, decoderName: String) {

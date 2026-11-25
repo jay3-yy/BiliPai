@@ -34,6 +34,7 @@ object SessionRepository {
         val session = AccountCookieSession.from(sessData, csrf, resolvedMid, selectedBuvid)
         AccountCookieStore.replace(context, session, cookies + session.seed)
         NetworkModule.clearRuntimeCookies()
+        NetworkModule.evictHttpCache(context)
         TokenManager.applyStoredSession(
             context = context, sessData = sessData, csrf = csrf, mid = resolvedMid,
             accessToken = accessToken, refreshToken = refreshToken,
@@ -47,6 +48,7 @@ object SessionRepository {
         AccountSessionStore.setPlaybackAccountMid(context, null)
         NetworkModule.clearRuntimeCookies()
         NetworkModule.clearPlaybackAccountClient()
+        NetworkModule.evictHttpCache(context)
     }
 
     suspend fun completeQrLogin(context: Context, response: TvPollResponse) = withContext(Dispatchers.IO) {

@@ -271,18 +271,15 @@ object VideoCatalogRepository {
     }
 
     private const val MAX_CREATOR_CARD_STATS_CACHE_ENTRIES = 128
+    private const val CREATOR_CARD_STATS_TTL_MS = 5 * 60_000L
 
-    private val creatorCardStatsCache = object : LinkedHashMap<Long, CreatorCardStats>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, CreatorCardStats>?): Boolean {
-            return size > MAX_CREATOR_CARD_STATS_CACHE_ENTRIES
-        }
-    }
+    private val creatorCardStatsCache = OnDemandRequestCache<Long, Result<CreatorCardStats>>(
+        maxEntries = MAX_CREATOR_CARD_STATS_CACHE_ENTRIES,
+        maxAgeMs = CREATOR_CARD_STATS_TTL_MS,
+        canCache = { it.isSuccess },
+    )
 
-    fun clearCreatorCardStatsCache() {
-        synchronized(creatorCardStatsCache) {
-            creatorCardStatsCache.clear()
-        }
-    }
+    fun clearCreatorCardStatsCache() = creatorCardStatsCache.clearCompleted()
 
     private val creatorLiveRoomCache = OnDemandRequestCache<Long, Result<SpaceLiveRoom?>>(
         maxEntries = 32,
@@ -311,32 +308,33 @@ object VideoCatalogRepository {
     }
 
     fun getCachedCreatorCardStats(mid: Long): CreatorCardStats? =
-        synchronized(creatorCardStatsCache) { creatorCardStatsCache[mid] }
+        creatorCardStatsCache.peek(mid)?.getOrNull()
 
     suspend fun getCreatorCardStats(mid: Long): Result<CreatorCardStats> = withContext(Dispatchers.IO) {
         if (mid <= 0L) return@withContext Result.failure(IllegalArgumentException("Invalid mid"))
-        getCachedCreatorCardStats(mid)?.let { return@withContext Result.success(it) }
-        try {
-            val response = api.getUserCard(mid = mid, photo = false)
-            val data = response.data
-            if (response.code == 0 && data != null) {
-                val stats = CreatorCardStats(
-                    followerCount = data.follower.coerceAtLeast(0),
-                    videoCount = data.archive_count.coerceAtLeast(0),
-                    vipStatus = data.card?.vip?.status ?: 0,
-                    vipType = data.card?.vip?.type ?: 0,
-                    officialType = data.card?.Official?.type ?: -1,
-                    pendantImage = data.card?.pendant?.image.orEmpty(),
-                )
-                synchronized(creatorCardStatsCache) {
-                    creatorCardStatsCache[mid] = stats
+        creatorCardStatsCache.getOrLoad(mid) {
+            try {
+                val response = api.getUserCard(mid = mid, photo = false)
+                val data = response.data
+                if (response.code == 0 && data != null) {
+                    Result.success(
+                        CreatorCardStats(
+                            followerCount = data.follower.coerceAtLeast(0),
+                            videoCount = data.archive_count.coerceAtLeast(0),
+                            vipStatus = data.card?.vip?.status ?: 0,
+                            vipType = data.card?.vip?.type ?: 0,
+                            officialType = data.card?.Official?.type ?: -1,
+                            pendantImage = data.card?.pendant?.image.orEmpty(),
+                        )
+                    )
+                } else {
+                    Result.failure(Exception(response.message.ifBlank { "UP主信息加载失败(${response.code})" }))
                 }
-                Result.success(stats)
-            } else {
-                Result.failure(Exception(response.message.ifBlank { "UP主信息加载失败(${response.code})" }))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 }

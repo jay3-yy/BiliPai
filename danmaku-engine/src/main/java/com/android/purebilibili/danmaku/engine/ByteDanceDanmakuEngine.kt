@@ -249,6 +249,9 @@ internal class ByteDanceDanmakuEngine(
         clearClickSelection()
         if (closed) return
         controller.stop()
+        currentItems.clear()
+        currentSegmentIndices = emptyList()
+        currentMaskFrames.clear()
         currentWindowItems = null
         playbackState = DanmakuPlaybackState.STOPPED
         currentPositionMs = 0L
