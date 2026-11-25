@@ -57,12 +57,23 @@ internal fun ScrollCompactNavigation(
 ) {
     val reduceMotion = LocalSystemReduceMotion.current ||
         !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+    val targetSpring = if (glassEnabled) {
+        if (compact) {
+            com.android.purebilibili.core.ui.motion.GlassMorphSprings.DockCollapseX
+        } else {
+            com.android.purebilibili.core.ui.motion.GlassMorphSprings.DockExpandX
+        }
+    } else if (compact) {
+        com.android.purebilibili.core.ui.motion.GlassMorphSprings.Return
+    } else {
+        com.android.purebilibili.core.ui.motion.GlassMorphSprings.Expand
+    }
     val progress = animateFloatAsState(
         targetValue = if (compact) 1f else 0f,
         animationSpec = if (reduceMotion) snap() else com.android.purebilibili.core.ui.components.scrollFeedbackSpring(
             com.android.purebilibili.core.ui.components.LocalScrollFeedbackPreset.current,
-            damping = if (compact) 0.78f else 0.74f,
-            stiffness = 420f,
+            damping = targetSpring.dampingRatio,
+            stiffness = targetSpring.stiffness,
         ),
         label = "scrollCompactNavigation",
     )
@@ -106,9 +117,6 @@ internal fun ScrollCompactNavigation(
                     // Morphing needs a mask; the fully expanded dock must allow the original
                     // indicator and shell to bloom outside their resting bounds.
                     clip = shouldClip
-                    // The spring can grow past the expanded endpoint without stretching text.
-                    val rebound = (-progress.value).coerceIn(0f, 0.03f)
-                    scaleX = 1f + rebound * 0.55f
                 }
                 .then(if (compact) Modifier.clearAndSetSemantics {} else Modifier)
                 .pointerInput(compact) {

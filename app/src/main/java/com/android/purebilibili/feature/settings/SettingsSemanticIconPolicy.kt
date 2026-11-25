@@ -147,6 +147,7 @@ internal enum class SettingsIconRole(
     PROGRESSIVE_BLUR_RENDERER(R.drawable.ic_settings_progressive_blur_renderer_24),
     PROGRESSIVE_TOP_FADE(R.drawable.ic_settings_progressive_top_fade_24),
     KEEP_TOP_SEARCH(R.drawable.ic_settings_top_search_24),
+    BOTTOM_BAR_SEARCH_INSIDE_DOCK(R.drawable.ms_manage_search_24, R.drawable.ph_align_bottom_24),
     HOME_AVATAR_DRAWER(R.drawable.ic_settings_home_avatar_drawer_24),
     LINKED_DOCK_MERGE(R.drawable.ms_merge_24, R.drawable.ph_arrows_merge_24),
     BOTTOM_BAR_SCROLL_COMPACT(R.drawable.ic_settings_bottom_bar_compact_24),

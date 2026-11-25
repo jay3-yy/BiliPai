@@ -8,6 +8,19 @@ internal fun resolveLinkedDockGlassHandoffProgress(mergeProgress: Float): Float 
     return progress * progress * progress
 }
 
+/** 搜索图标内置于底栏时，收起/进入搜索后从胶囊右端平滑浮现为独立圆形按钮。 */
+internal fun resolveLinkedDockDetachedSearchAlpha(
+    mergeProgress: Float,
+    searchProgress: Float,
+    searchInsideDock: Boolean,
+): Float {
+    if (!searchInsideDock) return 1f
+    val raw = maxOf(mergeProgress, searchProgress)
+    val t = ((raw - 0.08f) / 0.28f).coerceIn(0f, 1f)
+    val inv = 1f - t
+    return 1f - inv * inv * inv
+}
+
 enum class LinkedDockPhase { Expanded, Playback, Compact, Search }
 
 /** Search owns the first tap on the compact artwork target. */
@@ -120,9 +133,14 @@ internal fun resolveLinkedDockNavigationX(
     button: Int,
     gap: Int,
     searchEnabled: Boolean,
+    searchInsideDock: Boolean = false,
 ): Int {
     val safeMaximumWidth = maximumWidth.coerceAtLeast(0)
-    val searchReservation = if (searchEnabled) button.coerceAtLeast(0) + gap.coerceAtLeast(0) else 0
+    val searchReservation = if (searchEnabled && !searchInsideDock) {
+        button.coerceAtLeast(0) + gap.coerceAtLeast(0)
+    } else {
+        0
+    }
     val clusterWidth = (navigationWidth.coerceAtLeast(0) + searchReservation)
         .coerceAtMost(safeMaximumWidth)
     return ((safeMaximumWidth - clusterWidth) / 2).coerceAtLeast(0)
@@ -136,14 +154,21 @@ internal fun resolveLinkedDockSearchX(
     gap: Int,
     mergeProgress: Float,
     searchProgress: Float,
+    searchInsideDock: Boolean = false,
 ): Int {
-    val startX = resolveLinkedDockNavigationX(
+    val navX = resolveLinkedDockNavigationX(
         maximumWidth = maximumWidth,
         navigationWidth = navigationWidth,
         button = button,
         gap = gap,
         searchEnabled = true,
-    ) + navigationWidth.coerceAtLeast(0) + gap.coerceAtLeast(0)
+        searchInsideDock = searchInsideDock,
+    )
+    val startX = if (searchInsideDock) {
+        (navX + navigationWidth.coerceAtLeast(0) - button.coerceAtLeast(0)).coerceAtLeast(0)
+    } else {
+        navX + navigationWidth.coerceAtLeast(0) + gap.coerceAtLeast(0)
+    }
     val endX = (maximumWidth - searchWidth).coerceAtLeast(0)
     val expansionProgress = maxOf(mergeProgress, searchProgress).coerceIn(0f, 1f)
     return (startX + (endX - startX) * expansionProgress)

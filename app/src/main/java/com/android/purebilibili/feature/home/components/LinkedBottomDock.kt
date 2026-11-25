@@ -70,6 +70,7 @@ typealias LinkedDockNowPlayingSlot = @Composable (
 internal fun LinkedBottomDock(
     currentItem: BottomNavItem,
     searchEnabled: Boolean,
+    searchInsideDock: Boolean = false,
     collapseRequested: Boolean,
     onSearchClick: () -> Unit,
     onSearchKeywordSubmit: (String) -> Unit,
@@ -95,14 +96,15 @@ internal fun LinkedBottomDock(
     modifier: Modifier = Modifier,
     blurEnabled: Boolean = false,
     hazeState: HazeState? = null,
-    navigationContent: @Composable (allocatedWidth: Dp) -> Unit,
+    navigationContent: @Composable (allocatedWidth: Dp, onInlineSearchClick: (() -> Unit)?) -> Unit,
 ) {
     com.android.purebilibili.core.ui.components.ProvideAppElasticFeedback {
         val searchHaptic = com.android.purebilibili.core.util.rememberHapticFeedback(
             com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION,
         )
         val hasAudio = nowPlayingContent != null
-        val searchMergeEnabled = searchEnabled && mergeOnScrollDownEnabled
+        val effectiveSearchInsideDock = searchEnabled && searchInsideDock
+        val searchMergeEnabled = searchEnabled && mergeOnScrollDownEnabled && !effectiveSearchInsideDock
         var keepSlotComposed by remember { mutableStateOf(hasAudio) }
         val useNavigationCompact = shouldUseScrollCompactNavigation(
             enabled = compactOnScrollEnabled,
@@ -133,6 +135,17 @@ internal fun LinkedBottomDock(
         LaunchedEffect(useNavigationCompact, currentItem, isTopLevelDestination) {
             if (useNavigationCompact && isTopLevelDestination && phase != LinkedDockPhase.Search) {
                 updatePhase(LinkedDockPhase.Expanded)
+            }
+        }
+        LaunchedEffect(effectiveSearchInsideDock, phase) {
+            if (effectiveSearchInsideDock && phase == LinkedDockPhase.Search) {
+                updatePhase(
+                    resolveLinkedDockPhaseOnSearchDismiss(
+                        hasAudio = hasAudio,
+                        previousPhase = LinkedDockPhase.Expanded,
+                        searchMergeEnabled = false,
+                    )
+                )
             }
         }
         LaunchedEffect(phase) {
@@ -183,7 +196,7 @@ internal fun LinkedBottomDock(
                         accumulatedPx = accumulated,
                         thresholdPx = threshold,
                         hasAudio = hasAudio,
-                        searchEnabled = searchEnabled,
+                        searchEnabled = searchEnabled && !effectiveSearchInsideDock,
                         mergeOnScrollDownEnabled = mergeOnScrollDownEnabled,
                     )
                     if (target != null) {
@@ -226,28 +239,61 @@ internal fun LinkedBottomDock(
         }
         val reduceMotion = LocalSystemReduceMotion.current ||
             !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+        val glassMorphMotion = glassEnabled && !hasUiSkinDecoration
         val dockMotionStyle = rememberGlassDockMotionStyle(
-            enabled = glassEnabled && !hasUiSkinDecoration,
+            enabled = glassMorphMotion,
         )
         val transition = updateTransition(targetState = phase, label = "linkedBottomDock")
-        // 共用弹簧保持合体、解体和中途反向时的速度连续。
+        // 液态玻璃路径拆分水平/垂直两轴弹簧（收起先缩窄再落槽、展开先抬升再铺开）；
+        // 非玻璃路径保持双轴共用同一原生弹簧，反向时均由 Compose 保留速度。
         val merge = transition.animateFloat(
             transitionSpec = {
                 if (reduceMotion) {
                     snap()
                 } else {
-                    glassDockMorphSpring(dockMotionStyle, expanding = linkedDockMotionExpanding(initialState, targetState))
+                    glassDockHorizontalMorphSpring(
+                        glassEnabled = glassMorphMotion,
+                        style = dockMotionStyle,
+                        expanding = linkedDockMotionExpanding(initialState, targetState),
+                    )
                 }
             },
             label = "dockMerge",
         ) { if (it == LinkedDockPhase.Expanded) 0f else 1f }
+        val mergeVertical = transition.animateFloat(
+            transitionSpec = {
+                if (reduceMotion) {
+                    snap()
+                } else {
+                    glassDockVerticalMorphSpring(
+                        glassEnabled = glassMorphMotion,
+                        style = dockMotionStyle,
+                        expanding = linkedDockMotionExpanding(initialState, targetState),
+                    )
+                }
+            },
+            label = "dockMergeVertical",
+        ) { if (it == LinkedDockPhase.Expanded) 0f else 1f }
         val search = transition.animateFloat(
             transitionSpec = {
-                if (reduceMotion) snap() else glassDockMorphSpring(dockMotionStyle,
-                    expanding = linkedDockMotionExpanding(initialState, targetState))
+                if (reduceMotion) {
+                    snap()
+                } else {
+                    glassDockHorizontalMorphSpring(
+                        glassEnabled = glassMorphMotion,
+                        style = dockMotionStyle,
+                        expanding = linkedDockMotionExpanding(initialState, targetState),
+                    )
+                }
             },
             label = "dockSearch",
         ) { if (it == LinkedDockPhase.Search || it == LinkedDockPhase.Compact) 1f else 0f }
+        fun openSearch() {
+            searchHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
+            phaseBeforeSearch = phase
+            pendingUserImeRequest = true
+            updatePhase(LinkedDockPhase.Search)
+        }
         val imeSettled = WindowInsets.ime
             .getBottom(LocalDensity.current) == 0
         val mergeProgressProvider = remember(merge) {
@@ -354,8 +400,8 @@ internal fun LinkedBottomDock(
             val controlHeight: Int
             val gap: Int
             val verticalGap: Int
-            val fusedDockCapable = glassEnabled && searchEnabled && backdrop != null &&
-                !hasUiSkinDecoration
+            val fusedDockCapable = glassEnabled && searchEnabled && !effectiveSearchInsideDock &&
+                backdrop != null && !hasUiSkinDecoration
             with(density) {
                 maximumWidth = constraints.maxWidth.coerceAtMost(600.dp.roundToPx())
                 button = resolveBiliPaiBottomBarSearchCircleSize().roundToPx()
@@ -401,7 +447,7 @@ internal fun LinkedBottomDock(
                     cornerRadius = with(density) { barHeight.toDp() / 2 },
                 ).roundToPx()
             }
-            val reservedSearchWidth = if (searchEnabled) button + gap else 0
+            val reservedSearchWidth = if (searchEnabled && !effectiveSearchInsideDock) button + gap else 0
             val expandedNavigationWidth = preferredNavigationWidth.coerceAtMost(
                 (maximumWidth - reservedSearchWidth).coerceAtLeast(0)
             )
@@ -413,7 +459,29 @@ internal fun LinkedBottomDock(
                 button = button,
                 gap = gap,
                 searchEnabled = searchEnabled,
+                searchInsideDock = effectiveSearchInsideDock,
             )
+            val navMorphClipShape = remember(merge, navWidth, barHeight, button, hasAudio, search) {
+                object : androidx.compose.ui.graphics.Shape {
+                    override fun createOutline(
+                        size: androidx.compose.ui.geometry.Size,
+                        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                        density: androidx.compose.ui.unit.Density,
+                    ): androidx.compose.ui.graphics.Outline {
+                        val amount = merge.value.coerceIn(0f, 1f)
+                        val targetSize = compactControlSize()
+                        val width = resolveScrollCompactExtent(navWidth, targetSize, amount).toFloat()
+                        val height = resolveScrollCompactExtent(barHeight, targetSize, amount).toFloat()
+                        val top = (barHeight - height) / 2f
+                        return androidx.compose.ui.graphics.Outline.Rounded(
+                            androidx.compose.ui.geometry.RoundRect(
+                                androidx.compose.ui.geometry.Rect(0f, top, width, top + height),
+                                androidx.compose.ui.geometry.CornerRadius(height / 2f),
+                            )
+                        )
+                    }
+                }
+            }
 
             // Glass keeps the navigation/backdrop mounted across both endpoints. At the compact
             // endpoint skip placement so the hidden row neither draws nor intercepts touches.
@@ -454,6 +522,7 @@ internal fun LinkedBottomDock(
                     gap = gap,
                     mergeProgress = merge.value,
                     searchProgress = search.value,
+                    searchInsideDock = effectiveSearchInsideDock,
                 ) + (liveDockGeometry.searchWidth - liveSearchVisualWidth) / 2
             } else navigationX + navWidth + gap
             val liveSearchBaseY = controlRowY + (controlHeight - liveSearchVisualHeight) / 2
@@ -545,7 +614,16 @@ internal fun LinkedBottomDock(
                 if (glassEnabled || !collapsedAtRest) {
                     Box(
                         modifier = Modifier
-                            .offset { IntOffset(navigationX, navRowY) }
+                            .offset {
+                                if (glassMorphMotion) {
+                                    val compactX = (button - compactControlSize()) / 2
+                                    val x = (navigationX + (compactX - navigationX) *
+                                        merge.value.coerceIn(0f, 1f)).roundToInt()
+                                    IntOffset(x, navRowY)
+                                } else {
+                                    IntOffset(navigationX, navRowY)
+                                }
+                            }
                             .size(
                                 allocatedNavigationWidth,
                                 with(density) { barHeight.toDp() },
@@ -554,23 +632,34 @@ internal fun LinkedBottomDock(
                                 if (glassEnabled) Modifier.layout { measurable, constraints ->
                                     val placeable = measurable.measure(constraints)
                                     layout(placeable.width, placeable.height) {
-                                        if (merge.value < 1f) {
+                                        if (merge.value < 0.999f) {
                                             placeable.placeRelative(0, 0)
                                         }
                                     }
                                 } else Modifier
                             )
                             .graphicsLayer {
-                                // 退出窗口（前 34%）ease-in 淡出；全程向左侧圆钮方向
-                                // 轻微收拢缩放，读作"并入圆钮"而非原地溶解。
-                                val exitProgress = (merge.value / 0.34f).coerceIn(0f, 1f)
-                                alpha = if (glassEnabled) {
-                                    1f - resolveLinkedDockGlassHandoffProgress(merge.value)
-                                } else 1f - EaseInCubic.transform(exitProgress)
-                                val collapse = EaseOutCubic.transform(merge.value.coerceIn(0f, 1f))
-                                scaleX = 1f - 0.10f * collapse
-                                scaleY = 1f - 0.10f * collapse
-                                transformOrigin = TransformOrigin(0f, 0.5f)
+                                if (glassMorphMotion) {
+                                    alpha = 1f - resolveLinkedDockGlassHandoffProgress(merge.value)
+                                    val shouldClip = merge.value > 0f
+                                    if (shouldClip) {
+                                        this.shape = navMorphClipShape
+                                    }
+                                    clip = shouldClip
+                                    scaleX = 1f
+                                    scaleY = 1f
+                                } else {
+                                    // 退出窗口（前 34%）ease-in 淡出；全程向左侧圆钮方向
+                                    // 轻微收拢缩放，读作"并入圆钮"而非原地溶解。
+                                    val exitProgress = (merge.value / 0.34f).coerceIn(0f, 1f)
+                                    alpha = if (glassEnabled) {
+                                        1f - resolveLinkedDockGlassHandoffProgress(merge.value)
+                                    } else 1f - EaseInCubic.transform(exitProgress)
+                                    val collapse = EaseOutCubic.transform(merge.value.coerceIn(0f, 1f))
+                                    scaleX = 1f - 0.10f * collapse
+                                    scaleY = 1f - 0.10f * collapse
+                                    transformOrigin = TransformOrigin(0f, 0.5f)
+                                }
                             }
                             .pointerInput(phase) {
                                 if (phase != LinkedDockPhase.Expanded) {
@@ -590,6 +679,12 @@ internal fun LinkedBottomDock(
                                 }
                             ),
                     ) {
+                        val inlineSearchAction: (() -> Unit)? = if (effectiveSearchInsideDock) {
+                            {
+                                searchHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
+                                onSearchClick()
+                            }
+                        } else null
                         if (compactOnScrollEnabled) {
                             ScrollCompactNavigation(
                                 compact = useNavigationCompact && compactNavigation && phase == LinkedDockPhase.Expanded,
@@ -609,17 +704,18 @@ internal fun LinkedBottomDock(
                                 onExpand = { compactNavigation = false },
                                 content = {
                                     CompositionLocalProvider(LocalLinkedDockFusedGlassActive provides fusedDockActive) {
-                                        navigationContent(allocatedNavigationWidth)
+                                        navigationContent(allocatedNavigationWidth, inlineSearchAction)
                                     }
                                 },
                             )
                         } else CompositionLocalProvider(LocalLinkedDockFusedGlassActive provides fusedDockActive) {
-                            navigationContent(allocatedNavigationWidth)
+                            navigationContent(allocatedNavigationWidth, inlineSearchAction)
                         }
                     }
                 }
                 val homeElasticState = rememberAppElasticPressState(
                     visualSize = with(density) { controlHeight.toDp() },
+                    feedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
                 )
                 val homeGlassMotion = glassEnabled && backdrop != null
                 val homeDragEnabled = phase != LinkedDockPhase.Expanded &&
@@ -630,12 +726,27 @@ internal fun LinkedBottomDock(
                     modifier = Modifier
                         .offset {
                             val size = compactControlSize()
-                            IntOffset((button - size) / 2, controlRowY + (controlHeight - size) / 2)
+                            if (glassMorphMotion) {
+                                val progress = merge.value.coerceIn(0f, 1f)
+                                val compactX = (button - size) / 2
+                                val x = (navigationX + (compactX - navigationX) * progress).roundToInt()
+                                val h = resolveScrollCompactExtent(barHeight, size, progress)
+                                IntOffset(x, navRowY + (barHeight - h) / 2)
+                            } else {
+                                IntOffset((button - size) / 2, controlRowY + (controlHeight - size) / 2)
+                            }
                         }
                         .layout { measurable, _ ->
                             val size = compactControlSize()
-                            val child = measurable.measure(Constraints.fixed(size, size))
-                            layout(size, size) {
+                            val progress = merge.value.coerceIn(0f, 1f)
+                            val width = if (glassMorphMotion) {
+                                resolveScrollCompactExtent(navWidth, size, progress)
+                            } else size
+                            val height = if (glassMorphMotion) {
+                                resolveScrollCompactExtent(barHeight, size, progress)
+                            } else size
+                            val child = measurable.measure(Constraints.fixed(width, height))
+                            layout(width, height) {
                                 if (merge.value > 0f) child.placeRelative(0, 0)
                             }
                         },
@@ -671,17 +782,22 @@ internal fun LinkedBottomDock(
                                 } else Modifier
                             )
                             .graphicsLayer {
-                                // 进入窗口（前 50%）ease-out 淡入并从 92% 缩放弹出，落定干净无过冲。
-                                val enterProgress = (merge.value / 0.5f).coerceIn(0f, 1f)
-                                val eased = EaseOutCubic.transform(enterProgress)
-                                // One complementary handoff prevents both glass shells from
-                                // brightening the same region during merge and reversal.
-                                alpha = if (glassEnabled) {
-                                    resolveLinkedDockGlassHandoffProgress(merge.value)
-                                } else eased
-                                val scale = 0.92f + 0.08f * eased
-                                scaleX = scale
-                                scaleY = scale
+                                if (glassMorphMotion) {
+                                    // 物理缩宽路径：与导航条玻璃壳互补淡切，不做二次缩放弹出。
+                                    alpha = resolveLinkedDockGlassHandoffProgress(merge.value)
+                                } else {
+                                    // 进入窗口（前 50%）ease-out 淡入并从 92% 缩放弹出，落定干净无过冲。
+                                    val enterProgress = (merge.value / 0.5f).coerceIn(0f, 1f)
+                                    val eased = EaseOutCubic.transform(enterProgress)
+                                    // One complementary handoff prevents both glass shells from
+                                    // brightening the same region during merge and reversal.
+                                    alpha = if (glassEnabled) {
+                                        resolveLinkedDockGlassHandoffProgress(merge.value)
+                                    } else eased
+                                    val scale = 0.92f + 0.08f * eased
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
                             }
                             .then(
                                 if (phase != LinkedDockPhase.Expanded) {
@@ -690,7 +806,7 @@ internal fun LinkedBottomDock(
                                     Modifier.clearAndSetSemantics {}
                                 }
                             ),
-                        contentAlignment = Alignment.Center,
+                        contentAlignment = if (glassMorphMotion) Alignment.CenterStart else Alignment.Center,
                     ) {
                         val skinCollapsedContainerColor = if (uiSkinDecoration != null) {
                             val skinTint = uiSkinDecoration.liquidGlassSurfaceTint ?: uiSkinDecoration.bottomTrimTint
@@ -723,27 +839,40 @@ internal fun LinkedBottomDock(
                             selected = true,
                             visibleItems = visibleItems,
                         )
-                        if (collapsedSkinIconPath != null) {
-                            BottomBarSkinIcon(
-                                iconPath = collapsedSkinIconPath,
-                                contentDescription = "$currentLabel，展开底栏",
-                                selected = true,
-                                size = resolveBottomBarCompactSkinHomeIconSize(),
-                                modifier = if (homeGlassMotion) {
-                                    Modifier.graphicsLayer(homeElasticState.layerBlock)
-                                } else {
-                                    Modifier
-                                },
-                            )
-                        } else {
-                            AppIcon(
-                                imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
-                                    resolveHomeNavigationBarIcon(currentItem, selected = true)
-                                } else resolveMaterialBottomBarIcon(currentItem, selected = true),
-                                contentDescription = "$currentLabel，展开底栏",
-                                tint = navigationColor,
-                                modifier = if (homeGlassMotion) Modifier.graphicsLayer(homeElasticState.layerBlock) else Modifier,
-                            )
+                        Box(
+                            modifier = if (glassMorphMotion) {
+                                Modifier.layout { measurable, _ ->
+                                    val s = compactControlSize()
+                                    val p = measurable.measure(Constraints.fixed(s, s))
+                                    layout(s, s) { p.placeRelative(0, 0) }
+                                }
+                            } else {
+                                Modifier
+                            },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (collapsedSkinIconPath != null) {
+                                BottomBarSkinIcon(
+                                    iconPath = collapsedSkinIconPath,
+                                    contentDescription = "$currentLabel，展开底栏",
+                                    selected = true,
+                                    size = resolveBottomBarCompactSkinHomeIconSize(),
+                                    modifier = if (homeGlassMotion) {
+                                        Modifier.graphicsLayer(homeElasticState.layerBlock)
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                            } else {
+                                AppIcon(
+                                    imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
+                                        resolveHomeNavigationBarIcon(currentItem, selected = true)
+                                    } else resolveMaterialBottomBarIcon(currentItem, selected = true),
+                                    contentDescription = "$currentLabel，展开底栏",
+                                    tint = navigationColor,
+                                    modifier = if (homeGlassMotion) Modifier.graphicsLayer(homeElasticState.layerBlock) else Modifier,
+                                )
+                            }
                         }
                     }
                 }
@@ -806,10 +935,16 @@ internal fun LinkedBottomDock(
                                 )
                                 // 外层槽位保留导航行高，紧凑横条在槽内贴底，展开时底边贴导航行上方。
                                 // verticalGap 处；收合时槽与导航行完全重合（圆心同中心）。
+                                // 液态玻璃路径允许垂直轴保留轻微自然过冲（~2.5%），还原录屏落槽回弹。
+                                val verticalMerge = if (glassMorphMotion) {
+                                    mergeVertical.value.coerceIn(-0.04f, 1.04f)
+                                } else {
+                                    mergeVertical.value.coerceIn(0f, 1f)
+                                }
                                 IntOffset(
                                     geometry.audioX,
                                     navRowY - verticalGap - barHeight +
-                                        ((barHeight + verticalGap) * merge.value).roundToInt(),
+                                        ((barHeight + verticalGap) * verticalMerge).roundToInt(),
                                 )
                             },
                     ) {
@@ -838,11 +973,6 @@ internal fun LinkedBottomDock(
                 }
                 Box(
                     modifier = Modifier
-                        .graphicsLayer {
-                            // Geometry remains bounded; the spring's overshoot is visible at the edge.
-                            val overshoot = search.value - search.value.coerceIn(0f, 1f)
-                            translationX = overshoot * 24.dp.toPx()
-                        }
                         .offset {
                             val geometry = resolveLinkedDockGeometry(
                                 width = maximumWidth,
@@ -864,6 +994,7 @@ internal fun LinkedBottomDock(
                                     gap = gap,
                                     mergeProgress = merge.value,
                                     searchProgress = search.value,
+                                    searchInsideDock = effectiveSearchInsideDock,
                                 ),
                                 controlRowY + (controlHeight - searchVisualHeight()) / 2,
                             )
@@ -887,7 +1018,22 @@ internal fun LinkedBottomDock(
                                 Constraints.fixed(width, searchVisualHeight())
                             )
                             layout(geometry.searchWidth, searchVisualHeight()) {
-                                placeable.placeRelative((geometry.searchWidth - width) / 2, 0)
+                                if (!effectiveSearchInsideDock || maxOf(merge.value, search.value) > 0.005f) {
+                                    placeable.placeRelative((geometry.searchWidth - width) / 2, 0)
+                                }
+                            }
+                        }
+                        .graphicsLayer {
+                            if (effectiveSearchInsideDock) {
+                                val detachedAlpha = resolveLinkedDockDetachedSearchAlpha(
+                                    mergeProgress = merge.value,
+                                    searchProgress = search.value,
+                                    searchInsideDock = true,
+                                )
+                                alpha = detachedAlpha
+                                val detachedScale = 0.86f + 0.14f * detachedAlpha
+                                scaleX = detachedScale
+                                scaleY = detachedScale
                             }
                         },
                 ) {
@@ -940,10 +1086,12 @@ internal fun LinkedBottomDock(
                                     .then(
                                         if (phase != LinkedDockPhase.Search) {
                                             Modifier.clickable(role = Role.Button) {
-                                                searchHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
-                                                phaseBeforeSearch = phase
-                                                pendingUserImeRequest = true
-                                                updatePhase(LinkedDockPhase.Search)
+                                                if (effectiveSearchInsideDock) {
+                                                    searchHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
+                                                    onSearchClick()
+                                                } else {
+                                                    openSearch()
+                                                }
                                             }
                                         } else Modifier
                                     )

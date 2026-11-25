@@ -14,8 +14,8 @@ internal fun <T> bottomBarChromeHeightMotionSpec(): TweenSpec<T> = iosMorphTween
 internal fun <T> bottomBarSearchGapMotionSpec(): TweenSpec<T> = iosMorphTween(240)
 
 internal fun <T> bottomBarSearchMorphSpring(): SpringSpec<T> = spring(
-    dampingRatio = 0.8f,
-    stiffness = 380f,
+    dampingRatio = 0.82f,
+    stiffness = 360f,
 )
 
 internal fun <T> bottomBarContentVisibilityMotionSpec(): TweenSpec<T> = tween(

@@ -31,4 +31,28 @@ class GlassDockMotionTest {
         assertTrue(linkedDockMotionExpanding(LinkedDockPhase.Playback, LinkedDockPhase.Search))
         assertTrue(!linkedDockMotionExpanding(LinkedDockPhase.Search, LinkedDockPhase.Playback))
     }
+
+    @Test
+    fun liquidGlassDockSeparatesHorizontalAndVerticalArcsWhileNativeKeepsSharedSpring() {
+        val collapseX = glassDockHorizontalMorphSpring<Float>(glassEnabled = true, GlassMotionStyle.STANDARD, expanding = false)
+        val collapseY = glassDockVerticalMorphSpring<Float>(glassEnabled = true, GlassMotionStyle.STANDARD, expanding = false)
+        assertTrue(collapseX.stiffness > collapseY.stiffness)
+
+        val expandX = glassDockHorizontalMorphSpring<Float>(glassEnabled = true, GlassMotionStyle.STANDARD, expanding = true)
+        val expandY = glassDockVerticalMorphSpring<Float>(glassEnabled = true, GlassMotionStyle.STANDARD, expanding = true)
+        assertTrue(expandY.stiffness > expandX.stiffness)
+
+        val nativeX = glassDockHorizontalMorphSpring<Float>(glassEnabled = false, GlassMotionStyle.STANDARD, expanding = false)
+        val nativeY = glassDockVerticalMorphSpring<Float>(glassEnabled = false, GlassMotionStyle.STANDARD, expanding = false)
+        assertEquals(nativeX, nativeY)
+
+        assertTrue(GlassMorphSprings.Expand.dampingRatio in 0.72f..0.80f)
+        assertTrue(GlassMorphSprings.Return.dampingRatio in 0.72f..0.80f)
+        assertTrue(GlassMorphSprings.DockExpandX.dampingRatio >= 0.85f)
+        assertEquals(
+            GlassMorphSprings.Expand.stiffness,
+            glassTopTabCapsuleSpringSpec<Float>().stiffness,
+            0.01f,
+        )
+    }
 }

@@ -709,6 +709,7 @@ data class HomeSettings(
     val bottomBarLiquidGlassPreset: BottomBarLiquidGlassPreset =
         BottomBarLiquidGlassPreset.BILIPAI_TUNED,
     val isBottomBarSearchEnabled: Boolean = false,
+    val bottomBarSearchInsideDock: Boolean = false,
     val keepHomeTopSearchWithBottomSearch: Boolean = false,
     val listScopedSearchEnabled: Boolean = false,
     val linkedDockMergeOnScrollEnabled: Boolean = true,
@@ -1771,6 +1772,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey("home_search_liquid_glass_enabled")
     private val KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED = booleanPreferencesKey("bottom_bar_liquid_glass_enabled")
     private val KEY_BOTTOM_BAR_SEARCH_ENABLED = booleanPreferencesKey("bottom_bar_search_enabled")
+    private val KEY_BOTTOM_BAR_SEARCH_INSIDE_DOCK = booleanPreferencesKey("bottom_bar_search_inside_dock")
     private val KEY_KEEP_HOME_TOP_SEARCH = booleanPreferencesKey("keep_home_top_search_with_bottom_search")
     private val KEY_BOTTOM_BAR_SCROLL_COMPACT_ENABLED = booleanPreferencesKey("bottom_bar_scroll_compact_enabled")
     private val KEY_LINKED_DOCK_MERGE_ON_SCROLL_ENABLED =
@@ -2059,6 +2061,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                     ?: (preferences[KEY_TOP_BAR_LIQUID_GLASS_ENABLED] ?: false),
             isBottomBarLiquidGlassEnabled = preferences[KEY_BOTTOM_BAR_LIQUID_GLASS_ENABLED] ?: legacyLiquidGlassEnabled,
             isBottomBarSearchEnabled = preferences[KEY_BOTTOM_BAR_SEARCH_ENABLED] ?: false,
+            bottomBarSearchInsideDock = preferences[KEY_BOTTOM_BAR_SEARCH_INSIDE_DOCK] ?: false,
             keepHomeTopSearchWithBottomSearch = preferences[KEY_KEEP_HOME_TOP_SEARCH] ?: false,
             linkedDockMergeOnScrollEnabled = preferences[KEY_LINKED_DOCK_MERGE_ON_SCROLL_ENABLED] ?: true,
             bottomBarScrollCompactEnabled = preferences[KEY_BOTTOM_BAR_SCROLL_COMPACT_ENABLED] ?: true,
@@ -5167,6 +5170,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     suspend fun setBottomBarScrollCompactEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { it[KEY_BOTTOM_BAR_SCROLL_COMPACT_ENABLED] = value }
+    }
+
+    fun getBottomBarSearchInsideDock(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { it[KEY_BOTTOM_BAR_SEARCH_INSIDE_DOCK] ?: false }
+
+    suspend fun setBottomBarSearchInsideDock(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { it[KEY_BOTTOM_BAR_SEARCH_INSIDE_DOCK] = value }
     }
 
     fun getLinkedDockMergeOnScrollEnabled(context: Context): Flow<Boolean> =
@@ -9301,6 +9311,12 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     suspend fun setVideoCompanionEnabled(context: Context, enabled: Boolean) =
         NavigationSettingsStore.setVideoCompanionEnabled(context, enabled)
+
+    fun getVideoCompanionSplitFraction(context: Context): Flow<Float?> =
+        NavigationSettingsStore.getVideoCompanionSplitFraction(context)
+
+    suspend fun setVideoCompanionSplitFraction(context: Context, fraction: Float) =
+        NavigationSettingsStore.setVideoCompanionSplitFraction(context, fraction)
     private val KEY_SIDEBAR_EXPANDED = booleanPreferencesKey("sidebar_expanded")
     private val KEY_SIDEBAR_ACCOUNT_SWITCHER_ENABLED =
         booleanPreferencesKey("sidebar_account_switcher_enabled")
@@ -10045,6 +10061,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             ),
             BooleanShareablePreferenceDefinition(KEY_HEADER_COLLAPSE_ENABLED, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_SCROLL_COMPACT_ENABLED, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_SEARCH_INSIDE_DOCK, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_SHOW_PGC_TIMELINE, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_TABLET_NAVIGATION_MODE, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_VIDEO_COMPANION_ENABLED, SettingsShareSection.NAVIGATION),

@@ -31,18 +31,18 @@ internal fun <T> gentleEnterTween(durationMillis: Int): TweenSpec<T> =
 fun <T> softLandingSpring(): SpringSpec<T> =
     spring(
         dampingRatio = 0.86f,
-        stiffness = Spring.StiffnessMediumLow
+        stiffness = 340f
     )
 
 fun interactiveSnapSpring(): SpringSpec<Float> =
     spring(
-        dampingRatio = 0.78f,
+        dampingRatio = 0.84f,
         stiffness = 420f
     )
 
-/** Navigation expands and settles on one continuous trajectory with a restrained overshoot. */
+/** Navigation expands and settles on one continuous trajectory with iOS-like restrained damping. */
 fun scrollCompactExpansionSpring(): SpringSpec<Float> =
-    spring(dampingRatio = 0.74f, stiffness = 420f)
+    spring(dampingRatio = 0.84f, stiffness = 380f)
 
 fun pullRefreshReleaseSpring(): SpringSpec<Float> =
     spring(
@@ -52,8 +52,8 @@ fun pullRefreshReleaseSpring(): SpringSpec<Float> =
 
 internal fun expressiveSnapSpring(): SpringSpec<Float> =
     spring(
-        dampingRatio = 0.72f,
-        stiffness = 520f
+        dampingRatio = 0.82f,
+        stiffness = 460f
     )
 
 internal fun pressFeedbackSpring(): SpringSpec<Float> =

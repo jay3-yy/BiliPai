@@ -2573,7 +2573,11 @@ private fun BoxScope.LightweightTopTabIndicatorOverlay(
         // animation snapped to that position while they own motion, otherwise switching
         // back to the animated value can expose a second, delayed settle.
         animationSpec = if (shouldAnimateIosCapsule) {
-            iosTopTabCapsuleMotionSpec()
+            if (shouldUseLiquidGlassIndicator) {
+                glassTopTabCapsuleSpringSpec()
+            } else {
+                iosTopTabCapsuleMotionSpec()
+            }
         } else {
             snap()
         },

@@ -7,12 +7,12 @@ import kotlin.test.assertTrue
 class AudioNowPlayingBarPresenceMotionPolicyTest {
 
     @Test
-    fun enterUsesASlightlyUnderdampedSpringForBounce() {
+    fun enterUsesGlassExpandSpringForCrispSettlement() {
         val enter = resolveAudioNowPlayingPresenceEnterSpringSpec()
-        assertEquals(0.7f, enter.dampingRatio)
+        assertEquals(com.android.purebilibili.core.ui.motion.GlassMorphSprings.Expand.dampingRatio, enter.dampingRatio)
         assertTrue(enter.stiffness > 0f)
         val enterGeometry = resolveAudioNowPlayingPresenceEnterGeometrySpringSpec()
-        assertEquals(0.7f, enterGeometry.dampingRatio)
+        assertEquals(com.android.purebilibili.core.ui.motion.GlassMorphSprings.Expand.dampingRatio, enterGeometry.dampingRatio)
     }
 
     @Test

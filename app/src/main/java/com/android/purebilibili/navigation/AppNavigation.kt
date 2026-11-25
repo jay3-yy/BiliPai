@@ -989,8 +989,17 @@ fun AppNavigation(
         val visibleBottomBarItems = remember(orderedVisibleTabIds) {
             resolveVisibleBottomBarItems(orderedVisibleTabIds)
         }
-        val visibleBottomBarRoutes = remember(visibleBottomBarItems) {
-            visibleBottomBarItems.map { it.route }.toSet()
+        val isSearchInBottomBar = bottomBarHomeSettings.isBottomBarSearchEnabled &&
+            bottomBarHomeSettings.bottomBarSearchInsideDock
+        val isBottomBarSearchSelected = isSearchInBottomBar &&
+            currentNavigation3Key is BiliPaiNavKey.Search
+        val visibleBottomBarRoutes = remember(visibleBottomBarItems, isSearchInBottomBar) {
+            buildSet {
+                visibleBottomBarItems.forEach { add(it.route) }
+                if (isSearchInBottomBar) {
+                    add(ScreenRoutes.Search.route)
+                }
+            }
         }
         val mainBottomPagerState = key(memoryRecovery.snapshot?.savedAtMs) {
             rememberMainBottomPagerState(
@@ -1135,11 +1144,24 @@ fun AppNavigation(
         val videoCompanionEnabled by remember(context) {
             SettingsManager.getVideoCompanionEnabled(context)
         }.collectAsStateWithLifecycle(initialValue = true)
+        val savedCompanionSplitFraction by remember(context) {
+            SettingsManager.getVideoCompanionSplitFraction(context)
+        }.collectAsStateWithLifecycle(initialValue = null)
         val companionContentWidth = with(windowDensity) {
             navigationContentWidthPx.takeIf { it > 0 }?.toDp() ?: windowSizeClass.widthDp
         }
         val companionPaneState = rememberSaveable(saver = CompanionPaneState.Saver) {
             CompanionPaneState(1f - resolveCompanionPaneWidthFraction(companionContentWidth.value.toInt()))
+        }
+        LaunchedEffect(savedCompanionSplitFraction, companionContentWidth) {
+            savedCompanionSplitFraction?.let { persisted ->
+                companionPaneState.applyPersistedSplitFraction(persisted, companionContentWidth.value)
+            }
+        }
+        LaunchedEffect(companionPaneState.splitCommitRevision) {
+            if (companionPaneState.splitCommitRevision > 0) {
+                SettingsManager.setVideoCompanionSplitFraction(context, companionPaneState.splitFraction)
+            }
         }
         val companionSessionVisible = companionVideoDetailKey != null &&
             currentNavigation3Key == companionSourceKey
@@ -1907,6 +1929,9 @@ fun AppNavigation(
             }
         }
         fun requestSearchFromBottomBar() {
+            if (isSearchInBottomBar && currentNavigation3Key is BiliPaiNavKey.Search) {
+                return
+            }
             bottomBarSearchLaunchKey += 1
             navigateToSearchFromBottomBar()
         }
@@ -2694,7 +2719,8 @@ fun AppNavigation(
         }
 
         val handleNavItemClick: (BottomNavItem) -> Unit = { item ->
-            when (resolveBottomBarSelectionAction(currentBottomNavItem, item)) {
+            val isOnMainHost = currentNavigation3Key == BiliPaiNavKey.MainHost
+            when (resolveBottomBarSelectionAction(currentBottomNavItem, item, isOnMainHost = isOnMainHost)) {
                 BottomBarSelectionAction.NAVIGATE -> {
                     requestBottomPagerPageForRoute(item.route)
                 }
@@ -7264,6 +7290,7 @@ fun AppNavigation(
                                     linkedDockPhase = linkedDockPhase,
                                     onLinkedDockPhaseChange = { linkedDockPhase = it },
                                     isTopLevelDestination = currentNavigation3Key == BiliPaiNavKey.MainHost,
+                                    isSearchSelected = isBottomBarSearchSelected,
                                     // 共享过渡驱动的开关（点条进详情/返回落位）瞬时切换小横条
                                     // presence，morph 是唯一几何时间轴；仅会话起止播放动画。
                                     animateNowPlayingPresence = !driveBottomBarByProgress,
@@ -7321,6 +7348,7 @@ fun AppNavigation(
                                 linkedDockPhase = linkedDockPhase,
                                 onLinkedDockPhaseChange = { linkedDockPhase = it },
                                 isTopLevelDestination = currentNavigation3Key == BiliPaiNavKey.MainHost,
+                                isSearchSelected = isBottomBarSearchSelected,
                                 animateNowPlayingPresence = !driveBottomBarByProgress,
                                 onToggleSidebar = if (windowSizeClass.shouldUseSideNavigation) {
                                     {

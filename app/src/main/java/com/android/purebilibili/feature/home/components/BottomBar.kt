@@ -2210,6 +2210,7 @@ fun FrostedBottomBar(
     linkedDockPhase: LinkedDockPhase? = null,
     onLinkedDockPhaseChange: ((LinkedDockPhase) -> Unit)? = null,
     isTopLevelDestination: Boolean = true,
+    isSearchSelected: Boolean = false,
     animateNowPlayingPresence: Boolean = true,
 ) {
     val foldPosture = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.posture
@@ -2289,6 +2290,7 @@ fun FrostedBottomBar(
                     linkedDockPhase = linkedDockPhase,
                     onLinkedDockPhaseChange = onLinkedDockPhaseChange,
                     isTopLevelDestination = isTopLevelDestination,
+                    isSearchSelected = isSearchSelected,
                     animateNowPlayingPresence = animateNowPlayingPresence,
                 )
             },
@@ -2328,6 +2330,7 @@ fun FrostedBottomBar(
                     linkedDockPhase = linkedDockPhase,
                     onLinkedDockPhaseChange = onLinkedDockPhaseChange,
                     isTopLevelDestination = isTopLevelDestination,
+                    isSearchSelected = isSearchSelected,
                     animateNowPlayingPresence = animateNowPlayingPresence,
                 )
             },
@@ -2371,6 +2374,7 @@ private fun MaterialBottomBar(
     linkedDockPhase: LinkedDockPhase? = null,
     onLinkedDockPhaseChange: ((LinkedDockPhase) -> Unit)? = null,
     isTopLevelDestination: Boolean = true,
+    isSearchSelected: Boolean = false,
     animateNowPlayingPresence: Boolean = true,
 ) {
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
@@ -2469,6 +2473,7 @@ private fun MaterialBottomBar(
         val searchEnabled = shouldReserveBottomBarSearchLayout(
             bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
         )
+        val searchInsideDock = searchEnabled && homeSettings.bottomBarSearchInsideDock
         val mergeOnScrollDownEnabled = homeSettings.linkedDockMergeOnScrollEnabled
         // 播放条关闭后继续保留同一个 Dock，避免切换组件使展开动画丢失。
         var hasHostedNowPlaying by remember { mutableStateOf(nowPlayingContent != null) }
@@ -2479,6 +2484,7 @@ private fun MaterialBottomBar(
             LinkedBottomDock(
                 currentItem = currentItem,
                 searchEnabled = searchEnabled,
+                searchInsideDock = searchInsideDock,
                 collapseRequested = collapseLinkedDock,
                 onSearchClick = onSearchClick,
                 onSearchKeywordSubmit = onSearchKeywordSubmit,
@@ -2489,7 +2495,9 @@ private fun MaterialBottomBar(
                 glassEnabled = false,
                 liquidGlassTuning = liquidGlassTuning,
                 iconStyle = SharedFloatingBottomBarIconStyle.MATERIAL,
-                navigationItemCount = bottomBarVisibleItems.size + if (isTablet && onToggleSidebar != null) 1 else 0,
+                navigationItemCount = bottomBarVisibleItems.size +
+                    (if (isTablet && onToggleSidebar != null) 1 else 0) +
+                    (if (searchInsideDock) 1 else 0),
                 navigationLabelMode = normalizedLabelMode,
                 navigationMinEdgePadding = androidNativeTuning.outerHorizontalPaddingDp.dp,
                 nowPlayingContent = nowPlayingContent,
@@ -2501,13 +2509,15 @@ private fun MaterialBottomBar(
                 currentLabel = resolveBottomNavItemLabel(currentItem, itemLabels),
                 animateNowPlayingPresence = animateNowPlayingPresence,
                 modifier = modifier,
-                navigationContent = {
+                navigationContent = { _, onInlineSearchClick ->
                     OfficialMd3FloatingToolbarContent(
                         currentItem = currentItem,
                         onItemClick = onItemClick,
                         visibleItems = bottomBarVisibleItems,
                         itemLabels = itemLabels,
                         onToggleSidebar = onToggleSidebar,
+                        onInlineSearchClick = onInlineSearchClick,
+                        isSearchSelected = isSearchSelected,
                         dynamicUnreadCount = dynamicUnreadCount,
                         isTablet = isTablet,
                         showIcon = showIcon,
@@ -2519,7 +2529,7 @@ private fun MaterialBottomBar(
                         modifier = Modifier
                             .fillMaxSize()
                             .then(
-                                if (searchEnabled) Modifier.wrapContentWidth(Alignment.End)
+                                if (searchEnabled && !searchInsideDock) Modifier.wrapContentWidth(Alignment.End)
                                 else Modifier
                             ),
                         blurEnabled = blurEnabled,
@@ -2582,6 +2592,7 @@ private fun MaterialBottomBar(
             navigationIconCrossScaleEnabled = homeSettings.navigationIconCrossScaleEnabled,
             haptic = haptic,
             bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
+            bottomBarSearchInsideDock = homeSettings.bottomBarSearchInsideDock,
             mergeOnScrollDownEnabled = homeSettings.linkedDockMergeOnScrollEnabled,
             compactOnScrollEnabled = homeSettings.bottomBarScrollCompactEnabled,
             bottomBarSearchAutoExpandMode = homeSettings.bottomBarSearchAutoExpandMode,
@@ -2601,6 +2612,7 @@ private fun MaterialBottomBar(
             linkedDockPhase = linkedDockPhase,
             onLinkedDockPhaseChange = onLinkedDockPhaseChange,
             isTopLevelDestination = isTopLevelDestination,
+            isSearchSelected = isSearchSelected,
             animateNowPlayingPresence = animateNowPlayingPresence,
         )
         return
@@ -2713,7 +2725,7 @@ private fun MaterialBottomBar(
                     )
                 }
 
-                if (isTablet && onToggleSidebar != null) {
+            if (isTablet && onToggleSidebar != null) {
                     val sidebarLabel = stringResource(R.string.sidebar_toggle)
                     AppNavigationBarItem(
                         selected = false,
@@ -2769,6 +2781,8 @@ private fun OfficialMd3FloatingToolbarContent(
     visibleItems: List<BottomNavItem>,
     itemLabels: Map<String, String>,
     onToggleSidebar: (() -> Unit)?,
+    onInlineSearchClick: (() -> Unit)? = null,
+    isSearchSelected: Boolean = false,
     dynamicUnreadCount: Int,
     isTablet: Boolean,
     showIcon: Boolean,
@@ -2826,12 +2840,14 @@ private fun OfficialMd3FloatingToolbarContent(
         } else null
         val fit = resolveMd3BottomBarFit(
             availableWidthDp = maxWidth.value,
-            itemCount = visibleItems.size + if (isTablet && onToggleSidebar != null) 1 else 0,
+            itemCount = visibleItems.size +
+                (if (isTablet && onToggleSidebar != null) 1 else 0) +
+                (if (onInlineSearchClick != null) 1 else 0),
             selectedLabelWidthDp = selectedLabelWidth,
         )
         val toolbarContent: @Composable RowScope.() -> Unit = {
             visibleItems.forEach { item ->
-                val selected = currentItem == item
+                val selected = !isSearchSelected && currentItem == item
                 val label = resolveBottomNavItemLabel(item, itemLabels)
                 val onClick = {
                     performMaterialBottomBarTap(
@@ -2948,6 +2964,78 @@ private fun OfficialMd3FloatingToolbarContent(
                         imageVector = Icons.AutoMirrored.Outlined.MenuOpen,
                         contentDescription = stringResource(R.string.sidebar_toggle),
                     )
+                }
+            }
+            if (onInlineSearchClick != null) {
+                val searchLabel = "搜索"
+                when {
+                    showIcon && showText && fit.showSelectedLabel && isSearchSelected -> FilledTonalButton(
+                        onClick = onInlineSearchClick,
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        colors = buttonColors,
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = null,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        AppText(text = searchLabel, maxLines = 1)
+                    }
+                    showIcon -> {
+                        val indicatorProgressState = animateFloatAsState(
+                            targetValue = if (isSearchSelected) 1f else 0f,
+                            animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                            label = "md3FloatingSearchIndicatorProgress",
+                        )
+                        val indicatorAlphaState = animateFloatAsState(
+                            targetValue = if (isSearchSelected) 1f else 0f,
+                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                            label = "md3FloatingSearchIndicatorAlpha",
+                        )
+                        val showIndicator by remember(indicatorProgressState) {
+                            derivedStateOf { indicatorProgressState.value > 0f }
+                        }
+                        val selectionContentColor by animateColorAsState(
+                            targetValue = if (isSearchSelected) {
+                                selectionColors.contentColor
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                            label = "md3FloatingSearchContentColor",
+                        )
+                        IconButton(
+                            onClick = onInlineSearchClick,
+                            colors = IconButtonDefaults.iconButtonColors(contentColor = selectionContentColor),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                if (showIndicator) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .graphicsLayer {
+                                                val scale = 0.4f + 0.6f * indicatorProgressState.value
+                                                scaleX = scale
+                                                scaleY = scale
+                                                alpha = indicatorAlphaState.value
+                                            }
+                                            .clip(CircleShape)
+                                            .background(selectionColors.backgroundColor),
+                                    )
+                                }
+                                AppIcon(
+                                    imageVector = Icons.Outlined.Search,
+                                    contentDescription = searchLabel,
+                                )
+                            }
+                        }
+                    }
+                    isSearchSelected -> FilledTonalButton(onClick = onInlineSearchClick, colors = buttonColors) {
+                        AppText(text = searchLabel, maxLines = 1)
+                    }
+                    else -> TextButton(onClick = onInlineSearchClick) {
+                        AppText(text = searchLabel, maxLines = 1)
+                    }
                 }
             }
         }
@@ -3105,6 +3193,7 @@ private fun MiuixBottomBar(
     linkedDockPhase: LinkedDockPhase? = null,
     onLinkedDockPhaseChange: ((LinkedDockPhase) -> Unit)? = null,
     isTopLevelDestination: Boolean = true,
+    isSearchSelected: Boolean = false,
     animateNowPlayingPresence: Boolean = true,
 ) {
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
@@ -3199,6 +3288,7 @@ private fun MiuixBottomBar(
             forceLowBlurBudget = forceLowBlurBudget,
             compactOnScrollEnabled = homeSettings.bottomBarScrollCompactEnabled,
             bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
+            bottomBarSearchInsideDock = homeSettings.bottomBarSearchInsideDock,
             bottomBarSearchAutoExpandMode = homeSettings.bottomBarSearchAutoExpandMode,
             bottomBarSearchLayoutMode = homeSettings.bottomBarSearchLayoutMode,
             onSearchClick = onSearchClick,
@@ -3216,6 +3306,7 @@ private fun MiuixBottomBar(
             linkedDockPhase = linkedDockPhase,
             onLinkedDockPhaseChange = onLinkedDockPhaseChange,
             isTopLevelDestination = isTopLevelDestination,
+            isSearchSelected = isSearchSelected,
             animateNowPlayingPresence = animateNowPlayingPresence,
         )
         return
@@ -3271,14 +3362,23 @@ private fun MiuixBottomBar(
             mode = displayMode
         ) {
             val useNativeSelection = !sharedLiquidGlassEnabled && uiSkinDecoration == null
-            val selectedIndex = bottomBarVisibleItems.indexOf(currentItem)
+            val dockedInlineSearch = homeSettings.isBottomBarSearchEnabled && homeSettings.bottomBarSearchInsideDock
+            val selectedIndex = if (isSearchSelected && dockedInlineSearch) {
+                bottomBarVisibleItems.size
+            } else {
+                bottomBarVisibleItems.indexOf(currentItem)
+            }
             val indicator = if (useNativeSelection && selectedIndex >= 0) {
                 rememberMiuixBottomBarSelection(
                     selectedIndex = selectedIndex,
-                    itemCount = bottomBarVisibleItems.size,
+                    itemCount = bottomBarVisibleItems.size + (if (dockedInlineSearch) 1 else 0),
                     onSelected = { index ->
                         performMaterialBottomBarTap(haptic = haptic) {
-                            onItemClick(bottomBarVisibleItems[index])
+                            if (dockedInlineSearch && index == bottomBarVisibleItems.size) {
+                                onSearchClick()
+                            } else {
+                                onItemClick(bottomBarVisibleItems[index])
+                            }
                         }
                     },
                 )
@@ -3313,9 +3413,10 @@ private fun MiuixBottomBar(
 
             bottomBarVisibleItems.forEachIndexed { index, item ->
                 val itemLabel = resolveBottomNavItemLabel(item, itemLabels)
+                val itemSelected = !isSearchSelected && currentItem == item
                 val skinIconPath = uiSkinDecoration?.iconPathFor(
                     item,
-                    selected = currentItem == item,
+                    selected = itemSelected,
                     visibleItems = bottomBarVisibleItems,
                 )
                 val reminderBadgeText = formatBottomBarDynamicReminderBadge(
@@ -3338,11 +3439,11 @@ private fun MiuixBottomBar(
                     )
                 ) {
                     AppPlatformNavigationBarItem(
-                        selected = currentItem == item,
+                        selected = itemSelected,
                         onClick = onItemTap,
                         icon = resolveSharedBottomBarIcon(
                             item = item,
-                            selected = currentItem == item,
+                            selected = itemSelected,
                             iconStyle = sharedBarIconStyle
                         ),
                         label = itemLabel,
@@ -3361,11 +3462,11 @@ private fun MiuixBottomBar(
                     )
                 } else {
                     MiuixDockedBottomBarItem(
-                        selected = currentItem == item,
+                        selected = itemSelected,
                         onClick = onItemTap,
                         icon = resolveSharedBottomBarIcon(
                             item = item,
-                            selected = currentItem == item,
+                            selected = itemSelected,
                             iconStyle = sharedBarIconStyle
                         ),
                         label = itemLabel,
@@ -3378,6 +3479,51 @@ private fun MiuixBottomBar(
                         indicatorColor = dockedIndicatorColor,
                         skinIconPath = skinIconPath,
                         reminderBadgeText = reminderBadgeText
+                    )
+                }
+            }
+
+            if (dockedInlineSearch) {
+                val searchIcon = if (sharedBarIconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
+                    MiuixIcons.Search
+                } else {
+                    Icons.Outlined.Search
+                }
+                val onSearchTap = {
+                    performMaterialBottomBarTap(
+                        haptic = haptic,
+                        onClick = onSearchClick,
+                    )
+                }
+                if (shouldUseMiuixOfficialNavigationBarItem(skinIconPath = null, labelScrimAlpha = skinItemColors.labelScrimAlpha)) {
+                    AppPlatformNavigationBarItem(
+                        selected = isSearchSelected,
+                        onClick = onSearchTap,
+                        icon = searchIcon,
+                        label = "搜索",
+                        modifier = indicator?.itemModifier(bottomBarVisibleItems.size, dockedIndicatorColor) ?: Modifier,
+                        colors = if (useNativeSelection) {
+                            MiuixNavigationBarDefaults.navigationBarItemColors()
+                        } else MiuixNavigationBarDefaults.navigationBarItemColors(
+                            unselectedContentColor = skinItemColors.unselectedColor,
+                            selectedContentColor = skinItemColors.selectedColor,
+                        ),
+                    )
+                } else {
+                    MiuixDockedBottomBarItem(
+                        selected = isSearchSelected,
+                        onClick = onSearchTap,
+                        icon = searchIcon,
+                        label = "搜索",
+                        showIcon = showIcon,
+                        showText = showText,
+                        selectedColor = skinItemColors.selectedColor,
+                        unselectedColor = skinItemColors.unselectedColor,
+                        labelScrimColor = skinItemColors.labelScrimColor,
+                        labelScrimAlpha = skinItemColors.labelScrimAlpha,
+                        indicatorColor = dockedIndicatorColor,
+                        skinIconPath = null,
+                        reminderBadgeText = null,
                     )
                 }
             }
@@ -3690,6 +3836,7 @@ private fun BiliPaiFloatingBottomBar(
     isTransitionRunning: Boolean = false,
     forceLowBlurBudget: Boolean = false,
     bottomBarSearchEnabled: Boolean = false,
+    bottomBarSearchInsideDock: Boolean = false,
     bottomBarSearchAutoExpandMode: BottomBarSearchAutoExpandMode =
         BottomBarSearchAutoExpandMode.EXPAND_AT_HOME_TOP,
     bottomBarSearchLayoutMode: BottomBarSearchLayoutMode =
@@ -3709,6 +3856,7 @@ private fun BiliPaiFloatingBottomBar(
     linkedDockPhase: LinkedDockPhase? = null,
     onLinkedDockPhaseChange: ((LinkedDockPhase) -> Unit)? = null,
     isTopLevelDestination: Boolean = true,
+    isSearchSelected: Boolean = false,
     mergeOnScrollDownEnabled: Boolean = true,
     compactOnScrollEnabled: Boolean = false,
     animateNowPlayingPresence: Boolean = true,
@@ -3718,6 +3866,7 @@ private fun BiliPaiFloatingBottomBar(
         if (nowPlayingContent != null) hasHostedNowPlaying = true
     }
     if (bottomBarSearchEnabled || nowPlayingContent != null || hasHostedNowPlaying || compactOnScrollEnabled) {
+        val searchInsideDock = bottomBarSearchEnabled && bottomBarSearchInsideDock
         LinkedBottomDock(
             currentItem = currentItem,
             dockPhase = linkedDockPhase,
@@ -3728,6 +3877,7 @@ private fun BiliPaiFloatingBottomBar(
             currentLabel = resolveBottomNavItemLabel(currentItem, itemLabels),
             animateNowPlayingPresence = animateNowPlayingPresence,
             searchEnabled = bottomBarSearchEnabled,
+            searchInsideDock = searchInsideDock,
             collapseRequested = collapseLinkedDock,
             onSearchClick = onSearchClick,
             onSearchKeywordSubmit = onSearchKeywordSubmit,
@@ -3738,7 +3888,9 @@ private fun BiliPaiFloatingBottomBar(
             glassEnabled = glassEnabled && !forceLowBlurBudget,
             liquidGlassTuning = liquidGlassTuning,
             iconStyle = iconStyle,
-            navigationItemCount = visibleItems.size + if (isTablet && onToggleSidebar != null) 1 else 0,
+            navigationItemCount = visibleItems.size +
+                (if (isTablet && onToggleSidebar != null) 1 else 0) +
+                (if (searchInsideDock) 1 else 0),
             navigationLabelMode = labelMode,
             navigationMinEdgePadding = tuning.outerHorizontalPaddingDp.dp,
             hasUiSkinDecoration = uiSkinDecoration != null,
@@ -3746,7 +3898,7 @@ private fun BiliPaiFloatingBottomBar(
             visibleItems = visibleItems,
             nowPlayingContent = nowPlayingContent,
             modifier = modifier,
-            navigationContent = { allocatedWidth ->
+            navigationContent = { allocatedWidth, onInlineSearchClick ->
                 BiliPaiFloatingBottomBarChrome(
                     currentItem = currentItem,
                     onItemClick = onItemClick,
@@ -3756,6 +3908,8 @@ private fun BiliPaiFloatingBottomBar(
                     itemColorIndices = itemColorIndices,
                     dynamicUnreadCount = dynamicUnreadCount,
                     onToggleSidebar = onToggleSidebar,
+                    onInlineSearchClick = onInlineSearchClick,
+                    isSearchSelected = isSearchSelected,
                     isTablet = isTablet,
                     showIcon = showIcon,
                     showText = showText,
@@ -3849,6 +4003,8 @@ private fun BiliPaiFloatingBottomBarChrome(
     itemColorIndices: Map<String, Int> = emptyMap(),
     dynamicUnreadCount: Int = 0,
     onToggleSidebar: (() -> Unit)?,
+    onInlineSearchClick: (() -> Unit)? = null,
+    isSearchSelected: Boolean = false,
     isTablet: Boolean,
     showIcon: Boolean,
     showText: Boolean,
@@ -3897,14 +4053,22 @@ private fun BiliPaiFloatingBottomBarChrome(
         darkTheme = isDarkTheme,
         liquidGlassTuning = liquidGlassTuning
     )
-    val allItems = remember(visibleItems, isTablet, onToggleSidebar) {
+    val hasSidebarToggle = isTablet && onToggleSidebar != null
+    val hasInlineSearch = onInlineSearchClick != null
+    val sidebarToggleIndex = if (hasSidebarToggle) visibleItems.size else -1
+    val inlineSearchIndex = if (hasInlineSearch) visibleItems.size + (if (hasSidebarToggle) 1 else 0) else -1
+    val allItems = remember(visibleItems, hasSidebarToggle, hasInlineSearch) {
         buildList {
             addAll(visibleItems)
-            if (isTablet && onToggleSidebar != null) add(null)
+            if (hasSidebarToggle) add(null)
+            if (hasInlineSearch) add(null)
         }
     }
-    val selectedIndex = visibleItems.indexOf(currentItem).coerceAtLeast(0)
-    val isValidSelection = currentItem in visibleItems
+    val selectedIndex = when {
+        isSearchSelected && hasInlineSearch -> inlineSearchIndex
+        else -> visibleItems.indexOf(currentItem).coerceAtLeast(0)
+    }
+    val isValidSelection = (isSearchSelected && hasInlineSearch) || (currentItem in visibleItems)
     val nativeNavigationColors = com.android.purebilibili.core.ui.AppInteractionColors.nativeNavigation(
         com.android.purebilibili.core.ui.AppNavigationColorRole.BAR,
     )
@@ -4099,7 +4263,8 @@ private fun BiliPaiFloatingBottomBarChrome(
                     onItemClick(item)
                 }
             }
-            isTablet && onToggleSidebar != null && index == visibleItems.size -> onToggleSidebar()
+            hasSidebarToggle && index == sidebarToggleIndex -> onToggleSidebar?.invoke()
+            hasInlineSearch && index == inlineSearchIndex -> onInlineSearchClick?.invoke()
         }
     }
 
@@ -4226,7 +4391,7 @@ private fun BiliPaiFloatingBottomBarChrome(
                         val dockContent: @Composable RowScope.() -> Unit = {
                             visibleItems.forEachIndexed { index, item ->
                                 val label = resolveBottomNavItemLabel(item, itemLabels)
-                                val routeSelected = index == selectedIndexForBar
+                                val routeSelected = !isSearchSelected && index == selectedIndexForBar
                                 // 矢量图标允许在液态玻璃隐藏捕获层提前渲染选中态以配合透镜滑入染色；
                                 // 装扮插画 PNG 前后造型迥异（如角色头与皇冠），必须严格绑定真实选中项，防止滑动/折射时串图跳变。
                                 val vectorSelected = routeSelected ||
@@ -4267,12 +4432,12 @@ private fun BiliPaiFloatingBottomBarChrome(
                                 }
                             }
 
-                            if (isTablet && onToggleSidebar != null) {
+                            if (hasSidebarToggle) {
                                 val sidebarLabel = stringResource(R.string.sidebar_toggle)
                                 FloatingBottomBarItem(
                                     onClick = ::handleBottomBarSidebarClick,
                                     selected = false,
-                                    itemIndex = visibleItems.size,
+                                    itemIndex = sidebarToggleIndex,
                                     iconCrossScaleEnabled = navigationIconCrossScaleEnabled,
                                 ) {
                                     FloatingBottomBarTabVisual(
@@ -4288,6 +4453,36 @@ private fun BiliPaiFloatingBottomBarChrome(
                                         labelScrimAlpha = skinContentColors.labelScrimAlpha,
                                         hasSkinArtwork = !uiSkinDecoration?.bottomTrimImagePath.isNullOrBlank(),
                                         reminderBadgeText = null
+                                    )
+                                }
+                            }
+
+                            if (hasInlineSearch && onInlineSearchClick != null) {
+                                val inlineSearchIcon = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
+                                    MiuixIcons.Search
+                                } else {
+                                    Icons.Outlined.Search
+                                }
+                                FloatingBottomBarItem(
+                                    onClick = onInlineSearchClick,
+                                    selected = isSearchSelected,
+                                    itemIndex = inlineSearchIndex,
+                                    iconCrossScaleEnabled = navigationIconCrossScaleEnabled,
+                                ) {
+                                    FloatingBottomBarTabVisual(
+                                        item = null,
+                                        label = "搜索",
+                                        selected = isSearchSelected || LocalFloatingBottomBarActiveContent.current,
+                                        showIcon = showIcon,
+                                        showText = showText,
+                                        iconStyle = iconStyle,
+                                        skinIconPath = null,
+                                        dynamicUnreadCount = 0,
+                                        labelScrimColor = skinContentColors.labelScrimColor,
+                                        labelScrimAlpha = skinContentColors.labelScrimAlpha,
+                                        hasSkinArtwork = !uiSkinDecoration?.bottomTrimImagePath.isNullOrBlank(),
+                                        reminderBadgeText = null,
+                                        customIcon = inlineSearchIcon,
                                     )
                                 }
                             }
@@ -4329,8 +4524,8 @@ private fun BiliPaiFloatingBottomBarChrome(
                                     // Derive the inset capsule from the current dock height;
                                     // reserving search width must not independently flatten it.
                                     proportionalIndicatorReferenceWidth = null,
-                                    indicatorPositionProvider = indicatorPositionProvider,
-                                    externalPagerMotionEffectsEnabled = indicatorPositionProvider != null,
+                                    indicatorPositionProvider = if (isSearchSelected) null else indicatorPositionProvider,
+                                    externalPagerMotionEffectsEnabled = !isSearchSelected && indicatorPositionProvider != null,
                                     isScrollInProgressProvider = isPagerScrollInProgressProvider,
                                     isPagerDraggingProvider = isPagerDraggingProvider,
                                     pagerTargetPositionProvider = pagerTargetPositionProvider,
@@ -4520,7 +4715,8 @@ private fun ColumnScope.FloatingBottomBarTabVisual(
     labelScrimColor: Color,
     labelScrimAlpha: Float,
     hasSkinArtwork: Boolean,
-    reminderBadgeText: String?
+    reminderBadgeText: String?,
+    customIcon: ImageVector? = null,
 ) {
     val localColor = LocalFloatingBottomBarContentColor.current
     val selectedContentColor = LocalFloatingBottomBarSelectedContentColor.current
@@ -4558,6 +4754,12 @@ private fun ColumnScope.FloatingBottomBarTabVisual(
                         selected = selected,
                     )
                 }
+            } else if (customIcon != null) {
+                AppIcon(
+                    imageVector = customIcon,
+                    contentDescription = label,
+                    tint = contentColor
+                )
             } else if (item == null) {
                 AppIcon(
                     imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {

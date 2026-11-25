@@ -7,19 +7,25 @@ import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import android.os.SystemClock
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -159,6 +165,8 @@ fun FrostedSideBar(
                 visibleItems = visibleItems,
                 itemLabels = itemLabels,
                 uiSkinDecoration = uiSkinDecoration,
+                sidebarExpanded = sidebarExpanded,
+                onSidebarExpandedChange = onSidebarExpandedChange,
                 onToggleSidebar = onToggleSidebar,
                 onAccountSwitchClick = onAccountSwitchClick,
             )
@@ -401,12 +409,19 @@ private fun FrostedSideBarContent(
     visibleItems: List<BottomNavItem>,
     itemLabels: Map<String, String>,
     uiSkinDecoration: BottomBarUiSkinDecoration?,
+    sidebarExpanded: Boolean,
+    onSidebarExpandedChange: (Boolean) -> Unit,
     onToggleSidebar: (() -> Unit)?,
     onAccountSwitchClick: (() -> Unit)?,
 ) {
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
     var lastHomeClickMs by remember { mutableLongStateOf(0L) }
     var lastDynamicClickMs by remember { mutableLongStateOf(0L) }
+    val canExpand = shouldUseExpandedNavigationRailForLayout(
+        windowSizeClass = LocalWindowSizeClass.current,
+        foldPosture = LocalAppWindowAdaptiveInfo.current.posture,
+    )
+    val isExpanded = canExpand && sidebarExpanded
     val blurIntensity = com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity()
     val backgroundAlpha = com.android.purebilibili.core.ui.blur.BlurStyles.getBackgroundAlpha(blurIntensity)
     val chromeBackground = AppSurfaceTokens.chromeBackground()
@@ -427,7 +442,12 @@ private fun FrostedSideBarContent(
         chromeBackground.copy(alpha = 0.95f)
     }
 
-    val sideBarWidth = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.DoubleExtraLarge
+    val collapsedWidth = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.DoubleExtraLarge
+    val sideBarWidth by animateDpAsState(
+        targetValue = if (isExpanded) 196.dp else collapsedWidth,
+        animationSpec = AppMotionTokens.standardSpec(),
+        label = "frostedSideBarWidth",
+    )
 
     AppSurface(
         modifier = modifier
@@ -463,16 +483,48 @@ private fun FrostedSideBarContent(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical))
-                .padding(vertical = AppSpacingTokens.ExtraLarge),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(vertical = AppSpacingTokens.Large),
+            horizontalAlignment = if (isExpanded) Alignment.Start else Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
         ) {
+            if (canExpand) {
+                Box(
+                    modifier = Modifier
+                        .padding(
+                            start = if (isExpanded) 14.dp else 0.dp,
+                            bottom = AppSpacingTokens.Medium,
+                        )
+                        .size(AppChromeSizeTokens.MinimumTouchTarget)
+                        .clip(AppShapes.container(ContainerLevel.Card))
+                        .clickable {
+                            haptic(HapticType.LIGHT)
+                            onSidebarExpandedChange(!sidebarExpanded)
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIcon(
+                        imageVector = Icons.Outlined.ViewSidebar,
+                        contentDescription = if (isExpanded) "收起侧边栏" else "展开侧边栏",
+                        tint = AppContentColors.secondaryText(),
+                        modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro),
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = if (isExpanded) Alignment.Start else Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(if (isExpanded) 6.dp else AppSpacingTokens.Medium),
+            ) {
             visibleItems.forEachIndexed { itemIndex, item ->
                 val isSelected = item == currentItem
                 val itemLabel = resolveBottomNavItemLabel(item, itemLabels)
 
                 val primaryColor = AppContentColors.accent()
-                val unselectedColor = AppContentColors.primaryText().copy(alpha = 0.6f)
+                val unselectedColor = AppContentColors.primaryText().copy(alpha = 0.65f)
                 val skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = isSelected)
                 val selectionTransform = rememberNavigationSelectionTransform(
                     selected = isSelected,
@@ -483,6 +535,11 @@ private fun FrostedSideBarContent(
                     targetValue = if (isSelected) primaryColor else unselectedColor,
                     animationSpec = AppMotionTokens.standardSpec(),
                     label = "iconColor"
+                )
+                val itemBgColor by animateColorAsState(
+                    targetValue = if (isSelected) primaryColor.copy(alpha = 0.13f) else Color.Transparent,
+                    animationSpec = AppMotionTokens.standardSpec(),
+                    label = "frostedSideBarItemBg"
                 )
                 val triggerItemClick = {
                     val nowMs = SystemClock.elapsedRealtime()
@@ -524,19 +581,8 @@ private fun FrostedSideBarContent(
                     }
                 }
 
-                Column(
-                    modifier = Modifier
-                        .size(AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Large)
-                        .then(if (itemIndex == 0) firstItemModifier else Modifier)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            triggerItemClick()
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
+                val itemShape = AppShapes.container(ContainerLevel.Card)
+                val iconSlot: @Composable () -> Unit = {
                     Box(
                         modifier = Modifier.graphicsLayer {
                             scaleX = selectionTransform.scale()
@@ -562,35 +608,75 @@ private fun FrostedSideBarContent(
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
-
-                    AppText(
-                        text = itemLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                        color = iconColor
-                    )
                 }
 
-                Spacer(modifier = Modifier.height(AppSpacingTokens.Large))
+                if (isExpanded) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                            .heightIn(min = 48.dp)
+                            .clip(itemShape)
+                            .background(itemBgColor)
+                            .then(if (itemIndex == 0) firstItemModifier else Modifier)
+                            .clickable(onClick = triggerItemClick)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        iconSlot()
+                        AppText(
+                            text = itemLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = iconColor,
+                            maxLines = 1,
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .width(64.dp)
+                            .heightIn(min = 56.dp)
+                            .clip(itemShape)
+                            .background(itemBgColor)
+                            .then(if (itemIndex == 0) firstItemModifier else Modifier)
+                            .clickable(onClick = triggerItemClick)
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        iconSlot()
+                        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+                        AppText(
+                            text = itemLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                            color = iconColor,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
 
             if (onAccountSwitchClick != null) {
                 SideBarAccountSwitchButton(
                     onClick = onAccountSwitchClick,
-                    tint = AppContentColors.secondaryText().copy(alpha = 0.7f),
+                    tint = AppContentColors.secondaryText().copy(alpha = 0.78f),
+                    modifier = if (isExpanded) Modifier.padding(start = 14.dp) else Modifier,
                 )
-                Spacer(modifier = Modifier.height(AppSpacingTokens.Large))
+                Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
             }
 
             if (onToggleSidebar != null) {
                 val sidebarLabel = stringResource(R.string.sidebar_toggle)
                 Box(
                     modifier = Modifier
+                        .then(if (isExpanded) Modifier.padding(start = 14.dp) else Modifier)
                         .size(AppChromeSizeTokens.MinimumTouchTarget)
                         .clip(AppShapes.container(ContainerLevel.Card))
                         .clickable {
@@ -602,11 +688,10 @@ private fun FrostedSideBarContent(
                     AppIcon(
                         Icons.Outlined.ViewSidebar,
                         contentDescription = sidebarLabel,
-                        tint = AppContentColors.secondaryText().copy(alpha = 0.7f),
+                        tint = AppContentColors.secondaryText().copy(alpha = 0.78f),
                         modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro)
                     )
                 }
-                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraLarge))
             }
         }
     }

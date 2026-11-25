@@ -1325,9 +1325,12 @@ fun SearchScreen(
         }
     }
 
-    val resultBottomPadding = resolveBottomSafeAreaPadding(
-        navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-        extraBottomPadding = 16.dp
+    val resultBottomPadding = maxOf(
+        resolveBottomSafeAreaPadding(
+            navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+            extraBottomPadding = 16.dp
+        ),
+        com.android.purebilibili.core.ui.LocalBottomBarContentPadding.current,
     ) + if (com.android.purebilibili.core.ui.rememberNowPlayingBarOverlayVisible()) {
         // 听视频小横条悬浮时统一上浮避让（与首页/稍后再看一致）
         com.android.purebilibili.core.ui.NowPlayingBarOverlayAvoidancePadding

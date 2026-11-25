@@ -71,6 +71,48 @@ class LinkedDockPolicyTest {
     }
 
     @Test
+    fun searchInsideDockCentersFullNavigationAndDetachesSearchFromTrailingEdge() {
+        val navX = resolveLinkedDockNavigationX(
+            maximumWidth = 600,
+            navigationWidth = 400,
+            button = 56,
+            gap = 8,
+            searchEnabled = true,
+            searchInsideDock = true,
+        )
+        assertEquals(100, navX)
+        assertEquals(
+            444,
+            resolveLinkedDockSearchX(
+                maximumWidth = 600,
+                navigationWidth = 400,
+                searchWidth = 56,
+                button = 56,
+                gap = 8,
+                mergeProgress = 0f,
+                searchProgress = 0f,
+                searchInsideDock = true,
+            ),
+        )
+        assertEquals(
+            544,
+            resolveLinkedDockSearchX(
+                maximumWidth = 600,
+                navigationWidth = 400,
+                searchWidth = 56,
+                button = 56,
+                gap = 8,
+                mergeProgress = 1f,
+                searchProgress = 0f,
+                searchInsideDock = true,
+            ),
+        )
+        assertEquals(0f, resolveLinkedDockDetachedSearchAlpha(0f, 0f, searchInsideDock = true))
+        assertEquals(1f, resolveLinkedDockDetachedSearchAlpha(0.5f, 0f, searchInsideDock = true))
+        assertEquals(1f, resolveLinkedDockDetachedSearchAlpha(0f, 0f, searchInsideDock = false))
+    }
+
+    @Test
     fun globalCollapseRequestUsesCompactPlaybackPhaseWhenAudioIsPresent() {
         assertEquals(
             LinkedDockPhase.Playback,

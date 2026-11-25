@@ -58,7 +58,7 @@ object LiquidGlassSettingsStore {
 
     fun observePopupMotionStyle(context: Context): Flow<GlassMotionStyle> =
         context.settingsDataStore.data.map {
-            GlassMotionStyle.fromValue(it[glassPopupMotionStylePreferencesKey] ?: GlassMotionStyle.STANDARD.value)
+            GlassMotionStyle.fromValue(it[glassPopupMotionStylePreferencesKey] ?: GlassMotionStyle.ELASTIC.value)
         }.distinctUntilChanged()
 
     suspend fun setPopupMotionStyle(context: Context, style: GlassMotionStyle) {

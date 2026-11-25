@@ -123,6 +123,14 @@ class AppTopLevelNavigationPolicyTest {
                 tappedItem = BottomNavItem.DYNAMIC
             )
         )
+        assertEquals(
+            BottomBarSelectionAction.NAVIGATE,
+            resolveBottomBarSelectionAction(
+                currentItem = BottomNavItem.DYNAMIC,
+                tappedItem = BottomNavItem.DYNAMIC,
+                isOnMainHost = false,
+            )
+        )
     }
 
     @Test
@@ -555,6 +563,15 @@ class AppTopLevelNavigationPolicyTest {
             shouldShowBottomBarForNavigation(
                 activeRoute = resolveActiveBottomTabRoute(BiliPaiNavKey.Dynamic, BottomNavItem.HOME),
                 visibleBottomBarRoutes = defaultRoutes,
+                useSideNavigation = false,
+                shouldHideBottomBarOnTablet = false,
+                shouldDeferReveal = false
+            )
+        )
+        assertTrue(
+            shouldShowBottomBarForNavigation(
+                activeRoute = resolveActiveBottomTabRoute(BiliPaiNavKey.Search("test"), BottomNavItem.HOME),
+                visibleBottomBarRoutes = defaultRoutes + ScreenRoutes.Search.route,
                 useSideNavigation = false,
                 shouldHideBottomBarOnTablet = false,
                 shouldDeferReveal = false

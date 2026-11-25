@@ -42,15 +42,20 @@ internal fun resolveAudioNowPlayingPresenceGeometrySpec(
 internal const val AUDIO_NOW_PLAYING_PRESENCE_ENTER_SLIDE_DP = 28f
 
 /**
- * 首次出现的上滑入场弹簧：低阻尼（0.7）产生约 4% 的轻微回弹，
- * overshoot 由调用方 clamp——宽度/alpha 收在 1，位移越过终点再回落即回弹。
+ * 首次出现的上滑入场弹簧：复用液态玻璃展开阻尼与响应，轻快落位且无明显果冻回弹。
  */
 internal fun resolveAudioNowPlayingPresenceEnterSpringSpec(): SpringSpec<Float> =
-    spring(dampingRatio = 0.7f, stiffness = 380f)
+    spring(
+        dampingRatio = com.android.purebilibili.core.ui.motion.GlassMorphSprings.Expand.dampingRatio,
+        stiffness = com.android.purebilibili.core.ui.motion.GlassMorphSprings.Expand.stiffness,
+    )
 
-/** 独立挂载路径的高度展开入场弹簧（expandVertically 自下而上 + 回弹）。 */
+/** 独立挂载路径的高度展开入场弹簧（expandVertically 自下而上柔和落位）。 */
 internal fun resolveAudioNowPlayingPresenceEnterGeometrySpringSpec(): SpringSpec<IntSize> =
-    spring(dampingRatio = 0.7f, stiffness = 380f)
+    spring(
+        dampingRatio = com.android.purebilibili.core.ui.motion.GlassMorphSprings.Expand.dampingRatio,
+        stiffness = com.android.purebilibili.core.ui.motion.GlassMorphSprings.Expand.stiffness,
+    )
 
 /**
  * presence alpha 窗口：几何先展开，alpha 在后半段跟上，避免空壳提前可见。

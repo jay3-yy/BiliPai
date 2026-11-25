@@ -106,9 +106,17 @@ internal fun LastPositionPill(
     }
 
     // 调用方提供当前页面的内容区及底部避让；拖动只改变测量阶段的位置，三种材质共用。
+    val glassPillEnter = backdrop != null && refreshOverlayGlassEnabled()
     AnimatedVisibility(
         visibleState = visibility,
-        enter = fadeIn() + scaleIn(initialScale = 0.92f),
+        enter = fadeIn() + if (glassPillEnter) {
+            scaleIn(
+                animationSpec = com.android.purebilibili.core.ui.motion.GlassMorphSprings.Expand.asComposeSpring(),
+                initialScale = 0.92f,
+            )
+        } else {
+            scaleIn(initialScale = 0.92f)
+        },
         modifier = modifier
             .fillMaxSize()
             .layout { measurable, constraints ->

@@ -69,9 +69,10 @@ internal fun resolveTopLevelNavigationAction(
 
 internal fun resolveBottomBarSelectionAction(
     currentItem: BottomNavItem,
-    tappedItem: BottomNavItem
+    tappedItem: BottomNavItem,
+    isOnMainHost: Boolean = true,
 ): BottomBarSelectionAction {
-    return if (currentItem == tappedItem) {
+    return if (isOnMainHost && currentItem == tappedItem) {
         BottomBarSelectionAction.RESELECT
     } else {
         BottomBarSelectionAction.NAVIGATE
@@ -194,6 +195,9 @@ internal fun resolveActiveBottomTabRoute(
 ): String? {
     if (currentKey == null || currentKey == BiliPaiNavKey.MainHost) {
         return currentBottomItem.route
+    }
+    if (currentKey is BiliPaiNavKey.Search) {
+        return ScreenRoutes.Search.route
     }
     val route = currentKey.toLegacyRoute()
     return if (route == BiliPaiNavKey.MainHost.routeBase) currentBottomItem.route else route

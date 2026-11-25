@@ -28,6 +28,28 @@ internal fun <T> glassDockMorphSpring(style: GlassMotionStyle, expanding: Boolea
             (if (expanding) GlassMorphSprings.Expand else GlassMorphSprings.Return).asComposeSpring()
     }
 
+/** 液态玻璃底栏水平轴（缩宽/展开与搜索分合）默认弹簧；非玻璃路径保持原生参数。 */
+internal fun <T> glassDockHorizontalMorphSpring(
+    glassEnabled: Boolean,
+    style: GlassMotionStyle,
+    expanding: Boolean,
+): SpringSpec<T> = if (!glassEnabled) {
+    bottomBarSearchMorphSpring()
+} else {
+    (if (expanding) GlassMorphSprings.DockExpandX else GlassMorphSprings.DockCollapseX).asComposeSpring()
+}
+
+/** 液态玻璃底栏垂直轴（播放条上浮/落槽）默认弹簧；收起略慢于水平轴，展开略快于水平轴以形成自然弧线。 */
+internal fun <T> glassDockVerticalMorphSpring(
+    glassEnabled: Boolean,
+    style: GlassMotionStyle,
+    expanding: Boolean,
+): SpringSpec<T> = if (!glassEnabled) {
+    bottomBarSearchMorphSpring()
+} else {
+    (if (expanding) GlassMorphSprings.DockExpandY else GlassMorphSprings.DockCollapseY).asComposeSpring()
+}
+
 /** 两行收为一行时先按外壳方向选节奏；同一行内再由搜索框展开方向决定。 */
 internal fun linkedDockMotionExpanding(initial: LinkedDockPhase, target: LinkedDockPhase): Boolean =
     target == LinkedDockPhase.Expanded ||

@@ -228,6 +228,9 @@ internal fun AudioNowPlayingBar(
         val nativeBarLayer = if (LocalVideoCardSourceTrackingEnabled.current) {
             rememberNativeVideoCardLayer()
         } else null
+        val sharedBarSource = if (nativeBarLayer != null && state.bvid.isNotBlank()) {
+            com.android.purebilibili.navigation3.rememberNavigationSharedContainerSource(state.bvid)
+        } else null
         val snapshotScope = key(state.bvid, sourceRoute) { rememberCoroutineScope() }
         val latestLayoutStable by rememberUpdatedState(isLayoutStable)
         var captureInProgress by remember(state.bvid, sourceRoute) { mutableStateOf(false) }
@@ -385,7 +388,7 @@ internal fun AudioNowPlayingBar(
             freezeSourceLayer = true
             val expectedSourceKey = CardPositionManager.lastClickedVideoSourceKey
             val sourceOwner = CardPositionManager.videoCardPixelOwnerFor(expectedSourceKey)
-            try {
+            val capturedBitmap = try {
                 captureNativeVideoCardBitmap(layer, expectedSourceKey)
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -393,6 +396,16 @@ internal fun AudioNowPlayingBar(
                 com.android.purebilibili.core.util.Logger.w(
                     "AudioNowPlayingBar", "Could not freeze return snapshot: ${error.message}",
                 )
+                null
+            }
+            if (sharedBarSource != null && capturedBitmap != null &&
+                capturedBitmap.width > 1 && capturedBitmap.height > 1
+            ) {
+                // 小横条内部采样 bottomBarBackdrop；转场只使用冻结位图，避免 RenderNode 环。
+                sharedBarSource.origin.capturedSourceLayer = null
+                sharedBarSource.origin.capturedSourceBitmap = capturedBitmap
+                sharedBarSource.origin.capturedSourceLayerWidth = capturedBitmap.width.toFloat()
+                sharedBarSource.origin.capturedSourceLayerHeight = capturedBitmap.height.toFloat()
             }
             if (CardPositionManager.isActiveVideoCardPixelOwner(sourceOwner)) {
                 onExpand(true)
@@ -495,7 +508,13 @@ internal fun AudioNowPlayingBar(
                         else -> 8.dp
                     }
                 )
-                .videoCardSourceAnchor(state.bvid, shape, enabled = nativeBarLayer != null) { coordinates ->
+                .videoCardSourceAnchor(
+                    bvid = state.bvid,
+                    shape = shape,
+                    enabled = nativeBarLayer != null,
+                    sharedSource = sharedBarSource,
+                    recordSharedSourceLayer = false,
+                ) { coordinates ->
                     barCoordsRef[0] = coordinates
                 }
                 // 源锚点和录制层使用同一个未缩放的胶囊尺寸，松手回弹不会改变系统落点。
