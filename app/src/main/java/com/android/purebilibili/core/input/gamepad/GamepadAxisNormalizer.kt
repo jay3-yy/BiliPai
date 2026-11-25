@@ -313,6 +313,16 @@ private const val VENDOR_SONY = 0x054C
 private const val VENDOR_NINTENDO = 0x057E
 private const val VENDOR_8BITDO = 0x2DC8
 
+private val fingerprintUinputNames = listOf(
+    "uinput-fpc", "uinput-goodix", "uinput-fod", "uinput-egis", "uinput-silead",
+    "uinput_fpc", "uinput_goodix",
+)
+
+fun isNonControllerFingerprintUinput(deviceName: String?): Boolean {
+    val name = deviceName?.trim() ?: return false
+    return fingerprintUinputNames.any { name.contains(it, ignoreCase = true) }
+}
+
 /** 根据 USB/蓝牙 Vendor ID 与设备名称自动识别手柄型号。 */
 fun detectControllerProfile(
     vendorId: Int,

@@ -345,6 +345,7 @@ object GamepadControlEngine {
         if (!isGamepadKeyEvent(event)) return false
 
         val device = event.device
+        if (isNonControllerFingerprintUinput(device?.name)) return false
         if (device != null && isHardwareGamepadDevice(device)) {
             syncActiveControllerDevice(device)
         }
@@ -632,6 +633,7 @@ object GamepadControlEngine {
         if (!isJoystick) return false
 
         val device = event.device
+        if (isNonControllerFingerprintUinput(device?.name)) return false
         if (device != null && isHardwareGamepadDevice(device)) {
             syncActiveControllerDevice(device)
         }
@@ -1281,6 +1283,7 @@ object GamepadControlEngine {
 
     fun isHardwareGamepadDevice(device: InputDevice?): Boolean {
         if (device == null || device.isVirtual) return false
+        if (isNonControllerFingerprintUinput(device.name)) return false
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 && !device.isEnabled) return false
         val sources = device.sources
         if ((sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD) {

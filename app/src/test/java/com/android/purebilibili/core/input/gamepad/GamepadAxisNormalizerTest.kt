@@ -13,6 +13,22 @@ import kotlin.test.assertTrue
 class GamepadAxisNormalizerTest {
 
     @Test
+    fun rejectsOnlyKnownFingerprintUinputNames() {
+        for (name in listOf(
+            "uinput-fpc", "UINPUT-FPC", "uinput_fpc", "uinput-goodix", "uinput_goodix",
+            "uinput-fod", "uinput-egis", "uinput-silead", " MIUI uinput-fpc navigation ",
+        )) {
+            assertTrue(isNonControllerFingerprintUinput(name))
+        }
+        for (name in listOf(
+            "Xbox Wireless Controller", "DualSense Wireless Controller", "Nintendo Switch Pro Controller",
+            "Virtual Gamepad", "uinput-xbox", "", null,
+        )) {
+            assertFalse(isNonControllerFingerprintUinput(name))
+        }
+    }
+
+    @Test
     fun stickInsideRadialDeadzoneReturnsZero() {
         val result = normalizeRadialStick(rawX = 0.10f, rawY = -0.09f, deadzone = 0.15f)
         assertEquals(0f, result.x)
