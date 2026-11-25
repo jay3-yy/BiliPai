@@ -150,6 +150,12 @@ fun BangumiPlayerContent(
         commentViewModel = commentViewModel,
         enabled = handleCommentFeedback && ownsCommentUi,
     )
+    LaunchedEffect(handleCommentFeedback, ownsCommentUi, commentViewModel, context) {
+        if (!handleCommentFeedback || !ownsCommentUi) return@LaunchedEffect
+        commentViewModel.sendErrorEvents.collect { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
     val showIdentityDecorations by com.android.purebilibili.core.store.SettingsManager
         .getCommentMemberDecorationsEnabled(context).collectAsStateWithLifecycle(initialValue = false)
     val isCourse = detail.seasonType == 10

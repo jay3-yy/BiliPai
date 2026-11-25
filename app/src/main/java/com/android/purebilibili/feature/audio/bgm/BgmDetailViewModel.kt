@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@androidx.compose.runtime.Immutable
 internal data class BgmDetailUiState(
     val detail: BgmDetailData? = null,
     val videos: List<BgmRecommendVideo> = emptyList(),

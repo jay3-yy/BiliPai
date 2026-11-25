@@ -42,6 +42,7 @@ internal fun PlayerBlurBackground(
     Box(modifier = modifier.background(palette.middle)) {
         if (coverBitmap != null) {
             val coverImage = remember(coverBitmap) { coverBitmap.asImageBitmap() }
+            val lowBlurBudget = com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced()
             androidx.compose.foundation.Image(
                 bitmap = coverImage,
                 contentDescription = null,
@@ -52,7 +53,7 @@ internal fun PlayerBlurBackground(
                         scaleY = 2.90f
                         alpha = 0.78f
                     }
-                    .blur(48.dp),
+                    .then(if (lowBlurBudget) Modifier else Modifier.blur(48.dp)),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
             )
         }
@@ -96,10 +97,12 @@ internal fun FluidLyricBackground(
     animate: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val animateActive = animate && LocalPlayerSurfaceActive.current
-    val drift = if (animateActive) {
-        val transition = rememberInfiniteTransition(label = "fluid_lyric_background")
-        val value by transition.animateFloat(
+    val animationGate = if (animate) {
+        com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    } else null
+    val animateActive = animate && LocalPlayerSurfaceActive.current && animationGate?.active == true
+    val driftState = if (animateActive) {
+        rememberInfiniteTransition(label = "fluid_lyric_background").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
@@ -108,9 +111,8 @@ internal fun FluidLyricBackground(
             ),
             label = "fluid_lyric_background_drift",
         )
-        value
     } else {
-        0.36f
+        null
     }
     val pulse = if (animateActive && isPlaying) {
         0.5f + 0.5f * sin(positionMs / 900.0).toFloat()
@@ -118,7 +120,12 @@ internal fun FluidLyricBackground(
         0.28f
     }
 
-    Canvas(modifier = modifier.background(palette.middle)) {
+    Canvas(
+        modifier = modifier
+            .background(palette.middle)
+            .then(animationGate?.modifier ?: Modifier)
+    ) {
+        val drift = driftState?.value ?: 0.36f
         drawRect(
             brush = Brush.verticalGradient(
                 colors = listOf(
@@ -181,12 +188,15 @@ internal fun BeautifulLyricsDynamicBackground(
     brightness: Int = 70,
 ) {
     val durationMs = (960_000 / speed.coerceIn(5, 60)).coerceIn(16_000, 192_000)
-    val activeDrift = rememberSharedFlowProgress(
+    val animationGate = if (animate) {
+        com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    } else null
+    val animateActive = animate && LocalPlayerSurfaceActive.current && animationGate?.active == true
+    val activeDriftState = rememberSharedFlowProgressState(
         durationMillis = durationMs,
-        animate = animate && LocalPlayerSurfaceActive.current,
-        fallback = 0.42f,
+        animate = animateActive,
     )
-    val pulse = if (isPlaying) {
+    val pulse = if (animateActive && isPlaying) {
         0.5f + 0.5f * sin(positionMs / 760.0).toFloat()
     } else {
         0.36f
@@ -195,16 +205,20 @@ internal fun BeautifulLyricsDynamicBackground(
     val sampledColors = remember(coverBitmap, palette) {
         beautifulLyricsSampleColors(coverBitmap, palette)
     }
+    val lowBlurBudget = com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced()
+    val effectiveBlurDp = if (lowBlurBudget) 0.dp else blurPx.coerceIn(0, 80).dp
 
     Canvas(
         modifier = modifier
             .background(palette.middle)
-            .blur(blurPx.coerceIn(0, 80).dp)
+            .then(animationGate?.modifier ?: Modifier)
+            .then(if (effectiveBlurDp > 0.dp) Modifier.blur(effectiveBlurDp) else Modifier)
             .graphicsLayer {
                 scaleX = 1.08f
                 scaleY = 1.08f
             },
     ) {
+        val activeDrift = activeDriftState?.value ?: 0.42f
         val w = size.width
         val h = size.height
         drawRect(
@@ -266,14 +280,13 @@ internal fun BeautifulLyricsDynamicBackground(
 }
 
 @Composable
-internal fun rememberSharedFlowProgress(
+private fun rememberSharedFlowProgressState(
     durationMillis: Int,
     animate: Boolean,
-    fallback: Float,
-): Float {
-    if (!animate) return fallback
+): androidx.compose.runtime.State<Float>? {
+    if (!animate) return null
     val transition = rememberInfiniteTransition(label = "shared_flow_progress")
-    val value by transition.animateFloat(
+    return transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -282,7 +295,15 @@ internal fun rememberSharedFlowProgress(
         ),
         label = "shared_flow_progress_value",
     )
-    return value
+}
+
+@Composable
+internal fun rememberSharedFlowProgress(
+    durationMillis: Int,
+    animate: Boolean,
+    fallback: Float,
+): Float {
+    return rememberSharedFlowProgressState(durationMillis = durationMillis, animate = animate)?.value ?: fallback
 }
 
 internal fun beautifulLyricsBlobCenters(progress: Float): List<Offset> {

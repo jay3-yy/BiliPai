@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.audio.lyrics
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
 internal const val LYRIC_OFFSET_LIMIT_MS = 10_000L
@@ -13,6 +14,7 @@ internal enum class LyricSource {
     MANUAL
 }
 
+@Immutable
 @Serializable
 internal data class LyricSpan(
     val text: String,
@@ -20,6 +22,7 @@ internal data class LyricSpan(
     val endTimeMs: Long
 )
 
+@Immutable
 @Serializable
 internal data class LyricLine(
     val startTimeMs: Long,
@@ -30,6 +33,7 @@ internal data class LyricLine(
     val spans: List<LyricSpan> = emptyList()
 )
 
+@Immutable
 @Serializable
 internal data class LyricDocument(
     val metadata: Map<String, String> = emptyMap(),

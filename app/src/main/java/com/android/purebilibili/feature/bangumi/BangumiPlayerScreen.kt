@@ -56,6 +56,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +64,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import com.android.purebilibili.feature.video.screen.applyVideoDetailSystemBarsSpec
+import com.android.purebilibili.feature.video.screen.resolveVideoDetailSystemBarsApplySpec
+import com.android.purebilibili.feature.video.screen.resolveVideoDetailSystemBarsVisibilityPolicy
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
@@ -926,31 +931,6 @@ fun BangumiPlayerScreen(
         toggleOrientation()
     }
 
-    // 沉浸式状态栏控制
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = (view.context.findActivity())?.window ?: return@SideEffect
-            val insetsController = WindowCompat.getInsetsController(window, view)
-
-            // 顶部是黑色/画面模糊背景，使用白色图标，与普通视频一致。
-            insetsController.isAppearanceLightStatusBars = false
-            insetsController.isAppearanceLightNavigationBars = false
-            if (isFullscreen) {
-                insetsController.hide(WindowInsetsCompat.Type.systemBars())
-                insetsController.systemBarsBehavior =
-                    androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                setWindowStatusBarColor(window, Color.Black.toArgb())
-                setWindowNavigationBarColor(window, Color.Black.toArgb())
-            } else {
-                insetsController.show(WindowInsetsCompat.Type.systemBars())
-                insetsController.systemBarsBehavior =
-                    androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
-                setWindowStatusBarColor(window, Color.Transparent.toArgb())
-                setWindowNavigationBarColor(window, Color.Transparent.toArgb())
-            }
-        }
-    }
-
     //  [修复] 离开番剧页时恢复系统栏：横屏沉浸路径（isFullscreen=true）此前没有
     //  onDispose，经小窗/深链等非返回手势路径离开会泄漏隐藏的系统栏。
     if (!view.isInEditMode) {
@@ -971,6 +951,9 @@ fun BangumiPlayerScreen(
         }
     }
 
+    val groupedBackgroundColor = AppSurfaceTokens.groupedListContainer()
+    val isLightGroupedBackground = groupedBackgroundColor.luminance() > 0.5f
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -980,7 +963,7 @@ fun BangumiPlayerScreen(
                 isTextInputActive = showDanmakuSend,
                 onToggleFullscreen = { toggleOrientation() },
             )
-            .background(if (isFullscreen) Color.Black else AppSurfaceTokens.groupedListContainer())
+            .background(if (isFullscreen) Color.Black else groupedBackgroundColor)
     ) {
         //  获取清晰度数据
         val playbackEpisodes = remember(successState?.seasonDetail, successState?.currentEpisode?.id) {
@@ -1198,29 +1181,70 @@ fun BangumiPlayerScreen(
             inlinePlayerCollapseState.reconcileLayout(inlineCollapseEnabled, collapseRangePx)
         }
 
-        val rawCollapseProgress = remember(inlinePlayerCollapseState.offsetPx, collapseRangePx) {
-            if (collapseRangePx <= 0f) 0f else (abs(inlinePlayerCollapseState.offsetPx) / collapseRangePx).coerceIn(0f, 1f)
+        val lastRenderedCollapseProgress = remember { FloatArray(1) }
+        val collapseSettleAnimatable = remember { androidx.compose.animation.core.Animatable(0f) }
+        var isAnimatingCollapseSettle by remember { mutableStateOf(false) }
+        val rawCollapseProgressProvider: () -> Float = {
+            if (!inlineCollapseEnabled || collapseRangePx <= 0f) {
+                0f
+            } else {
+                (abs(inlinePlayerCollapseState.offsetPx) / collapseRangePx).coerceIn(0f, 1f)
+            }
         }
-
-        val animatedCollapseProgress by animateFloatAsState(
-            targetValue = if (inlineCollapseEnabled) rawCollapseProgress else 0f,
-            animationSpec = if (
+        LaunchedEffect(
+            inlineCollapseEnabled,
+            inlinePlayerCollapseState.restoreRequested,
+            inlinePlayerCollapseState.layoutReconciled,
+            collapseRangePx,
+        ) {
+            if (
                 inlinePlayerCollapseState.restoreRequested ||
                     inlinePlayerCollapseState.layoutReconciled ||
                     !inlineCollapseEnabled
             ) {
-                tween(durationMillis = 280, easing = AppMotionEasing.M1Standard)
+                val target = rawCollapseProgressProvider()
+                val start = lastRenderedCollapseProgress[0]
+                if (abs(start - target) > 0.001f) {
+                    collapseSettleAnimatable.snapTo(start)
+                    isAnimatingCollapseSettle = true
+                    try {
+                        collapseSettleAnimatable.animateTo(
+                            targetValue = target,
+                            animationSpec = tween(durationMillis = 280, easing = AppMotionEasing.M1Standard),
+                        )
+                    } finally {
+                        isAnimatingCollapseSettle = false
+                    }
+                } else {
+                    collapseSettleAnimatable.snapTo(target)
+                }
+            }
+        }
+        val collapseProgressProvider: () -> Float = {
+            val progress = if (isAnimatingCollapseSettle) {
+                collapseSettleAnimatable.value
             } else {
-                snap()
-            },
-            label = "bangumi_player_collapse_progress"
-        )
+                rawCollapseProgressProvider()
+            }
+            lastRenderedCollapseProgress[0] = progress
+            progress
+        }
 
-        // 折叠自动暂停 / 展开自动恢复
+        // 折叠自动暂停 / 展开自动恢复（使用 derivedStateOf，仅跨越阈值时触发重组）
         var autoPausedByPlayerCollapse by remember(currentEpisodeIdForDebug) { mutableStateOf(false) }
         var timerVersionAtCollapse by remember(currentEpisodeIdForDebug) { mutableLongStateOf(0L) }
-        val isPlayerCollapsed = inlineCollapseEnabled && rawCollapseProgress >= 0.98f &&
-            !inlinePlayerCollapseState.restoreRequested
+        val isPlayerCollapsed by remember(inlinePlayerCollapseState, inlineCollapseEnabled, collapseRangePx) {
+            derivedStateOf {
+                inlineCollapseEnabled &&
+                    !inlinePlayerCollapseState.restoreRequested &&
+                    rawCollapseProgressProvider() >= 0.98f
+            }
+        }
+        val showCollapsedPlayerBar by remember(inlinePlayerCollapseState, inlineCollapseEnabled, collapseRangePx) {
+            derivedStateOf {
+                isAnimatingCollapseSettle || rawCollapseProgressProvider() > 0f
+            }
+        }
         LaunchedEffect(isPlayerCollapsed, pauseOnPlayerCollapseEnabled, isFullscreen, currentEpisodeIdForDebug) {
             val player = exoPlayer ?: return@LaunchedEffect
             // An earlier episode/setting effect can request restoration in this same frame.
@@ -1250,7 +1274,7 @@ fun BangumiPlayerScreen(
         }
 
         // Re-grabbing an animated restore continues from the visible height, not its zero target.
-        val latestAnimatedCollapseProgress by rememberUpdatedState(animatedCollapseProgress)
+        val latestCollapseProgressProvider by rememberUpdatedState(collapseProgressProvider)
         val nestedScrollConnection = remember(
             inlinePlayerCollapseState, inlineCollapseEnabled, isFullscreen, collapseRangePx,
         ) {
@@ -1258,7 +1282,7 @@ fun BangumiPlayerScreen(
                 override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                     val scrollUpdate = reduceVideoDetailPreScroll(
                         currentOffsetPx = if (inlinePlayerCollapseState.restoreRequested) {
-                            -latestAnimatedCollapseProgress * collapseRangePx
+                            -latestCollapseProgressProvider() * collapseRangePx
                         } else inlinePlayerCollapseState.offsetPx,
                         deltaPx = available.y,
                         minOffsetPx = -collapseRangePx,
@@ -1271,7 +1295,7 @@ fun BangumiPlayerScreen(
                 override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                     val scrollUpdate = reduceVideoDetailPostScroll(
                         currentOffsetPx = if (inlinePlayerCollapseState.restoreRequested) {
-                            -latestAnimatedCollapseProgress * collapseRangePx
+                            -latestCollapseProgressProvider() * collapseRangePx
                         } else inlinePlayerCollapseState.offsetPx,
                         deltaPx = available.y,
                         minOffsetPx = -collapseRangePx,
@@ -1380,6 +1404,33 @@ fun BangumiPlayerScreen(
         // 软折痕跨整窗避免下半屏留黑。
         val bangumiSplitPanes = appWindowAdaptiveInfo.shouldAvoidHinge &&
             (!isFullscreen || appWindowAdaptiveInfo.foldingFeature.layoutHinges().any { it.isOccluding })
+        // 沉浸式状态栏控制：大屏分栏顶栏为页面底色，按背景明暗切换状态栏图标颜色；竖屏/折痕顶部为黑底或模糊图，保持浅色图标。
+        if (!view.isInEditMode) {
+            val systemBarsVisibilityPolicy = resolveVideoDetailSystemBarsVisibilityPolicy(
+                isFullscreenMode = playerPresentation.isFullscreen,
+                hideVideoPageStatusBar = false,
+                isInPipMode = isInPipMode,
+                isScreenActive = true,
+            )
+            val systemBarsSpec = resolveVideoDetailSystemBarsApplySpec(
+                visibilityPolicy = systemBarsVisibilityPolicy,
+                useTabletLayout = !isFullscreen && useLargeScreenLayout && !bangumiSplitPanes,
+                isLightBackground = isLightGroupedBackground,
+                backgroundColor = Color.Transparent.toArgb(),
+                transparentColor = Color.Transparent.toArgb(),
+                blackColor = Color.Black.toArgb(),
+                transientBarsBehavior = if (isFullscreen) {
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                } else {
+                    WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+                },
+            )
+            SideEffect {
+                val window = (view.context.findActivity())?.window ?: return@SideEffect
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                applyVideoDetailSystemBarsSpec(window, insetsController, systemBarsSpec)
+            }
+        }
         if (bangumiSplitPanes) {
             com.android.purebilibili.core.ui.adaptive.AppHingePaneLayout(
                 modifier = Modifier.fillMaxSize(),
@@ -1433,9 +1484,7 @@ fun BangumiPlayerScreen(
                     .fillMaxSize()
                     .nestedScroll(nestedScrollConnection)
             ) {
-                // 播放器区域 - 动态高度计算
-                val currentViewportHeight = lerp(playerHeight, collapsedPlayerHeight, animatedCollapseProgress)
-
+                // 播放器区域 - 在 layout 阶段读取折叠进度，避免跟手滚动逐帧触发整页重组
                 ImmersiveStatusBarBackdrop(
                     ambientFrame = statusBarAmbientFrame,
                     height = portraitPlayerTopPadding,
@@ -1446,16 +1495,29 @@ fun BangumiPlayerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(currentViewportHeight)
+                        .layout { measurable, constraints ->
+                            val heightPx = lerp(
+                                playerHeight,
+                                collapsedPlayerHeight,
+                                collapseProgressProvider(),
+                            ).roundToPx().coerceAtLeast(0)
+                            val placeable = measurable.measure(
+                                constraints.copy(minHeight = heightPx, maxHeight = heightPx)
+                            )
+                            layout(placeable.width, heightPx) {
+                                placeable.placeRelative(0, 0)
+                            }
+                        }
                         .background(Color.Black)
                         // 上方状态栏背景已占位；所有材质共用这次消费，原生组件参数保持不变。
                         .consumeWindowInsets(PaddingValues(top = portraitPlayerTopPadding))
                 ) {
                     playerContentView(false)
 
-                    if (animatedCollapseProgress > 0f) {
+                    if (showCollapsedPlayerBar) {
                         BangumiCollapsedPlayerBar(
-                            scrollRatio = animatedCollapseProgress,
+                            scrollRatio = 0f,
+                            scrollRatioProvider = collapseProgressProvider,
                             topInset = 0.dp,
                             isPlaying = exoPlayer?.let {
                                 resolveOverlayPlaybackButtonPlayingState(it.isPlaying, it.playWhenReady, it.playbackState)

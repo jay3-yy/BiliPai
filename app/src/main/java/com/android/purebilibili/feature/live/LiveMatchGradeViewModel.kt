@@ -15,8 +15,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@androidx.compose.runtime.Immutable
 internal data class LiveMatchGradeState(
     val contestId: Long = 0,
     val game: Int = 1,
@@ -32,6 +34,7 @@ internal data class LiveMatchGradeState(
     val submissionVersion: Int = 0,
 )
 
+@androidx.compose.runtime.Immutable
 internal data class LiveMatchGradeComments(
     val gradeId: String = "",
     val mode: Int = 3,
@@ -73,11 +76,24 @@ internal class LiveMatchGradeViewModel : ViewModel() {
                 if (!isCurrent(context)) return@launch
                 check(response.code == 0) { response.message.ifBlank { "选手评分加载失败" } }
                 val data = checkNotNull(response.data) { "选手评分数据为空" }
-                mutableState.value = context.copy(data = data, loading = false,
-                    availableGames = maxOf(knownGames, data.currentGame ?: 1).coerceIn(1, 99))
+                val resolvedGames = maxOf(knownGames, data.currentGame ?: 1).coerceIn(1, 99)
+                mutableState.update { current ->
+                    if (current.contestId == context.contestId && current.game == context.game &&
+                        current.account == context.account && TokenManager.accountIdentity.value == context.account
+                    ) {
+                        current.copy(data = data, loading = false, availableGames = maxOf(current.availableGames, resolvedGames))
+                    } else current
+                }
             } catch (cancelled: CancellationException) { throw cancelled
             } catch (error: Exception) {
-                if (isCurrent(context)) mutableState.value = context.copy(loading = false, error = error.message ?: "选手评分加载失败")
+                val errorMsg = error.message ?: "选手评分加载失败"
+                mutableState.update { current ->
+                    if (current.contestId == context.contestId && current.game == context.game &&
+                        current.account == context.account && TokenManager.accountIdentity.value == context.account
+                    ) {
+                        current.copy(loading = false, error = errorMsg)
+                    } else current
+                }
             }
         }
     }
@@ -89,13 +105,20 @@ internal class LiveMatchGradeViewModel : ViewModel() {
         val previous = comments.value
         if (more && (previous.gradeId != player.gradeId || previous.loading || previous.end)) return
         commentRequest?.cancel()
-        val page = if (more) previous else LiveMatchGradeComments(gradeId = player.gradeId, mode = mode)
-        mutableComments.value = page.copy(loading = true, error = null)
+        var requestOffset = ""
+        var requestMode = mode
+        mutableComments.update { current ->
+            val base = if (more && current.gradeId == player.gradeId) current
+                else LiveMatchGradeComments(gradeId = player.gradeId, mode = mode)
+            requestOffset = base.offset
+            requestMode = base.mode
+            base.copy(loading = true, error = null)
+        }
         commentRequest = viewModelScope.launch {
             try {
                 val session = AccountCookieSession.main()
                 if (!isCurrent(context)) return@launch
-                val params = liveMatchGradeCommentQuery(aid, player.gradeId, page.offset, page.mode)
+                val params = liveMatchGradeCommentQuery(aid, player.gradeId, requestOffset, requestMode)
                 val (img, sub) = WbiKeyManager.getWbiKeys().getOrThrow()
                 ensureActive()
                 if (!isCurrent(context)) return@launch
@@ -106,16 +129,30 @@ internal class LiveMatchGradeViewModel : ViewModel() {
                 val data = checkNotNull(response.data) { "评分评论数据为空" }
                 val incoming = data.replies.orEmpty()
                 val next = data.cursor.paginationReply?.nextOffset.orEmpty()
-                mutableComments.value = page.copy(items = (page.items + incoming).distinctBy { it.rpid }, loading = false,
-                    offset = next, end = data.cursor.isEnd || next.isBlank() || next == page.offset)
+                val reachedEnd = data.cursor.isEnd || next.isBlank() || next == requestOffset
+                mutableComments.update { current ->
+                    if (current.gradeId != player.gradeId || current.mode != requestMode) current
+                    else current.copy(
+                        items = (current.items + incoming).distinctBy { it.rpid },
+                        loading = false,
+                        offset = next,
+                        end = reachedEnd
+                    )
+                }
             } catch (cancelled: CancellationException) { throw cancelled
             } catch (error: Exception) {
-                if (isCurrent(context)) mutableComments.value = page.copy(error = error.message ?: "评分评论加载失败")
+                if (isCurrent(context)) {
+                    val errorMsg = error.message ?: "评分评论加载失败"
+                    mutableComments.update { current ->
+                        if (current.gradeId != player.gradeId || current.mode != requestMode) current
+                        else current.copy(loading = false, error = errorMsg)
+                    }
+                }
             }
         }
     }
 
-    fun clearFeedback() { mutableState.value = state.value.copy(feedback = null, feedbackPlayerId = 0) }
+    fun clearFeedback() { mutableState.update { it.copy(feedback = null, feedbackPlayerId = 0) } }
 
     fun clearComments() { commentRequest?.cancel(); mutableComments.value = LiveMatchGradeComments() }
 
@@ -128,16 +165,26 @@ internal class LiveMatchGradeViewModel : ViewModel() {
         val csrf = session.seed["bili_jct"].orEmpty()
         if (!isCurrent(context)) return
         if (session.sessData.isBlank() || csrf.isBlank() || context.account.mid == null) {
-            mutableState.value = context.copy(feedback = "请先登录后参与评分和评论", requiresLogin = true, feedbackPlayerId = player.playerId)
+            mutableState.update { current ->
+                if (current.contestId == context.contestId && current.game == context.game && current.account == context.account) {
+                    current.copy(feedback = "请先登录后参与评分和评论", requiresLogin = true, feedbackPlayerId = player.playerId)
+                } else current
+            }
             return
         }
         if (score !in liveMatchRatingScores || message.length > 1000) return
-        mutableState.value = context.copy(submitting = true, feedback = null, feedbackPlayerId = player.playerId)
+        mutableState.update { current ->
+            if (current.contestId == context.contestId && current.game == context.game && current.account == context.account) {
+                current.copy(submitting = true, feedback = null, feedbackPlayerId = player.playerId)
+            } else current
+        }
         mutation = viewModelScope.launch {
             var accepted = false
             try {
                 fun ensureSuccess(code: Int, message: String) {
-                    if (code == -101 && isCurrent(context)) mutableState.value = state.value.copy(requiresLogin = true)
+                    if (code == -101 && isCurrent(context)) {
+                        mutableState.update { it.copy(requiresLogin = true) }
+                    }
                     check(code == 0) {
                         when (code) {
                             -101 -> "登录已过期，请重新登录"
@@ -160,24 +207,39 @@ internal class LiveMatchGradeViewModel : ViewModel() {
                 accepted = true
                 if (!isCurrent(context)) return@launch
                 // 已确认的个人评分立即回显，均分与人数仍以刷新结果为准。
-                val old = checkNotNull(context.data)
-                mutableState.value = state.value.copy(data = old.withConfirmedRating(player.playerId, player.gradeId, score),
-                    feedback = if (message.isBlank()) "评分已提交" else "评分评论已发布",
-                    feedbackPlayerId = player.playerId,
-                    submissionVersion = state.value.submissionVersion + if (message.isNotBlank()) 1 else 0)
+                val fallbackOld = checkNotNull(context.data)
+                mutableState.update { current ->
+                    val baseData = current.data ?: fallbackOld
+                    current.copy(
+                        data = baseData.withConfirmedRating(player.playerId, player.gradeId, score),
+                        feedback = if (message.isBlank()) "评分已提交" else "评分评论已发布",
+                        feedbackPlayerId = player.playerId,
+                        submissionVersion = current.submissionVersion + if (message.isNotBlank()) 1 else 0
+                    )
+                }
                 if (message.isNotBlank() && comments.value.gradeId == player.gradeId) showComments(player, comments.value.mode)
                 val refreshed = NetworkModule.api.getLiveMatchGrades(context.contestId, context.game, cookie(session))
                 ensureActive()
                 if (isCurrent(context)) {
                     val refreshedData = refreshed.data
-                    if (refreshed.code == 0 && refreshedData != null) mutableState.value = state.value.copy(data = refreshedData.withConfirmedRating(player.playerId, player.gradeId, score))
-                    else mutableState.value = state.value.copy(feedback = "提交成功，最新统计暂未刷新", feedbackPlayerId = player.playerId)
+                    if (refreshed.code == 0 && refreshedData != null) {
+                        val confirmed = refreshedData.withConfirmedRating(player.playerId, player.gradeId, score)
+                        mutableState.update { it.copy(data = confirmed) }
+                    } else {
+                        mutableState.update { it.copy(feedback = "提交成功，最新统计暂未刷新", feedbackPlayerId = player.playerId) }
+                    }
                 }
             } catch (cancelled: CancellationException) { throw cancelled
             } catch (error: Exception) {
-                if (isCurrent(context)) mutableState.value = state.value.copy(feedbackPlayerId = player.playerId, feedback = if (accepted) "提交成功，最新统计暂未刷新" else error.message ?: "提交结果未确认，请刷新评分后再决定是否重试")
+                if (isCurrent(context)) {
+                    val feedbackText = if (accepted) "提交成功，最新统计暂未刷新"
+                        else error.message ?: "提交结果未确认，请刷新评分后再决定是否重试"
+                    mutableState.update { it.copy(feedbackPlayerId = player.playerId, feedback = feedbackText) }
+                }
             } finally {
-                if (isCurrent(context)) mutableState.value = state.value.copy(submitting = false)
+                if (isCurrent(context)) {
+                    mutableState.update { it.copy(submitting = false) }
+                }
             }
         }
     }

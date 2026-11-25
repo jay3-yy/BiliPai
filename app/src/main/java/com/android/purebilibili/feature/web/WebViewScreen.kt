@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -92,6 +93,20 @@ fun WebViewScreen(
     val darkTheme = com.android.purebilibili.core.ui.isAppInDarkTheme()
     val webViewBackground = if (darkTheme) 0xFF101010.toInt() else 0xFFFFFFFF.toInt()
     val browserSession = remember(url) { BrowserPageSession() }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(browserSession, lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> browserSession.pause()
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> browserSession.resume()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
     var currentPageUrl by remember(url) { mutableStateOf(url) }
     var canGoBack by remember(url) { mutableStateOf(false) }
     val openInitialUrlExternally = remember(url) { shouldOpenWebUrlExternally(url) }
@@ -131,7 +146,7 @@ fun WebViewScreen(
     var externalUrl by remember(url) { mutableStateOf<String?>(null) }
     val canNavigateBack = canGoBack && externalUrl == null && !rendererFailed
     val goBack = { if (canNavigateBack) browserSession.goBack() else onBack() }
-    androidx.activity.compose.BackHandler(enabled = canNavigateBack) { browserSession.goBack() }
+    com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = canNavigateBack) { browserSession.goBack() }
     val externalOpenGate = remember(url) { LinkOpenGate() }
     val openExternal by rememberUpdatedState<(String) -> Unit>({ targetUrl ->
         // Redirect callbacks can arrive repeatedly before Compose removes AndroidView.
@@ -477,6 +492,8 @@ private class BrowserPageSession {
 
     fun owns(view: WebView): Boolean = active === view
     fun goBack() { active?.goBack() }
+    fun pause() { active?.onPause() }
+    fun resume() { active?.onResume() }
 
     fun attach(view: BrowserWebView, requestedUrl: String) {
         active?.let { previous ->

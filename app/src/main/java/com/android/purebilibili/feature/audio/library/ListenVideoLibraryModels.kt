@@ -1,8 +1,10 @@
 package com.android.purebilibili.feature.audio.library
 
+import androidx.compose.runtime.Immutable
 import com.android.purebilibili.data.model.response.FavFolderSource
 import com.android.purebilibili.feature.video.player.PlaylistItem
 
+@Immutable
 internal data class ListenVideoTrack(
     val bvid: String,
     val cid: Long,
@@ -14,6 +16,7 @@ internal data class ListenVideoTrack(
     val artistAvatarUrl: String
 )
 
+@Immutable
 internal data class ListenVideoPlaylist(
     val mediaId: Long,
     val title: String,
@@ -22,6 +25,7 @@ internal data class ListenVideoPlaylist(
     val source: FavFolderSource
 )
 
+@Immutable
 internal data class ListenVideoAlbum(
     val seasonId: Long,
     val ownerMid: Long,
@@ -31,6 +35,7 @@ internal data class ListenVideoAlbum(
     val artistName: String
 )
 
+@Immutable
 internal data class ListenVideoArtist(
     val mid: Long,
     val name: String,
@@ -38,6 +43,7 @@ internal data class ListenVideoArtist(
     val tracks: List<ListenVideoTrack>
 )
 
+@Immutable
 internal data class ListenVideoPlaybackSelection(
     val items: List<PlaylistItem>,
     val startIndex: Int

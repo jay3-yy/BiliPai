@@ -130,9 +130,15 @@ class LocalProxyServer(port: Int = 8901) : NanoHTTPD(port) {
         const val PORT = 8901
         const val DASH_CONTENT_TYPE = "application/dash+xml"
 
+        private const val MAX_CACHED_MANIFESTS = 8
         @Volatile private var sharedServer: LocalProxyServer? = null
         private val bootstrapLock = Any()
-        private val manifestStore = ConcurrentHashMap<String, String>()
+        private val manifestStore = java.util.Collections.synchronizedMap(
+            object : LinkedHashMap<String, String>(12, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean =
+                    size > MAX_CACHED_MANIFESTS
+            }
+        )
 
         @JvmStatic
         fun ensureStarted(): Boolean {

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+@androidx.compose.runtime.Immutable
 internal data class ListenVideoUiState(
     val generation: Long = 0L,
     val isLoggedIn: Boolean = true,

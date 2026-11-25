@@ -531,14 +531,12 @@ private fun ArticleDetailContent(
     val bottomSafeAreaPadding = resolveArticleDetailBottomPadding(
         navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     )
-    var bannerSourceRect by remember(article.bannerUrl) {
-        mutableStateOf<Rect?>(null)
-    }
+    val bannerSourceRect = com.android.purebilibili.feature.dynamic.components.rememberImagePreviewSourceRect()
     val bodyImageSourceRects = remember(article.blocks) {
-        mutableStateMapOf<Int, Rect>()
+        HashMap<Int, Rect>()
     }
     fun currentPreviewSourceRects(): Map<Int, Rect> = buildMap {
-        if (hasBannerImage) bannerSourceRect?.let { put(0, it) }
+        if (hasBannerImage) bannerSourceRect.value?.let { put(0, it) }
         var pageIndex = bodyImageIndexOffset
         article.blocks.forEachIndexed { blockIndex, block ->
             if (block is ArticleContentBlock.Image) {
@@ -550,12 +548,12 @@ private fun ArticleDetailContent(
     var imagePreviewRequest by remember(article.bannerUrl, article.blocks) {
         mutableStateOf<ArticleImagePreviewRequest?>(null)
     }
-    val bannerSourceHidden = isImagePreviewSourceHidden(bannerSourceRect)
+    val bannerSourceHidden = isImagePreviewSourceHidden(bannerSourceRect.value, article.bannerUrl)
     val baseBannerModifier = Modifier
         .fillMaxWidth()
         .clip(AppShapes.container(ContainerLevel.Floating))
         .onGloballyPositioned { coordinates ->
-            bannerSourceRect = coordinates.boundsInWindow()
+            bannerSourceRect.value = coordinates.boundsInWindow()
         }
         .alpha(if (bannerSourceHidden) 0f else 1f)
         .clickable(
@@ -563,11 +561,11 @@ private fun ArticleDetailContent(
             indication = null,
             enabled = previewImages.isNotEmpty(),
         ) {
-            prepareImagePreviewSourceTransition(bannerSourceRect)
+            prepareImagePreviewSourceTransition(bannerSourceRect.value, article.bannerUrl)
             imagePreviewRequest = ArticleImagePreviewRequest(
                 images = previewImages,
                 initialIndex = 0,
-                sourceRect = bannerSourceRect,
+                sourceRect = bannerSourceRect.value,
                 sourceRects = currentPreviewSourceRects(),
                 sourceCornerRadiusDp = ARTICLE_BANNER_CORNER_RADIUS_DP
             )
@@ -687,7 +685,11 @@ private fun ArticleDetailContent(
                     }
                 }
 
-                itemsIndexed(article.blocks, key = { index, _ -> index }) { index, block ->
+                itemsIndexed(
+                    items = article.blocks,
+                    key = { index, block -> "${block::class.simpleName}_$index" },
+                    contentType = { _, block -> block::class },
+                ) { index, block ->
                     when (block) {
                         is ArticleContentBlock.Heading -> {
                             if (block.spans.isEmpty()) {
@@ -698,14 +700,23 @@ private fun ArticleDetailContent(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             } else {
-                                val text = buildArticleAnnotatedString(
-                                    spans = block.spans,
-                                    defaultColor = articleTextColor,
-                                    baseFontSize = headingStyle.fontSize,
-                                    linkListener = articleLinkListener,
-                                    explicitFontScale = readingPreferences.fontScale,
-                                    backgroundColor = articleBackground,
-                                )
+                                val text = remember(
+                                    block.spans,
+                                    articleTextColor,
+                                    headingStyle.fontSize,
+                                    articleLinkListener,
+                                    readingPreferences.fontScale,
+                                    articleBackground,
+                                ) {
+                                    buildArticleAnnotatedString(
+                                        spans = block.spans,
+                                        defaultColor = articleTextColor,
+                                        baseFontSize = headingStyle.fontSize,
+                                        linkListener = articleLinkListener,
+                                        explicitFontScale = readingPreferences.fontScale,
+                                        backgroundColor = articleBackground,
+                                    )
+                                }
                                 PublicWebLinkText(text) { previewModifier, onPreviewTextLayout ->
                                     AppText(
                                         text = text,
@@ -727,14 +738,23 @@ private fun ArticleDetailContent(
                                     color = articleTextColor
                                 )
                             } else {
-                                val text = buildArticleAnnotatedString(
-                                    spans = block.spans,
-                                    defaultColor = articleTextColor,
-                                    baseFontSize = bodyStyle.fontSize,
-                                    linkListener = articleLinkListener,
-                                    explicitFontScale = readingPreferences.fontScale,
-                                    backgroundColor = articleBackground,
-                                )
+                                val text = remember(
+                                    block.spans,
+                                    articleTextColor,
+                                    bodyStyle.fontSize,
+                                    articleLinkListener,
+                                    readingPreferences.fontScale,
+                                    articleBackground,
+                                ) {
+                                    buildArticleAnnotatedString(
+                                        spans = block.spans,
+                                        defaultColor = articleTextColor,
+                                        baseFontSize = bodyStyle.fontSize,
+                                        linkListener = articleLinkListener,
+                                        explicitFontScale = readingPreferences.fontScale,
+                                        backgroundColor = articleBackground,
+                                    )
+                                }
                                 PublicWebLinkText(text) { previewModifier, onPreviewTextLayout ->
                                     AppText(
                                         text = text,
@@ -823,7 +843,7 @@ private fun ArticleDetailContent(
                         }
 
                         is ArticleContentBlock.Image -> {
-                            val sourceHidden = isImagePreviewSourceHidden(bodyImageSourceRects[index])
+                            val sourceHidden = isImagePreviewSourceHidden(bodyImageSourceRects[index], block.url)
                             val imageAspectRatio = resolveArticleImageAspectRatio(
                                 width = block.width,
                                 height = block.height
@@ -850,7 +870,7 @@ private fun ArticleDetailContent(
                                             blocks = article.blocks,
                                             tappedBlockIndex = index
                                         ) ?: return@clickable
-                                        prepareImagePreviewSourceTransition(bodyImageSourceRects[index])
+                                        prepareImagePreviewSourceTransition(bodyImageSourceRects[index], block.url)
                                         imagePreviewRequest = ArticleImagePreviewRequest(
                                             images = previewImages,
                                             initialIndex = payload.initialIndex + bodyImageIndexOffset,

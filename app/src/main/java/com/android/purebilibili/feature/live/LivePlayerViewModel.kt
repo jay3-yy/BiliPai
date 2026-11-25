@@ -48,6 +48,7 @@ import com.android.purebilibili.core.util.FormatUtils
 /**
  * 直播弹幕 UI 模型
  */
+@androidx.compose.runtime.Immutable
 @kotlinx.serialization.Serializable
 data class LiveDanmakuItem(
     val text: String,
@@ -95,6 +96,7 @@ data class LiveDanmakuItem(
     val originRoomId: Long = 0L,
 )
 
+@androidx.compose.runtime.Immutable
 data class LiveChatMessage(
     val sequence: Long,
     val item: LiveDanmakuItem,
@@ -103,6 +105,7 @@ data class LiveChatMessage(
 /**
  * 主播信息
  */
+@androidx.compose.runtime.Immutable
 data class AnchorInfo(
     val uid: Long = 0,
     val uname: String = "",
@@ -114,6 +117,7 @@ data class AnchorInfo(
 /**
  * 直播间信息
  */
+@androidx.compose.runtime.Immutable
 data class RoomInfo(
     val roomId: Long = 0,
     val title: String = "",
@@ -134,6 +138,7 @@ data class RoomInfo(
 )
 
 /** 高频在线/看过人数统计，与顶层 LivePlayerState 解耦，避免 WebSocket 推送引发整个直播间和播放器重组。 */
+@androidx.compose.runtime.Immutable
 data class LiveRoomDynamicStats(
     val watchedText: String = "",
     val onlineRankText: String = "",
@@ -145,6 +150,7 @@ data class LiveRoomDynamicStats(
 sealed class LivePlayerState {
     object Loading : LivePlayerState()
     
+    @androidx.compose.runtime.Immutable
     data class Success(
         val playUrl: String,
         val allPlayUrls: List<String> = emptyList(),  //  [新增] 所有可用的 CDN URL（用于故障转移）
@@ -667,7 +673,7 @@ class LivePlayerViewModel : ViewModel() {
      */
     fun dismissSuperChat(superChatId: Long) {
         if (superChatId <= 0L) return
-        _superChatItems.value = _superChatItems.value.filterNot { it.superChatId == superChatId }
+        _superChatItems.update { items -> items.filterNot { it.superChatId == superChatId } }
     }
 
     fun changeQuality(qn: Int) {
@@ -713,6 +719,7 @@ class LivePlayerViewModel : ViewModel() {
                     )
                 }
             }.onFailure { e ->
+                if (e is CancellationException) throw e
                 android.util.Log.e("LivePlayer", " changeQuality failed: ${e.message}")
                 CrashReporter.reportLiveError(
                     roomId = currentRoomId,
@@ -734,9 +741,13 @@ class LivePlayerViewModel : ViewModel() {
     }
 
     fun setDanmakuEnabled(enabled: Boolean) {
-        val currentState = _uiState.value as? LivePlayerState.Success ?: return
-        if (currentState.isDanmakuEnabled != enabled) {
-            _uiState.value = currentState.copy(isDanmakuEnabled = enabled)
+        _uiState.update { state ->
+            val currentState = state as? LivePlayerState.Success ?: return@update state
+            if (currentState.isDanmakuEnabled != enabled) {
+                currentState.copy(isDanmakuEnabled = enabled)
+            } else {
+                currentState
+            }
         }
     }
 
@@ -772,14 +783,17 @@ class LivePlayerViewModel : ViewModel() {
                     val nextCandidate = playback.candidates[next.candidateIndex]
                     android.util.Log.d("LivePlayer", " Trying next live source (candidate=${next.candidateIndex}, url=${next.urlIndex}): ${next.playUrl.take(80)}...")
                     CrashReporter.markLivePlaybackStage("switch_source_${next.candidateIndex}_${next.urlIndex}")
-                    _uiState.value = currentState.copy(
-                        playUrl = next.playUrl,
-                        allPlayUrls = nextCandidate.urls,
-                        currentUrlIndex = next.urlIndex,
-                        currentQuality = nextCandidate.currentQuality,
-                        qualityList = nextCandidate.qualityList,
-                        playbackRevision = ++nextPlaybackRevision
-                    )
+                    val revision = ++nextPlaybackRevision
+                    _uiState.update { state ->
+                        (state as? LivePlayerState.Success)?.copy(
+                            playUrl = next.playUrl,
+                            allPlayUrls = nextCandidate.urls,
+                            currentUrlIndex = next.urlIndex,
+                            currentQuality = nextCandidate.currentQuality,
+                            qualityList = nextCandidate.qualityList,
+                            playbackRevision = revision
+                        ) ?: state
+                    }
                 }
                 is LiveAdvanceResult.ReloadCurrentQuality -> {
                     if (remainingReloadAttempts > 0) {
@@ -812,10 +826,12 @@ class LivePlayerViewModel : ViewModel() {
             android.util.Log.d("LivePlayer", " Trying next CDN URL (index=$nextIndex): ${nextUrl.take(80)}...")
             CrashReporter.markLivePlaybackStage("switch_cdn_$nextIndex")
 
-            _uiState.value = currentState.copy(
-                playUrl = nextUrl,
-                currentUrlIndex = nextIndex
-            )
+            _uiState.update { state ->
+                (state as? LivePlayerState.Success)?.copy(
+                    playUrl = nextUrl,
+                    currentUrlIndex = nextIndex
+                ) ?: state
+            }
         } else {
             android.util.Log.e("LivePlayer", " No more CDN URLs to try (tried all ${currentState.allPlayUrls.size})")
             _uiState.value = LivePlayerState.Error("所有 CDN 均无法连接，请稍后重试")
@@ -857,14 +873,17 @@ class LivePlayerViewModel : ViewModel() {
         resetPlaybackReloadBudget()
         android.util.Log.d("LivePlayer", " Manual switch source (candidate=$candidateIndex, url=$urlIndex): ${url.take(80)}...")
         CrashReporter.markLivePlaybackStage("manual_switch_source_${candidateIndex}_${urlIndex}")
-        _uiState.value = currentState.copy(
-            playUrl = url,
-            allPlayUrls = candidate.urls,
-            currentUrlIndex = urlIndex,
-            currentQuality = candidate.currentQuality,
-            qualityList = candidate.qualityList,
-            playbackRevision = ++nextPlaybackRevision
-        )
+        val revision = ++nextPlaybackRevision
+        _uiState.update { state ->
+            (state as? LivePlayerState.Success)?.copy(
+                playUrl = url,
+                allPlayUrls = candidate.urls,
+                currentUrlIndex = urlIndex,
+                currentQuality = candidate.currentQuality,
+                qualityList = candidate.qualityList,
+                playbackRevision = revision
+            ) ?: state
+        }
     }
 
     private fun publishResolvedPlayback(
@@ -877,7 +896,6 @@ class LivePlayerViewModel : ViewModel() {
         danmakuPermission: LiveDanmakuPermission,
         audioOnly: Boolean = currentAudioOnly,
     ): Boolean {
-        val danmakuEnabled = (_uiState.value as? LivePlayerState.Success)?.isDanmakuEnabled ?: true
         val resolved = resolveLivePlayback(data, requestedQn)?.let { playback ->
             val plugin = PluginManager.getEnabledPlugins(PlaybackCdnPlugin::class).firstOrNull()
                 ?: return@let playback
@@ -901,22 +919,28 @@ class LivePlayerViewModel : ViewModel() {
             resolvedPlayback = resolved
             activeCandidateIndex = preferredIndex
             activeUrlIndex = 0
-            _uiState.value = LivePlayerState.Success(
-                playUrl = primaryUrl,
-                allPlayUrls = selected.urls,
-                currentUrlIndex = 0,
-                currentQuality = selected.currentQuality,
-                qualityList = selected.qualityList,
-                roomInfo = roomInfo,
-                anchorInfo = anchorInfo,
-                isFollowing = isFollowing,
-                isDanmakuEnabled = danmakuEnabled,
-                isAudioOnly = currentAudioOnly,
-                redPocketInfo = redPocketInfo,
-                danmakuPermission = danmakuPermission,
-                playbackRevision = ++nextPlaybackRevision
-            )
-            updateLiveHeartbeatForRoom(roomInfo)
+            val revision = ++nextPlaybackRevision
+            var resolvedRoom = roomInfo
+            _uiState.update { state ->
+                val latest = (state as? LivePlayerState.Success)?.takeIf { it.roomInfo.roomId == roomInfo.roomId }
+                resolvedRoom = latest?.roomInfo ?: roomInfo
+                LivePlayerState.Success(
+                    playUrl = primaryUrl,
+                    allPlayUrls = selected.urls,
+                    currentUrlIndex = 0,
+                    currentQuality = selected.currentQuality,
+                    qualityList = selected.qualityList,
+                    roomInfo = resolvedRoom,
+                    anchorInfo = latest?.anchorInfo?.takeIf { it.uid > 0L } ?: anchorInfo,
+                    isFollowing = latest?.isFollowing ?: isFollowing,
+                    isDanmakuEnabled = latest?.isDanmakuEnabled ?: true,
+                    isAudioOnly = currentAudioOnly,
+                    redPocketInfo = latest?.redPocketInfo ?: redPocketInfo,
+                    danmakuPermission = latest?.danmakuPermission ?: danmakuPermission,
+                    playbackRevision = revision
+                )
+            }
+            updateLiveHeartbeatForRoom(resolvedRoom)
             return true
         }
 
@@ -1195,7 +1219,7 @@ class LivePlayerViewModel : ViewModel() {
                     // 记录发送的弹幕（用于去重）
                     recentSentDanmaku = text
                     recentSentTime = System.currentTimeMillis()
-                    if (_replyTarget.value === reply) _replyTarget.value = null
+                    _replyTarget.update { if (it === reply) null else it }
                     _events.tryEmit(LivePlayerEvent.DanmakuSent(text))
 
                     // 发送成功，模拟一条本地弹幕立即上屏（沿用所选颜色与模式）
@@ -1212,6 +1236,7 @@ class LivePlayerViewModel : ViewModel() {
                     )
                     emitOwnLiveChatItem(item)
                 }.onFailure { e ->
+                    if (e is CancellationException) throw e
                     if (currentRoomId != roomId) return@onFailure
                     android.util.Log.e("LivePlayer", "Send danmaku failed: ${e.message}")
                     _events.tryEmit(LivePlayerEvent.Toast(e.message ?: "弹幕发送失败"))
@@ -1240,7 +1265,7 @@ class LivePlayerViewModel : ViewModel() {
                     if (currentRoomId != roomId) return@onSuccess
                     recentSentDanmaku = item.displayText
                     recentSentTime = System.currentTimeMillis()
-                    if (item.dmType == 0 && _replyTarget.value === reply) _replyTarget.value = null
+                    if (item.dmType == 0) _replyTarget.update { if (it === reply) null else it }
                     _events.tryEmit(LivePlayerEvent.EmoticonSent)
                     val mid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
                     emitOwnLiveChatItem(
@@ -1260,6 +1285,7 @@ class LivePlayerViewModel : ViewModel() {
                         )
                     )
                 }.onFailure { e ->
+                    if (e is CancellationException) throw e
                     if (currentRoomId != roomId) return@onFailure
                     _events.tryEmit(LivePlayerEvent.Toast(e.message ?: "表情发送失败"))
                 }
@@ -1499,18 +1525,18 @@ class LivePlayerViewModel : ViewModel() {
                 if (!superChatEnabled) return
                 if (!persistSuperChats && shouldExpireLiveSuperChat(action.item.superChatEndTime, System.currentTimeMillis() / 1000L)) return
                 val roomBoundItem = action.item.copy(originRoomId = currentRoomId)
-                _superChatItems.value = (
-                    listOf(roomBoundItem) + _superChatItems.value
-                        .filterNot { it.superChatId > 0L && it.superChatId == action.id }
-                ).take(MAX_ACTIVE_SUPER_CHAT_ITEMS)
+                _superChatItems.update { items ->
+                    (listOf(roomBoundItem) + items.filterNot { it.superChatId > 0L && it.superChatId == action.id })
+                        .take(MAX_ACTIVE_SUPER_CHAT_ITEMS)
+                }
                 scheduleSuperChatExpiry()
                 emitLiveChatItem(roomBoundItem)
                 _superChatFlashFlow.tryEmit(roomBoundItem)
             }
             is LiveRealtimeAction.RemoveSuperChats -> {
                 val ids = action.ids.toSet()
-                _superChatItems.value = _superChatItems.value.filterNot {
-                    it.superChatId > 0L && it.superChatId in ids
+                _superChatItems.update { items ->
+                    items.filterNot { it.superChatId > 0L && it.superChatId in ids }
                 }
             }
             is LiveRealtimeAction.RecallDanmaku -> {
@@ -1524,15 +1550,16 @@ class LivePlayerViewModel : ViewModel() {
             }
             is LiveRealtimeAction.RefreshRedPocket -> refreshLiveRedPocket(action.message)
             is LiveRealtimeAction.UpdateVote -> {
-                val previous = _voteSnapshot.value
-                _voteSnapshot.value = previous.copy(
-                    current = action.vote,
-                    history = if (action.vote.isActive) previous.history else {
-                        listOf(action.vote) + previous.history.filterNot {
-                            it.interactionId > 0L && it.interactionId == action.vote.interactionId
-                        }
-                    }.take(10)
-                )
+                _voteSnapshot.update { previous ->
+                    previous.copy(
+                        current = action.vote,
+                        history = if (action.vote.isActive) previous.history else {
+                            listOf(action.vote) + previous.history.filterNot {
+                                it.interactionId > 0L && it.interactionId == action.vote.interactionId
+                            }
+                        }.take(10)
+                    )
+                }
                 emitLiveChatItem(action.announcement)
             }
         }
@@ -1549,8 +1576,11 @@ class LivePlayerViewModel : ViewModel() {
         val roomId = currentRoomId.takeIf { it > 0L } ?: return
         viewModelScope.launch {
             LiveRepository.getLiveRedPocketInfo(roomId).onSuccess { info ->
-                val current = _uiState.value as? LivePlayerState.Success ?: return@onSuccess
-                _uiState.value = current.copy(redPocketInfo = info)
+                _uiState.update { state ->
+                    val current = state as? LivePlayerState.Success ?: return@update state
+                    if (current.roomInfo.roomId != roomId) return@update current
+                    current.copy(redPocketInfo = info)
+                }
             }
         }
     }
@@ -1620,10 +1650,10 @@ class LivePlayerViewModel : ViewModel() {
 
     private fun updateRoomTitle(title: String) {
         if (title.isBlank()) return
-        val current = _uiState.value as? LivePlayerState.Success ?: return
-        _uiState.value = current.copy(
-            roomInfo = current.roomInfo.copy(title = title)
-        )
+        _uiState.update { state ->
+            val current = state as? LivePlayerState.Success ?: return@update state
+            current.copy(roomInfo = current.roomInfo.copy(title = title))
+        }
     }
 
     private fun formatLiveCompactCount(value: Long): String =

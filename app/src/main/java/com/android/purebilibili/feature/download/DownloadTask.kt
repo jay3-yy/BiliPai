@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.download
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
 /**
@@ -16,6 +17,7 @@ enum class DownloadStatus {
     PAUSED          // 已暂停
 }
 
+@Immutable
 @Serializable
 data class DownloadOptions(
     val includeDanmaku: Boolean = true
@@ -38,6 +40,7 @@ enum class DownloadAssetStatus {
     SKIPPED
 }
 
+@Immutable
 @Serializable
 data class DownloadAssetState(
     val kind: DownloadAssetKind,
@@ -54,6 +57,7 @@ data class DownloadAssetState(
 /**
  * 下载任务数据模型
  */
+@Immutable
 @Serializable
 data class DownloadTask(
     val aid: Long = 0L,

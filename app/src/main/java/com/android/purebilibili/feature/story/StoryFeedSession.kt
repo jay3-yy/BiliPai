@@ -7,6 +7,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 internal enum class StoryFeedSource { STORY, HOME }
@@ -136,7 +137,7 @@ internal class StoryFeedSession(
         if (!active) return
         generation += 1
         loadJob?.cancel()
-        mutableState.value = mutableState.value.copy(isLoading = false, error = null)
+        mutableState.update { it.copy(isLoading = false, error = null) }
         loadMoreStories()
     }
 
@@ -146,11 +147,20 @@ internal class StoryFeedSession(
             startFeed(seed, onlyVertical)
             return
         }
-        if (mutableState.value.isLoading) return
+        var beganLoading = false
+        mutableState.update { current ->
+            if (current.isLoading) {
+                beganLoading = false
+                current
+            } else {
+                beganLoading = true
+                current.copy(isLoading = true, error = null)
+            }
+        }
+        if (!beganLoading) return
         val requestGeneration = generation
         val requestOnlyVertical = onlyVertical
         val emptyPageLimit = if (requestOnlyVertical) MAX_VERTICAL_EMPTY_PAGES else MAX_EMPTY_PAGES
-        mutableState.value = mutableState.value.copy(isLoading = true, error = null)
         loadJob = scope.launch {
             var emptyPages = 0
             while (true) {
@@ -171,10 +181,13 @@ internal class StoryFeedSession(
                         emptyPages = 0
                         continue
                     }
-                    mutableState.value = mutableState.value.copy(
-                        isLoading = false,
-                        error = result.exceptionOrNull()?.message ?: "推荐加载失败"
-                    )
+                    val errorMsg = result.exceptionOrNull()?.message ?: "推荐加载失败"
+                    mutableState.update {
+                        it.copy(
+                            isLoading = false,
+                            error = errorMsg
+                        )
+                    }
                     return@launch
                 }
                 if (source == StoryFeedSource.STORY) nextDisplayId += 1 else nextHomePage += 1
@@ -192,10 +205,17 @@ internal class StoryFeedSession(
                     startFeed(seed, requestOnlyVertical)
                     return@launch
                 }
-                val previous = mutableState.value.items
-                val merged = mergeStoryFeedItems(previous, incoming)
-                if (merged.size > previous.size) {
-                    mutableState.value = mutableState.value.copy(items = merged, isLoading = false, error = null)
+                var appended = false
+                mutableState.update { current ->
+                    val merged = mergeStoryFeedItems(current.items, incoming)
+                    appended = merged.size > current.items.size
+                    if (appended) {
+                        current.copy(items = merged, isLoading = false, error = null)
+                    } else {
+                        current
+                    }
+                }
+                if (appended) {
                     return@launch
                 }
                 emptyPages += 1
@@ -204,7 +224,9 @@ internal class StoryFeedSession(
                     source = StoryFeedSource.HOME
                     emptyPages = 0
                 } else if (emptyPages >= emptyPageLimit) {
-                    mutableState.value = mutableState.value.copy(isLoading = false, error = "暂时没有新的推荐视频，请重试")
+                    mutableState.update {
+                        it.copy(isLoading = false, error = "暂时没有新的推荐视频，请重试")
+                    }
                     return@launch
                 }
             }
@@ -217,8 +239,9 @@ internal class StoryFeedSession(
             startFeed(seed, onlyVertical)
             return
         }
-        val index = resolveStoryPortraitIndexForBvid(bvid, mutableState.value.items)
-        val item = mutableState.value.items.getOrNull(index)
+        val currentItems = mutableState.value.items
+        val index = resolveStoryPortraitIndexForBvid(bvid, currentItems)
+        val item = currentItems.getOrNull(index)
         furthestVisitedIndex = maxOf(furthestVisitedIndex, index)
         val keys = if (item != null) storyItemIdentityKeys(item) else {
             if (bvid.trim() != seed) return
@@ -231,7 +254,8 @@ internal class StoryFeedSession(
         while (watchedKeys.size > StoryContinuationStore.MAX_WATCHED_KEYS) {
             watchedKeys.remove(watchedKeys.first())
         }
-        mutableState.value = mutableState.value.copy(currentIndex = index.coerceAtLeast(0))
+        val safeIndex = index.coerceAtLeast(0)
+        mutableState.update { it.copy(currentIndex = safeIndex) }
     }
 
     private fun wasWatched(item: StoryItem): Boolean =

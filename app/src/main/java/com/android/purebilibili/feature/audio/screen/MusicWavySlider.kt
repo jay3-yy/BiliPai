@@ -77,11 +77,14 @@ internal fun MusicWavySlider(
         }
         onValueChange(nextValue)
     }
+    val animationGate = if (wavy) {
+        com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    } else null
     val amplitudePx = animateFloatAsState(
         targetValue = if (wavy) with(density) { MUSIC_WAVY_AMPLITUDE_DP.dp.toPx() } else 0f,
         label = "music-wavy-amplitude"
     )
-    val animatedPhase = if (wavy) {
+    val animatedPhase = if (animationGate?.active == true) {
         rememberInfiniteTransition(label = "music-wavy-phase").animateFloat(
             initialValue = 0f,
             targetValue = (2f * PI).toFloat(),
@@ -102,6 +105,7 @@ internal fun MusicWavySlider(
         modifier = modifier
             .fillMaxWidth()
             .height(28.dp)
+            .then(animationGate?.modifier ?: Modifier)
             .semantics {
                 setProgress {
                     changeValue(

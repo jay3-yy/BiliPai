@@ -60,7 +60,7 @@ fun LiveSendDanmakuSheet(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .imePadding()
+            .then(if (showingEmoticons) Modifier else Modifier.imePadding())
             .navigationBarsPadding()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
     ) {

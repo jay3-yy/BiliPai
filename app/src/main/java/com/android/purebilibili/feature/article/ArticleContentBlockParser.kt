@@ -11,31 +11,39 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+@androidx.compose.runtime.Immutable
 sealed interface ArticleContentBlock {
+    @androidx.compose.runtime.Immutable
     data class Heading(
         val text: String,
         val spans: List<ArticleTextSpan> = emptyList()
     ) : ArticleContentBlock
+    @androidx.compose.runtime.Immutable
     data class Paragraph(
         val text: String,
         val spans: List<ArticleTextSpan> = emptyList()
     ) : ArticleContentBlock
+    @androidx.compose.runtime.Immutable
     data class Quote(
         val text: String,
         val spans: List<ArticleTextSpan> = emptyList()
     ) : ArticleContentBlock
+    @androidx.compose.runtime.Immutable
     data class ListBlock(
         val ordered: Boolean,
         val items: List<String>
     ) : ArticleContentBlock
+    @androidx.compose.runtime.Immutable
     data class Code(
         val language: String,
         val content: String
     ) : ArticleContentBlock
+    @androidx.compose.runtime.Immutable
     data class MediaCard(
         val card: com.android.purebilibili.data.model.response.OpusLinkCard,
         val preview: Image? = null,
     ) : ArticleContentBlock
+    @androidx.compose.runtime.Immutable
     data class Image(
         val url: String,
         val width: Int = 0,
@@ -47,6 +55,7 @@ sealed interface ArticleContentBlock {
  * 行内富文本片段：保留专栏正文里的字号、颜色、加粗、斜体、删除线。
  * 空字段表示沿用外层块级样式。
  */
+@androidx.compose.runtime.Immutable
 data class ArticleTextSpan(
     val text: String,
     val fontSizeSp: Int? = null,

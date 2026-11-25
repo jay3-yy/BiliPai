@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -161,7 +162,11 @@ internal fun InstantArticleContent(
                         )
                     }
                 }
-                items(state.blocks) { block ->
+                itemsIndexed(
+                    items = state.blocks,
+                    key = { index, block -> "${block::class.simpleName}_$index" },
+                    contentType = { _, block -> block::class },
+                ) { _, block ->
                     FeedReadingBlock(
                         block = block,
                         textScale = 1f,

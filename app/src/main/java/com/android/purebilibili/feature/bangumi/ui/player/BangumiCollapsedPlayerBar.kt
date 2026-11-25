@@ -51,25 +51,29 @@ fun BangumiCollapsedPlayerBar(
     onBack: () -> Unit,
     onPlayClick: () -> Unit,
     modifier: Modifier = Modifier,
+    scrollRatioProvider: (() -> Float)? = null,
 ) {
-    if (scrollRatio <= 0f) return
-
-    val scrimAlpha = (scrollRatio * 0.85f).coerceIn(0f, 1f)
-    val contentAlpha = ((scrollRatio - 0.2f) / 0.8f).coerceIn(0f, 1f)
+    if (scrollRatioProvider == null && scrollRatio <= 0f) return
 
     Box(
         modifier = modifier
             .drawBehind {
-                drawRect(
-                    color = Color.Black,
-                    alpha = scrimAlpha,
-                )
+                val ratio = (scrollRatioProvider?.invoke() ?: scrollRatio).coerceIn(0f, 1f)
+                if (ratio > 0f) {
+                    drawRect(
+                        color = Color.Black,
+                        alpha = (ratio * 0.85f).coerceIn(0f, 1f),
+                    )
+                }
             }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .graphicsLayer { alpha = contentAlpha }
+                .graphicsLayer {
+                    val ratio = (scrollRatioProvider?.invoke() ?: scrollRatio).coerceIn(0f, 1f)
+                    alpha = ((ratio - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                }
         ) {
             if (topInset > 0.dp) {
                 Spacer(

@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+@androidx.compose.runtime.Immutable
 internal data class MusicUiState(
     val isLoading: Boolean = false,
     val songInfo: SongInfoData? = null,

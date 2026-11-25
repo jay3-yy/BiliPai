@@ -1192,17 +1192,21 @@ object DownloadManager {
      * 🖼️ [新增] 保存图片到相册
      */
     suspend fun saveImageToGallery(context: Context, url: String, title: String): Boolean = withContext(Dispatchers.IO) {
+        val resolver = context.contentResolver
+        var insertedUri: Uri? = null
+        var published = false
         try {
-            // 1. 下载图片
-             val request = Request.Builder()
+            val request = Request.Builder()
                 .url(url.replace("http://", "https://"))
                 .build()
-            
-            val response = client.newCall(request).execute()
-            val body = response.body
-            val bytes = body.bytes()
-            
-            // 2. 插入 MediaStore
+
+            val bytes = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw java.io.IOException("HTTP ${response.code}")
+                }
+                response.body.bytes()
+            }
+
             val values = android.content.ContentValues().apply {
                 put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "$title.jpg")
                 put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
@@ -1211,25 +1215,33 @@ object DownloadManager {
                     put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/BiliPai")
                 }
             }
-            
-            val resolver = context.contentResolver
-            val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) 
+
+            val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
                 ?: return@withContext false
-                
-            resolver.openOutputStream(uri)?.use { output ->
+            insertedUri = uri
+
+            val outputStream = resolver.openOutputStream(uri)
+                ?: throw java.io.IOException("Unable to open MediaStore output stream")
+            outputStream.use { output ->
                 output.write(bytes)
             }
-            
+
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 values.clear()
                 values.put(android.provider.MediaStore.Images.Media.IS_PENDING, 0)
                 resolver.update(uri, values, null, null)
             }
-            
+            published = true
             return@withContext true
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             com.android.purebilibili.core.util.Logger.e("DownloadManager", "Failed to save image", e)
             return@withContext false
+        } finally {
+            if (!published && insertedUri != null) {
+                runCatching { resolver.delete(insertedUri, null, null) }
+            }
         }
     }
 

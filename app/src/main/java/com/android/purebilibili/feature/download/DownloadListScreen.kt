@@ -34,6 +34,11 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
@@ -45,9 +50,11 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 //  Material Icons
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +76,7 @@ import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoCardFrame
 import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
 import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppLiquidAwareSearchField
 import com.android.purebilibili.core.util.NetworkUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -108,24 +116,48 @@ fun DownloadListScreen(
     val downloadExportTreeUri by remember(context) {
         SettingsManager.getDownloadExportTreeUri(context)
     }.collectAsStateWithLifecycle(initialValue = null)
-    val taskList = remember(tasks) { tasks.values.toList().sortedByDescending { it.createdAt } }
+    val storedSortOrderKey by remember(context) {
+        SettingsManager.getDownloadListSortOrder(context)
+    }.collectAsStateWithLifecycle(initialValue = null)
+    val sortOrder = remember(storedSortOrderKey) {
+        DownloadListSortOrder.fromStorageKey(storedSortOrderKey)
+    }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val hasActiveSearch = searchQuery.isNotBlank()
+    val allTaskList = remember(tasks) { tasks.values.toList() }
+    val taskList = remember(allTaskList, searchQuery, sortOrder) {
+        filterAndSortDownloadTasks(
+            tasks = allTaskList,
+            query = searchQuery,
+            sortOrder = sortOrder,
+        )
+    }
     var pendingDeleteTask by remember { mutableStateOf<com.android.purebilibili.feature.download.DownloadTask?>(null) }
     var dissolvingTaskIds by remember { mutableStateOf(setOf<String>()) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedTaskIds by remember { mutableStateOf(emptySet<String>()) }
     var pendingBatchDeleteIds by remember { mutableStateOf(emptySet<String>()) }
     var deletingBatch by remember { mutableStateOf(false) }
-    val completedTaskIds = remember(taskList, dissolvingTaskIds) {
+    val completedTaskIds = remember(allTaskList, dissolvingTaskIds) {
+        allTaskList.filter { it.isComplete && it.id !in dissolvingTaskIds }.map { it.id }.toSet()
+    }
+    val visibleCompletedTaskIds = remember(taskList, dissolvingTaskIds) {
         taskList.filter { it.isComplete && it.id !in dissolvingTaskIds }.map { it.id }.toSet()
     }
-    val selectedCompletedIds = selectedTaskIds.intersect(completedTaskIds)
+    val selectedCompletedIds = remember(selectedTaskIds, completedTaskIds) {
+        selectedTaskIds.intersect(completedTaskIds)
+    }
     val exitSelection = {
         selectionMode = false
         selectedTaskIds = emptySet<String>()
         pendingBatchDeleteIds = emptySet<String>()
     }
-    BackHandler(enabled = selectionMode) {
-        if (!deletingBatch) exitSelection()
+    com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = selectionMode || hasActiveSearch) {
+        if (selectionMode) {
+            if (!deletingBatch) exitSelection()
+        } else if (hasActiveSearch) {
+            searchQuery = ""
+        }
     }
     LaunchedEffect(completedTaskIds) {
         selectedTaskIds = selectedTaskIds.intersect(completedTaskIds)
@@ -138,8 +170,8 @@ fun DownloadListScreen(
     )
 
     val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
-    val hasIncompleteTasks = taskList.any { !it.isComplete }
-    val hasDownloadingTasks = taskList.any { it.status == DownloadStatus.DOWNLOADING }
+    val hasIncompleteTasks = allTaskList.any { !it.isComplete }
+    val hasDownloadingTasks = allTaskList.any { it.status == DownloadStatus.DOWNLOADING }
     LaunchedEffect(context, pageWorkActive, hasIncompleteTasks) {
         if (!pageWorkActive || !hasIncompleteTasks) return@LaunchedEffect
         while (true) {
@@ -176,72 +208,125 @@ fun DownloadListScreen(
     }
 
     AppScaffold(
+        topBarSurfaceColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            AppTopBar(
-                title = if (selectionMode) "已选 ${selectedCompletedIds.size} 项" else "离线缓存",
-                navigationIcon = {
-                    AppIconButton(onClick = {
-                        if (selectionMode) {
-                            if (!deletingBatch) exitSelection()
-                        } else onBack()
-                    }) {
-                        AppIcon(
-                            imageVector = if (selectionMode) Icons.Outlined.Close else rememberAppBackIcon(),
-                            contentDescription = if (selectionMode) "退出多选" else "返回",
-                        )
-                    }
-                },
-                actions = {
-                    val hasActive = taskList.any(::shouldPauseAllInclude)
-                    val hasResumable = taskList.any(::shouldContinueAllInclude)
-                    if (selectionMode) {
-                        AppTextButton(onClick = exitSelection, enabled = !deletingBatch) {
-                            AppText("完成")
+            Column(modifier = Modifier.fillMaxWidth()) {
+                AppTopBar(
+                    title = if (selectionMode) "已选 ${selectedCompletedIds.size} 项" else "离线缓存",
+                    navigationIcon = {
+                        AppIconButton(onClick = {
+                            if (selectionMode) {
+                                if (!deletingBatch) exitSelection()
+                            } else onBack()
+                        }) {
+                            AppIcon(
+                                imageVector = if (selectionMode) Icons.Outlined.Close else rememberAppBackIcon(),
+                                contentDescription = if (selectionMode) "退出多选" else "返回",
+                            )
                         }
-                    } else {
-                        if (completedTaskIds.isNotEmpty() || hasActive || hasResumable) {
-                            AppWindowActionMenu(
-                                groups = listOf(
-                                    buildList {
-                                        if (completedTaskIds.isNotEmpty()) {
-                                            add(AppWindowAction(label = "管理", onClick = { selectionMode = true }))
-                                        }
-                                        if (hasActive || hasResumable) {
-                                            add(
-                                                AppWindowAction(
-                                                    label = if (hasActive) "暂停全部" else "继续全部",
-                                                    onClick = {
+                    },
+                    actions = {
+                        val hasActive = allTaskList.any(::shouldPauseAllInclude)
+                        val hasResumable = allTaskList.any(::shouldContinueAllInclude)
+                        if (selectionMode) {
+                            AppTextButton(onClick = exitSelection, enabled = !deletingBatch) {
+                                AppText("完成")
+                            }
+                        } else {
+                            if (allTaskList.isNotEmpty()) {
+                                AppWindowActionMenu(
+                                    groups = listOf(
+                                        DownloadListSortOrder.entries.map { order ->
+                                            AppWindowAction(
+                                                label = order.label,
+                                                selected = sortOrder == order,
+                                                onClick = {
+                                                    if (sortOrder != order) {
                                                         actionScope.launch {
-                                                            if (hasActive) {
-                                                                taskList.filter(::shouldPauseAllInclude).forEach {
-                                                                    DownloadManager.pauseDownload(it.id)
-                                                                }
-                                                            } else {
-                                                                taskList.filter(::shouldContinueAllInclude).forEach {
-                                                                    DownloadManager.startDownload(it.id)
-                                                                }
-                                                            }
+                                                            SettingsManager.setDownloadListSortOrder(
+                                                                context,
+                                                                order.storageKey,
+                                                            )
+                                                            gridState.scrollToItem(0)
                                                         }
-                                                    },
-                                                )
+                                                    }
+                                                },
                                             )
                                         }
-                                    }
-                                ),
-                            ) {
-                                AppIcon(rememberAppMoreIcon(), contentDescription = "更多管理")
+                                    ),
+                                ) {
+                                    AppIcon(
+                                        imageVector = Icons.AutoMirrored.Outlined.Sort,
+                                        contentDescription = "排序：${sortOrder.label}",
+                                    )
+                                }
                             }
+                            val canManage = visibleCompletedTaskIds.isNotEmpty()
+                            if (canManage || hasActive || hasResumable) {
+                                AppWindowActionMenu(
+                                    groups = listOf(
+                                        buildList {
+                                            if (canManage) {
+                                                add(AppWindowAction(label = "管理", onClick = { selectionMode = true }))
+                                            }
+                                            if (hasActive || hasResumable) {
+                                                add(
+                                                    AppWindowAction(
+                                                        label = if (hasActive) "暂停全部" else "继续全部",
+                                                        onClick = {
+                                                            actionScope.launch {
+                                                                if (hasActive) {
+                                                                    allTaskList.filter(::shouldPauseAllInclude).forEach {
+                                                                        DownloadManager.pauseDownload(it.id)
+                                                                    }
+                                                                } else {
+                                                                    allTaskList.filter(::shouldContinueAllInclude).forEach {
+                                                                        DownloadManager.startDownload(it.id)
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    ),
+                                ) {
+                                    AppIcon(rememberAppMoreIcon(), contentDescription = "更多管理")
+                                }
+                            }
+                            VideoListLayoutToggle(
+                                singleColumn = listLayout.singleColumn,
+                                onClick = listLayout.toggle,
+                            )
                         }
-                        VideoListLayoutToggle(
-                            singleColumn = listLayout.singleColumn,
-                            onClick = listLayout.toggle,
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color.Transparent,
+                    )
+                )
+                AnimatedVisibility(
+                    visible = downloadsInitialized && allTaskList.isNotEmpty() && !selectionMode,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut(),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                            .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.Small)
+                    ) {
+                        AppLiquidAwareSearchField(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            placeholder = "搜索标题、UP 主、BV 号或画质",
+                            modifier = Modifier.fillMaxWidth(),
+                            isScrollInProgressProvider = { gridState.isScrollInProgress },
                         )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
+                }
+            }
         }
     ) { padding ->
         // 遮挡铰链时整页内容落入最大安全区，软折痕允许跨越（与首页/动态/搜索一致）。
@@ -255,7 +340,7 @@ fun DownloadListScreen(
             ) {
                 AppCircularProgressIndicator()
             }
-        } else if (taskList.isEmpty()) {
+        } else if (allTaskList.isEmpty()) {
             // 空状态
             Box(
                 modifier = Modifier
@@ -269,10 +354,34 @@ fun DownloadListScreen(
                     enableEasterEgg = false
                 )
             }
+        } else if (taskList.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                ) {
+                    com.android.purebilibili.core.ui.EmptyState(
+                        message = "未找到匹配的缓存视频",
+                        subtitle = "试试更换标题、UP 主、BV 号或画质关键词",
+                        enableEasterEgg = false,
+                    )
+                    AppTextButton(onClick = { searchQuery = "" }) {
+                        AppText("清除搜索")
+                    }
+                }
+            }
         } else {
             val columns = resolveVideoListColumns(listLayout.singleColumn, maxWidth.value)
             val alignRows = columns > 1 && !com.android.purebilibili.core.ui.LocalFullVideoCardContentVisible.current
             val playbackMotionGroup = rememberNavigationControlMotionGroup()
+            val taskKeys = remember(taskList) { taskList.map { it.id } }
+            val allVisibleSelected = visibleCompletedTaskIds.isNotEmpty() &&
+                visibleCompletedTaskIds.all { it in selectedCompletedIds }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 state = gridState,
@@ -283,7 +392,7 @@ fun DownloadListScreen(
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
-                    top = padding.calculateTopPadding() + 16.dp,
+                    top = padding.calculateTopPadding() + 12.dp,
                     bottom = padding.calculateBottomPadding() + 16.dp +
                         if (com.android.purebilibili.core.ui.rememberNowPlayingBarOverlayVisible()) {
                             // 听视频小横条悬浮时统一上浮避让（与首页/稍后再看一致）
@@ -295,20 +404,25 @@ fun DownloadListScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (selectionMode) {
-                    item(key = "batch_management", span = { GridItemSpan(maxLineSpan) }) {
+                    item(
+                        key = "batch_management",
+                        contentType = "batch_management",
+                        span = { GridItemSpan(maxLineSpan) },
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             AppTextButton(
-                                enabled = !deletingBatch && completedTaskIds.isNotEmpty(),
+                                enabled = !deletingBatch && visibleCompletedTaskIds.isNotEmpty(),
                                 onClick = {
-                                    selectedTaskIds = if (selectedCompletedIds == completedTaskIds) {
-                                        emptySet()
-                                    } else completedTaskIds
+                                    selectedTaskIds = resolveDownloadSelectionAllToggle(
+                                        visibleCompletedIds = visibleCompletedTaskIds,
+                                        currentSelected = selectedCompletedIds,
+                                    )
                                 },
                             ) {
-                                AppText(if (selectedCompletedIds == completedTaskIds) "取消全选" else "全选")
+                                AppText(if (allVisibleSelected) "取消全选" else "全选")
                             }
                             Spacer(Modifier.weight(1f))
                             AppTextButton(
@@ -319,8 +433,50 @@ fun DownloadListScreen(
                             }
                         }
                     }
+                } else if (hasActiveSearch || sortOrder != DownloadListSortOrder.RECENT_FIRST) {
+                    item(
+                        key = "download_query_summary",
+                        contentType = "download_query_summary",
+                        span = { GridItemSpan(maxLineSpan) },
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AppText(
+                                text = if (hasActiveSearch) {
+                                    "找到 ${taskList.size} / ${allTaskList.size} 个 · ${sortOrder.label}"
+                                } else {
+                                    "排序：${sortOrder.label}"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = AppContentColors.secondaryText(),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (hasActiveSearch) {
+                                AppTextButton(onClick = { searchQuery = "" }) {
+                                    AppText("清除搜索")
+                                }
+                            } else {
+                                AppTextButton(
+                                    onClick = {
+                                        actionScope.launch {
+                                            SettingsManager.setDownloadListSortOrder(
+                                                context,
+                                                DownloadListSortOrder.RECENT_FIRST.storageKey,
+                                            )
+                                            gridState.scrollToItem(0)
+                                        }
+                                    }
+                                ) {
+                                    AppText("恢复默认")
+                                }
+                            }
+                        }
+                    }
                 }
-                val taskKeys = taskList.map { it.id }
                 val renderTask: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
                     val task = taskList[index]
                     val isDissolving = task.id in dissolvingTaskIds
@@ -423,13 +579,21 @@ fun DownloadListScreen(
                     }
                 }
                 if (!alignRows) {
-                    itemsIndexed(taskList, key = { _, task -> task.id }) { index, _ ->
+                    itemsIndexed(
+                        items = taskList,
+                        key = { _, task -> task.id },
+                        contentType = { _, task -> if (task.isComplete) "download_complete" else "download_active" },
+                    ) { index, _ ->
                         renderTask(index, videoListItemModifier())
                     }
                 } else {
                     com.android.purebilibili.feature.home.resolveHomeFeedAlignedRows(taskList.size, columns)
                         .forEach { row ->
-                            item(key = "download_row_${taskKeys[row.first]}", span = { GridItemSpan(maxLineSpan) }) {
+                            item(
+                                key = "download_row_${taskKeys[row.first]}",
+                                contentType = "download_aligned_row",
+                                span = { GridItemSpan(maxLineSpan) },
+                            ) {
                                 com.android.purebilibili.feature.home.HomeAlignedVideoRow(
                                     indices = row,
                                     itemKeys = taskKeys,
@@ -443,7 +607,14 @@ fun DownloadListScreen(
                 }
 
                 // [新增] 显示当前存储路径
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(
+                    key = "download_storage_footer",
+                    contentType = "download_storage_footer",
+                    span = { GridItemSpan(maxLineSpan) },
+                ) {
+                    val totalStorageBytes = remember(allTaskList) {
+                        allTaskList.sumOf { it.fileSize.coerceAtLeast(0L) }
+                    }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -451,9 +622,13 @@ fun DownloadListScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         AppText(
-                            text = "共 ${taskList.size} 个 · 已用 " + formatDownloadStorageBytes(
-                                taskList.sumOf { it.fileSize.coerceAtLeast(0L) }
-                            ),
+                            text = if (hasActiveSearch) {
+                                "匹配 ${taskList.size} / 共 ${allTaskList.size} 个 · 总已用 " +
+                                    formatDownloadStorageBytes(totalStorageBytes)
+                            } else {
+                                "共 ${allTaskList.size} 个 · 已用 " +
+                                    formatDownloadStorageBytes(totalStorageBytes)
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = AppContentColors.secondaryText()
                         )

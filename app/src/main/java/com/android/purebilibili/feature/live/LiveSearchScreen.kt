@@ -280,10 +280,10 @@ fun LiveSearchScreen(
 }
 
 private fun liveSearchTab(page: Int, title: String, total: Int?): AppSegmentOption<Int> =
-    AppSegmentOption(
+    com.android.purebilibili.core.ui.components.appCountedTabOption(
         value = page,
-        label = if (total == null) title else "$title $total",
-        measurementLabel = "$title ${Int.MAX_VALUE}",
+        label = title,
+        count = total,
     )
 
 @Composable

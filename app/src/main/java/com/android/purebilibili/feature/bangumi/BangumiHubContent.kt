@@ -321,8 +321,11 @@ internal fun BangumiHubContent(
                     }
                 }
                 Column(Modifier.fillMaxSize().padding(top = listTopPadding)) {
+                    val categoryOptions = remember(categories) {
+                        categories.map { AppSegmentOption(it, it.label) }
+                    }
                     AppThemeAdaptiveTabRow(
-                        options = categories.map { AppSegmentOption(it, it.label) },
+                        options = categoryOptions,
                         selectedValue = activeCategory,
                         onSelectionChange = { category ->
                             scope.launch {
@@ -564,13 +567,16 @@ private fun TimelineSection(
                 } else {
                     112.dp
                 }
+                val dayTabOptions = remember(state.days) {
+                    state.days.map { day ->
+                        AppSegmentOption(day.date, resolveBangumiTimelineDayLabel(day))
+                    }
+                }
                 AppThemeAdaptiveTabRow(
                     // Glass indicator fills the measured slot; native geometry keeps its defaults.
                     liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
                     role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
-                    options = state.days.map { day ->
-                        AppSegmentOption(day.date, resolveBangumiTimelineDayLabel(day))
-                    },
+                    options = dayTabOptions,
                     selectedValue = selectedDay.date,
                     onSelectionChange = { selectedDate = it },
                     // Glass drags on the selected capsule choose a date; other slots remain scrollable.
@@ -581,7 +587,7 @@ private fun TimelineSection(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 val motionEnabled = LocalComponentMotionEnabled.current
-                val dateOrder = state.days.map(TimelineDay::date)
+                val dateOrder = remember(state.days) { state.days.map(TimelineDay::date) }
                 AnimatedContent(
                     targetState = selectedDay.date,
                     transitionSpec = {
@@ -720,9 +726,15 @@ private fun IndexFilterPanel(
         label = "indexFilterExpandArrow",
     )
     val collapsedCount = if (state.conditions.size > 5) state.conditions.size / 2 else state.conditions.size
+    val collapsedConditions = remember(state.conditions, collapsedCount) {
+        state.conditions.take(collapsedCount)
+    }
+    val expandedConditions = remember(state.conditions, collapsedCount) {
+        state.conditions.drop(collapsedCount)
+    }
     Column {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            state.conditions.take(collapsedCount).forEach { group ->
+            collapsedConditions.forEach { group ->
                 IndexFilterRow(group, state.selectedParams[group.field], onFilterSelected)
             }
         }
@@ -748,7 +760,7 @@ private fun IndexFilterPanel(
                     modifier = Modifier.padding(top = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    state.conditions.drop(collapsedCount).forEach { group ->
+                    expandedConditions.forEach { group ->
                         IndexFilterRow(group, state.selectedParams[group.field], onFilterSelected)
                     }
                 }
@@ -799,13 +811,16 @@ private fun IndexFilterRow(
             ) {
                 AppChromeSizeTokens.MinimumTouchTarget
             } else 88.dp
+            val choiceOptions = remember(group, liquidGlassEnabled) {
+                group.choices.map {
+                    AppSegmentOption(it, resolveBangumiIndexChoiceDisplayLabel(group, it, liquidGlassEnabled))
+                }
+            }
             AppThemeAdaptiveTabRow(
                 // Glass indicator fills the measured slot; native geometry keeps its defaults.
                 liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
                 role = com.android.purebilibili.core.ui.components.AppTabRowRole.FILTER,
-                options = group.choices.map {
-                    AppSegmentOption(it, resolveBangumiIndexChoiceDisplayLabel(group, it, liquidGlassEnabled))
-                },
+                options = choiceOptions,
                 selectedValue = selectedChoice,
                 scrollable = true,
                 centerContent = false,
@@ -851,11 +866,12 @@ private fun BangumiFollowContent(
             ),
         ) {
             if (showStatusTabs) {
+                val statusOptions = remember { BangumiFollowStatus.entries.map { AppSegmentOption(it, it.label) } }
                 AppLiquidAwareTabRow(
                     // Glass indicator fills the measured slot; native geometry keeps its defaults.
                     liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
                     role = com.android.purebilibili.core.ui.components.AppTabRowRole.FILTER,
-                    options = BangumiFollowStatus.entries.map { AppSegmentOption(it, it.label) },
+                    options = statusOptions,
                     selectedValue = status,
                     enabled = !state.isMutating,
                     onSelectionChange = {
@@ -1051,7 +1067,10 @@ private fun BangumiSearchContent(
     val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val results = state.results
     Column(modifier = Modifier.fillMaxSize().padding(top = listTopPadding)) {
-        val categories = resolveBangumiSearchCategories(channel)
+        val categories = remember(channel) { resolveBangumiSearchCategories(channel) }
+        val categoryOptions = remember(categories) {
+            categories.map { category -> AppSegmentOption(category, category.label) }
+        }
         val uiStyle = LocalAppUiStyle.current
         val searchCategoryMinWidth = if (uiStyle == AppUiStyle.MATERIAL3) {
             AppChromeSizeTokens.MinimumTouchTarget
@@ -1063,7 +1082,7 @@ private fun BangumiSearchContent(
             // Glass indicator fills the measured slot; native geometry keeps its defaults.
             liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
             role = com.android.purebilibili.core.ui.components.AppTabRowRole.PRIMARY,
-            options = categories.map { category -> AppSegmentOption(category, category.label) },
+            options = categoryOptions,
             selectedValue = state.category,
             onSelectionChange = onCategorySelected,
             scrollable = true,

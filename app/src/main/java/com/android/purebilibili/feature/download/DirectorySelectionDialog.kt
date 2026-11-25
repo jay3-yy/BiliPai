@@ -44,23 +44,35 @@ fun DirectorySelectionDialog(
 ) {
     var currentPath by remember { mutableStateOf(initialPath) }
     var fileList by remember { mutableStateOf<List<File>>(emptyList()) }
+    var readableParentPath by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
 
-    // 加载文件列表
+    // 加载文件列表（放至 IO 线程，避免主线程目录遍历与 stat/access 系统调用阻塞）
     LaunchedEffect(currentPath) {
         listState.scrollToItem(0)
-        val dir = File(currentPath)
-        if (dir.exists() && dir.isDirectory) {
-            val files = dir.listFiles()?.filter {
-                it.isDirectory && !it.name.startsWith(".") // 仅显示目录且不以.开头
-            }?.sortedBy { it.name } ?: emptyList()
-            fileList = files
-        } else {
-            // 如果路径无效，尝试回退到外部存储根目录
-            val root = android.os.Environment.getExternalStorageDirectory()
-            if (root.exists()) {
-                currentPath = root.absolutePath
+        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val dir = File(currentPath)
+            if (dir.exists() && dir.isDirectory) {
+                val files = dir.listFiles()?.filter {
+                    it.isDirectory && !it.name.startsWith(".") // 仅显示目录且不以.开头
+                }?.sortedBy { it.name } ?: emptyList()
+                val parentPath = dir.parentFile?.takeIf { it.canRead() }?.absolutePath
+                Triple(true, files, parentPath)
+            } else {
+                val root = android.os.Environment.getExternalStorageDirectory()
+                val fallback = root.takeIf { it.exists() }?.absolutePath
+                Triple(false, emptyList<File>(), fallback)
             }
+        }
+        val (validDir, files, pathOrFallback) = result
+        if (validDir) {
+            fileList = files
+            readableParentPath = pathOrFallback
+        } else if (pathOrFallback != null && pathOrFallback != currentPath) {
+            currentPath = pathOrFallback
+        } else {
+            fileList = emptyList()
+            readableParentPath = null
         }
     }
 
@@ -113,12 +125,12 @@ fun DirectorySelectionDialog(
                     }
 
                     // 返回上级按钮
-                    val parentDir = File(currentPath).parentFile
-                    if (parentDir != null && parentDir.canRead()) {
+                    val parentPath = readableParentPath
+                    if (parentPath != null) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { currentPath = parentDir.absolutePath }
+                                .clickable { currentPath = parentPath }
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {

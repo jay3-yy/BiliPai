@@ -3223,7 +3223,7 @@ private fun MusicArtwork(
         val cardAspectRatio = if (isCard) (16f / 10f) else 1f
         val cornerRadius = if (isCard) APPLE_MUSIC_CARD_CORNER_RADIUS_DP.dp else APPLE_MUSIC_COVER_CORNER_RADIUS_DP.dp
         val cornerShape = RoundedCornerShape(cornerRadius)
-        val playbackProgress by animateFloatAsState(
+        val playbackProgressState = animateFloatAsState(
             targetValue = if (isPlaying) 1f else 0f,
             animationSpec = if (reduceMotion) {
                 snap()
@@ -3237,25 +3237,25 @@ private fun MusicArtwork(
         )
         val playingScale = resolveAppleMusicCoverScale(isPlaying = true)
         val pausedScale = resolveAppleMusicCoverScale(isPlaying = false)
-        val artworkScale = pausedScale + (playingScale - pausedScale) * playbackProgress
-        val shadowElevation = resolveAppleMusicCoverShadowElevation(playbackProgress).dp
+        val ambientShadowColor = artworkShadowColor.copy(alpha = if (isDarkEnvironment) 0.45f else 0.15f)
+        val spotShadowColor = artworkShadowColor.copy(alpha = if (isDarkEnvironment) 0.55f else 0.20f)
         Box(
             modifier = modifier
                 // Put the transform before the visual chrome so the artwork, rounded clip,
                 // border and shadow settle as one card. A later graphicsLayer only scales the
                 // image subtree and leaves the old-size frame behind while pausing.
+                .aspectRatio(cardAspectRatio)
                 .graphicsLayer {
+                    val playbackProgress = playbackProgressState.value
+                    val artworkScale = pausedScale + (playingScale - pausedScale) * playbackProgress
                     scaleX = artworkScale
                     scaleY = artworkScale
+                    shadowElevation = resolveAppleMusicCoverShadowElevation(playbackProgress).dp.toPx()
+                    this.shape = cornerShape
+                    clip = true
+                    this.ambientShadowColor = ambientShadowColor
+                    this.spotShadowColor = spotShadowColor
                 }
-                .aspectRatio(cardAspectRatio)
-                .shadow(
-                    elevation = shadowElevation,
-                    shape = cornerShape,
-                    ambientColor = artworkShadowColor.copy(alpha = if (isDarkEnvironment) 0.45f else 0.15f),
-                    spotColor = artworkShadowColor.copy(alpha = if (isDarkEnvironment) 0.55f else 0.20f)
-                )
-                .clip(cornerShape)
                 .border(
                     width = 1.dp,
                     color = artworkBorderColor.copy(alpha = if (isDarkEnvironment) 0.20f else 0.14f),

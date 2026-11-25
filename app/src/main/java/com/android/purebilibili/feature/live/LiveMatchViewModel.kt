@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 
+@androidx.compose.runtime.Immutable
 internal data class LiveMatchUiState(
     val date: LocalDate = LocalDate.now(),
     val gameId: Int = 0,

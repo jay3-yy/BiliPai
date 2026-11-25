@@ -24,6 +24,7 @@ import kotlinx.coroutines.ensureActive
  */
 sealed class BangumiListState {
     object Loading : BangumiListState()
+    @androidx.compose.runtime.Immutable
     data class Success(
         val items: List<BangumiItem>,
         val hasMore: Boolean = true,
@@ -37,6 +38,7 @@ sealed class BangumiListState {
  */
 sealed class BangumiDetailState {
     object Loading : BangumiDetailState()
+    @androidx.compose.runtime.Immutable
     data class Success(val detail: BangumiDetail) : BangumiDetailState()
     data class Error(val message: String) : BangumiDetailState()
 }
@@ -46,6 +48,7 @@ sealed class BangumiDetailState {
  */
 sealed class TimelineState {
     object Loading : TimelineState()
+    @androidx.compose.runtime.Immutable
     data class Success(val days: List<TimelineDay>) : TimelineState()
     data class Error(val message: String) : TimelineState()
 }
@@ -56,6 +59,7 @@ sealed class TimelineState {
 sealed class BangumiSearchState {
     object Idle : BangumiSearchState()
     object Loading : BangumiSearchState()
+    @androidx.compose.runtime.Immutable
     data class Success(
         val items: List<BangumiSearchItem>,
         val hasMore: Boolean = true,
@@ -69,6 +73,7 @@ sealed class BangumiSearchState {
  */
 sealed class MyFollowState {
     object Loading : MyFollowState()
+    @androidx.compose.runtime.Immutable
     data class Success(
         val items: List<FollowBangumiItem>,
         val hasMore: Boolean = true,
@@ -87,6 +92,7 @@ enum class BangumiDisplayMode {
     SEARCH      // 搜索结果
 }
 
+@androidx.compose.runtime.Immutable
 data class BangumiUiState(
     val displayMode: BangumiDisplayMode = BangumiDisplayMode.LIST,
     val selectedType: Int = 1,

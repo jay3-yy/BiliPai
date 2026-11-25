@@ -9,6 +9,7 @@ import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.data.repository.videoMetadataAccountScope
 import com.android.purebilibili.data.repository.recommendationAccountScope
 
+@androidx.compose.runtime.Immutable
 data class StoryUiState(
     val items: List<StoryItem> = emptyList(),
     val isLoading: Boolean = false,

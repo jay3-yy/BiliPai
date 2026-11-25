@@ -101,6 +101,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+@androidx.compose.runtime.Immutable
 data class LiveRoomItem(
     val roomId: Long,
     val title: String,
@@ -124,6 +125,7 @@ data class LiveRoomItem(
     }
 }
 
+@androidx.compose.runtime.Immutable
 data class LiveListUiState(
     val accountIdentity: com.android.purebilibili.core.store.AccountSessionIdentity = com.android.purebilibili.core.store.AccountSessionIdentity(),
     val contentItems: List<LiveRoomItem> = emptyList(),
@@ -174,7 +176,18 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         refreshJob?.cancel()
         pageLoadJob?.cancel()
         requests.invalidate()
-        _uiState.value = _uiState.value.copy(accountIdentity = current, initialLoadComplete = false, contentLoadComplete = false, contentItems = emptyList(), followItems = emptyList(), livingCount = null, followError = null, areaEntries = emptyList())
+        _uiState.update {
+            it.copy(
+                accountIdentity = current,
+                initialLoadComplete = false,
+                contentLoadComplete = false,
+                contentItems = emptyList(),
+                followItems = emptyList(),
+                livingCount = null,
+                followError = null,
+                areaEntries = emptyList()
+            )
+        }
         refresh()
     }
 
@@ -186,7 +199,7 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         val state = _uiState.value
         val epoch = ++refreshEpoch
         val identity = com.android.purebilibili.core.store.TokenManager.accountIdentity.value
-        _uiState.value = state.copy(isLoading = true, isLoadingMore = false, error = null, loadMoreError = null)
+        _uiState.update { it.copy(isLoading = true, isLoadingMore = false, error = null, loadMoreError = null) }
         refreshJob = viewModelScope.launch {
             // 目录与顶部模块独立补齐，推荐/分区结果不等待它们结束骨架。
             if (state.areaList.isEmpty()) launch {
@@ -199,25 +212,29 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
             if (state.selectedAreaIndex != LIVE_HOME_RECOMMEND_INDEX) launch {
                 LiveRepository.getLiveFeedHome(page = 1, moduleSelect = true).onSuccess { snapshot ->
                     if (epoch == refreshEpoch && identity == com.android.purebilibili.core.store.TokenManager.accountIdentity.value) {
-                        val current = _uiState.value
-                        val entries = snapshot.areaEntries.ifEmpty { current.areaEntries }
-                        // 解析失败（-1，如快照缺少该分区）视为未知，保留当前选中，
-                        // 不能用 -1 覆盖导致指示器退回推荐。
-                        val resolvedIndex = resolveRefreshedLiveHomeAreaIndex(current.selectedAreaIndex, current.selectedParentAreaId, current.selectedAreaId, entries)
-                        _uiState.value = current.copy(
-                            selectedAreaIndex = if (resolvedIndex >= 0) resolvedIndex else current.selectedAreaIndex,
-                            followItems = if (snapshot.hasFollowModule && snapshot.followError == null) snapshot.followRooms.map { it.toLiveRoomItem() } else current.followItems,
-                            livingCount = if (snapshot.hasFollowModule && snapshot.followError == null) snapshot.totalCount else current.livingCount,
-                            followError = snapshot.followError,
-                            areaEntries = entries,
-                        )
+                        val mappedFollow = if (snapshot.hasFollowModule && snapshot.followError == null) {
+                            snapshot.followRooms.map { it.toLiveRoomItem() }
+                        } else null
+                        _uiState.update { current ->
+                            val entries = snapshot.areaEntries.ifEmpty { current.areaEntries }
+                            // 解析失败（-1，如快照缺少该分区）视为未知，保留当前选中，
+                            // 不能用 -1 覆盖导致指示器退回推荐。
+                            val resolvedIndex = resolveRefreshedLiveHomeAreaIndex(current.selectedAreaIndex, current.selectedParentAreaId, current.selectedAreaId, entries)
+                            current.copy(
+                                selectedAreaIndex = if (resolvedIndex >= 0) resolvedIndex else current.selectedAreaIndex,
+                                followItems = mappedFollow ?: current.followItems,
+                                livingCount = if (mappedFollow != null) snapshot.totalCount else current.livingCount,
+                                followError = snapshot.followError,
+                                areaEntries = entries,
+                            )
+                        }
                     }
                 }
             }
             loadPage(request, state)
             if (epoch == refreshEpoch && identity == com.android.purebilibili.core.store.TokenManager.accountIdentity.value) {
                 // 列表请求独立结束加载；顶部慢请求继续由本轮任务持有。
-                _uiState.value = _uiState.value.copy(isLoading = false, initialLoadComplete = true, contentLoadComplete = true, refreshCompletion = epoch)
+                _uiState.update { it.copy(isLoading = false, initialLoadComplete = true, contentLoadComplete = true, refreshCompletion = epoch) }
             }
         }
     }
@@ -230,17 +247,21 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         topRefreshJob = viewModelScope.launch {
             LiveRepository.getLiveFeedHome(page = 1, moduleSelect = true).onSuccess { snapshot ->
                 if (epoch != refreshEpoch || identity != com.android.purebilibili.core.store.TokenManager.accountIdentity.value) return@onSuccess
-                val current = _uiState.value
-                val entries = snapshot.areaEntries
-                // 同 refresh()：解析失败视为未知，保留当前选中，避免指示器退回推荐。
-                val resolvedIndex = resolveRefreshedLiveHomeAreaIndex(current.selectedAreaIndex, current.selectedParentAreaId, current.selectedAreaId, entries)
-                _uiState.value = current.copy(
-                    followItems = if (snapshot.hasFollowModule && snapshot.followError == null) snapshot.followRooms.map { it.toLiveRoomItem() } else current.followItems,
-                    livingCount = if (snapshot.hasFollowModule && snapshot.followError == null) snapshot.totalCount else current.livingCount,
-                    followError = snapshot.followError,
-                    areaEntries = entries,
-                    selectedAreaIndex = if (resolvedIndex >= 0) resolvedIndex else current.selectedAreaIndex,
-                )
+                val mappedFollow = if (snapshot.hasFollowModule && snapshot.followError == null) {
+                    snapshot.followRooms.map { it.toLiveRoomItem() }
+                } else null
+                _uiState.update { current ->
+                    val entries = snapshot.areaEntries
+                    // 同 refresh()：解析失败视为未知，保留当前选中，避免指示器退回推荐。
+                    val resolvedIndex = resolveRefreshedLiveHomeAreaIndex(current.selectedAreaIndex, current.selectedParentAreaId, current.selectedAreaId, entries)
+                    current.copy(
+                        followItems = mappedFollow ?: current.followItems,
+                        livingCount = if (mappedFollow != null) snapshot.totalCount else current.livingCount,
+                        followError = snapshot.followError,
+                        areaEntries = entries,
+                        selectedAreaIndex = if (resolvedIndex >= 0) resolvedIndex else current.selectedAreaIndex,
+                    )
+                }
             }
         }
     }
@@ -252,7 +273,9 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         val identity = com.android.purebilibili.core.store.TokenManager.accountIdentity.value
         return LiveRepository.submitLiveFeedFeedback(roomId, reason).onSuccess {
             if (identity == com.android.purebilibili.core.store.TokenManager.accountIdentity.value) {
-                _uiState.value = _uiState.value.copy(contentItems = _uiState.value.contentItems.filterNot { it.roomId == roomId })
+                _uiState.update { current ->
+                    current.copy(contentItems = current.contentItems.filterNot { it.roomId == roomId })
+                }
             }
         }
     }
@@ -261,16 +284,18 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         val state = _uiState.value
         if (state.isLoading || state.isLoadingMore) return
         val request = requests.loadMore(state.hasMore) ?: return
-        _uiState.value = state.copy(isLoadingMore = true, loadMoreError = null)
+        _uiState.update { it.copy(isLoadingMore = true, loadMoreError = null) }
         pageLoadJob = viewModelScope.launch { loadPage(request, state) }
     }
 
     private fun reloadSelection() {
         refreshEpoch += 1L
         requests.invalidate()
-        _uiState.value = _uiState.value.copy(
-            contentItems = emptyList(), contentLoadComplete = false, isLoadingMore = false, loadMoreError = null,
-        )
+        _uiState.update {
+            it.copy(
+                contentItems = emptyList(), contentLoadComplete = false, isLoadingMore = false, loadMoreError = null,
+            )
+        }
         refresh()
     }
 
@@ -288,32 +313,36 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         // 加载中也允许改选：新的 reloadSelection 递增 refreshEpoch，旧加载结果按 epoch 丢弃。
         if (index == state.selectedAreaIndex) return
         if (index <= LIVE_HOME_RECOMMEND_INDEX) {
-            _uiState.value = state.copy(
-                selectedAreaIndex = LIVE_HOME_RECOMMEND_INDEX,
-                selectedParentAreaId = 0,
-                selectedAreaId = 0,
-                selectedSortType = null,
-                sortTags = emptyList(),
-                page = 1,
-                hasMore = true,
-                isLoading = true,
-                error = null,
-            )
+            _uiState.update {
+                it.copy(
+                    selectedAreaIndex = LIVE_HOME_RECOMMEND_INDEX,
+                    selectedParentAreaId = 0,
+                    selectedAreaId = 0,
+                    selectedSortType = null,
+                    sortTags = emptyList(),
+                    page = 1,
+                    hasMore = true,
+                    isLoading = true,
+                    error = null,
+                )
+            }
             reloadSelection()
             return
         }
         if (isLiveHomeFollowedTab(index)) {
-            _uiState.value = state.copy(
-                selectedAreaIndex = LIVE_HOME_FOLLOWED_INDEX,
-                selectedParentAreaId = 0,
-                selectedAreaId = 0,
-                selectedSortType = null,
-                sortTags = emptyList(),
-                page = 1,
-                hasMore = true,
-                isLoading = true,
-                error = null,
-            )
+            _uiState.update {
+                it.copy(
+                    selectedAreaIndex = LIVE_HOME_FOLLOWED_INDEX,
+                    selectedParentAreaId = 0,
+                    selectedAreaId = 0,
+                    selectedSortType = null,
+                    sortTags = emptyList(),
+                    page = 1,
+                    hasMore = true,
+                    isLoading = true,
+                    error = null,
+                )
+            }
             reloadSelection()
             return
         }
@@ -321,17 +350,19 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
             feedEntries = state.areaEntries,
             areaParents = state.areaList
         ).getOrNull(resolveLiveHomeAreaListIndex(index)) ?: return
-        _uiState.value = state.copy(
-            selectedAreaIndex = index,
-            selectedParentAreaId = entry.parentAreaId,
-            selectedAreaId = entry.areaId,
-            selectedSortType = null,
-            sortTags = emptyList(),
-            page = 1,
-            hasMore = true,
-            isLoading = true,
-            error = null,
-        )
+        _uiState.update {
+            it.copy(
+                selectedAreaIndex = index,
+                selectedParentAreaId = entry.parentAreaId,
+                selectedAreaId = entry.areaId,
+                selectedSortType = null,
+                sortTags = emptyList(),
+                page = 1,
+                hasMore = true,
+                isLoading = true,
+                error = null,
+            )
+        }
         reloadSelection()
     }
 
@@ -339,18 +370,20 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
         val state = _uiState.value
         // 加载中也允许改选：reloadSelection 的 refreshEpoch 会让旧结果失效。
         if (state.selectedParentAreaId <= 0) return
-        _uiState.value = state.copy(
-            selectedSortType = sortType,
-            page = 1,
-            hasMore = true,
-            isLoading = true,
-            error = null,
-        )
+        _uiState.update {
+            it.copy(
+                selectedSortType = sortType,
+                page = 1,
+                hasMore = true,
+                isLoading = true,
+                error = null,
+            )
+        }
         reloadSelection()
     }
 
     fun toggleShowFirstFrame() {
-        _uiState.value = _uiState.value.copy(showFirstFrame = !_uiState.value.showFirstFrame)
+        _uiState.update { it.copy(showFirstFrame = !it.showFirstFrame) }
     }
 
     private suspend fun loadRecommendPage(request: LiveBrowseRequestPolicy.Request) {
@@ -368,40 +401,41 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
             }
             val mapped = snapshot.rooms.map { it.toLiveRoomItem() }
             val followMapped = snapshot.followRooms.map { it.toLiveRoomItem() }
-            val current = _uiState.value
-            val mergedRooms = if (append) {
-                (current.contentItems + mapped).distinctBy { it.roomId }
-            } else {
-                mapped.distinctBy { it.roomId }
-            }
-            val areaEntries = when {
-                snapshot.areaEntries.isNotEmpty() -> snapshot.areaEntries
-                !append -> current.areaEntries
-                else -> current.areaEntries
-            }.ifEmpty {
-                current.areaList.map {
-                    com.android.purebilibili.data.model.response.LiveFeedAreaEntry(
-                        title = it.name,
-                        areaId = 0,
-                        parentAreaId = it.id,
-                    )
+            _uiState.update { current ->
+                val mergedRooms = if (append) {
+                    (current.contentItems + mapped).distinctBy { it.roomId }
+                } else {
+                    mapped.distinctBy { it.roomId }
                 }
+                val areaEntries = when {
+                    snapshot.areaEntries.isNotEmpty() -> snapshot.areaEntries
+                    !append -> current.areaEntries
+                    else -> current.areaEntries
+                }.ifEmpty {
+                    current.areaList.map {
+                        com.android.purebilibili.data.model.response.LiveFeedAreaEntry(
+                            title = it.name,
+                            areaId = 0,
+                            parentAreaId = it.id,
+                        )
+                    }
+                }
+                current.copy(
+                    contentItems = mergedRooms,
+                    followItems = if (!append && snapshot.hasFollowModule && snapshot.followError == null) followMapped else current.followItems,
+                    livingCount = if (!append && snapshot.hasFollowModule && snapshot.followError == null) snapshot.totalCount ?: current.livingCount else current.livingCount,
+                    followError = if (!append) snapshot.followError else current.followError,
+                    areaEntries = areaEntries,
+                    page = page,
+                    hasMore = snapshot.hasMore,
+                    // 刷新指示器随推荐内容就绪结束；关注补取结果由 complete 阶段单独落地，不拖住转圈。
+                    isLoading = false,
+                    initialLoadComplete = true,
+                    contentLoadComplete = true,
+                    isLoadingMore = false,
+                    error = if (mergedRooms.isEmpty() && !append) "暂无直播" else null,
+                )
             }
-            _uiState.value = current.copy(
-                contentItems = mergedRooms,
-                followItems = if (!append && snapshot.hasFollowModule && snapshot.followError == null) followMapped else current.followItems,
-                livingCount = if (!append && snapshot.hasFollowModule && snapshot.followError == null) snapshot.totalCount ?: current.livingCount else current.livingCount,
-                followError = if (!append) snapshot.followError else current.followError,
-                areaEntries = areaEntries,
-                page = page,
-                hasMore = snapshot.hasMore,
-                // 刷新指示器随推荐内容就绪结束；关注补取结果由 complete 阶段单独落地，不拖住转圈。
-                isLoading = false,
-                initialLoadComplete = true,
-                contentLoadComplete = true,
-                isLoadingMore = false,
-                error = if (mergedRooms.isEmpty() && !append) "暂无直播" else null,
-            )
         }
         LiveRepository.getLiveFeedHome(
             page = page,
@@ -418,12 +452,14 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
             onFailure = { error ->
                 if (error is kotlinx.coroutines.CancellationException) throw error
                 if (!requests.fail(request)) return@fold
-                _uiState.value = _uiState.value.copy(
-                    isLoading = !append,
-                    isLoadingMore = false,
-                    error = if (!append) error.message ?: "加载失败" else _uiState.value.error,
-                    loadMoreError = if (append) error.message ?: "加载更多失败" else null,
-                )
+                _uiState.update { current ->
+                    current.copy(
+                        isLoading = !append,
+                        isLoadingMore = false,
+                        error = if (!append) error.message ?: "加载失败" else current.error,
+                        loadMoreError = if (append) error.message ?: "加载更多失败" else null,
+                    )
+                }
             }
         )
     }
@@ -435,34 +471,37 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
             onSuccess = { snapshot ->
                 if (!requests.succeed(request)) return@fold
                 val mapped = snapshot.items.map { it.toLiveRoomItem() }
-                val current = _uiState.value
-                val mergedRooms = if (append) {
-                    (current.contentItems + mapped).distinctBy { it.roomId }
-                } else {
-                    mapped.distinctBy { it.roomId }
+                _uiState.update { current ->
+                    val mergedRooms = if (append) {
+                        (current.contentItems + mapped).distinctBy { it.roomId }
+                    } else {
+                        mapped.distinctBy { it.roomId }
+                    }
+                    current.copy(
+                        contentItems = mergedRooms,
+                        followItems = if (!append) mapped else current.followItems,
+                        livingCount = if (!append) snapshot.totalCount else current.livingCount,
+                        followError = if (!append) null else current.followError,
+                        page = page,
+                        hasMore = snapshot.hasMore && (!append || mapped.isEmpty() || mergedRooms.size > current.contentItems.size),
+                        isLoading = !append,
+                        isLoadingMore = false,
+                        // 空关注列表是正常内容状态，仍需保留顶部分类，方便切回推荐直播。
+                        error = null,
+                    )
                 }
-                _uiState.value = current.copy(
-                    contentItems = mergedRooms,
-                    followItems = if (!append) mapped else current.followItems,
-                    livingCount = if (!append) snapshot.totalCount else current.livingCount,
-                    followError = if (!append) null else current.followError,
-                    page = page,
-                    hasMore = snapshot.hasMore && (!append || mapped.isEmpty() || mergedRooms.size > current.contentItems.size),
-                    isLoading = !append,
-                    isLoadingMore = false,
-                    // 空关注列表是正常内容状态，仍需保留顶部分类，方便切回推荐直播。
-                    error = null,
-                )
             },
             onFailure = { error ->
                 if (error is kotlinx.coroutines.CancellationException) throw error
                 if (!requests.fail(request)) return@fold
-                _uiState.value = _uiState.value.copy(
-                    isLoading = !append,
-                    isLoadingMore = false,
-                    error = if (!append) error.message ?: "加载关注直播失败" else _uiState.value.error,
-                    loadMoreError = if (append) error.message ?: "加载更多失败" else null,
-                )
+                _uiState.update { current ->
+                    current.copy(
+                        isLoading = !append,
+                        isLoadingMore = false,
+                        error = if (!append) error.message ?: "加载关注直播失败" else current.error,
+                        loadMoreError = if (append) error.message ?: "加载更多失败" else null,
+                    )
+                }
             }
         )
     }
@@ -478,11 +517,13 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
             areaId = state.selectedAreaId
         ) ?: run {
             if (!requests.fail(request)) return
-            _uiState.value = state.copy(
-                isLoading = !append,
-                isLoadingMore = false,
-                error = "无效的直播分区"
-            )
+            _uiState.update { current ->
+                current.copy(
+                    isLoading = !append,
+                    isLoadingMore = false,
+                    error = "无效的直播分区"
+                )
+            }
             return
         }
         LiveRepository.getLiveSecondHome(
@@ -494,31 +535,34 @@ class LiveListViewModel(application: Application) : AndroidViewModel(application
             onSuccess = { snapshot ->
                 if (!requests.succeed(request)) return@fold
                 val mapped = snapshot.rooms.map { it.toLiveRoomItem() }
-                val current = _uiState.value
-                val merged = if (append) {
-                    (current.contentItems + mapped).distinctBy { it.roomId }
-                } else {
-                    mapped.distinctBy { it.roomId }
+                _uiState.update { current ->
+                    val merged = if (append) {
+                        (current.contentItems + mapped).distinctBy { it.roomId }
+                    } else {
+                        mapped.distinctBy { it.roomId }
+                    }
+                    current.copy(
+                        contentItems = merged,
+                        sortTags = if (snapshot.sortTags.isNotEmpty()) snapshot.sortTags else current.sortTags,
+                        page = page,
+                        hasMore = snapshot.hasMore,
+                        isLoading = !append,
+                        isLoadingMore = false,
+                        error = if (merged.isEmpty() && !append) "暂无直播内容" else null,
+                    )
                 }
-                _uiState.value = current.copy(
-                    contentItems = merged,
-                    sortTags = if (snapshot.sortTags.isNotEmpty()) snapshot.sortTags else current.sortTags,
-                    page = page,
-                    hasMore = snapshot.hasMore,
-                    isLoading = !append,
-                    isLoadingMore = false,
-                    error = if (merged.isEmpty() && !append) "暂无直播内容" else null,
-                )
             },
             onFailure = { error ->
                 if (error is kotlinx.coroutines.CancellationException) throw error
                 if (!requests.fail(request)) return@fold
-                _uiState.value = _uiState.value.copy(
-                    isLoading = !append,
-                    isLoadingMore = false,
-                    error = if (!append) error.message ?: "加载失败" else _uiState.value.error,
-                    loadMoreError = if (append) error.message ?: "加载更多失败" else null,
-                )
+                _uiState.update { current ->
+                    current.copy(
+                        isLoading = !append,
+                        isLoadingMore = false,
+                        error = if (!append) error.message ?: "加载失败" else current.error,
+                        loadMoreError = if (append) error.message ?: "加载更多失败" else null,
+                    )
+                }
             }
         )
     }

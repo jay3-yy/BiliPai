@@ -63,7 +63,6 @@ internal fun BgmDetailScreen(
     val comments by commentViewModel.commentState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var composer by rememberSaveable(musicId) { mutableStateOf(false) }
-    var submittedSessionId by remember(musicId) { mutableStateOf<Long?>(null) }
     var emotePackages by remember { mutableStateOf<List<EmotePackage>>(emptyList()) }
     LaunchedEffect(composer) {
         if (composer && emotePackages.isEmpty()) emotePackages = com.android.purebilibili.data.repository.CommentRepository.getEmotePackages().getOrDefault(emptyList())
@@ -76,10 +75,9 @@ internal fun BgmDetailScreen(
         }
     }
     LaunchedEffect(viewModel) { viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() } }
-    LaunchedEffect(comments.isSending, comments.sendError, comments.composerDrafts.completedSessionId) {
-        if (submittedSessionId != null && !comments.isSending) {
-            submittedSessionId = null
-            comments.sendError?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    LaunchedEffect(commentViewModel, context) {
+        commentViewModel.sendErrorEvents.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
     }
     LaunchedEffect(comments.composerDrafts.sessionId, comments.composerDrafts.completedSessionId) {
@@ -148,7 +146,6 @@ internal fun BgmDetailScreen(
                 latest.composerDrafts.completedSessionId != composerSessionId &&
                 latest.replyTarget?.rpid == composerReplyRpid && !latest.isSending
             ) {
-                submittedSessionId = composerSessionId
                 commentViewModel.updateCommentDraft(composerSessionId, composerReplyRpid, text, images, sync)
                 commentViewModel.sendComment(text, images, sync)
             }

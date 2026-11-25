@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -1195,13 +1196,18 @@ fun OfflineVideoPlayerScreen(
                         Modifier.requiredSize(viewport.width.toDp(), viewport.height.toDp())
                     },
                 )
-                if (!sharedSurfaceVisible && task.cover.isNotBlank()) {
+                // 封面常驻就绪，避免返回隐藏 PlayerView 首帧才异步挂载封面造成闪黑。
+                if (task.cover.isNotBlank()) {
                     AsyncImage(
                         model = task.cover,
-                        contentDescription = task.title,
+                        contentDescription = if (!sharedSurfaceVisible) task.title else null,
                         contentScale = ContentScale.Crop,
                         modifier = with(density) {
-                            Modifier.requiredSize(viewport.width.toDp(), viewport.height.toDp())
+                            Modifier
+                                .requiredSize(viewport.width.toDp(), viewport.height.toDp())
+                                .graphicsLayer {
+                                    alpha = if (!sharedSurfaceVisible) 1f else 0f
+                                }
                         },
                     )
                 }
