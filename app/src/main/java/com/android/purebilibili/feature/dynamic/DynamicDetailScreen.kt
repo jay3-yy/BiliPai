@@ -488,14 +488,6 @@ fun DynamicDetailScreen(
                     localLiked = state.item.id_str in likedDynamics,
                     serverLiked = dynamicStats?.like?.status,
                 )
-                val dockLikeCount = dynamicStats?.like?.let { like ->
-                    val delta = when {
-                        dynamicLiked == like.status -> 0
-                        dynamicLiked -> 1
-                        else -> -1
-                    }
-                    (like.count.toLong() + delta).coerceAtLeast(0L)
-                }
 
                 //  [新增] 卡片与评论内容提取，供分栏/单列两种布局复用
                 val cardContent: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
@@ -684,8 +676,6 @@ fun DynamicDetailScreen(
                             backdrop = detailCommentBackdrop,
                             isLiked = dynamicLiked,
                             repostEnabled = dynamicStats?.forward?.forbidden != true,
-                            likeCount = dockLikeCount,
-                            repostCount = dynamicStats?.forward?.count?.toLong()?.plus(forwardCountDelta),
                             onComment = interactionViewModel::openCommentComposer,
                             onLike = { onLikeDynamic(state.item.id_str, dynamicLiked) },
                             onRepost = { showRepostDialog = state.item.id_str },

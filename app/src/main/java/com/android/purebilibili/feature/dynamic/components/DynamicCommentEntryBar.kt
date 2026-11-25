@@ -171,8 +171,6 @@ internal fun DynamicDetailCommentBar(
     backdrop: Backdrop?,
     isLiked: Boolean,
     repostEnabled: Boolean,
-    likeCount: Long?,
-    repostCount: Long?,
     onComment: () -> Unit,
     onLike: () -> Unit,
     onRepost: () -> Unit,
@@ -186,14 +184,12 @@ internal fun DynamicDetailCommentBar(
             icon = if (isLiked) rememberAppLikeFilledIcon() else rememberAppLikeIcon(),
             iconTint = if (isLiked) AppContentColors.accent() else null,
             onClick = onLike,
-            summary = likeCount?.let(FormatUtils::formatStat),
         ),
         AppWindowAction(
             label = "转发",
             icon = Icons.Outlined.IosShare,
             enabled = repostEnabled,
             onClick = onRepost,
-            summary = repostCount?.let(FormatUtils::formatStat),
         ),
         AppWindowAction(label = "分享", icon = rememberAppShareIcon(), onClick = onShare),
     )
@@ -204,25 +200,15 @@ internal fun DynamicDetailCommentBar(
     // 玻璃外壳留出折射边缘，原生操作栏使用自己的内边距。
     val preferredActionPadding = dimensions.preferredActionPadding
     val minimumActionPadding = DynamicCommentBarSpec.MinimumActionPadding
-    val actionCountGap = DynamicCommentBarSpec.ActionCountGap
     val dockGap = DynamicCommentBarSpec.DockGap
-    val countStyle = MaterialTheme.typography.labelSmall
     val commentStyle = if (liquidGlassEnabled) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    // Reserve the formatted width even while a count is unknown or changes digits.
-    val countWidth = with(density) {
-        maxOf(
-            textMeasurer.measure("8888", style = countStyle).size.width,
-            textMeasurer.measure("88.8亿", style = countStyle).size.width,
-        ).toDp() + DynamicCommentBarSpec.CountWidthAllowance
-    }
     val commentLabelWidth = with(density) {
         textMeasurer.measure("发评论", style = commentStyle).size.width.toDp()
     }
     val minimumCommentWidth = commentLabelWidth + dimensions.commentChromeWidth
-    val countedActionWidth = maxOf(actionHeight, actionIconSize + actionCountGap + countWidth)
-    val actionSlotsWidth = countedActionWidth * 2 + actionHeight
+    val actionSlotsWidth = actionHeight * actions.size
 
     BoxWithConstraints(modifier = modifier) {
         val availableActionWidth = maxWidth - minimumCommentWidth - dockGap
@@ -250,10 +236,7 @@ internal fun DynamicDetailCommentBar(
             val actionContent: @Composable () -> Unit = {
                 if (compact) {
                     AppWindowActionMenu(
-                        groups = listOf(actions.map { action ->
-                            val count = action.summary
-                            if (count == null) action else action.copy(label = "${action.label} $count", summary = null)
-                        }),
+                        groups = listOf(actions),
                         modifier = Modifier.fillMaxSize(),
                         anchorModifier = Modifier.size(actionHeight),
                     ) {
@@ -268,9 +251,6 @@ internal fun DynamicDetailCommentBar(
                         actions = actions,
                         actionHeight = actionHeight,
                         iconSize = actionIconSize,
-                        countWidth = countWidth,
-                        countStyle = countStyle,
-                        countGap = actionCountGap,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = actionPadding),
                     )
                 }
@@ -317,44 +297,21 @@ private fun DynamicDetailCommentActions(
     actions: List<AppWindowAction>,
     actionHeight: Dp,
     iconSize: Dp,
-    countWidth: Dp,
-    countStyle: TextStyle,
-    countGap: Dp,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        for ((index, action) in actions.withIndex()) {
-            val hasCountSlot = index < actions.lastIndex
+        for (action in actions) {
             val tint = action.iconTint ?: if (action.enabled) AppContentColors.primaryText() else AppContentColors.secondaryText()
             AppIconButton(
                 enabled = action.enabled,
                 onClick = { action.onClick?.invoke() },
-                modifier = (if (hasCountSlot) Modifier.weight(1f) else Modifier.width(actionHeight))
-                    .height(actionHeight),
+                modifier = Modifier.size(actionHeight),
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(countGap),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    action.icon?.let { icon ->
-                        AppIcon(icon, contentDescription = action.label, tint = tint, modifier = Modifier.size(iconSize))
-                    }
-                    val count = action.summary
-                    if (hasCountSlot && count != null) {
-                        AppText(
-                            text = count,
-                            style = countStyle,
-                            color = tint,
-                            modifier = Modifier.widthIn(max = countWidth),
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                            tapToCopyEnabled = false,
-                        )
-                    }
+                action.icon?.let { icon ->
+                    AppIcon(icon, contentDescription = action.label, tint = tint, modifier = Modifier.size(iconSize))
                 }
             }
         }
