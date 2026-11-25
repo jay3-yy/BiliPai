@@ -540,6 +540,7 @@ internal class VideoContentPresentationState(
     val bottomContentPadding: Dp,
     val commentPullToRefreshEnabled: Boolean = true,
     val relatedContentReady: Boolean = true,
+    val detailRelatedVisibility: DetailRelatedVisibility = DetailRelatedVisibility.VISIBLE,
 )
 
 internal class VideoContentPrimaryActions(
@@ -1007,6 +1008,7 @@ internal fun VideoContentSection(
                             relatedVideos = relatedVideos,
                             relatedLoadState = data.relatedLoadState,
                             relatedContentReady = presentationState.relatedContentReady,
+                            detailRelatedVisibility = presentationState.detailRelatedVisibility,
                             currentPageIndex = currentPageIndex,
                             followingMids = followingMids,
                             videoTags = videoTags,
@@ -1417,6 +1419,7 @@ private fun VideoIntroTab(
     relatedVideos: List<RelatedVideo>,
     relatedLoadState: VideoPlaybackUiState.RelatedLoadState,
     relatedContentReady: Boolean = true,
+    detailRelatedVisibility: DetailRelatedVisibility,
     currentPageIndex: Int,
     followingMids: Set<Long>,
     videoTags: List<VideoTag>,
@@ -1468,7 +1471,11 @@ private fun VideoIntroTab(
     showInteractionActions: Boolean = true,
     animateVideoDetailLayout: Boolean = true,
 ) {
-    val visibleRelatedVideos = relatedVideos
+    val visibleRelatedVideos = if (detailRelatedVisibility == DetailRelatedVisibility.VISIBLE) {
+        relatedVideos
+    } else {
+        emptyList()
+    }
     val relatedRows = remember(visibleRelatedVideos) {
         chunkRelatedVideosForHomeStyleGrid(visibleRelatedVideos)
     }
@@ -1538,6 +1545,11 @@ private fun VideoIntroTab(
 
         // Keep loaded rows and their keys even while expensive images/shared bounds wait
         // for the entry handoff. Network loading uses the same card geometry per lazy row.
+        // 设置未读到时先不画骨架，避免已关闭的用户看到一闪而过的推荐区；
+        // 关闭时整块不渲染，也不再显示「暂无相关推荐」这类占位文案。
+        if (detailRelatedVisibility != DetailRelatedVisibility.VISIBLE) {
+            return@RelatedVideoList
+        }
         if (visibleRelatedVideos.isEmpty() &&
             (!relatedContentReady || relatedLoadState == VideoPlaybackUiState.RelatedLoadState.LOADING)
         ) {

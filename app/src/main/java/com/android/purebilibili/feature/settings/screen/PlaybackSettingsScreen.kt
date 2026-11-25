@@ -1492,6 +1492,8 @@ private fun PlaybackInteractionSettingsSection(
         .collectAsStateWithLifecycle(initialValue = false)
     //  [新增] 自动播放下一个
     val autoPlayEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getAutoPlay(context) }.collectAsStateWithLifecycle(initialValue = true)
+    val showDetailRelatedVideos by remember(context) { SettingsManager.getShowDetailRelatedVideos(context) }
+        .collectAsStateWithLifecycle(initialValue = true)
     val nextWatchHintEnabled by remember(context) { SettingsManager.getNextWatchHintEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = true)
     val externalPlaylistAutoContinueEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getExternalPlaylistAutoContinue(context) }.collectAsStateWithLifecycle(initialValue = true)
@@ -1651,6 +1653,19 @@ private fun PlaybackInteractionSettingsSection(
                     }
                 },
                 iconTint = AppContentColors.secondaryText()
+            )
+        }
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.show_detail_related_videos") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.RECOMMEND_RETENTION),
+                title = playbackSettingTitle("playback.show_detail_related_videos"),
+                subtitle = "仅控制手机视频简介下方的推荐列表，不影响自动连播",
+                checked = showDetailRelatedVideos,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setShowDetailRelatedVideos(context, enabled) }
+                },
+                iconTint = AppContentColors.secondaryText(),
             )
         }
         AppPreferenceDivider()
