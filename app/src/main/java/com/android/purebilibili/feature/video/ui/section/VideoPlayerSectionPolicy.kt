@@ -534,6 +534,19 @@ internal fun shouldShowDanmakuLayers(
     return true
 }
 
+/**
+ * 弹幕渲染不能依赖窗口焦点：小窗/分屏失焦时窗口仍可见，进度条曾因同一原因停住。
+ * PiP 下 Activity 可能只到 STARTED，仍应继续渲染；真正进后台（STOPPED）才停。
+ */
+internal fun shouldRunDanmakuRenderWork(
+    pageActive: Boolean,
+    resumed: Boolean,
+    started: Boolean,
+    isInPipMode: Boolean
+): Boolean {
+    return pageActive && (resumed || (isInPipMode && started))
+}
+
 internal fun shouldPollVideoPlayerProgress(
     controlsVisible: Boolean,
     gestureVisible: Boolean,

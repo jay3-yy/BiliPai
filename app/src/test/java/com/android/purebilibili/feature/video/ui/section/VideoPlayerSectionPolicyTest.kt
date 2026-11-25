@@ -624,6 +624,54 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun danmakuRenderWork_ignoresWindowFocusButStopsInBackground() {
+        // 小窗/分屏失焦：RESUMED 但 focused=false；这里不接收 focused，必须继续渲染。
+        assertTrue(
+            shouldRunDanmakuRenderWork(
+                pageActive = true,
+                resumed = true,
+                started = true,
+                isInPipMode = false
+            )
+        )
+        // PiP 可能只到 STARTED，仍应继续。
+        assertTrue(
+            shouldRunDanmakuRenderWork(
+                pageActive = true,
+                resumed = false,
+                started = true,
+                isInPipMode = true
+            )
+        )
+        // 普通页面被覆盖到 STARTED，不应继续。
+        assertFalse(
+            shouldRunDanmakuRenderWork(
+                pageActive = true,
+                resumed = false,
+                started = true,
+                isInPipMode = false
+            )
+        )
+        // 真正进后台或页面不再活跃。
+        assertFalse(
+            shouldRunDanmakuRenderWork(
+                pageActive = true,
+                resumed = false,
+                started = false,
+                isInPipMode = true
+            )
+        )
+        assertFalse(
+            shouldRunDanmakuRenderWork(
+                pageActive = false,
+                resumed = true,
+                started = true,
+                isInPipMode = false
+            )
+        )
+    }
+
+    @Test
     fun livePlayerSharedElement_enabledOnlyWhenAllGuardsPass() {
         assertTrue(
             shouldEnableLivePlayerSharedElement(

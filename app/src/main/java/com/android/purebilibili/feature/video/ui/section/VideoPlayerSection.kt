@@ -4727,7 +4727,8 @@ private fun VideoPlayerSectionContent(
     )
 
     // 2. DanmakuView (使用 ByteDance DanmakuRenderEngine - 覆盖在 PlayerView 上方)
-    val danmakuRenderWorkActive = playerVisualWorkActive
+    // 不能复用 playerVisualWorkActive：它含窗口焦点，小窗/分屏失焦会让弹幕整层消失。
+    val danmakuRenderWorkActive = rememberDanmakuRenderWorkActive(isInPipMode) && playerInViewport
     val shouldShowDanmakuLayer = danmakuHostActive && !suppressTransientOverlaysForTransition &&
         !forceCoverDuringReturnAnimation && shouldShowDanmakuLayers(
         isInPipMode = isInPipMode,
