@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.repository.ActionRepository
 import kotlinx.coroutines.launch
 
@@ -39,32 +40,41 @@ internal fun CollectionSubscriptionButton(
     immersive: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
 ) {
-    key(collectionId) {
+    val accountIdentity by TokenManager.accountIdentity.collectAsStateWithLifecycle()
+    key(collectionId, accountIdentity) {
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
         val subscriptionHaptic = com.android.purebilibili.core.util.rememberVisibleHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
-        val cachedSubscription = remember(context, collectionId) {
+        val cachedSubscription = remember(context, collectionId, accountIdentity) {
             SettingsManager.getCollectionSubscriptionState(context, collectionId)
         }
         val cachedIsSubscribed by cachedSubscription.collectAsStateWithLifecycle(initialValue = null)
-        var remoteIsSubscribed by remember(collectionId) {
+        var remoteIsSubscribed by remember(collectionId, accountIdentity) {
             mutableStateOf<Boolean?>(null)
         }
-        var isUpdating by remember(collectionId) { mutableStateOf(false) }
-        var queryFailed by remember { mutableStateOf(false) }
-        var retryRequest by remember { mutableStateOf(0) }
+        var isUpdating by remember(collectionId, accountIdentity) { mutableStateOf(false) }
+        var queryFailed by remember(accountIdentity) { mutableStateOf(false) }
+        var retryRequest by remember(accountIdentity) { mutableStateOf(0) }
         val isSubscribed = remoteIsSubscribed ?: cachedIsSubscribed
 
-        LaunchedEffect(collectionId, currentBvid, currentAid, isUpdating, retryRequest) {
+        LaunchedEffect(collectionId, currentBvid, currentAid, accountIdentity, isUpdating, retryRequest) {
             if (collectionId <= 0L || currentBvid.isBlank() || isUpdating) return@LaunchedEffect
+            val identity = TokenManager.accountIdentity.value
             val result = ActionRepository.checkCollectionSubscriptionStatus(bvid = currentBvid, aid = currentAid)
             currentCoroutineContext().ensureActive()
+            if (identity != TokenManager.accountIdentity.value) return@LaunchedEffect
             result
                 .onSuccess { subscribed ->
-                    remoteIsSubscribed = subscribed
-                    SettingsManager.setCollectionSubscription(context, collectionId, subscribed)
+                    if (identity == TokenManager.accountIdentity.value) {
+                        remoteIsSubscribed = subscribed
+                        SettingsManager.setCollectionSubscription(context, collectionId, subscribed)
+                    }
                 }
-                .onFailure { queryFailed = true }
+                .onFailure {
+                    if (identity == TokenManager.accountIdentity.value) {
+                        queryFailed = true
+                    }
+                }
         }
 
         AppTextButton(
@@ -80,6 +90,7 @@ internal fun CollectionSubscriptionButton(
                     return@AppTextButton
                 }
                 if (isUpdating) return@AppTextButton
+                val identity = TokenManager.accountIdentity.value
                 isUpdating = true
                 scope.launch {
                     try {
@@ -91,6 +102,7 @@ internal fun CollectionSubscriptionButton(
                             )
                             .onSuccess { subscribed ->
                                 currentCoroutineContext().ensureActive()
+                                if (identity != TokenManager.accountIdentity.value) return@onSuccess
                                 if (subscribed != isSubscribed) subscriptionHaptic(HapticType.LIGHT)
                                 remoteIsSubscribed = subscribed
                                 SettingsManager.setCollectionSubscription(context, collectionId, subscribed)
@@ -101,6 +113,7 @@ internal fun CollectionSubscriptionButton(
                                 ).show()
                             }
                             .onFailure { error ->
+                                if (identity != TokenManager.accountIdentity.value) return@onFailure
                                 Toast.makeText(
                                     context,
                                     error.message ?: "合集订阅操作失败",
@@ -108,7 +121,9 @@ internal fun CollectionSubscriptionButton(
                                 ).show()
                             }
                     } finally {
-                        isUpdating = false
+                        if (identity == TokenManager.accountIdentity.value) {
+                            isUpdating = false
+                        }
                     }
                 }
             },

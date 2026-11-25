@@ -546,13 +546,24 @@ internal fun VideoDetailScreenStateHolder(
         )
     // 卡片开合需要可合成的实时 SDR 画面；HDR 仍由播放器选择 SurfaceView。
     val isPlayerSurfaceReady = true
-    val liveSurfaceCardTransitionEnabled = transitionEnabled
+    val liveSurfaceTransitionPreference by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getLiveSurfaceCardTransitionEnabled(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = remember {
+            com.android.purebilibili.core.store.SettingsManager.getInitialLiveSurfaceCardTransitionEnabled()
+        },
+    )
+    val sharedContainerActive =
+        com.android.purebilibili.navigation3.LocalNavigationSharedContainerSources.current != null
+    val liveSurfaceCardTransitionEnabled = transitionEnabled ||
+        (sharedContainerActive && liveSurfaceTransitionPreference)
     val useTextureSurfaceForNavigation = remember(
         transitionEnabled,
+        sharedContainerActive,
         liveSurfaceCardTransitionEnabled,
     ) {
         resolveNavigationLiveSurfaceTextureEnabled(
-            cardTransitionEnabled = transitionEnabled,
+            cardTransitionEnabled = transitionEnabled || sharedContainerActive,
             liveSurfaceCardTransitionEnabled = liveSurfaceCardTransitionEnabled,
         )
     }
@@ -4768,6 +4779,10 @@ internal fun VideoDetailScreenStateHolder(
                         val miuixReturnState =
                             com.android.purebilibili.core.ui.transition
                                 .LocalMiuixVideoCardTransitionState.current
+                        val sharedNavTransition =
+                            com.android.purebilibili.core.ui.LocalVideoDetailNavigationTransitionScope.current
+                        val sharedNavSurfaceVisible =
+                            com.android.purebilibili.navigation3.LocalNavigationSharedSurfaceVisible.current
                         val expandPlayerForSharedReturn by remember(
                             isExitTransitionInProgress,
                             isCommittedCardReturn,
@@ -4779,12 +4794,18 @@ internal fun VideoDetailScreenStateHolder(
                             entryOwnsMiuixCardTransition,
                             miuixReturnState,
                             videoCardDepthBackgroundState,
+                            sharedNavTransition,
+                            sharedNavSurfaceVisible,
                         ) {
                             derivedStateOf {
                                 val miuixGesture =
                                     entryOwnsMiuixCardTransition &&
                                         miuixReturnState.enabled &&
                                         miuixReturnState.isGestureInProgressProvider()
+                                val sharedContainerReturning = !sharedNavSurfaceVisible &&
+                                    sharedNavTransition != null &&
+                                    (sharedNavTransition.isRemoving ||
+                                        (sharedNavTransition.isRunning && sharedNavTransition.relativeDepth <= 0f))
                                 val phase = if (entryOwnsMiuixCardTransition) {
                                     videoCardDepthBackgroundState.phaseProvider()
                                 } else {
@@ -4795,13 +4816,14 @@ internal fun VideoDetailScreenStateHolder(
                                     keepLoadedContentForBackPreview = keepLoadedContentForBackPreview,
                                     isExitTransitionInProgress = isExitTransitionInProgress ||
                                         miuixGesture ||
+                                        sharedContainerReturning ||
                                         phase == VideoCardTransitionBackgroundPhase.RETURNING,
                                     isReturnGestureInProgress =
                                         (
                                             entryOwnsMiuixCardTransition &&
                                                 videoCardDepthBackgroundState
                                                     .isReturnGestureInProgressProvider()
-                                        ) || miuixGesture,
+                                        ) || miuixGesture || sharedContainerReturning,
                                     isGestureRestoreInProgress =
                                         entryOwnsMiuixCardTransition &&
                                             videoCardDepthBackgroundState
@@ -4809,6 +4831,7 @@ internal fun VideoDetailScreenStateHolder(
                                     sharedReturnLikely = detailShellSharedBoundsEnabled ||
                                         sharedBoundsActive ||
                                         liveReturnMorph ||
+                                        sharedContainerReturning ||
                                         (entryOwnsMiuixCardTransition &&
                                             miuixReturnState.enabled),
                                 )

@@ -44,24 +44,48 @@ internal class ReplyPreviewCache(private val nowMs: () -> Long = { android.os.Sy
     private val entries = LinkedHashMap<Key, Entry>()
     val requests = Semaphore(2)
 
+    @Synchronized
     fun get(account: AccountSessionIdentity, item: ReplyItem): List<ReplyItem>? {
-        val entry = entries[Key(account, item.oid, item.replyType, item.rpid)] ?: return null
-        return entry.replies.takeIf {
-            entry.source == item.replies && entry.count == item.count && entry.rcount == item.rcount &&
-                nowMs() - entry.atMs < 60_000L
+        val key = Key(account, item.oid, item.replyType, item.rpid)
+        val entry = entries[key] ?: return null
+        val fresh = entry.source == item.replies &&
+            entry.count == item.count &&
+            entry.rcount == item.rcount &&
+            nowMs() - entry.atMs < 60_000L
+        if (!fresh) {
+            entries.remove(key)
+            return null
         }
+        return entry.replies
     }
 
+    @Synchronized
     fun put(account: AccountSessionIdentity, item: ReplyItem, replies: List<ReplyItem>) {
         if (replies.size <= item.replies.orEmpty().size) return
+        val now = nowMs()
+        val iterator = entries.entries.iterator()
+        while (iterator.hasNext()) {
+            if (now - iterator.next().value.atMs >= 60_000L) {
+                iterator.remove()
+            }
+        }
         val key = Key(account, item.oid, item.replyType, item.rpid)
         entries.remove(key)
-        entries[key] = Entry(item.replies, item.count, item.rcount, replies, nowMs())
+        entries[key] = Entry(item.replies, item.count, item.rcount, replies, now)
         while (entries.size > 128) entries.remove(entries.keys.first())
+    }
+
+    @Synchronized
+    fun clear() {
+        entries.clear()
     }
 }
 
 private val replyPreviewCache = ReplyPreviewCache()
+
+internal fun clearReplyPreviewCache() {
+    replyPreviewCache.clear()
+}
 
 /** Visible rows supplement previews as soon as their settings and page allow it. */
 @Composable

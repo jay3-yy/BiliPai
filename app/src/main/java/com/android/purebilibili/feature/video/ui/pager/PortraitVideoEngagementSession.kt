@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.feature.video.policy.resolveFavoriteFolderMediaId
 import com.android.purebilibili.feature.video.usecase.VideoInteractionUseCase
@@ -250,7 +251,7 @@ internal class PortraitVideoEngagementSession(
     }
     fun tripleAction() = submit(PortraitEngagementAction.TRIPLE) { model.doTripleAction() }
     fun openFavoriteFolders() = submit(PortraitEngagementAction.FAVORITE) {
-        folderState.value = folderState.value.copy(visible = true, loading = true)
+        folderState.update { it.copy(visible = true, loading = true) }
         scope.launch { loadFavoriteFolders() }
     }
     private suspend fun loadFavoriteFolders(keepSelection: Boolean = false) {
@@ -259,48 +260,71 @@ internal class PortraitVideoEngagementSession(
         result.onSuccess { folders ->
             val selected = folders.filter { it.fav_state == 1 }
                 .map(::resolveFavoriteFolderMediaId).filter { it > 0L }.toSet()
-            val current = folderState.value
-            folderState.value = current.copy(
-                folders = folders, original = selected,
-                selected = if (keepSelection) current.selected.intersect(folders.map(::resolveFavoriteFolderMediaId).toSet()) else selected,
-            )
+            val validFolderIds = folders.map(::resolveFavoriteFolderMediaId).toSet()
+            folderState.update { current ->
+                current.copy(
+                    folders = folders, original = selected,
+                    selected = if (keepSelection) current.selected.intersect(validFolderIds) else selected,
+                )
+            }
             model.applyFavoriteFolderResult(subject.aid, selected.isNotEmpty())
-        }.onFailure { model.emitMessage(it.message ?: "加载收藏夹失败") }
-        folderState.value = folderState.value.copy(loading = false)
+        }.onFailure {
+            if (it is CancellationException) throw it
+            model.emitMessage(it.message ?: "加载收藏夹失败")
+        }
+        folderState.update { it.copy(loading = false) }
     }
     fun toggleFolder(folder: FavFolder) {
         val id = resolveFavoriteFolderMediaId(folder)
-        if (id <= 0L || folderState.value.saving) return
-        val current = folderState.value
-        folderState.value = current.copy(selected = if (id in current.selected) current.selected - id else current.selected + id)
+        if (id <= 0L) return
+        folderState.update { current ->
+            if (current.saving) current
+            else current.copy(selected = if (id in current.selected) current.selected - id else current.selected + id)
+        }
     }
     fun dismissFavoriteFolders() {
-        if (!folderState.value.saving) folderState.value = folderState.value.copy(visible = false)
+        folderState.update { current -> if (current.saving) current else current.copy(visible = false) }
     }
     fun hideDialogs() {
         model.setCoinDialogVisible(false)
         model.cancelTripleCelebration(model.uiState.value.tripleCelebrationId)
-        folderState.value = folderState.value.copy(visible = false)
+        folderState.update { it.copy(visible = false) }
     }
     fun saveFavoriteFolders() {
-        val current = folderState.value
-        if (current.saving || current.loading) return
-        val mutation = resolveFavoriteFolderMutation(current.original, current.selected)
-        if (mutation.addFolderIds.isEmpty() && mutation.removeFolderIds.isEmpty()) {
-            dismissFavoriteFolders()
-            return
+        var snapshot: PortraitFavoriteFolders? = null
+        var shouldDismiss = false
+        folderState.update { current ->
+            if (current.saving || current.loading) current
+            else {
+                val mutation = resolveFavoriteFolderMutation(current.original, current.selected)
+                if (mutation.addFolderIds.isEmpty() && mutation.removeFolderIds.isEmpty()) {
+                    shouldDismiss = true
+                    current.copy(visible = false)
+                } else {
+                    snapshot = current
+                    current.copy(saving = true)
+                }
+            }
         }
-        folderState.value = current.copy(saving = true)
+        if (shouldDismiss) return
+        val current = snapshot ?: return
+        val mutation = resolveFavoriteFolderMutation(current.original, current.selected)
         scope.launch {
-            val result = folderActions.updateFavoriteFolders(subject.aid, mutation.addFolderIds, mutation.removeFolderIds)
-            currentCoroutineContext().ensureActive()
-            result.onSuccess {
-                folderState.value = folderState.value.copy(visible = false, original = current.selected)
-                model.applyFavoriteFolderResult(subject.aid, current.selected.isNotEmpty())
-                model.notifyFavoriteFoldersChanged()
-                model.emitMessage(if (current.selected.isEmpty()) "已取消收藏" else "收藏设置已保存")
-            }.onFailure { model.emitMessage(it.message ?: "收藏失败") }
-            folderState.value = folderState.value.copy(saving = false)
+            try {
+                val result = folderActions.updateFavoriteFolders(subject.aid, mutation.addFolderIds, mutation.removeFolderIds)
+                currentCoroutineContext().ensureActive()
+                result.onSuccess {
+                    folderState.update { it.copy(visible = false, original = current.selected) }
+                    model.applyFavoriteFolderResult(subject.aid, current.selected.isNotEmpty())
+                    model.notifyFavoriteFoldersChanged()
+                    model.emitMessage(if (current.selected.isEmpty()) "已取消收藏" else "收藏设置已保存")
+                }.onFailure {
+                    if (it is CancellationException) throw it
+                    model.emitMessage(it.message ?: "收藏失败")
+                }
+            } finally {
+                folderState.update { it.copy(saving = false) }
+            }
         }
     }
     fun createFavoriteFolder(title: String, intro: String, isPrivate: Boolean) {
@@ -308,7 +332,10 @@ internal class PortraitVideoEngagementSession(
             val result = ActionRepository.createFavFolder(title, intro, isPrivate)
             currentCoroutineContext().ensureActive()
             result.onSuccess { loadFavoriteFolders(keepSelection = true) }
-                .onFailure { model.emitMessage(it.message ?: "创建收藏夹失败") }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    model.emitMessage(it.message ?: "创建收藏夹失败")
+                }
         }
     }
     fun close() { closed = true; job.cancel() }

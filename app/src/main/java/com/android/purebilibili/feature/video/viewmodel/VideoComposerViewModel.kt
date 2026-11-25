@@ -6,6 +6,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 
 data class VideoComposerUiState(
     val subject: VideoSubjectSnapshot? = null,
@@ -37,11 +38,11 @@ class VideoComposerViewModel : ViewModel() {
     }
 
     fun updateCommentDraft(text: String) {
-        _uiState.value = _uiState.value.copy(commentDraft = text)
+        _uiState.update { it.copy(commentDraft = text) }
     }
 
     fun updateDanmakuDraft(text: String) {
-        _uiState.value = _uiState.value.copy(danmakuDraft = text)
+        _uiState.update { it.copy(danmakuDraft = text) }
     }
 
     internal suspend fun notifyCommentSent() {

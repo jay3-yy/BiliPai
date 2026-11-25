@@ -165,6 +165,10 @@ fun PlayerSelectionPopup(
         // 必须用测量到的真实高度才能贴着锚点展开。
         val menuHeightPx = with(menuDensity) { height.roundToPx() }
         var menuMeasuredSize by remember { mutableStateOf(IntSize.Zero) }
+        com.android.purebilibili.core.ui.LocalNavigationBackHandler(
+            enabled = true,
+            onBackCompleted = onDismissRequest,
+        )
         Popup(
             onDismissRequest = onDismissRequest,
             properties = PopupProperties(
@@ -271,6 +275,10 @@ fun PlayerSelectionPopup(
             PlayerListPopupPlacement.ANCHOR_END -> return
         }
         val origin = remember { mutableStateOf(Offset.Zero) }
+        com.android.purebilibili.core.ui.LocalNavigationBackHandler(
+            enabled = true,
+            onBackCompleted = onDismissRequest,
+        )
         // 这层 fillMaxSize 只是为了拿窗口原点来做绝对定位，但调用方把本组件放在底栏的
         // Column 里，直接 fillMaxSize 会把 Column 撑到整屏高（198 -> 1260），导致
         // align(BottomStart) 的底栏跑到顶部。用 Popup 承载后，fillMaxSize 只作用于 Popup

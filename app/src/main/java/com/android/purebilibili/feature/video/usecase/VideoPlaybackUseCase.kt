@@ -638,7 +638,7 @@ class VideoPlaybackUseCase(
                         if (defaultQuality > 0) defaultQuality else playData.quality
                     }
                     
-                    val selectionSpeed = playbackSpeedOverride ?: exoPlayer?.playbackParameters?.speed ?: 1.0f
+                    val selectionSpeed = playbackSpeedOverride ?: 1.0f
                     val allowPremiumApiOnlyQualities = !VideoRepository.isAppApiCoolingDown()
                     val selection = withContext(Dispatchers.Default) {
                         resolvePlaybackSelection(
@@ -903,7 +903,7 @@ class VideoPlaybackUseCase(
         durationMs: Long = 0L,
         playbackQualityMode: PlaybackQualityMode = PlaybackQualityMode.AUTO,
         audioQualityPreference: Int = -1, // [新增] 传入音频偏好
-        playbackSpeed: Float = exoPlayer?.playbackParameters?.speed ?: 1.0f,
+        playbackSpeed: Float = 1.0f,
         videoCodecPreference: String = "hev1",
         videoSecondCodecPreference: String = "avc1",
         isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
@@ -1031,7 +1031,7 @@ class VideoPlaybackUseCase(
         currentPos: Long,
         playbackQualityMode: PlaybackQualityMode = PlaybackQualityMode.AUTO,
         audioQualityPreference: Int = -1, // [新增] 传入音频偏好
-        playbackSpeed: Float = exoPlayer?.playbackParameters?.speed ?: 1.0f,
+        playbackSpeed: Float = 1.0f,
         videoCodecPreference: String = "hev1",
         videoSecondCodecPreference: String = "avc1",
         isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
@@ -1153,7 +1153,7 @@ class VideoPlaybackUseCase(
         playUrlData: PlayUrlData,
         targetQuality: Int,
         audioQualityPreference: Int = -1,
-        playbackSpeed: Float = exoPlayer?.playbackParameters?.speed ?: 1.0f,
+        playbackSpeed: Float = 1.0f,
         videoCodecPreference: String = "hev1",
         videoSecondCodecPreference: String = "avc1",
         playbackQualityMode: PlaybackQualityMode = PlaybackQualityMode.AUTO,

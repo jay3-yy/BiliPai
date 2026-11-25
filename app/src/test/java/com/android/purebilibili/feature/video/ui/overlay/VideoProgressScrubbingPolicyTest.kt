@@ -12,6 +12,10 @@ import com.android.purebilibili.feature.video.ui.components.shouldShowEndScreenN
 import com.android.purebilibili.feature.video.ui.section.formatPinchZoomRestoreLabel
 import com.android.purebilibili.feature.video.ui.section.resolveAdjacentChapterTarget
 import com.android.purebilibili.feature.video.ui.section.resolveFillZoomScale
+import com.android.purebilibili.core.store.LongPressSpeedSlideMode
+import com.android.purebilibili.feature.video.ui.section.formatLongPressSpeedLabel
+import com.android.purebilibili.feature.video.ui.section.isLongPressSpeedAnchorTick
+import com.android.purebilibili.feature.video.ui.section.resolveLongPressContinuousSlideSpeed
 import com.android.purebilibili.feature.video.ui.section.resolveLongPressSlideSpeed
 import com.android.purebilibili.feature.video.ui.section.resolvePinchZoomReleaseScale
 import com.android.purebilibili.feature.video.ui.section.shouldTriggerPortraitSwipeDownMinimize
@@ -185,9 +189,74 @@ class VideoProgressScrubbingPolicyTest {
     fun `long press slide speed steps through presets and clamps bounds`() {
         assertEquals(2.0f, resolveLongPressSlideSpeed(2.0f, accumulatedDragXPx = 20f, stepPx = 100f))
         assertEquals(2.5f, resolveLongPressSlideSpeed(2.0f, accumulatedDragXPx = 120f, stepPx = 100f))
-        assertEquals(3.0f, resolveLongPressSlideSpeed(2.0f, accumulatedDragXPx = 500f, stepPx = 100f))
+        assertEquals(5.0f, resolveLongPressSlideSpeed(2.0f, accumulatedDragXPx = 900f, stepPx = 100f))
         assertEquals(1.5f, resolveLongPressSlideSpeed(2.0f, accumulatedDragXPx = -120f, stepPx = 100f))
-        assertEquals(1.25f, resolveLongPressSlideSpeed(2.0f, accumulatedDragXPx = -500f, stepPx = 100f))
+        assertEquals(0.5f, resolveLongPressSlideSpeed(2.0f, accumulatedDragXPx = -900f, stepPx = 100f))
+    }
+
+    @Test
+    fun `continuous long press slide speed honors deadzone 0_1x steps and 0_5x to 5_0x bounds`() {
+        // 起手死区内保持原速，防止下滑锁速时误蹭偏倍速
+        assertEquals(
+            2.0f,
+            resolveLongPressContinuousSlideSpeed(
+                initialSpeed = 2.0f,
+                accumulatedDragXPx = 18f,
+                deadzonePx = 20f,
+                stepPx = 15f,
+            ),
+        )
+        // 向右跨过死区 3 步 -> 2.3x
+        assertEquals(
+            2.3f,
+            resolveLongPressContinuousSlideSpeed(
+                initialSpeed = 2.0f,
+                accumulatedDragXPx = 20f + 45f,
+                deadzonePx = 20f,
+                stepPx = 15f,
+            ),
+        )
+        // 向左跨过死区 12 步 -> 0.8x（支持 < 1.0x 临时慢放）
+        assertEquals(
+            0.8f,
+            resolveLongPressContinuousSlideSpeed(
+                initialSpeed = 2.0f,
+                accumulatedDragXPx = -(20f + 180f),
+                deadzonePx = 20f,
+                stepPx = 15f,
+            ),
+        )
+        // 上下限钳制在 0.5x ~ 5.0x
+        assertEquals(
+            5.0f,
+            resolveLongPressContinuousSlideSpeed(
+                initialSpeed = 2.0f,
+                accumulatedDragXPx = 1000f,
+                deadzonePx = 20f,
+                stepPx = 15f,
+            ),
+        )
+        assertEquals(
+            0.5f,
+            resolveLongPressContinuousSlideSpeed(
+                initialSpeed = 2.0f,
+                accumulatedDragXPx = -1000f,
+                deadzonePx = 20f,
+                stepPx = 15f,
+            ),
+        )
+        assertTrue(isLongPressSpeedAnchorTick(2.0f))
+        assertTrue(isLongPressSpeedAnchorTick(0.5f))
+        assertFalse(isLongPressSpeedAnchorTick(2.3f))
+        assertEquals("2.0x", formatLongPressSpeedLabel(2.0f))
+        assertEquals("1.25x", formatLongPressSpeedLabel(1.25f))
+        assertEquals("0.8x", formatLongPressSpeedLabel(0.8000001f))
+        assertEquals(LongPressSpeedSlideMode.PRESETS, LongPressSpeedSlideMode.fromStorageValue(null, legacyEnabled = true))
+        assertEquals(LongPressSpeedSlideMode.OFF, LongPressSpeedSlideMode.fromStorageValue(null, legacyEnabled = false))
+        assertEquals(
+            LongPressSpeedSlideMode.CONTINUOUS,
+            LongPressSpeedSlideMode.fromStorageValue("continuous", legacyEnabled = false),
+        )
     }
 
     @Test

@@ -358,44 +358,51 @@ class VideoEngagementViewModel(
     }
 
     private fun applyAuthoritativeSnapshot(snapshot: VideoEngagementAuthoritativeSnapshot) {
-        val target = _uiState.value
-        val targetSubject = target.subject ?: return
         val owner = snapshot.subject
         val source = snapshot.seed
-        if (handoffSession != interactionSession() || boundSession != handoffSession ||
-            targetSubject.bvid != owner.bvid || targetSubject.aid != owner.aid) return
+        if (handoffSession != interactionSession() || boundSession != handoffSession) return
+        val targetSubject = _uiState.value.subject ?: return
+        if (targetSubject.bvid != owner.bvid || targetSubject.aid != owner.aid) return
         val sameOwner = targetSubject.ownerMid == owner.ownerMid
         locallyModifiedFields = locallyModifiedFields + setOf(
             VideoEngagementField.LIKE, VideoEngagementField.DISLIKE,
             VideoEngagementField.FAVORITE, VideoEngagementField.COIN,
         ) + if (sameOwner) setOf(VideoEngagementField.FOLLOWING, VideoEngagementField.FOLLOWING_MIDS) else emptySet()
-        _uiState.value = target.copy(
-            isLiked = source.isLiked,
-            likeStatusKnown = source.likeStatusKnown,
-            isDisliked = source.isDisliked,
-            isFavorited = source.isFavorited,
-            likeCount = source.likeCount,
-            favoriteCount = source.favoriteCount,
-            coinCount = source.coinCount,
-            relationshipStatusKnown = true,
-            isRepost = source.isRepost,
-            isFollowing = if (sameOwner) source.isFollowing else target.isFollowing,
-            followStatusKnown = if (sameOwner) source.followStatusKnown else target.followStatusKnown,
-            followingMids = if (sameOwner) {
-                (target.followingMids - owner.ownerMid) + if (source.isFollowing) setOf(owner.ownerMid) else emptySet()
-            } else target.followingMids,
-        )
+        _uiState.update { target ->
+            val currentSubject = target.subject ?: return@update target
+            if (currentSubject.bvid != owner.bvid || currentSubject.aid != owner.aid) return@update target
+            val currentSameOwner = currentSubject.ownerMid == owner.ownerMid
+            target.copy(
+                isLiked = source.isLiked,
+                likeStatusKnown = source.likeStatusKnown,
+                isDisliked = source.isDisliked,
+                isFavorited = source.isFavorited,
+                likeCount = source.likeCount,
+                favoriteCount = source.favoriteCount,
+                coinCount = source.coinCount,
+                relationshipStatusKnown = true,
+                isRepost = source.isRepost,
+                isFollowing = if (currentSameOwner) source.isFollowing else target.isFollowing,
+                followStatusKnown = if (currentSameOwner) source.followStatusKnown else target.followStatusKnown,
+                followingMids = if (currentSameOwner) {
+                    (target.followingMids - owner.ownerMid) + if (source.isFollowing) setOf(owner.ownerMid) else emptySet()
+                } else target.followingMids,
+            )
+        }
     }
 
     internal fun applyFavoriteFolderResult(aid: Long, favorited: Boolean) {
         val current = _uiState.value
         if (current.subject?.aid != aid || !isCurrent(current, boundSession)) return
         locallyModifiedFields = locallyModifiedFields + VideoEngagementField.FAVORITE
-        _uiState.value = current.copy(
-            isFavorited = favorited,
-            favoriteCount = (current.favoriteCount +
-                if (favorited == current.isFavorited) 0 else if (favorited) 1 else -1).coerceAtLeast(0),
-        )
+        _uiState.update { latest ->
+            if (latest.subject?.aid != aid || !isCurrent(latest, boundSession)) return@update latest
+            latest.copy(
+                isFavorited = favorited,
+                favoriteCount = (latest.favoriteCount +
+                    if (favorited == latest.isFavorited) 0 else if (favorited) 1 else -1).coerceAtLeast(0),
+            )
+        }
     }
 
     internal fun notifyFavoriteFoldersChanged() {
@@ -678,7 +685,12 @@ class VideoEngagementViewModel(
                     }
                     emitMessage(if (inWatchLater) "已添加到稍后再看" else "已从稍后再看移除")
                 }
-                .onFailure { emitMessage(it.message ?: "操作失败") }
+                .onFailure {
+                    it.rethrowCancellation()
+                    if (_uiState.value.subject?.generation == subject.generation) {
+                        emitMessage(it.message ?: "操作失败")
+                    }
+                }
         }
     }
 

@@ -329,7 +329,9 @@ internal fun TabletVideoLayout(
         basePrimaryRatio = layoutPolicy.primaryRatio,
         secondaryPaneMode = secondaryPaneMode
     )
-    val useThreePaneLayout = !companionPane && LocalWindowSizeClass.current.shouldUseThreePaneLayout &&
+    val detailRelatedVisible = rememberDetailRelatedVisibility().isVisible()
+    val useThreePaneLayout = !companionPane && detailRelatedVisible &&
+        LocalWindowSizeClass.current.shouldUseThreePaneLayout &&
         !layoutPolicy.useTabletopLayout
     val secondaryPaneHidden = companionPane || shouldHideTabletSecondaryPane(
         paneMode = secondaryPaneMode,
@@ -668,7 +670,7 @@ internal fun TabletVideoLayout(
                                 videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
                                 videoNoteEnabled = videoNoteEnabled,
                                 videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
-                                showRelatedVideos = companionPane,
+                                showRelatedVideos = companionPane && detailRelatedVisible,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }
@@ -680,18 +682,17 @@ internal fun TabletVideoLayout(
         secondaryContent = {
             Box(Modifier.fillMaxSize().focusGroup().videoDetailTransitionChrome(transitionChromeAlphaProvider)) {
                 // 📝 右侧：评论 / 相关推荐
+                val showRelatedFirstSkeleton = !useThreePaneLayout && detailRelatedVisible &&
+                    secondaryDefaultTab == com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED
                 VideoDetailSkeletonHandoff(
                     identity = bvid,
                     ready = contentState != null,
-                    entryContentReady = if (useThreePaneLayout || secondaryDefaultTab ==
-                        com.android.purebilibili.core.store.TabletSecondaryDefaultTab.COMMENTS
-                    ) commentsContentReady else relatedContentReady,
+                    entryContentReady = if (!showRelatedFirstSkeleton) commentsContentReady else relatedContentReady,
                     loading = contentState == null && uiState is VideoPlaybackUiState.Loading,
                     modifier = Modifier.fillMaxSize(),
                     skeleton = {
                         VideoDetailSecondaryPaneSkeleton(
-                            showComments = useThreePaneLayout || secondaryDefaultTab ==
-                                com.android.purebilibili.core.store.TabletSecondaryDefaultTab.COMMENTS,
+                            showComments = !showRelatedFirstSkeleton,
                             modifier = Modifier.fillMaxSize(),
                             showIntro = layoutPolicy.useTabletopLayout,
                         )
@@ -725,8 +726,9 @@ internal fun TabletVideoLayout(
                                 onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
                                 onDanmakuToggle = danmakuChrome.onToggle,
                                 fixedTab = if (useThreePaneLayout) TabletSecondaryTab.COMMENTS else null,
-                                relatedTabFirst = secondaryDefaultTab ==
-                                com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED,
+                                includeRelatedTab = detailRelatedVisible,
+                                relatedTabFirst = detailRelatedVisible && secondaryDefaultTab ==
+                                    com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED,
                                 introContent = if (layoutPolicy.useTabletopLayout) {
                                     {
                                         TabletVideoInfoPane(

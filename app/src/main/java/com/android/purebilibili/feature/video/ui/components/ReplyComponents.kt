@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.plugin.skin.assetPath
+
 import com.android.purebilibili.R
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
@@ -1514,7 +1516,34 @@ fun ReplyItemView(
     } else {
         null
     }
-    val biliPaiDecoration = fanGroupVisual
+    val uiSkinState = com.android.purebilibili.core.plugin.skin.LocalUiSkinState.current
+    val selfAccountMid = TokenManager.midCache ?: 0L
+    val currentReplyMemberMid = remember(item.member.mid, item.mid) { resolveReplyMemberMid(item) }
+    val localSkinCommentVisual = remember(
+        showResolvedIdentityDecorations,
+        currentReplyMemberMid,
+        selfAccountMid,
+        uiSkinState,
+    ) {
+        if (!showResolvedIdentityDecorations || selfAccountMid <= 0L || currentReplyMemberMid != selfAccountMid) {
+            null
+        } else {
+            val commentBgPath = uiSkinState.assetPath(
+                com.android.purebilibili.core.plugin.skin.UiSkinSurface.COMMENT_CARD
+            ) { it.commentCardBgImage }
+            if (commentBgPath.isNullOrBlank()) {
+                null
+            } else {
+                val skinColors = uiSkinState.activeSkin?.manifest?.colors
+                FanGroupTagVisual(
+                    fanNumber = uiSkinState.customFanNumber,
+                    cardBgImageUrl = java.io.File(commentBgPath).toURI().toString(),
+                    fanColorHex = skinColors?.commentFanNoColor ?: skinColors?.fanNoColor ?: "",
+                )
+            }
+        }
+    }
+    val biliPaiDecoration = localSkinCommentVisual ?: fanGroupVisual
     val replyOfficialBadge = remember(item.member.officialVerify) {
         resolveOfficialVerifyBadge(
             type = item.member.officialVerify.type,
@@ -3334,7 +3363,9 @@ internal fun normalizeHttpImageUrl(url: String?): String {
 }
 
 internal fun resolveDecorationImageUrl(url: String?): String {
-    return normalizeHttpImageUrl(url)
+    val trimmed = url?.trim().orEmpty()
+    if (trimmed.startsWith("file://") || trimmed.startsWith("/")) return trimmed
+    return normalizeHttpImageUrl(trimmed)
 }
 
 private fun resolveFansMedalColor(level: Int): Color {
@@ -3746,8 +3777,8 @@ fun CommentPictures(
             val pic = pictures[0]
             //  [优化] 更好的比例计算；比例规则下沉 core-data 后委托共享实现
             val aspectRatio = resolveCommentSinglePictureAspectRatio(pic)
-            var imageRect by remember { mutableStateOf<Rect?>(null) }
-            val sourceHidden = isImagePreviewSourceHidden(imageRect)
+            val imageRectState = com.android.purebilibili.feature.dynamic.components.rememberImagePreviewSourceRect()
+            val sourceHidden = isImagePreviewSourceHidden(imageRectState.value, imageUrls.firstOrNull())
 
             Box(
                 modifier = Modifier
@@ -3759,22 +3790,24 @@ fun CommentPictures(
                     .clip(AppShapes.container(ContainerLevel.Card))  //  [优化] 更大圆角 8dp → 12dp
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .onGloballyPositioned { coordinates ->
-                        imageRect = coordinates.boundsInWindow()
-                        imageRect?.let { galleryRects[0] = it }
+                        val bounds = coordinates.boundsInWindow()
+                        imageRectState.value = bounds
+                        galleryRects[0] = bounds
                     }
                     .appActionClickable(
                         interactionSource = null,
                         indication = null,
                         enabled = !sourceHidden,
                     ) {
-                        val anchor = imageRect?.let {
+                        val anchor = imageRectState.value?.let {
                             ImagePreviewSourceAnchor(
                                 it,
                                 singleImageCornerDp,
-                                galleryRects = galleryRects.toMap()
+                                galleryRects = galleryRects.toMap(),
+                                sourceKey = imageUrls.firstOrNull(),
                             )
                         }
-                        prepareImagePreviewSourceTransition(anchor?.rect)
+                        prepareImagePreviewSourceTransition(anchor?.rect, anchor?.sourceKey)
                         onImageClick(
                             imageUrls,
                             0,
@@ -3791,17 +3824,19 @@ fun CommentPictures(
         }
         else -> {
             // 多张图片：网格布局
-            val displayItems = pictures.take(9)  //  [优化] 最多显示9张
+            val displayItems = remember(pictures) { pictures.take(9) }  //  [优化] 最多显示9张
             // 列数规则下沉 core-data 后委托共享实现
             val columns = resolveCommentPictureGridColumns(displayItems.size)
+            val rows = remember(displayItems, columns) { displayItems.chunked(columns) }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {  //  [优化] 增加间距 4dp → 6dp
-                displayItems.chunked(columns).forEachIndexed { rowIndex, row ->
+                rows.forEachIndexed { rowIndex, row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         row.forEachIndexed { colIndex, pic ->
                             val globalIndex = rowIndex * columns + colIndex
-                            var imageRect by remember { mutableStateOf<Rect?>(null) }
-                            val sourceHidden = isImagePreviewSourceHidden(imageRect)
+                            val cellImageUrl = imageUrls.getOrNull(globalIndex)
+                            val imageRectState = com.android.purebilibili.feature.dynamic.components.rememberImagePreviewSourceRect()
+                            val sourceHidden = isImagePreviewSourceHidden(imageRectState.value, cellImageUrl)
 
                             Box(
                                 modifier = Modifier
@@ -3811,22 +3846,24 @@ fun CommentPictures(
                                     .clip(AppShapes.container(ContainerLevel.Field))  //  [优化] 更大圆角 6dp → 10dp
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                                     .onGloballyPositioned { coordinates ->
-                                        imageRect = coordinates.boundsInWindow()
-                                        imageRect?.let { galleryRects[globalIndex] = it }
+                                        val bounds = coordinates.boundsInWindow()
+                                        imageRectState.value = bounds
+                                        galleryRects[globalIndex] = bounds
                                     }
                                     .appActionClickable(
                                         interactionSource = null,
                                         indication = null,
                                         enabled = !sourceHidden,
                                     ) {
-                                        val anchor = imageRect?.let {
+                                        val anchor = imageRectState.value?.let {
                                             ImagePreviewSourceAnchor(
                                                 it,
                                                 gridImageCornerDp,
-                                                galleryRects = galleryRects.toMap()
+                                                galleryRects = galleryRects.toMap(),
+                                                sourceKey = cellImageUrl,
                                             )
                                         }
-                                        prepareImagePreviewSourceTransition(anchor?.rect)
+                                        prepareImagePreviewSourceTransition(anchor?.rect, anchor?.sourceKey)
                                         onImageClick(
                                             imageUrls,
                                             globalIndex,

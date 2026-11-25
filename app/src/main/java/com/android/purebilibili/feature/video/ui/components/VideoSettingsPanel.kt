@@ -719,9 +719,11 @@ internal fun VideoSettingsPanel(
                             val doubleTapLikeEnabled by remember(context) {
                                 com.android.purebilibili.core.store.SettingsManager.getDoubleTapLike(context)
                             }.collectAsStateWithLifecycle(initialValue = true)
-                            val longPressSlideEnabled by remember(context) {
-                                com.android.purebilibili.core.store.SettingsManager.getLongPressSpeedSlideAdjustEnabled(context)
-                            }.collectAsStateWithLifecycle(initialValue = true)
+                            val longPressSlideMode by remember(context) {
+                                com.android.purebilibili.core.store.SettingsManager.getLongPressSpeedSlideMode(context)
+                            }.collectAsStateWithLifecycle(
+                                initialValue = com.android.purebilibili.core.store.LongPressSpeedSlideMode.PRESETS,
+                            )
                             AppText(
                                 text = "快捷开关",
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
@@ -740,15 +742,28 @@ internal fun VideoSettingsPanel(
                                     }
                                 },
                             )
-                            VideoSettingsSwitchRow(
-                                icon = Icons.Outlined.Speed,
-                                title = "长按加速时滑动调速",
-                                subtitle = "长按期间左右滑动可微调临时倍速",
-                                checked = longPressSlideEnabled,
-                                onCheckedChange = { enabled ->
+                            PlayerSettingsRow(
+                                title = "长按倍速滑动调节（${longPressSlideMode.label}）",
+                                subtitle = when (longPressSlideMode) {
+                                    com.android.purebilibili.core.store.LongPressSpeedSlideMode.OFF ->
+                                        "长按保持固定倍速 · 点按切至档位换挡"
+                                    com.android.purebilibili.core.store.LongPressSpeedSlideMode.PRESETS ->
+                                        "左右滑切换 0.5x–5.0x 档位 · 点按切至无极调速"
+                                    com.android.purebilibili.core.store.LongPressSpeedSlideMode.CONTINUOUS ->
+                                        "左右滑 0.5x–5.0x 无极微调（±0.1x）· 点按关闭"
+                                },
+                                onClick = {
+                                    val nextMode = when (longPressSlideMode) {
+                                        com.android.purebilibili.core.store.LongPressSpeedSlideMode.OFF ->
+                                            com.android.purebilibili.core.store.LongPressSpeedSlideMode.PRESETS
+                                        com.android.purebilibili.core.store.LongPressSpeedSlideMode.PRESETS ->
+                                            com.android.purebilibili.core.store.LongPressSpeedSlideMode.CONTINUOUS
+                                        com.android.purebilibili.core.store.LongPressSpeedSlideMode.CONTINUOUS ->
+                                            com.android.purebilibili.core.store.LongPressSpeedSlideMode.OFF
+                                    }
                                     scope.launch {
                                         com.android.purebilibili.core.store.SettingsManager
-                                            .setLongPressSpeedSlideAdjustEnabled(context, enabled)
+                                            .setLongPressSpeedSlideMode(context, nextMode)
                                     }
                                 },
                             )

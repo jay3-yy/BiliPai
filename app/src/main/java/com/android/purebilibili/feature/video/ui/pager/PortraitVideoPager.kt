@@ -898,18 +898,6 @@ fun PortraitVideoPager(
             }
         com.android.purebilibili.core.lifecycle.AbandonableResource(createdPlayer) { it.release() }
     }.value
-    DisposableEffect(exoPlayer, portraitAudioOnly) {
-        val videoTrackType = androidx.media3.common.C.TRACK_TYPE_VIDEO
-        val wasDisabled = exoPlayer.trackSelectionParameters.disabledTrackTypes.contains(videoTrackType)
-        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
-            .setTrackTypeDisabled(videoTrackType, portraitAudioOnly)
-            .build()
-        onDispose {
-            exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(videoTrackType, wasDisabled)
-                .build()
-        }
-    }
     LaunchedEffect(exoPlayer, playbackCompletionBehavior) {
         exoPlayer.repeatMode = resolvePlaybackCompletionRepeatMode(playbackCompletionBehavior)
     }
@@ -1053,6 +1041,34 @@ fun PortraitVideoPager(
         } else requestedPlaybackSnapshot?.takeIf { it.bvid == bvid }
     }
 
+    // 独立竖屏播放器在切到后台继续听音频或纯音频模式时关闭视频轨道硬解，回前台可见窗口后恢复
+    val disablePortraitVideoTrack = if (useSharedPlayer) {
+        portraitAudioOnly
+    } else {
+        portraitAudioOnly || (!canPlayInVisibleWindow && continueInBackgroundAudio)
+    }
+    DisposableEffect(exoPlayer, disablePortraitVideoTrack) {
+        val videoTrackType = androidx.media3.common.C.TRACK_TYPE_VIDEO
+        val wasDisabled = exoPlayer.trackSelectionParameters.disabledTrackTypes.contains(videoTrackType)
+        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(videoTrackType, disablePortraitVideoTrack)
+            .build()
+        onDispose {
+            exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(videoTrackType, wasDisabled)
+                .build()
+        }
+    }
+    // 独立竖屏播放器在后台暂停超过 15 秒后释放解码器与缓冲，回到可见窗口时由 inactivitySnapshot 恢复准备与进度
+    LaunchedEffect(exoPlayer, useSharedPlayer, isPortraitPlaybackAllowed, canPlayInVisibleWindow) {
+        if (useSharedPlayer || isPortraitPlaybackAllowed || canPlayInVisibleWindow) return@LaunchedEffect
+        kotlinx.coroutines.delay(15_000L)
+        if (!isPortraitPlaybackAllowed && !canPlayInVisibleWindow) {
+            capturePortraitInactivitySnapshot()
+            exoPlayer.stop()
+        }
+    }
+
     DisposableEffect(lifecycleOwner, activity) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -1075,9 +1091,9 @@ fun PortraitVideoPager(
                     val canContinue =
                         MiniPlayerManager.getInstance(context).shouldContinueBackgroundAudio()
                     continueInBackgroundAudio = canContinue
+                    canPlayInVisibleWindow = false
                     if (!canContinue) {
                         capturePortraitInactivitySnapshot()
-                        canPlayInVisibleWindow = false
                     }
                 }
                 else -> Unit
@@ -1667,11 +1683,11 @@ fun PortraitVideoPager(
     }
 
     LaunchedEffect(
-        exoPlayer, wifiPreloadQueue, portraitWifiAvailable, isPortraitPlaybackAllowed,
+        exoPlayer, wifiPreloadQueue, portraitWifiAvailable, isPortraitPlaybackAllowed, canPlayInVisibleWindow,
         portraitSelectedQuality, portraitRequestedAudioQuality, portraitPreloadSpeed, activeLoadGeneration, isLoading,
         portraitPreferredCodec, portraitSecondPreferredCodec, portraitCdnPreference,
     ) {
-        if (!portraitWifiAvailable || !isPortraitPlaybackAllowed || portraitSelectedQuality <= 0 || isLoading) {
+        if (!portraitWifiAvailable || !isPortraitPlaybackAllowed || !canPlayInVisibleWindow || portraitSelectedQuality <= 0 || isLoading) {
             wifiPreloadQueue.clear()
             exoPlayer.setPreloadConfiguration(ExoPlayer.PreloadConfiguration.DEFAULT)
             return@LaunchedEffect
@@ -1718,7 +1734,12 @@ fun PortraitVideoPager(
         val matchingMedia = mediaId == resolvePortraitMediaId(snapshot.bvid, snapshot.cid) ||
             (useSharedPlayer && mediaId == snapshot.bvid)
         if (matchingMedia && exoPlayer.playerError == null) {
-            if (exoPlayer.playbackState == Player.STATE_IDLE) exoPlayer.prepare()
+            if (exoPlayer.playbackState == Player.STATE_IDLE) {
+                if (snapshot.positionMs > 0L) {
+                    exoPlayer.seekTo(snapshot.positionMs)
+                }
+                exoPlayer.prepare()
+            }
             exoPlayer.playWhenReady = snapshot.playWhenReady
             if (snapshot.playWhenReady) exoPlayer.play() else exoPlayer.pause()
         } else {
@@ -1735,10 +1756,10 @@ fun PortraitVideoPager(
     // One effect owns the entire prefetch window, including cancellation of obsolete tasks.
     LaunchedEffect(
         pagerState, pageItems, portraitSelectedQuality, portraitRequestedAudioQuality,
-        prefetchVideoEnabled, portraitWifiAvailable, isPortraitPlaybackAllowed, portraitPlaybackCdnPlugin, portraitCdnPreference,
+        prefetchVideoEnabled, portraitWifiAvailable, isPortraitPlaybackAllowed, canPlayInVisibleWindow, portraitPlaybackCdnPlugin, portraitCdnPreference,
         portraitPreferredCodec, portraitSecondPreferredCodec,
     ) {
-        if (portraitSelectedQuality <= 0 || !isPortraitPlaybackAllowed) return@LaunchedEffect
+        if (portraitSelectedQuality <= 0 || !isPortraitPlaybackAllowed || !canPlayInVisibleWindow) return@LaunchedEffect
         if (!portraitWifiAvailable && !prefetchVideoEnabled) return@LaunchedEffect
         val prefetchExecutor = PortraitPrefetchWindowExecutor<PortraitPagePlaybackIdentity> {
             resolvePortraitMediaId(it.bvid, it.cid)

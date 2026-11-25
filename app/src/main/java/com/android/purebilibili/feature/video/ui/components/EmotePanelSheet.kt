@@ -99,15 +99,18 @@ fun EmotePanelSheet(
             } else {
                 // 表情包 Tab 栏
                 var selectedPackageIndex by remember { mutableIntStateOf(0) }
+                val packageOptions = remember(packages) {
+                    packages.mapIndexed { index, pkg ->
+                        AppSegmentOption(index, pkg.text)
+                    }
+                }
 
                 AppThemeAdaptiveTabRow(
                     // Glass indicator fills the measured slot; native geometry keeps its defaults.
                     liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
                     role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
                     centerContent = false,
-                    options = packages.mapIndexed { index, pkg ->
-                        AppSegmentOption(index, pkg.text)
-                    },
+                    options = packageOptions,
                     selectedValue = selectedPackageIndex,
                     onSelectionChange = { selectedPackageIndex = it },
                     modifier = Modifier.fillMaxWidth(),

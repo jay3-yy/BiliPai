@@ -406,12 +406,21 @@ private class CachedDanmakuBlockRuleMatcher(
     val matcher: DanmakuBlockRuleMatcher?
 )
 
+private const val MAX_DANMAKU_BLOCK_RULE_MATCHER_CACHE_SIZE = 1024
+
 private val DANMAKU_BLOCK_RULE_MATCHER_CACHE =
     ConcurrentHashMap<String, CachedDanmakuBlockRuleMatcher>()
+
+internal fun clearDanmakuBlockRuleMatcherCache() {
+    DANMAKU_BLOCK_RULE_MATCHER_CACHE.clear()
+}
 
 private fun resolveDanmakuBlockRuleMatcher(rule: String): DanmakuBlockRuleMatcher? {
     val normalized = rule.trim()
     if (normalized.isEmpty()) return null
+    if (DANMAKU_BLOCK_RULE_MATCHER_CACHE.size > MAX_DANMAKU_BLOCK_RULE_MATCHER_CACHE_SIZE) {
+        DANMAKU_BLOCK_RULE_MATCHER_CACHE.clear()
+    }
     return DANMAKU_BLOCK_RULE_MATCHER_CACHE
         .computeIfAbsent(normalized) { CachedDanmakuBlockRuleMatcher(compileDanmakuBlockRuleMatcher(it)) }
         .matcher

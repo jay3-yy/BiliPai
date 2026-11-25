@@ -190,6 +190,7 @@ class DanmakuManager private constructor(
     val basDanmakuFlow: kotlinx.coroutines.flow.StateFlow<List<BasDanmaku>> = _basDanmakuFlow.asStateFlow()
     private val _commandDanmakuFlow = kotlinx.coroutines.flow.MutableStateFlow<List<CommandDanmakuItem>>(emptyList())
     val commandDanmakuFlow: kotlinx.coroutines.flow.StateFlow<List<CommandDanmakuItem>> = _commandDanmakuFlow.asStateFlow()
+    @Volatile private var bpxExternalDanmakuList: List<DanmakuItem> = emptyList()
     private var cachedCid: Long = 0L
     private var cachedAid: Long = 0L
     private var cachedBvid: String = ""
@@ -1478,6 +1479,7 @@ class DanmakuManager private constructor(
         //  [关键修复] 等待 View 布局完成后再设置弹幕数据
         // DanmakuRenderEngine 需要有效的 View 尺寸来计算弹幕轨道位置
         if (hasValidSize) {
+            clearPendingViewLayoutHooks()
             // View 已经有有效尺寸，直接设置数据
             Log.w(TAG, "📎 View has valid size, setting data immediately")
             lastAppliedWidth = view.width
@@ -1485,12 +1487,17 @@ class DanmakuManager private constructor(
             // [修复] 立即应用正确的配置（含高度）和数据
             applyConfigToController("resize")
         } else {
-            // View 尺寸为 0，等待布局完成
+            // View 尺寸为 0，等待布局完成（先清理旧挂起监听与延迟任务，避免快速滑动切页时堆积泄漏）
+            clearPendingViewLayoutHooks()
             Log.w(TAG, "📎 View size is 0, waiting for layout...")
-            view.viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            val listener = object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
                 override fun onGlobalLayout() {
-                    // 移除监听器，避免重复回调
-                    view.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                    if (view.viewTreeObserver.isAlive) {
+                        view.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                    }
+                    if (pendingLayoutListener === this) {
+                        pendingLayoutListener = null
+                    }
                     
                     Log.w(TAG, "📎 Layout callback! width=${view.width}, height=${view.height}")
                     
@@ -1503,7 +1510,8 @@ class DanmakuManager private constructor(
                     } else if (danmakuView === view) {
                         //  [修复] 如果布局回调时尺寸仍为 0，延迟 100ms 再试一次
                         Log.w(TAG, " View still zero size, scheduling delayed retry...")
-                        view.postDelayed({
+                        val retry = Runnable {
+                            pendingLayoutRetryRunnable = null
                             if (danmakuView === view && view.width > 0 && view.height > 0) {
                                 Log.w(TAG, "📎 Delayed retry: width=${view.width}, height=${view.height}")
                                 lastAppliedWidth = view.width
@@ -1512,12 +1520,18 @@ class DanmakuManager private constructor(
                             } else {
                                 Log.w(TAG, " View still invalid after delay, skipping")
                             }
-                        }, 100)
+                        }
+                        pendingLayoutRetryRunnable = retry
+                        pendingLayoutView = view
+                        view.postDelayed(retry, 100)
                     } else {
                         Log.w(TAG, " View changed, skipping setData")
                     }
                 }
-            })
+            }
+            pendingLayoutView = view
+            pendingLayoutListener = listener
+            view.viewTreeObserver.addOnGlobalLayoutListener(listener)
         }
         
         Log.w(TAG, "========== attachView COMPLETED ==========")
@@ -1545,8 +1559,29 @@ class DanmakuManager private constructor(
         } ?: Log.w(TAG, "📎 No cached danmaku list to apply")
     }
     
+    private var pendingLayoutView: DanmakuRenderView? = null
+    private var pendingLayoutListener: android.view.ViewTreeObserver.OnGlobalLayoutListener? = null
+    private var pendingLayoutRetryRunnable: Runnable? = null
+
+    private fun clearPendingViewLayoutHooks(targetView: DanmakuRenderView? = null) {
+        val trackedView = pendingLayoutView
+        if (targetView != null && trackedView !== targetView) return
+        pendingLayoutListener?.let { listener ->
+            if (trackedView?.viewTreeObserver?.isAlive == true) {
+                trackedView.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+            }
+        }
+        pendingLayoutRetryRunnable?.let { runnable ->
+            trackedView?.removeCallbacks(runnable)
+        }
+        pendingLayoutListener = null
+        pendingLayoutRetryRunnable = null
+        pendingLayoutView = null
+    }
+
     /** Detach a render target. A stale target is only allowed to release itself. */
     fun detachView(view: DanmakuRenderView) {
+        clearPendingViewLayoutHooks(view)
         if (danmakuView === view) clearTapSelection()
         renderPauseState.detach(view)
         renderTargets.remove(view)
@@ -1971,6 +2006,7 @@ class DanmakuManager private constructor(
         sourceAdvancedDanmakuList = null
         sourceBasDanmakuList = null
         sourceCommandDanmakuList = emptyList()
+        bpxExternalDanmakuList = emptyList()
         parsedSegments.clear()
         missingSegmentRetryAtMs = 0L
         activeSegmentIndices = emptyList()
@@ -1997,6 +2033,19 @@ class DanmakuManager private constructor(
         loadJob?.cancel()
         loadJob = scope.launch {
             try {
+                val mediaTitle = withContext(Dispatchers.Main.immediate) {
+                    player?.mediaMetadata?.title?.toString().orEmpty()
+                }
+                val bpxTracksDeferred = async {
+                    com.android.purebilibili.core.plugin.bpx.BpxSandboxRuntime.runPlayerTracks(
+                        context = context,
+                        bvid = bvid,
+                        aid = aid,
+                        cid = cid,
+                        title = mediaTitle,
+                        durationSec = (durationMs / 1000L).coerceAtLeast(0L),
+                    )
+                }
                 val maskInfoDeferred = async {
                     if (config.smartOcclusionEnabled && bvid.isNotBlank()) {
                         com.android.purebilibili.data.repository.VideoRepository
@@ -2028,6 +2077,41 @@ class DanmakuManager private constructor(
                     allowXmlFallback = true,
                     reason = "load_new"
                 )
+                val bpxExternal = bpxTracksDeferred.await()
+                if (
+                    bpxExternal.isNotEmpty() &&
+                    isCurrentSegmentWindowRequest(cid, requestGeneration, requestWindowGeneration)
+                ) {
+                    bpxExternalDanmakuList = bpxExternal.mapIndexedNotNull { index, ext ->
+                        val text = ext.text.trim()
+                        if (text.isEmpty()) return@mapIndexedNotNull null
+                        DanmakuItem().apply {
+                            danmakuId = 900_000_000L + index
+                            this.text = text
+                            showAtTime = (ext.timeSec * 1000.0).toLong().coerceAtLeast(0L)
+                            layerType = when (ext.mode.lowercase()) {
+                                "top" -> DANMAKU_LAYER_TOP
+                                "bottom" -> DANMAKU_LAYER_BOTTOM
+                                else -> DANMAKU_LAYER_SCROLL
+                            }
+                            textColor = com.android.purebilibili.feature.plugin.js.parseJsDanmuColorInt(
+                                ext.color.orEmpty()
+                            )
+                            textSizeScale = 1f
+                        }
+                    }
+                    applyParsedSegmentWindow(
+                        cid = cid,
+                        positionMs = withContext(Dispatchers.Main.immediate) { player?.currentPosition ?: 0L },
+                        requestGeneration = requestGeneration,
+                        requestWindowGeneration = requestWindowGeneration,
+                        reason = "bpx_track_merge",
+                        requestedSegments = segmentWindowForPosition(
+                            withContext(Dispatchers.Main.immediate) { player?.currentPosition ?: 0L },
+                            totalSegmentCount,
+                        ),
+                    )
+                }
                 val maskInfo = maskInfoDeferred.await()
                 if (
                     maskInfo != null &&
@@ -2180,9 +2264,13 @@ class DanmakuManager private constructor(
             if (!isCurrentSegmentWindowRequest(cid, requestGeneration, requestWindowGeneration)) return
             val orderedSegments = requestedSegments.mapNotNull(parsedSegments::get)
             val specialSnapshot = specialDanmaku
+            val externalSnapshot = bpxExternalDanmakuList
             val rebuild = withContext(Dispatchers.Default) {
-                val windowStandard = (orderedSegments.flatMap { it.standardList } + specialSnapshot.standardList)
-                    .sortedBy(DanmakuItem::showAtTime)
+                val windowStandard = (
+                    orderedSegments.flatMap { it.standardList } +
+                        specialSnapshot.standardList +
+                        externalSnapshot
+                    ).sortedBy(DanmakuItem::showAtTime)
                 val windowAdvanced =
                     (orderedSegments.flatMap { it.advancedList } + specialSnapshot.advancedList)
                         .sortedBy(AdvancedDanmakuData::startTimeMs)
@@ -3005,6 +3093,7 @@ class DanmakuManager private constructor(
      */
     private fun clearViewReference() {
         Log.d(TAG, " clearViewReference: Clearing all references")
+        clearPendingViewLayoutHooks()
         
         // 移除播放器监听器
         playerListener?.let { listener ->
@@ -3079,9 +3168,9 @@ class DanmakuManager private constructor(
         webMaskWindowEndMs = Long.MIN_VALUE
         maskFetchJob?.cancel()
         maskFetchJob = null
+        webMaskBytes = null
         hotDanmakuIndex = null
-        controller?.pause()
-        controller?.clear()
+        controller?.stop()
         // A trimmed renderer no longer owns the visible timeline. Foreground recovery
         // must replay it even when a host otherwise requests a lightweight clock sync.
         timelineSyncedController = null
@@ -3235,7 +3324,7 @@ class DanmakuManager private constructor(
 
 internal fun createDanmakuManagerScope(sourceScope: CoroutineScope): CoroutineScope {
     val dispatcher = sourceScope.coroutineContext[ContinuationInterceptor] ?: Dispatchers.Main.immediate
-    return CoroutineScope(dispatcher + Job())
+    return CoroutineScope(dispatcher + kotlinx.coroutines.SupervisorJob())
 }
 
 /**

@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.store.player.PiliPlayerMenuStore
 import com.android.purebilibili.data.model.response.UgcSeason
 import com.android.purebilibili.data.repository.ActionRepository
@@ -40,12 +41,13 @@ fun rememberPiliCollectionMenuSession(
             resolveCurrentUgcEpisodeAid(ugcSeason?.sections?.flatMap { it.episodes }.orEmpty(), bvid, cid)
         }
     } else 0L
+    val accountIdentity by TokenManager.accountIdentity.collectAsStateWithLifecycle()
     val cachedSubscribed = if (canLoadSubscription) {
-        remember(context, seasonId) { SettingsManager.isCollectionSubscribed(context, seasonId) }
+        remember(context, seasonId, accountIdentity) { SettingsManager.isCollectionSubscribed(context, seasonId) }
             .collectAsStateWithLifecycle(initialValue = false).value
     } else false
-    var remoteSubscribed by remember(seasonId, bvid, cid) { mutableStateOf<Boolean?>(null) }
-    var updating by remember(seasonId) { mutableStateOf(false) }
+    var remoteSubscribed by remember(seasonId, bvid, cid, accountIdentity) { mutableStateOf<Boolean?>(null) }
+    var updating by remember(seasonId, accountIdentity) { mutableStateOf(false) }
     val storedReversed by remember(context, orderSeasonId, bvid) {
         if (orderSeasonId > 0) SettingsManager.getCollectionSortMode(context, orderSeasonId).map { it == CollectionSortMode.DESCENDING }
         else PiliPlayerMenuStore.reversedPages(context, bvid)
@@ -54,28 +56,40 @@ fun rememberPiliCollectionMenuSession(
     val reversed = localReversed ?: storedReversed
     SideEffect { PiliPlaybackOrder.setReversed(orderSeasonId, bvid, reversed) }
     LaunchedEffect(storedReversed) { localReversed = null }
-    LaunchedEffect(seasonId, bvid, aid, canLoadSubscription) {
+    LaunchedEffect(seasonId, bvid, aid, canLoadSubscription, accountIdentity) {
         if (canLoadSubscription) {
+            val identity = TokenManager.accountIdentity.value
             ActionRepository.checkCollectionSubscriptionStatus(bvid = bvid, aid = aid).onSuccess {
-                remoteSubscribed = it
-                SettingsManager.setCollectionSubscription(context, seasonId, it)
+                if (identity == TokenManager.accountIdentity.value) {
+                    remoteSubscribed = it
+                    SettingsManager.setCollectionSubscription(context, seasonId, it)
+                }
             }
         }
     }
     return PiliCollectionMenuSession(
         isSubscribed = if (seasonId > 0) remoteSubscribed ?: cachedSubscribed.takeIf { it } else null,
         onSubscriptionChange = if (canLoadSubscription && !updating) ({ target ->
+            val identity = TokenManager.accountIdentity.value
             scope.launch {
                 updating = true
                 try {
                     ActionRepository.setCollectionSubscription(seasonId = seasonId, subscribe = target)
                         .onSuccess {
+                            if (identity != TokenManager.accountIdentity.value) return@onSuccess
                             if (it != (remoteSubscribed ?: cachedSubscribed)) subscriptionHaptic(HapticType.LIGHT)
                             remoteSubscribed = it
                             SettingsManager.setCollectionSubscription(context, seasonId, it)
                             Toast.makeText(context, if (it) "已订阅合集" else "已取消订阅合集", Toast.LENGTH_SHORT).show()
-                        }.onFailure { Toast.makeText(context, it.message ?: "合集订阅操作失败", Toast.LENGTH_LONG).show() }
-                } finally { updating = false }
+                        }.onFailure {
+                            if (identity != TokenManager.accountIdentity.value) return@onFailure
+                            Toast.makeText(context, it.message ?: "合集订阅操作失败", Toast.LENGTH_LONG).show()
+                        }
+                } finally {
+                    if (identity == TokenManager.accountIdentity.value) {
+                        updating = false
+                    }
+                }
             }
         }) else null,
         isReversed = reversed,

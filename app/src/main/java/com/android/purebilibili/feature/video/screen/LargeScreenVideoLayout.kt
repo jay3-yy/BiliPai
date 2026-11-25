@@ -204,13 +204,14 @@ internal fun LargeScreenVideoLayout(
         }
         val applySideStatusBarPadding =
             metrics.mode != LargeScreenVideoLayoutMode.AlmostSquare
-        val showRelatedInIntro = resolveShowRelatedInIntro(metrics.mode)
-        val relatedTabFirst = resolveRelatedTabFirstInSecondary(
+        val detailRelatedVisible = rememberDetailRelatedVisibility().isVisible()
+        val showRelatedInIntro = resolveShowRelatedInIntro(metrics.mode) && detailRelatedVisible
+        val includeRelatedTab = resolveIncludeRelatedTabInSecondary(metrics.mode) && detailRelatedVisible
+        val relatedTabFirst = includeRelatedTab && resolveRelatedTabFirstInSecondary(
             mode = metrics.mode,
             defaultTab = secondaryDefaultTab,
         )
-        val includeRelatedTab = resolveIncludeRelatedTabInSecondary(metrics.mode)
-        val sideContentReady = if (relatedTabFirst && includeRelatedTab) relatedContentReady else commentsContentReady
+        val sideContentReady = if (relatedTabFirst) relatedContentReady else commentsContentReady
         val success = detailContentState ?: (uiState as? VideoPlaybackUiState.Success)
         val player: @Composable (Modifier) -> Unit = { modifier ->
             LargeScreenPlayerHost(

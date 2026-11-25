@@ -1227,6 +1227,25 @@ internal fun resolveAutoExitFullscreenMode(
     return AutoExitFullscreenMode.fromLegacyEnabled(legacyEnabled ?: true)
 }
 
+enum class LongPressSpeedSlideMode(
+    val storageValue: String,
+    val label: String,
+) {
+    OFF("off", "关闭"),
+    PRESETS("presets", "档位换挡"),
+    CONTINUOUS("continuous", "无极调速");
+
+    companion object {
+        fun fromStorageValue(
+            raw: String?,
+            legacyEnabled: Boolean = true,
+        ): LongPressSpeedSlideMode {
+            entries.firstOrNull { it.storageValue == raw }?.let { return it }
+            return if (legacyEnabled) PRESETS else OFF
+        }
+    }
+}
+
 data class PlayerInteractionSettings(
     val gestureSensitivity: Float = 1.0f,
     val doubleTapLikeEnabled: Boolean = true,
@@ -1277,6 +1296,7 @@ data class PlayerInteractionSettings(
     val directPortraitStoryEntry: Boolean = false,
     val launchToPortraitFeedOnStartup: Boolean = false,
     val longPressSpeedSlideAdjustEnabled: Boolean = true,
+    val longPressSpeedSlideMode: LongPressSpeedSlideMode = LongPressSpeedSlideMode.PRESETS,
     val doubleTapJumpAheadEnabled: Boolean = true,
     val progressFineScrubbingEnabled: Boolean = true,
     val progressSnapAndOriginCancelEnabled: Boolean = true,
@@ -1456,6 +1476,58 @@ internal fun setCollectionSubscription(
     }
 }
 
+internal fun buildAccountScopedCollectionSubscriptionKey(
+    accountMid: Long?,
+    collectionId: Long,
+): String? {
+    val validMid = accountMid?.takeIf { it > 0L } ?: return null
+    val validCollectionId = collectionId.takeIf { it > 0L } ?: return null
+    return "${validMid}_$validCollectionId"
+}
+
+internal fun resolveAccountCollectionSubscriptionState(
+    subscribedIds: Set<String>,
+    knownIds: Set<String>,
+    accountMid: Long?,
+    collectionId: Long,
+): Boolean? {
+    val key = buildAccountScopedCollectionSubscriptionKey(accountMid, collectionId) ?: return null
+    return when {
+        key in subscribedIds -> true
+        key in knownIds -> false
+        else -> null
+    }
+}
+
+internal fun toggleAccountCollectionSubscription(
+    subscribedCollectionIds: Set<String>,
+    accountMid: Long?,
+    collectionId: Long,
+): Set<String> {
+    val key = buildAccountScopedCollectionSubscriptionKey(accountMid, collectionId)
+        ?: return subscribedCollectionIds
+    return if (key in subscribedCollectionIds) {
+        subscribedCollectionIds - key
+    } else {
+        subscribedCollectionIds + key
+    }
+}
+
+internal fun setAccountCollectionSubscription(
+    subscribedCollectionIds: Set<String>,
+    accountMid: Long?,
+    collectionId: Long,
+    subscribed: Boolean,
+): Set<String> {
+    val key = buildAccountScopedCollectionSubscriptionKey(accountMid, collectionId)
+        ?: return subscribedCollectionIds
+    return if (subscribed) {
+        subscribedCollectionIds + key
+    } else {
+        subscribedCollectionIds - key
+    }
+}
+
 internal fun decodeCollectionSortPreferences(rawValue: String?): Map<Long, CollectionSortMode> {
     if (rawValue.isNullOrBlank()) return emptyMap()
     return runCatching {
@@ -1492,6 +1564,7 @@ object SettingsManager {
         MONTHLY(30, "每月")
     }
     // 键定义
+    private val KEY_SHOW_DETAIL_RELATED_VIDEOS = booleanPreferencesKey("show_detail_related_videos")
     private val KEY_NEXT_WATCH_HINT_ENABLED = booleanPreferencesKey("next_watch_hint_enabled")
     private val KEY_AUTO_PLAY = booleanPreferencesKey("auto_play")
     private val KEY_PLAYBACK_COMPLETION_BEHAVIOR = intPreferencesKey("playback_completion_behavior")
@@ -2188,7 +2261,14 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             hiResLongPressCompatHintShown = preferences[KEY_HI_RES_LONG_PRESS_COMPAT_HINT_SHOWN] ?: false,
             directPortraitStoryEntry = preferences[KEY_AUTO_PORTRAIT_FULLSCREEN] ?: false,
             launchToPortraitFeedOnStartup = preferences[KEY_LAUNCH_TO_PORTRAIT_FEED_ON_STARTUP] ?: false,
-            longPressSpeedSlideAdjustEnabled = preferences[KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED] ?: true,
+            longPressSpeedSlideAdjustEnabled = LongPressSpeedSlideMode.fromStorageValue(
+                raw = preferences[KEY_LONG_PRESS_SPEED_SLIDE_MODE],
+                legacyEnabled = preferences[KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED] ?: true,
+            ) != LongPressSpeedSlideMode.OFF,
+            longPressSpeedSlideMode = LongPressSpeedSlideMode.fromStorageValue(
+                raw = preferences[KEY_LONG_PRESS_SPEED_SLIDE_MODE],
+                legacyEnabled = preferences[KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED] ?: true,
+            ),
             doubleTapJumpAheadEnabled = preferences[KEY_DOUBLE_TAP_JUMP_AHEAD_ENABLED] ?: true,
             progressFineScrubbingEnabled = preferences[KEY_PROGRESS_FINE_SCRUBBING_ENABLED] ?: true,
             progressSnapAndOriginCancelEnabled = preferences[KEY_PROGRESS_SNAP_AND_ORIGIN_CANCEL_ENABLED] ?: true,
@@ -2361,6 +2441,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     @Volatile
     private var playbackCompletionBehaviorMemoryCache: Int? = null
+
+    fun getShowDetailRelatedVideos(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SHOW_DETAIL_RELATED_VIDEOS] ?: true }
+
+    suspend fun setShowDetailRelatedVideos(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_SHOW_DETAIL_RELATED_VIDEOS] = enabled }
+    }
 
     fun getNextWatchHintEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_NEXT_WATCH_HINT_ENABLED] ?: true }
@@ -3742,12 +3829,21 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
+    @Volatile
+    private var lastLiveSurfaceCardTransitionEnabled: Boolean = false
+
+    fun getInitialLiveSurfaceCardTransitionEnabled(): Boolean = lastLiveSurfaceCardTransitionEnabled
+
     /** 默认关闭：稳妥封面过渡；开启后 SDR 可用实时画面双向 morph，HDR 仍不强制 TextureView。 */
     fun getLiveSurfaceCardTransitionEnabled(context: Context): Flow<Boolean> =
         context.settingsDataStore.data
-            .map { preferences -> preferences[KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED] ?: false }
+            .map { preferences ->
+                (preferences[KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED] ?: false)
+                    .also { lastLiveSurfaceCardTransitionEnabled = it }
+            }
 
     suspend fun setLiveSurfaceCardTransitionEnabled(context: Context, value: Boolean) {
+        lastLiveSurfaceCardTransitionEnabled = value
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED] = value
         }
@@ -4177,15 +4273,33 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
+    @Volatile
+    private var lastHomeCardDynamicTintEnabled: Boolean = false
+
+    @Volatile
+    private var lastHomeCardBackgroundMode: HomeCardBackgroundMode = HomeCardBackgroundMode.OFF
+
+    @Volatile
+    private var lastHomeCardFrostedGlassEnabled: Boolean = false
+
+    fun getInitialHomeCardDynamicTintEnabled(): Boolean = lastHomeCardDynamicTintEnabled
+
+    fun getInitialHomeCardBackgroundMode(): HomeCardBackgroundMode = lastHomeCardBackgroundMode
+
+    fun getInitialHomeCardFrostedGlassEnabled(): Boolean = lastHomeCardFrostedGlassEnabled
+
     fun getHomeCardDynamicTintEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED] ?: false }
+        .map { preferences ->
+            (preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED] ?: false)
+                .also { lastHomeCardDynamicTintEnabled = it }
+        }
 
     fun getHomeCardBackgroundMode(context: Context): Flow<HomeCardBackgroundMode> = context.settingsDataStore.data
         .map { preferences ->
             HomeCardBackgroundMode.fromSettings(
                 dynamicTint = preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED] ?: false,
                 fixedBlur = preferences[KEY_HOME_CARD_FIXED_BLUR_ENABLED] ?: false,
-            )
+            ).also { lastHomeCardBackgroundMode = it }
         }.distinctUntilChanged()
 
     suspend fun setHomeCardBackgroundMode(context: Context, mode: HomeCardBackgroundMode) {
@@ -4204,7 +4318,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             resolveHomeCardFrostedGlassEnabled(
                 storedValue = preferences[KEY_HOME_CARD_FROSTED_GLASS_ENABLED],
                 legacyCombinedValue = preferences[KEY_HOME_CARD_DYNAMIC_TINT_ENABLED],
-            )
+            ).also { lastHomeCardFrostedGlassEnabled = it }
         }
 
     suspend fun setHomeCardFrostedGlassEnabled(context: Context, value: Boolean) {
@@ -6849,48 +6963,75 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             .getInt("mobile_quality", 64)
     }
 
-    fun getSubscribedCollectionIds(context: Context): Flow<Set<String>> = context.settingsDataStore.data
-        .map { preferences -> decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS]) }
-        .distinctUntilChanged()
+    private fun activeCollectionSubscriptionMid(identity: AccountSessionIdentity = TokenManager.accountIdentity.value): Long? =
+        (identity.mid ?: TokenManager.midCache)?.takeIf { it > 0L }
 
-    fun isCollectionSubscribed(context: Context, collectionId: Long): Flow<Boolean> {
-        val normalizedId = collectionId.takeIf { it > 0L }?.toString()
-            ?: return kotlinx.coroutines.flow.flowOf(false)
-        return getSubscribedCollectionIds(context)
-            .map { subscribedIds -> normalizedId in subscribedIds }
-            .distinctUntilChanged()
-    }
-
-    /** 缓存缺失为未知；已订阅集合也可作为旧版本的肯定记录。 */
-    fun getCollectionSubscriptionState(context: Context, collectionId: Long): Flow<Boolean?> =
-        context.settingsDataStore.data.map { preferences ->
-            val id = collectionId.toString()
-            when {
-                id in decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS]) -> true
-                id in decodeCollectionSubscriptionIds(preferences[KEY_KNOWN_COLLECTION_SUBSCRIPTION_IDS]) -> false
-                else -> null
-            }
+    fun getSubscribedCollectionIds(context: Context): Flow<Set<String>> =
+        kotlinx.coroutines.flow.combine(
+            context.settingsDataStore.data,
+            TokenManager.accountIdentity,
+        ) { preferences, identity ->
+            val mid = activeCollectionSubscriptionMid(identity) ?: return@combine emptySet()
+            val prefix = "${mid}_"
+            decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS])
+                .mapNotNull { entry ->
+                    entry.removePrefix(prefix).takeIf { entry.startsWith(prefix) && it.isNotBlank() }
+                }
+                .toSet()
         }.distinctUntilChanged()
 
+    fun isCollectionSubscribed(context: Context, collectionId: Long): Flow<Boolean> {
+        if (collectionId <= 0L) return kotlinx.coroutines.flow.flowOf(false)
+        return kotlinx.coroutines.flow.combine(
+            context.settingsDataStore.data,
+            TokenManager.accountIdentity,
+        ) { preferences, identity ->
+            val key = buildAccountScopedCollectionSubscriptionKey(
+                accountMid = activeCollectionSubscriptionMid(identity),
+                collectionId = collectionId,
+            ) ?: return@combine false
+            key in decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS])
+        }.distinctUntilChanged()
+    }
+
+    /** 缓存按当前主账号 mid 隔离，未登录返回未知，旧版无前缀条目不跨账号泄漏。 */
+    fun getCollectionSubscriptionState(context: Context, collectionId: Long): Flow<Boolean?> {
+        if (collectionId <= 0L) return kotlinx.coroutines.flow.flowOf(null)
+        return kotlinx.coroutines.flow.combine(
+            context.settingsDataStore.data,
+            TokenManager.accountIdentity,
+        ) { preferences, identity ->
+            val mid = activeCollectionSubscriptionMid(identity) ?: return@combine null
+            resolveAccountCollectionSubscriptionState(
+                subscribedIds = decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS]),
+                knownIds = decodeCollectionSubscriptionIds(preferences[KEY_KNOWN_COLLECTION_SUBSCRIPTION_IDS]),
+                accountMid = mid,
+                collectionId = collectionId,
+            )
+        }.distinctUntilChanged()
+    }
+
     suspend fun toggleCollectionSubscription(context: Context, collectionId: Long) {
+        val mid = activeCollectionSubscriptionMid() ?: return
         if (collectionId <= 0L) return
         context.settingsDataStore.edit { preferences ->
             val current = decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS])
             preferences[KEY_SUBSCRIBED_COLLECTION_IDS] = encodeCollectionSubscriptionIds(
-                toggleCollectionSubscription(current, collectionId)
+                toggleAccountCollectionSubscription(current, mid, collectionId)
             )
         }
     }
 
     suspend fun setCollectionSubscription(context: Context, collectionId: Long, subscribed: Boolean) {
-        if (collectionId <= 0L) return
+        val mid = activeCollectionSubscriptionMid() ?: return
+        val key = buildAccountScopedCollectionSubscriptionKey(mid, collectionId) ?: return
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_KNOWN_COLLECTION_SUBSCRIPTION_IDS] = encodeCollectionSubscriptionIds(
-                decodeCollectionSubscriptionIds(preferences[KEY_KNOWN_COLLECTION_SUBSCRIPTION_IDS]) + collectionId.toString()
+                decodeCollectionSubscriptionIds(preferences[KEY_KNOWN_COLLECTION_SUBSCRIPTION_IDS]) + key
             )
             val current = decodeCollectionSubscriptionIds(preferences[KEY_SUBSCRIBED_COLLECTION_IDS])
             preferences[KEY_SUBSCRIBED_COLLECTION_IDS] = encodeCollectionSubscriptionIds(
-                setCollectionSubscription(current, collectionId, subscribed)
+                setAccountCollectionSubscription(current, mid, collectionId, subscribed)
             )
         }
     }
@@ -7135,6 +7276,12 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         liquidSwitchThumbMode = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME,
     )
 
+    @Volatile
+    private var lastAppThemeConfig: com.android.purebilibili.core.ui.AppThemeConfig = DEFAULT_INITIAL_APP_THEME_CONFIG
+
+    /** 供新启动的独立窗口（如 VideoActivity）在首帧复用主进程已有主题快照，零磁盘 I/O 且避免首帧样式闪跳。 */
+    fun getInitialAppThemeConfig(): com.android.purebilibili.core.ui.AppThemeConfig = lastAppThemeConfig
+
     /** 单次映射主宿主全部视觉/交互运行时配置，避免 Activity 根部挂载十余个独立 DataStore 订阅。 */
     fun getAppThemeConfig(context: Context): Flow<com.android.purebilibili.core.ui.AppThemeConfig> =
         context.settingsDataStore.data
@@ -7184,7 +7331,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                     ),
                     liquidControlsUseThemeColor = preferences[KEY_LIQUID_CONTROLS_USE_THEME_COLOR] ?: false,
                     liquidSwitchThumbMode = thumbMode,
-                )
+                ).also { lastAppThemeConfig = it }
             }
             .distinctUntilChanged()
 
@@ -8078,6 +8225,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     
     private val KEY_DOWNLOAD_PATH = stringPreferencesKey("download_path")
     private val KEY_DOWNLOAD_EXPORT_TREE_URI = stringPreferencesKey("download_export_tree_uri")
+    private val KEY_DOWNLOAD_LIST_SORT_ORDER = stringPreferencesKey("download_list_sort_order")
     private val KEY_IMAGE_SAVE_TREE_URI = stringPreferencesKey("image_save_tree_uri")
     
     /**
@@ -8107,6 +8255,17 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         .map { preferences ->
             preferences[KEY_DOWNLOAD_EXPORT_TREE_URI]
         }
+
+    fun getDownloadListSortOrder(context: Context): Flow<String?> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[KEY_DOWNLOAD_LIST_SORT_ORDER]
+        }
+
+    suspend fun setDownloadListSortOrder(context: Context, sortOrderKey: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DOWNLOAD_LIST_SORT_ORDER] = sortOrderKey
+        }
+    }
 
     suspend fun setDownloadExportTreeUri(context: Context, uri: String?) {
         editSettingsAndCommitPrefs(
@@ -8340,6 +8499,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_SHOW_FULLSCREEN_ACTION_ITEMS = booleanPreferencesKey("show_fullscreen_action_items")
     private val KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED =
         booleanPreferencesKey("long_press_speed_slide_adjust_enabled")
+    private val KEY_LONG_PRESS_SPEED_SLIDE_MODE =
+        stringPreferencesKey("long_press_speed_slide_mode")
     private val KEY_DOUBLE_TAP_JUMP_AHEAD_ENABLED =
         booleanPreferencesKey("double_tap_jump_ahead_enabled")
     private val KEY_PROGRESS_FINE_SCRUBBING_ENABLED =
@@ -8763,12 +8924,39 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
-    fun getLongPressSpeedSlideAdjustEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED] ?: true }
+    fun getLongPressSpeedSlideMode(context: Context): Flow<LongPressSpeedSlideMode> = context.settingsDataStore.data
+        .map { preferences ->
+            LongPressSpeedSlideMode.fromStorageValue(
+                raw = preferences[KEY_LONG_PRESS_SPEED_SLIDE_MODE],
+                legacyEnabled = preferences[KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED] ?: true,
+            )
+        }
+        .distinctUntilChanged()
+
+    suspend fun setLongPressSpeedSlideMode(context: Context, mode: LongPressSpeedSlideMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_LONG_PRESS_SPEED_SLIDE_MODE] = mode.storageValue
+            preferences[KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED] = mode != LongPressSpeedSlideMode.OFF
+        }
+    }
+
+    fun getLongPressSpeedSlideAdjustEnabled(context: Context): Flow<Boolean> =
+        getLongPressSpeedSlideMode(context).map { it != LongPressSpeedSlideMode.OFF }.distinctUntilChanged()
 
     suspend fun setLongPressSpeedSlideAdjustEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_LONG_PRESS_SPEED_SLIDE_ADJUST_ENABLED] = enabled
+            if (!enabled) {
+                preferences[KEY_LONG_PRESS_SPEED_SLIDE_MODE] = LongPressSpeedSlideMode.OFF.storageValue
+            } else {
+                val current = LongPressSpeedSlideMode.fromStorageValue(
+                    raw = preferences[KEY_LONG_PRESS_SPEED_SLIDE_MODE],
+                    legacyEnabled = false,
+                )
+                if (current == LongPressSpeedSlideMode.OFF) {
+                    preferences[KEY_LONG_PRESS_SPEED_SLIDE_MODE] = LongPressSpeedSlideMode.PRESETS.storageValue
+                }
+            }
         }
     }
 
@@ -9670,6 +9858,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             StringShareablePreferenceDefinition(KEY_LIVE_CDN_HOST, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_LIVE_SUPER_CHAT_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_LIVE_AUTO_MINI_PLAYER_ENABLED, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(KEY_SHOW_DETAIL_RELATED_VIDEOS, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_NEXT_WATCH_HINT_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_AUTO_PLAY, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_RESILIENT_VIDEO_BUFFER, SettingsShareSection.PLAYBACK),

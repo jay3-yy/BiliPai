@@ -273,8 +273,8 @@ data class GamepadConfig(
     val stickDeadzone: Float = 0.15f,
     /** 播放页按住右扳机时的倍速倍率 */
     val rtBoostSpeed: Float = 2.0f,
-    /** 是否显示底部手柄键位提示条 */
-    val showLegendHud: Boolean = true,
+    /** 是否显示底部手柄键位提示条（默认关闭，避免干扰底部导航栏） */
+    val showLegendHud: Boolean = false,
     /** 光标移动时是否向底层发送 Hover 事件以触发卡片悬浮反馈 */
     val hoverHighlightEnabled: Boolean = true,
     /** 静止一段时间后自动淡出光标 */

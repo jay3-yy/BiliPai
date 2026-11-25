@@ -929,7 +929,36 @@ private fun MiniPlayerSessionOverlay(
                 shape = AppCardShape.Uniform(miniPlayerCornerRadius),
                 colors = AppCardDefaults.colors(containerColor = Color.Black),
             ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    // 空白画面统一用于移动，进度由独立按钮控制，避免横拖误跳播。
+                    .pointerInput(isStashed, dismissing) {
+                        if (isStashed || dismissing) return@pointerInput
+                        detectDragGestures(
+                            onDragStart = { latestBeginPositionDrag() },
+                            onDragEnd = { latestFinishPositionDrag(false) },
+                            onDragCancel = { latestFinishPositionDrag(true) },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                dragVelocityTracker.addPosition(change.uptimeMillis, change.position)
+                                latestMoveMiniPlayer(dragAmount.x, dragAmount.y)
+                            }
+                        )
+                    }
+                    .pointerInput(isStashed, dismissing) {
+                        if (isStashed || dismissing) return@pointerInput
+                        detectTapGestures(
+                            onTap = {
+                                showControls = !showControls
+                                if (showControls) {
+                                    lastInteractionTime = System.currentTimeMillis()
+                                }
+                            },
+                            onDoubleTap = { latestExpand() }
+                        )
+                    }
+            ) {
                 // 视频画面
                 player?.takeUnless { awaitingMorphLanding }?.let { exoPlayer ->
                     val useTextureSurface = com.android.purebilibili.feature.video.ui.components.rememberCompatibleVideoTextureSurface(
@@ -954,32 +983,6 @@ private fun MiniPlayerSessionOverlay(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(RoundedCornerShape(shellVisual.cardCornerRadiusDp.dp))
-                            // 空白画面统一用于移动，进度由独立按钮控制，避免横拖误跳播。
-                            .pointerInput(isStashed, dismissing) {
-                                if (isStashed || dismissing) return@pointerInput
-                                detectDragGestures(
-                                    onDragStart = { latestBeginPositionDrag() },
-                                    onDragEnd = { latestFinishPositionDrag(false) },
-                                    onDragCancel = { latestFinishPositionDrag(true) },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        dragVelocityTracker.addPosition(change.uptimeMillis, change.position)
-                                        latestMoveMiniPlayer(dragAmount.x, dragAmount.y)
-                                    }
-                                )
-                            }
-                            .pointerInput(isStashed, dismissing) {
-                                if (isStashed || dismissing) return@pointerInput
-                                detectTapGestures(
-                                    onTap = {
-                                        showControls = !showControls
-                                        if (showControls) {
-                                            lastInteractionTime = System.currentTimeMillis()
-                                        }
-                                    },
-                                    onDoubleTap = { latestExpand() }
-                                )
-                            }
                     )
                     }
                 }

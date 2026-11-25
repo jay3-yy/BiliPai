@@ -1,29 +1,49 @@
 package com.android.purebilibili.feature.video.viewmodel
 
 import android.net.Uri
+import androidx.compose.runtime.Immutable
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toPersistentMap
 
+@Immutable
 data class DanmakuComposerDraft(
     val text: String = "",
     val attentionCommand: Boolean = false
 )
 
+@Immutable
 data class CommentComposerDraft(
     val text: String = "",
-    val imageUris: List<Uri> = emptyList(),
+    val imageUris: ImmutableList<Uri> = persistentListOf(),
     val syncToDynamic: Boolean = false
-)
+) {
+    constructor(
+        text: String,
+        imageUris: List<Uri>,
+        syncToDynamic: Boolean = false
+    ) : this(
+        text = text,
+        imageUris = (imageUris as? ImmutableList<Uri>) ?: imageUris.toImmutableList(),
+        syncToDynamic = syncToDynamic
+    )
+}
 
+@Immutable
 data class CommentComposerDraftState(
     val sessionId: Long = 0L,
     val completedSessionId: Long = -1L,
-    val drafts: Map<Long, CommentComposerDraft> = emptyMap(),
+    val drafts: ImmutableMap<Long, CommentComposerDraft> = persistentMapOf(),
     val revision: Long = 0L
 ) {
     internal fun open(): CommentComposerDraftState = copy(sessionId = sessionId + 1L)
 
     internal fun reset(): CommentComposerDraftState = copy(
         sessionId = sessionId + 1L,
-        drafts = emptyMap()
+        drafts = persistentMapOf()
     )
 
     internal fun update(
@@ -36,9 +56,10 @@ data class CommentComposerDraftState(
         val updatedDrafts = if (
             draft.text.isEmpty() && draft.imageUris.isEmpty() && !draft.syncToDynamic
         ) {
-            if (key in drafts) drafts - key else drafts
+            if (key in drafts) drafts.toPersistentMap().remove(key) else drafts
         } else {
-            drafts + (key to draft)
+            // Remove first so PersistentHashMap stores the new instance reference even when equals() is true.
+            drafts.toPersistentMap().remove(key).put(key, draft)
         }
         // StateFlow must retain a newer draft instance even when its contents are equal.
         return copy(drafts = updatedDrafts, revision = revision + 1L)
@@ -53,11 +74,16 @@ data class CommentComposerDraftState(
         val key = commentComposerDraftKey(replyRpid)
         return copy(
             completedSessionId = maxOf(completedSessionId, sessionId),
-            drafts = if (sentDraft != null && drafts[key] === sentDraft) drafts - key else drafts
+            drafts = if (sentDraft != null && drafts[key] === sentDraft) {
+                drafts.toPersistentMap().remove(key)
+            } else {
+                drafts
+            }
         )
     }
 }
 
+@Immutable
 data class VideoComposerDraftState(
     val videoId: String = "",
     val danmaku: DanmakuComposerDraft = DanmakuComposerDraft(),

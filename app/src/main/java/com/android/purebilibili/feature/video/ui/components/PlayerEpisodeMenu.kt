@@ -183,7 +183,16 @@ fun PlayerEpisodeMenu(
             contentPadding = PaddingValues(top = 7.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            itemsIndexed(entries) { _, group ->
+            itemsIndexed(
+                items = entries,
+                key = { index, group ->
+                    when (val target = group.first().target) {
+                        is PlayerEpisodeMenuTarget.Episode -> "ep_${sectionIndex}_${target.episode.id}"
+                        is PlayerEpisodeMenuTarget.Part -> "part_${target.pageIndex}_$index"
+                    }
+                },
+                contentType = { _, group -> group.size > 1 },
+            ) { _, group ->
                 val current = content.sections.getOrNull(content.currentSectionIndex)?.entries?.getOrNull(content.currentEntryIndex)
                 val selected = sectionIndex == content.currentSectionIndex && current in group
                 val entry = group.first()

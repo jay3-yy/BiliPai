@@ -534,6 +534,19 @@ internal fun shouldShowDanmakuLayers(
     return true
 }
 
+/**
+ * 弹幕渲染不能依赖窗口焦点：小窗/分屏失焦时窗口仍可见，进度条曾因同一原因停住。
+ * PiP 下 Activity 可能只到 STARTED，仍应继续渲染；真正进后台（STOPPED）才停。
+ */
+internal fun shouldRunDanmakuRenderWork(
+    pageActive: Boolean,
+    resumed: Boolean,
+    started: Boolean,
+    isInPipMode: Boolean
+): Boolean {
+    return pageActive && (resumed || (isInPipMode && started))
+}
+
 internal fun shouldPollVideoPlayerProgress(
     controlsVisible: Boolean,
     gestureVisible: Boolean,
@@ -677,8 +690,15 @@ internal fun shouldTriggerSeekStepHaptic(
     return previousTargetMs / stepMs != currentTargetMs / stepMs
 }
 
-internal val LONG_PRESS_SLIDE_SPEED_PRESETS = listOf(1.25f, 1.5f, 2.0f, 2.5f, 3.0f)
-internal const val LONG_PRESS_SLIDE_SPEED_STEP_DP = 48f
+internal val LONG_PRESS_SLIDE_SPEED_PRESETS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f, 5.0f)
+internal const val LONG_PRESS_SLIDE_SPEED_STEP_DP = 44f
+internal const val LONG_PRESS_CONTINUOUS_SPEED_MIN = 0.5f
+internal const val LONG_PRESS_CONTINUOUS_SPEED_MAX = 5.0f
+internal const val LONG_PRESS_CONTINUOUS_SPEED_STEP = 0.1f
+internal const val LONG_PRESS_CONTINUOUS_SPEED_DEADZONE_DP = 18f
+internal const val LONG_PRESS_CONTINUOUS_SPEED_STEP_DP = 14f
+internal const val LONG_PRESS_CONTINUOUS_SPEED_APPLY_THROTTLE_MS = 55L
+internal const val LONG_PRESS_CONTINUOUS_SPEED_HAPTIC_THROTTLE_MS = 45L
 
 internal fun resolveLongPressSlideSpeed(
     initialSpeed: Float,
@@ -691,6 +711,68 @@ internal fun resolveLongPressSlideSpeed(
     val deltaSteps = (accumulatedDragXPx / stepPx).toInt()
     val targetIndex = (baseIndex + deltaSteps).coerceIn(0, presets.lastIndex)
     return presets[targetIndex]
+}
+
+/**
+ * 长按左右无极调速（0.5x–5.0x，步长 0.1x）：
+ * 保留水平起手死区防止下滑锁速时误蹭偏倍速；按 0.1x 量化输出消除浮点尾数误差。
+ */
+internal fun resolveLongPressContinuousSlideSpeed(
+    initialSpeed: Float,
+    accumulatedDragXPx: Float,
+    deadzonePx: Float,
+    stepPx: Float,
+    minSpeed: Float = LONG_PRESS_CONTINUOUS_SPEED_MIN,
+    maxSpeed: Float = LONG_PRESS_CONTINUOUS_SPEED_MAX,
+    step: Float = LONG_PRESS_CONTINUOUS_SPEED_STEP,
+): Float {
+    val safeMin = minOf(minSpeed, maxSpeed)
+    val safeMax = maxOf(minSpeed, maxSpeed)
+    val quantizedBase = (kotlin.math.round(initialSpeed.coerceIn(safeMin, safeMax) / step) * step)
+        .coerceIn(safeMin, safeMax)
+    if (stepPx <= 0f || step <= 0f) return roundSpeedToSingleDecimalIfClose(quantizedBase)
+    val absDrag = kotlin.math.abs(accumulatedDragXPx)
+    val safeDeadzone = deadzonePx.coerceAtLeast(0f)
+    if (absDrag <= safeDeadzone) return roundSpeedToSingleDecimalIfClose(quantizedBase)
+    val effectiveDrag = if (accumulatedDragXPx > 0f) {
+        accumulatedDragXPx - safeDeadzone
+    } else {
+        accumulatedDragXPx + safeDeadzone
+    }
+    val deltaSteps = (effectiveDrag / stepPx).toInt()
+    val rawTarget = quantizedBase + deltaSteps * step
+    val clamped = rawTarget.coerceIn(safeMin, safeMax)
+    return roundSpeedToSingleDecimalIfClose(clamped)
+}
+
+private fun roundSpeedToSingleDecimalIfClose(value: Float): Float {
+    val tenths = kotlin.math.round(value * 10f) / 10f
+    return if (kotlin.math.abs(value - tenths) < 0.005f) tenths else value
+}
+
+internal fun isLongPressSpeedAnchorTick(speed: Float): Boolean {
+    val anchors = floatArrayOf(0.5f, 1.0f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f, 5.0f)
+    return anchors.any { kotlin.math.abs(speed - it) < 0.02f }
+}
+
+internal fun formatLongPressSpeedLabel(speed: Float): String {
+    val scaled100 = kotlin.math.round(speed * 100f).toInt()
+    val whole = scaled100 / 100
+    val frac = scaled100 % 100
+    return when {
+        frac == 0 -> "${whole}.0x"
+        frac % 10 == 0 -> "${whole}.${frac / 10}x"
+        else -> "${whole}.${frac.toString().padStart(2, '0')}x"
+    }
+}
+
+internal fun normalizeLongPressSpeedFraction(
+    speed: Float,
+    minSpeed: Float = LONG_PRESS_CONTINUOUS_SPEED_MIN,
+    maxSpeed: Float = LONG_PRESS_CONTINUOUS_SPEED_MAX,
+): Float {
+    if (maxSpeed <= minSpeed) return 0f
+    return ((speed - minSpeed) / (maxSpeed - minSpeed)).coerceIn(0f, 1f)
 }
 
 internal data class PinchZoomReleaseResult(

@@ -27,11 +27,13 @@ internal class PlayerPageBackdrop(
 )
 
 @Composable
-internal fun rememberPlayerPageBackdrop(): PlayerPageBackdrop {
-    val video = rememberChromeBackdropSource()
-    val cover = rememberChromeBackdropSource()
-    val danmaku = rememberChromeBackdropSource()
-    val subtitles = rememberChromeBackdropSource()
+internal fun rememberPlayerPageBackdrop(
+    recordingEnabled: Boolean = com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current,
+): PlayerPageBackdrop {
+    val video = rememberChromeBackdropSource(recordingEnabled = recordingEnabled)
+    val cover = rememberChromeBackdropSource(recordingEnabled = recordingEnabled)
+    val danmaku = rememberChromeBackdropSource(recordingEnabled = recordingEnabled)
+    val subtitles = rememberChromeBackdropSource(recordingEnabled = recordingEnabled)
     val videoAndCover = rememberCombinedBackdrop(video.backdrop, cover.backdrop)
     val withDanmaku = rememberCombinedBackdrop(videoAndCover, danmaku.backdrop)
     val page = rememberCombinedBackdrop(withDanmaku, subtitles.backdrop)

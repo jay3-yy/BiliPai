@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.android.purebilibili.feature.settings.ui.LocalSettingsTopContentPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
@@ -422,27 +423,44 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                             )
                                 }
                         AppPreferenceDivider()
-                        val longPressSpeedSlideAdjustEnabled by remember(context) {
-                            SettingsManager.getLongPressSpeedSlideAdjustEnabled(context)
-                        }.collectAsStateWithLifecycle(initialValue = true)
+                        val longPressSpeedSlideMode by remember(context) {
+                            SettingsManager.getLongPressSpeedSlideMode(context)
+                        }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.LongPressSpeedSlideMode.PRESETS)
                         SettingsItemAnchor("playback.long_press_speed_slide_adjust_enabled") {
-                            AppSwitchPreference(
+                            SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.LONG_PRESS_SPEED_SLIDE),
                                 title = playbackSettingTitle("playback.long_press_speed_slide_adjust_enabled"),
-                                subtitle = if (longPressSpeedSlideAdjustEnabled) {
-                                    "长按加速时左右滑动可切换 1.25x~3.0x 倍率"
-                                } else {
-                                    "关闭后长按始终使用固定默认倍速"
+                                subtitle = when (longPressSpeedSlideMode) {
+                                    com.android.purebilibili.core.store.LongPressSpeedSlideMode.OFF ->
+                                        "关闭后长按始终使用固定预设倍速"
+                                    com.android.purebilibili.core.store.LongPressSpeedSlideMode.PRESETS ->
+                                        "长按左右滑动按档位切换 0.5x–5.0x 倍率"
+                                    com.android.purebilibili.core.store.LongPressSpeedSlideMode.CONTINUOUS ->
+                                        "长按左右滑动按 0.1x 无极调节 0.5x–5.0x 倍率"
                                 },
-                                checked = longPressSpeedSlideAdjustEnabled,
-                                onCheckedChange = { enabled ->
+                                options = listOf(
+                                    AppSegmentOption(
+                                        com.android.purebilibili.core.store.LongPressSpeedSlideMode.OFF,
+                                        com.android.purebilibili.core.store.LongPressSpeedSlideMode.OFF.label,
+                                    ),
+                                    AppSegmentOption(
+                                        com.android.purebilibili.core.store.LongPressSpeedSlideMode.PRESETS,
+                                        com.android.purebilibili.core.store.LongPressSpeedSlideMode.PRESETS.label,
+                                    ),
+                                    AppSegmentOption(
+                                        com.android.purebilibili.core.store.LongPressSpeedSlideMode.CONTINUOUS,
+                                        com.android.purebilibili.core.store.LongPressSpeedSlideMode.CONTINUOUS.label,
+                                    ),
+                                ),
+                                selectedValue = longPressSpeedSlideMode,
+                                onSelectionChange = { mode ->
                                     scope.launch {
-                                        SettingsManager.setLongPressSpeedSlideAdjustEnabled(context, enabled)
+                                        SettingsManager.setLongPressSpeedSlideMode(context, mode)
                                     }
                                 },
                                 iconTint = AppContentColors.secondaryText(),
                             )
-                            LongPressSlideSpeedLivePreview(enabled = longPressSpeedSlideAdjustEnabled)
+                            LongPressSlideSpeedLivePreview(mode = longPressSpeedSlideMode)
                         }
                         AppPreferenceDivider()
                         SettingsItemAnchor("playback.long_press_speed_hint_hidden") {
@@ -1492,6 +1510,8 @@ private fun PlaybackInteractionSettingsSection(
         .collectAsStateWithLifecycle(initialValue = false)
     //  [新增] 自动播放下一个
     val autoPlayEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getAutoPlay(context) }.collectAsStateWithLifecycle(initialValue = true)
+    val showDetailRelatedVideos by remember(context) { SettingsManager.getShowDetailRelatedVideos(context) }
+        .collectAsStateWithLifecycle(initialValue = true)
     val nextWatchHintEnabled by remember(context) { SettingsManager.getNextWatchHintEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = true)
     val externalPlaylistAutoContinueEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getExternalPlaylistAutoContinue(context) }.collectAsStateWithLifecycle(initialValue = true)
@@ -1651,6 +1671,19 @@ private fun PlaybackInteractionSettingsSection(
                     }
                 },
                 iconTint = AppContentColors.secondaryText()
+            )
+        }
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.show_detail_related_videos") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.RECOMMEND_RETENTION),
+                title = playbackSettingTitle("playback.show_detail_related_videos"),
+                subtitle = "隐藏视频详情页中的相关推荐区域，不影响自动连播",
+                checked = showDetailRelatedVideos,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setShowDetailRelatedVideos(context, enabled) }
+                },
+                iconTint = AppContentColors.secondaryText(),
             )
         }
         AppPreferenceDivider()
@@ -3814,85 +3847,156 @@ SettingsItemAnchor("playback.player_insight_mode") {
 }
 
 @Composable
-private fun LongPressSlideSpeedLivePreview(enabled: Boolean) {
-    val gate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
-    val animateActive = gate.active && enabled
-    val phaseState = remember { androidx.compose.animation.core.Animatable(0.5f) }
-    LaunchedEffect(animateActive) {
-        if (!animateActive) {
-            phaseState.snapTo(0.5f)
-            return@LaunchedEffect
-        }
-        while (true) {
-            phaseState.animateTo(
-                targetValue = 0.85f,
-                animationSpec = androidx.compose.animation.core.tween(950),
-            )
-            phaseState.animateTo(
-                targetValue = 0.15f,
-                animationSpec = androidx.compose.animation.core.tween(1100),
-            )
-            phaseState.animateTo(
-                targetValue = 0.5f,
-                animationSpec = androidx.compose.animation.core.tween(700),
-            )
-        }
-    }
-    val accent = AppContentColors.accent()
-    val containerColor = AppSurfaceTokens.groupedListContainer()
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-            .clip(AppShapes.container(ContainerLevel.Field))
-            .background(containerColor)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AppText(
-                    text = if (enabled) "演示：按住画面左右滑动实时调速" else "关闭后长按固定使用预设倍速",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = AppContentColors.secondaryText(),
-                )
-                AppText(
-                    text = "1.5x · 2.0x · 3.0x",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (enabled) accent else AppContentColors.secondaryText(),
-                )
+private fun LongPressSlideSpeedLivePreview(mode: com.android.purebilibili.core.store.LongPressSpeedSlideMode) {
+    val enabled = mode != com.android.purebilibili.core.store.LongPressSpeedSlideMode.OFF
+    val isContinuous = mode == com.android.purebilibili.core.store.LongPressSpeedSlideMode.CONTINUOUS
+    androidx.compose.animation.AnimatedVisibility(visible = enabled) {
+        val gate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+        val phaseState = remember { androidx.compose.animation.core.Animatable(0.35f) }
+        var previewSpeed by remember(mode) { mutableFloatStateOf(2.0f) }
+        LaunchedEffect(gate.active, mode) {
+            if (!gate.active) {
+                phaseState.snapTo(0.35f)
+                previewSpeed = 2.0f
+                return@LaunchedEffect
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(22.dp),
-                contentAlignment = Alignment.CenterStart,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(accent.copy(alpha = if (enabled) 0.22f else 0.10f))
-                )
-                Box(
-                    modifier = Modifier
-                        .graphicsLayer {
-                            val travelPx = (size.width * 2.4f).coerceAtLeast(1f)
-                            translationX = (phaseState.value - 0.5f) * travelPx + travelPx * 0.65f
-                        }
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(if (enabled) accent else AppContentColors.secondaryText().copy(alpha = 0.45f))
-                        .padding(horizontal = 10.dp, vertical = 3.dp),
+            if (isContinuous) {
+                val waypoints = listOf(2.0f, 3.4f, 4.6f, 2.3f, 0.8f, 1.5f)
+                var idx = 0
+                while (true) {
+                    val next = waypoints[idx % waypoints.size]
+                    idx += 1
+                    val start = previewSpeed
+                    val steps = kotlin.math.abs(kotlin.math.round((next - start) * 10f).toInt()).coerceAtLeast(1)
+                    val targetFraction = ((next - 0.5f) / 4.5f).coerceIn(0f, 1f)
+                    val startFraction = phaseState.value
+                    for (step in 1..steps) {
+                        val t = step.toFloat() / steps.toFloat()
+                        val stepped = kotlin.math.round((start + (next - start) * t) * 10f) / 10f
+                        previewSpeed = stepped.coerceIn(0.5f, 5.0f)
+                        phaseState.animateTo(
+                            targetValue = startFraction + (targetFraction - startFraction) * t,
+                            animationSpec = androidx.compose.animation.core.tween(95),
+                        )
+                    }
+                    kotlinx.coroutines.delay(420)
+                }
+            } else {
+                val presetStops = listOf(2.0f, 3.0f, 5.0f, 2.5f, 1.5f, 0.5f, 1.25f)
+                var idx = 0
+                while (true) {
+                    val target = presetStops[idx % presetStops.size]
+                    idx += 1
+                    previewSpeed = target
+                    phaseState.animateTo(
+                        targetValue = ((target - 0.5f) / 4.5f).coerceIn(0f, 1f),
+                        animationSpec = androidx.compose.animation.core.spring(
+                            dampingRatio = 0.78f,
+                            stiffness = 380f,
+                        ),
+                    )
+                    kotlinx.coroutines.delay(560)
+                }
+            }
+        }
+        val primary = MaterialTheme.colorScheme.primary
+        val onPrimary = MaterialTheme.colorScheme.onPrimary
+        val containerColor = AppSurfaceTokens.groupedListContainer()
+        val borderColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+        val previewShape = AppShapes.container(ContainerLevel.Field)
+        val scaleLabels = remember { listOf("0.5x", "1.5x", "2.5x", "4.0x", "5.0x") }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(gate.modifier)
+                .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 12.dp)
+                .clip(previewShape)
+                .background(containerColor)
+                .border(1.dp, borderColor, previewShape)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     AppText(
-                        text = if (enabled) "⇄ 滑速" else "2.0x",
+                        text = if (isContinuous) "左右滑动按 0.1x 无极微调" else "左右滑动在预设档位间切换",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
+                        color = AppContentColors.secondaryText(),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
                     )
+                    com.android.purebilibili.feature.video.ui.section.AnimatedBlurredSpeedText(
+                        speed = previewSpeed,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = primary,
+                    )
+                }
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(24.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    val trackWidthPx = constraints.maxWidth.toFloat()
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(primary.copy(alpha = 0.18f))
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        val tickCount = if (isContinuous) 11 else 5
+                        repeat(tickCount) {
+                            Box(
+                                modifier = Modifier
+                                    .size(if (isContinuous) 4.dp else 6.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(primary.copy(alpha = if (isContinuous) 0.34f else 0.44f))
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .graphicsLayer {
+                                val maxTravelPx = (trackWidthPx - size.width).coerceAtLeast(0f)
+                                translationX = phaseState.value.coerceIn(0f, 1f) * maxTravelPx
+                            }
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(primary)
+                            .padding(horizontal = 10.dp, vertical = 3.dp),
+                    ) {
+                        AppText(
+                            text = if (isContinuous) "⇄ ±0.1x" else "⇄ 换挡",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = onPrimary,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    scaleLabels.forEach { label ->
+                        AppText(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppContentColors.secondaryText().copy(alpha = 0.78f),
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
@@ -3923,6 +4027,7 @@ private fun MusicLyricsStyleLivePreview(style: SettingsManager.MusicLyricsUiStyl
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .then(gate.modifier)
             .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
             .clip(AppShapes.container(ContainerLevel.Field))
             .background(previewBg)
@@ -4012,6 +4117,7 @@ private fun PortraitPlayerCollapseLivePreview(mode: com.android.purebilibili.cor
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(gate.modifier)
             .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
             .clip(AppShapes.container(ContainerLevel.Field))
             .background(containerColor)

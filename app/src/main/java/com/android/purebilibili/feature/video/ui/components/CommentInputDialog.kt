@@ -413,14 +413,22 @@ fun CommentInputDialog(
             // 只退出本输入窗的模糊，不修改其他弹层的默认材质或模糊行为。
             com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect(enabled = false)
             val density = LocalDensity.current
-            val imeBottomPx = WindowInsets.ime.getBottom(density)
             val navigationBarsBottomPx = WindowInsets.navigationBars.getBottom(density)
-            val keyboardHeightDp = with(density) {
-                (imeBottomPx - navigationBarsBottomPx).coerceAtLeast(0).toDp().value.roundToInt()
-            }
-            LaunchedEffect(keyboardHeightDp, showEmojiPanel) {
-                if (!showEmojiPanel) {
-                    lastKeyboardHeightDp = maxOf(lastKeyboardHeightDp, keyboardHeightDp)
+            val imeInsets = WindowInsets.ime
+            LaunchedEffect(density, imeInsets, navigationBarsBottomPx, showEmojiPanel) {
+                if (showEmojiPanel) return@LaunchedEffect
+                snapshotFlow {
+                    with(density) {
+                        (imeInsets.getBottom(density) - navigationBarsBottomPx)
+                            .coerceAtLeast(0)
+                            .toDp()
+                            .value
+                            .roundToInt()
+                    }
+                }.collect { currentKeyboardHeightDp ->
+                    if (currentKeyboardHeightDp > lastKeyboardHeightDp) {
+                        lastKeyboardHeightDp = currentKeyboardHeightDp
+                    }
                 }
             }
             val availablePanelHeightDp = configuration.screenHeightDp -
@@ -437,7 +445,7 @@ fun CommentInputDialog(
                 (if (selectedImageUris.isEmpty()) 0 else 112)
             val emojiPanelHeightDp = resolveCommentEmojiPanelHeightDp(
                 fallbackHeightDp = layoutPolicy.emojiPanelHeightDp,
-                keyboardHeightDp = maxOf(lastKeyboardHeightDp, keyboardHeightDp),
+                keyboardHeightDp = lastKeyboardHeightDp,
                 availableHeightDp = availablePanelHeightDp,
             )
             LaunchedEffect(showEmojiPanel, inputActive, canInputComment, draftKey) {

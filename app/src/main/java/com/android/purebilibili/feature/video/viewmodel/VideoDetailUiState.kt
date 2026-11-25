@@ -1,15 +1,20 @@
 package com.android.purebilibili.feature.video.viewmodel
 
+import androidx.compose.runtime.Immutable
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.feature.video.usecase.resolveVideoLoadDurationMs
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 
+@Immutable
 data class VideoDetailUiState(
     val requestBvid: String = "",
     val requestCid: Long = 0L,
     val requestToken: Long = 0L,
     val info: ViewInfo? = null,
-    val related: List<RelatedVideo> = emptyList(),
+    val related: ImmutableList<RelatedVideo> = persistentListOf(),
     val relatedLoadState: VideoPlaybackUiState.RelatedLoadState = VideoPlaybackUiState.RelatedLoadState.LOADING,
     val isLoggedIn: Boolean = false,
     val isVip: Boolean = false
@@ -27,7 +32,7 @@ data class VideoDetailUiState(
             requestCid = cid,
             requestToken = token,
             info = content?.info,
-            related = content?.related.orEmpty(),
+            related = content?.related?.toImmutableList() ?: persistentListOf(),
             relatedLoadState = content?.relatedLoadState ?: VideoPlaybackUiState.RelatedLoadState.LOADING,
             isLoggedIn = content?.isLoggedIn ?: false,
             isVip = content?.isVip ?: false

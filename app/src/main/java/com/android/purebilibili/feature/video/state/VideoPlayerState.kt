@@ -64,6 +64,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -619,12 +620,16 @@ class VideoPlayerState(
 
     private fun appendDiagnosticEvent(event: String) {
         val positionLabel = FormatUtils.formatDuration(player.currentPosition.coerceAtLeast(0L))
-        _diagnosticEvents.value = com.android.purebilibili.feature.video.ui.overlay.resolvePlaybackDiagnosticEvents(
-            current = _diagnosticEvents.value,
-            event = "$positionLabel | $event",
-            diagnosticsEnabled = com.android.purebilibili.core.store.PlayerSettingsCache
-                .isPlayerDiagnosticLoggingEnabled()
-        )
+        val diagnosticsEnabled = com.android.purebilibili.core.store.PlayerSettingsCache
+            .isPlayerDiagnosticLoggingEnabled()
+        val formattedEvent = "$positionLabel | $event"
+        _diagnosticEvents.update { current ->
+            com.android.purebilibili.feature.video.ui.overlay.resolvePlaybackDiagnosticEvents(
+                current = current,
+                event = formattedEvent,
+                diagnosticsEnabled = diagnosticsEnabled
+            )
+        }
     }
 
     fun recordDiagnosticEvent(event: String) {
@@ -635,11 +640,13 @@ class VideoPlayerState(
         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
             if (videoSize.width > 0 && videoSize.height > 0) {
                 _videoSize.value = Pair(videoSize.width, videoSize.height)
-                _debugInfo.value = applyPlaybackResolutionDebugInfo(
-                    current = _debugInfo.value,
-                    width = videoSize.width,
-                    height = videoSize.height
-                )
+                _debugInfo.update { current ->
+                    applyPlaybackResolutionDebugInfo(
+                        current = current,
+                        width = videoSize.width,
+                        height = videoSize.height
+                    )
+                }
                 val isVertical = videoSize.height > videoSize.width
                 _isVerticalVideo.value = isVertical
                 _verticalVideoSource.value = VerticalVideoSource.PLAYER
@@ -667,24 +674,29 @@ class VideoPlayerState(
             if (isPlaying) {
                 pendingResumeIntentAfterBuffering = false
             }
+            val currentPlaybackState = player.playbackState
+            val currentPlayWhenReady = player.playWhenReady
+            val currentPositionMs = player.currentPosition
             PlaybackUserActionTracker.resolveIfResponded(
                 player = player,
-                playbackState = player.playbackState,
-                playWhenReady = player.playWhenReady,
+                playbackState = currentPlaybackState,
+                playWhenReady = currentPlayWhenReady,
                 isPlaying = isPlaying,
-                currentPositionMs = player.currentPosition
+                currentPositionMs = currentPositionMs
             )
-            _debugInfo.value = applyPlaybackStateDebugInfo(
-                current = _debugInfo.value,
-                playbackState = player.playbackState,
-                playWhenReady = player.playWhenReady,
-                isPlaying = isPlaying
-            )
+            _debugInfo.update { current ->
+                applyPlaybackStateDebugInfo(
+                    current = current,
+                    playbackState = currentPlaybackState,
+                    playWhenReady = currentPlayWhenReady,
+                    isPlaying = isPlaying
+                )
+            }
             appendDiagnosticEvent("isPlaying=$isPlaying")
             Logger.d(
                 "VideoPlayerState",
                 "USER_DBG onIsPlayingChanged: isPlaying=$isPlaying, " +
-                    "state=${player.playbackState}, playWhenReady=${player.playWhenReady}, pos=${player.currentPosition}"
+                    "state=$currentPlaybackState, playWhenReady=$currentPlayWhenReady, pos=$currentPositionMs"
             )
             // 当播放状态改变时，更新通知栏（主要是播放/暂停按钮）
             if (currentTitle.isNotEmpty()) {
@@ -726,24 +738,29 @@ class VideoPlayerState(
             } else if (playbackState == Player.STATE_ENDED) {
                 pendingResumeIntentAfterBuffering = false
             }
+            val currentPlayWhenReady = player.playWhenReady
+            val currentIsPlaying = player.isPlaying
+            val currentPositionMs = player.currentPosition
             PlaybackUserActionTracker.resolveIfResponded(
                 player = player,
                 playbackState = playbackState,
-                playWhenReady = player.playWhenReady,
-                isPlaying = player.isPlaying,
-                currentPositionMs = player.currentPosition
+                playWhenReady = currentPlayWhenReady,
+                isPlaying = currentIsPlaying,
+                currentPositionMs = currentPositionMs
             )
-            _debugInfo.value = applyPlaybackStateDebugInfo(
-                current = _debugInfo.value,
-                playbackState = playbackState,
-                playWhenReady = player.playWhenReady,
-                isPlaying = player.isPlaying
-            )
+            _debugInfo.update { current ->
+                applyPlaybackStateDebugInfo(
+                    current = current,
+                    playbackState = playbackState,
+                    playWhenReady = currentPlayWhenReady,
+                    isPlaying = currentIsPlaying
+                )
+            }
             appendDiagnosticEvent("state=${resolvePlaybackStateDebugLabel(playbackState)}")
             Logger.d(
                 "VideoPlayerState",
                 "USER_DBG onPlaybackStateChanged: state=$playbackState, " +
-                    "isPlaying=${player.isPlaying}, playWhenReady=${player.playWhenReady}, pos=${player.currentPosition}"
+                    "isPlaying=$currentIsPlaying, playWhenReady=$currentPlayWhenReady, pos=$currentPositionMs"
             )
         }
 
@@ -765,24 +782,29 @@ class VideoPlayerState(
             ) {
                 pendingResumeIntentAfterBuffering = true
             }
+            val currentPlaybackState = player.playbackState
+            val currentIsPlaying = player.isPlaying
+            val currentPositionMs = player.currentPosition
             PlaybackUserActionTracker.resolveIfResponded(
                 player = player,
-                playbackState = player.playbackState,
+                playbackState = currentPlaybackState,
                 playWhenReady = playWhenReady,
-                isPlaying = player.isPlaying,
-                currentPositionMs = player.currentPosition
+                isPlaying = currentIsPlaying,
+                currentPositionMs = currentPositionMs
             )
-            _debugInfo.value = applyPlaybackStateDebugInfo(
-                current = _debugInfo.value,
-                playbackState = player.playbackState,
-                playWhenReady = playWhenReady,
-                isPlaying = player.isPlaying
-            )
+            _debugInfo.update { current ->
+                applyPlaybackStateDebugInfo(
+                    current = current,
+                    playbackState = currentPlaybackState,
+                    playWhenReady = playWhenReady,
+                    isPlaying = currentIsPlaying
+                )
+            }
             appendDiagnosticEvent("playWhenReady=$playWhenReady reason=$reason")
             Logger.d(
                 "VideoPlayerState",
                 "USER_DBG onPlayWhenReadyChanged: playWhenReady=$playWhenReady, reason=$reason, " +
-                    "state=${player.playbackState}, isPlaying=${player.isPlaying}, pos=${player.currentPosition}"
+                    "state=$currentPlaybackState, isPlaying=$currentIsPlaying, pos=$currentPositionMs"
             )
         }
 
@@ -791,7 +813,9 @@ class VideoPlayerState(
             // 会重新盖住仍在输出的视频画面，而重复播放不一定再次派发首帧事件。
             if (shouldResetFirstFrameForMediaItemTransition(reason)) {
                 // 合集/页内换片：清掉旧 firstFrame，避免封面状态机误以为新片已出画。
-                _debugInfo.value = applyMediaTransitionFirstFrameReset(current = _debugInfo.value)
+                _debugInfo.update { current ->
+                    applyMediaTransitionFirstFrameReset(current = current)
+                }
             }
             appendDiagnosticEvent("mediaItemTransition reason=$reason")
             Logger.d(
@@ -801,12 +825,16 @@ class VideoPlayerState(
         }
 
         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-            _debugInfo.value = applyPlaybackLoadErrorDebugInfo(
-                current = _debugInfo.value,
-                errorCodeName = error.errorCodeName,
-                message = error.message
-            )
-            appendDiagnosticEvent("playerError=${error.errorCodeName}")
+            val errorCodeName = error.errorCodeName
+            val errorMessage = error.message
+            _debugInfo.update { current ->
+                applyPlaybackLoadErrorDebugInfo(
+                    current = current,
+                    errorCodeName = errorCodeName,
+                    message = errorMessage
+                )
+            }
+            appendDiagnosticEvent("playerError=$errorCodeName")
         }
     }
 
@@ -817,14 +845,16 @@ class VideoPlayerState(
             decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
         ) {
             _videoInputFormat.value = format
-            _debugInfo.value = applyVideoFormatDebugInfo(
-                current = _debugInfo.value,
-                format = format
-            )
-            _debugInfo.value = applyVideoEventDebugInfo(
-                current = _debugInfo.value,
-                eventSummary = "video format ${resolvePlaybackCodecLabel(format.sampleMimeType)}"
-            )
+            val eventSummary = "video format ${resolvePlaybackCodecLabel(format.sampleMimeType)}"
+            _debugInfo.update { current ->
+                applyVideoEventDebugInfo(
+                    current = applyVideoFormatDebugInfo(
+                        current = current,
+                        format = format
+                    ),
+                    eventSummary = eventSummary
+                )
+            }
         }
 
         override fun onAudioInputFormatChanged(
@@ -832,14 +862,16 @@ class VideoPlayerState(
             format: Format,
             decoderReuseEvaluation: androidx.media3.exoplayer.DecoderReuseEvaluation?
         ) {
-            _debugInfo.value = applyAudioFormatDebugInfo(
-                current = _debugInfo.value,
-                format = format
-            )
-            _debugInfo.value = applyAudioEventDebugInfo(
-                current = _debugInfo.value,
-                eventSummary = "audio format ${resolvePlaybackCodecLabel(format.sampleMimeType)}"
-            )
+            val eventSummary = "audio format ${resolvePlaybackCodecLabel(format.sampleMimeType)}"
+            _debugInfo.update { current ->
+                applyAudioEventDebugInfo(
+                    current = applyAudioFormatDebugInfo(
+                        current = current,
+                        format = format
+                    ),
+                    eventSummary = eventSummary
+                )
+            }
         }
 
         override fun onVideoDecoderInitialized(
@@ -848,15 +880,16 @@ class VideoPlayerState(
             initializedTimestampMs: Long,
             initializationDurationMsMs: Long
         ) {
-            _debugInfo.value = applyVideoFormatDebugInfo(
-                current = _debugInfo.value,
-                format = null,
-                decoderName = decoderName
-            )
-            _debugInfo.value = applyVideoEventDebugInfo(
-                current = _debugInfo.value,
-                eventSummary = "video decoder initialized"
-            )
+            _debugInfo.update { current ->
+                applyVideoEventDebugInfo(
+                    current = applyVideoFormatDebugInfo(
+                        current = current,
+                        format = null,
+                        decoderName = decoderName
+                    ),
+                    eventSummary = "video decoder initialized"
+                )
+            }
             appendDiagnosticEvent("videoDecoder=$decoderName")
         }
 
@@ -866,15 +899,16 @@ class VideoPlayerState(
             initializedTimestampMs: Long,
             initializationDurationMsMs: Long
         ) {
-            _debugInfo.value = applyAudioFormatDebugInfo(
-                current = _debugInfo.value,
-                format = null,
-                decoderName = decoderName
-            )
-            _debugInfo.value = applyAudioEventDebugInfo(
-                current = _debugInfo.value,
-                eventSummary = "audio decoder initialized"
-            )
+            _debugInfo.update { current ->
+                applyAudioEventDebugInfo(
+                    current = applyAudioFormatDebugInfo(
+                        current = current,
+                        format = null,
+                        decoderName = decoderName
+                    ),
+                    eventSummary = "audio decoder initialized"
+                )
+            }
             appendDiagnosticEvent("audioDecoder=$decoderName")
         }
 
@@ -883,9 +917,9 @@ class VideoPlayerState(
             output: Any,
             renderTimeMs: Long
         ) {
-            _debugInfo.value = applyRenderedFirstFrameDebugInfo(
-                current = _debugInfo.value
-            )
+            _debugInfo.update { current ->
+                applyRenderedFirstFrameDebugInfo(current = current)
+            }
             appendDiagnosticEvent("firstFrameRendered")
         }
 
@@ -894,10 +928,12 @@ class VideoPlayerState(
             droppedFrames: Int,
             elapsedMs: Long
         ) {
-            _debugInfo.value = applyDroppedVideoFramesDebugInfo(
-                current = _debugInfo.value,
-                droppedFrameCount = droppedFrames
-            )
+            _debugInfo.update { current ->
+                applyDroppedVideoFramesDebugInfo(
+                    current = current,
+                    droppedFrameCount = droppedFrames
+                )
+            }
             if (droppedFrames > 0) {
                 appendDiagnosticEvent("droppedFrames=$droppedFrames")
             }
@@ -909,20 +945,24 @@ class VideoPlayerState(
             totalBytesLoaded: Long,
             bitrateEstimate: Long
         ) {
-            _debugInfo.value = applyBandwidthEstimateDebugInfo(
-                current = _debugInfo.value,
-                bitrateEstimate = bitrateEstimate
-            )
+            _debugInfo.update { current ->
+                applyBandwidthEstimateDebugInfo(
+                    current = current,
+                    bitrateEstimate = bitrateEstimate
+                )
+            }
         }
 
         override fun onVideoCodecError(
             eventTime: AnalyticsListener.EventTime,
             videoCodecError: Exception
         ) {
-            _debugInfo.value = applyVideoEventDebugInfo(
-                current = _debugInfo.value,
-                eventSummary = "video codec error"
-            )
+            _debugInfo.update { current ->
+                applyVideoEventDebugInfo(
+                    current = current,
+                    eventSummary = "video codec error"
+                )
+            }
             appendDiagnosticEvent("videoCodecError=${videoCodecError.javaClass.simpleName}")
             Logger.e("VideoPlayerState", "Video codec error", videoCodecError)
         }
@@ -931,10 +971,12 @@ class VideoPlayerState(
             eventTime: AnalyticsListener.EventTime,
             audioCodecError: Exception
         ) {
-            _debugInfo.value = applyAudioEventDebugInfo(
-                current = _debugInfo.value,
-                eventSummary = "audio codec error"
-            )
+            _debugInfo.update { current ->
+                applyAudioEventDebugInfo(
+                    current = current,
+                    eventSummary = "audio codec error"
+                )
+            }
             appendDiagnosticEvent("audioCodecError=${audioCodecError.javaClass.simpleName}")
             Logger.e("VideoPlayerState", "Audio codec error", audioCodecError)
         }
@@ -943,10 +985,12 @@ class VideoPlayerState(
             eventTime: AnalyticsListener.EventTime,
             audioSinkError: Exception
         ) {
-            _debugInfo.value = applyAudioEventDebugInfo(
-                current = _debugInfo.value,
-                eventSummary = "audio sink error"
-            )
+            _debugInfo.update { current ->
+                applyAudioEventDebugInfo(
+                    current = current,
+                    eventSummary = "audio sink error"
+                )
+            }
             appendDiagnosticEvent("audioSinkError=${audioSinkError.javaClass.simpleName}")
             Logger.e("VideoPlayerState", "Audio sink error", audioSinkError)
         }
@@ -957,20 +1001,27 @@ class VideoPlayerState(
         val size = player.videoSize
         if (size.width > 0 && size.height > 0) {
             _videoSize.value = Pair(size.width, size.height)
-            _debugInfo.value = applyPlaybackResolutionDebugInfo(
-                current = _debugInfo.value,
-                width = size.width,
-                height = size.height
-            )
+            _debugInfo.update { current ->
+                applyPlaybackResolutionDebugInfo(
+                    current = current,
+                    width = size.width,
+                    height = size.height
+                )
+            }
             _isVerticalVideo.value = size.height > size.width
             _verticalVideoSource.value = VerticalVideoSource.PLAYER
         }
-        _debugInfo.value = applyPlaybackStateDebugInfo(
-            current = _debugInfo.value,
-            playbackState = player.playbackState,
-            playWhenReady = player.playWhenReady,
-            isPlaying = player.isPlaying
-        )
+        val initialPlaybackState = player.playbackState
+        val initialPlayWhenReady = player.playWhenReady
+        val initialIsPlaying = player.isPlaying
+        _debugInfo.update { current ->
+            applyPlaybackStateDebugInfo(
+                current = current,
+                playbackState = initialPlaybackState,
+                playWhenReady = initialPlayWhenReady,
+                isPlaying = initialIsPlaying
+            )
+        }
     }
     
     /**
@@ -1159,7 +1210,7 @@ fun rememberVideoPlayerState(
 
     val scope = rememberCoroutineScope()
 
-    val holder = remember(player, scope) {
+    val holder = remember(player) {
         VideoPlayerState(context, player, scope)
     }
 
@@ -1173,7 +1224,7 @@ fun rememberVideoPlayerState(
         }
     }
 
-    DisposableEffect(player, holder) {
+    DisposableEffect(player) {
         miniPlayerManager.retainPlayerForPage(player)
         holder.attachPlayerListeners()
         onDispose {

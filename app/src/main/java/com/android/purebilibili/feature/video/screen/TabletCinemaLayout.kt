@@ -265,18 +265,25 @@ internal fun TabletCinemaLayout(
         runCatching { TabletSideCurtainState.valueOf(curtainStateName) }
             .getOrDefault(resolveInitialCurtainState(configuration.screenWidthDp))
     }
-    var selectedTab by rememberSaveable(bvid, secondaryDefaultTab) {
-        mutableIntStateOf(resolveTabletCinemaDefaultTab(secondaryDefaultTab))
+    val detailRelatedVisible = rememberDetailRelatedVisibility().isVisible()
+    var selectedTab by rememberSaveable(bvid, secondaryDefaultTab, detailRelatedVisible) {
+        mutableIntStateOf(if (detailRelatedVisible) resolveTabletCinemaDefaultTab(secondaryDefaultTab) else 0)
     }
     val curtainPagerState = rememberPagerState(
         initialPage = selectedTab,
-        pageCount = { 2 }
+        pageCount = { if (detailRelatedVisible) 2 else 1 }
     )
     val curtainWidth by animateDpAsState(
         targetValue = resolveCurtainWidthDp(curtainState, policy).dp,
         animationSpec = tween(durationMillis = 240),
         label = "cinemaCurtainWidth"
     )
+
+    LaunchedEffect(detailRelatedVisible) {
+        if (!detailRelatedVisible && selectedTab != 0) {
+            selectedTab = 0
+        }
+    }
 
     LaunchedEffect(success?.related?.size, commentState.replyCount, commentState.isRepliesLoading) {
         selectedTab = resolveCinemaSideCurtainSelectedTab(
@@ -432,6 +439,7 @@ internal fun TabletCinemaLayout(
                 width = curtainWidth,
                 selectedTab = selectedTab,
                 pagerState = curtainPagerState,
+                includeRelatedTab = detailRelatedVisible,
                 onToggle = {
                     curtainStateName = when (curtainState) {
                         TabletSideCurtainState.OPEN -> TabletSideCurtainState.PEEK.name
@@ -1129,6 +1137,7 @@ private fun CinemaSideCurtain(
     width: Dp,
     selectedTab: Int,
     pagerState: PagerState,
+    includeRelatedTab: Boolean = true,
     onToggle: () -> Unit,
     onTabSelected: (Int) -> Unit,
     success: VideoPlaybackUiState.Success?,
@@ -1216,12 +1225,14 @@ private fun CinemaSideCurtain(
                                     contentDescription = "comments"
                                 )
                             }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            AppIconButton(onClick = { onTabSelected(1) }) {
-                                AppIcon(
-                                    imageVector = Icons.AutoMirrored.Outlined.PlaylistPlay,
-                                    contentDescription = "related videos"
-                                )
+                            if (includeRelatedTab) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                AppIconButton(onClick = { onTabSelected(1) }) {
+                                    AppIcon(
+                                        imageVector = Icons.AutoMirrored.Outlined.PlaylistPlay,
+                                        contentDescription = "related videos"
+                                    )
+                                }
                             }
                         }
                     } else {
@@ -1232,15 +1243,24 @@ private fun CinemaSideCurtain(
                                     .padding(horizontal = 8.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                TabletSecondaryLiquidTabRow(
-                                    labels = listOf("评论", "相关推荐"),
-                                    selectedIndex = pagerState.tabSelectedPage,
-                                    onSelected = onTabSelected,
-                                    indicatorPositionProvider = {
-                                        pagerState.tabIndicatorPosition
-                                    },
-                                    isScrollInProgressProvider = { pagerState.isScrollInProgress },
-                                )
+                                if (includeRelatedTab) {
+                                    TabletSecondaryLiquidTabRow(
+                                        labels = listOf("评论", "相关推荐"),
+                                        selectedIndex = pagerState.tabSelectedPage,
+                                        onSelected = onTabSelected,
+                                        indicatorPositionProvider = {
+                                            pagerState.tabIndicatorPosition
+                                        },
+                                        isScrollInProgressProvider = { pagerState.isScrollInProgress },
+                                    )
+                                } else {
+                                    AppText(
+                                        text = "评论",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
+                                }
                             }
 
                             HorizontalPager(
@@ -1260,7 +1280,7 @@ private fun CinemaSideCurtain(
                                         }
                                     }
 
-                                    page == 0 -> {
+                                    page == 0 || !includeRelatedTab -> {
                                         CinemaCommentsPane(
                                             success = success,
                                             commentState = commentState,

@@ -652,18 +652,16 @@ fun VideoCommentSheetHost(
     val menuCallbacks = remember(commentViewModel) { commentViewModel.replyMenuCallbacks() }
     val useBuiltInComposer = onRootCommentClick == null || onReplyClick == null
     var showBuiltInComposer by rememberSaveable(aid, commentType) { mutableStateOf(false) }
-    var submittedSessionId by remember(aid, commentType) { mutableStateOf<Long?>(null) }
     var builtInEmotePackages by remember { mutableStateOf<List<EmotePackage>>(emptyList()) }
     LaunchedEffect(useBuiltInComposer, showBuiltInComposer) {
         if (useBuiltInComposer && showBuiltInComposer && builtInEmotePackages.isEmpty()) {
             builtInEmotePackages = CommentRepository.getEmotePackages().getOrDefault(emptyList())
         }
     }
-    LaunchedEffect(useBuiltInComposer, commentState.isSending, commentState.sendError, commentState.composerDrafts.completedSessionId) {
+    LaunchedEffect(useBuiltInComposer, commentViewModel, context) {
         if (!useBuiltInComposer) return@LaunchedEffect
-        if (submittedSessionId != null && !commentState.isSending) {
-            submittedSessionId = null
-            commentState.sendError?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+        commentViewModel.sendErrorEvents.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
     }
     LaunchedEffect(useBuiltInComposer, commentState.composerDrafts.sessionId, commentState.composerDrafts.completedSessionId) {
@@ -978,7 +976,6 @@ fun VideoCommentSheetHost(
                     latest.replyTarget?.rpid == composerReplyRpid &&
                     !latest.isSending
                 ) {
-                    submittedSessionId = composerSessionId
                     commentViewModel.updateCommentDraft(composerSessionId, composerReplyRpid, text, images, sync)
                     commentViewModel.sendComment(text, images, sync)
                 }

@@ -131,8 +131,11 @@ fun PagesSelector(
             )
         }
         Spacer(modifier = Modifier.height(6.dp))
+        val pageTitles = remember(pages) {
+            pages.map { "P${it.page} · ${it.part.ifBlank { "第${it.page}P" }}" }
+        }
         PagesHorizontalPreviewRow(
-            titles = pages.map { "P${it.page} · ${it.part.ifBlank { "第${it.page}P" }}" },
+            titles = pageTitles,
             currentIndex = currentPageIndex,
             isPlaying = isPlaying,
             onSelect = { index ->
@@ -246,7 +249,11 @@ private fun PagesHorizontalPreviewRow(
         horizontalArrangement = Arrangement.spacedBy(PagesPreviewItemSpacing),
         contentPadding = PaddingValues(horizontal = 16.dp),
     ) {
-        items(titles.size) { index ->
+        items(
+            count = titles.size,
+            key = { index -> "page_$index" },
+            contentType = { index -> index == activeIndex },
+        ) { index ->
             val title = titles[index]
             val isCurrent = index == activeIndex
             Row(

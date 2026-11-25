@@ -17,11 +17,23 @@ internal fun UgcSeason.episodesInPublishOrder(): List<UgcEpisode> =
 
 /** Shared by displayed episode order, lookahead, autoplay, and explicit previous/next. */
 internal object PiliPlaybackOrder {
-    private val reversed = ConcurrentHashMap<String, Boolean>()
-    private fun key(seasonId: Long, bvid: String): String = if (seasonId > 0) "season:$seasonId" else "video:$bvid"
-    fun setReversed(seasonId: Long, bvid: String, value: Boolean) {
-        reversed[key(seasonId, bvid)] = value
+    private const val MAX_REVERSED_ENTRIES = 128
+    private val reversed = object : LinkedHashMap<String, Boolean>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean =
+            size > MAX_REVERSED_ENTRIES
     }
+    private fun key(seasonId: Long, bvid: String): String = if (seasonId > 0) "season:$seasonId" else "video:$bvid"
+
+    @Synchronized
+    fun setReversed(seasonId: Long, bvid: String, value: Boolean) {
+        val targetKey = key(seasonId, bvid)
+        if (value) {
+            reversed[targetKey] = true
+        } else {
+            reversed.remove(targetKey)
+        }
+    }
+
     fun pageStep(bvid: String): Int = step(0L, bvid)
 
     fun seasonStep(info: ViewInfo): Int {
@@ -31,6 +43,7 @@ internal object PiliPlaybackOrder {
         return step(id, info.bvid)
     }
 
+    @Synchronized
     private fun step(seasonId: Long, bvid: String): Int =
         if (reversed[key(seasonId, bvid)] == true) -1 else 1
 }

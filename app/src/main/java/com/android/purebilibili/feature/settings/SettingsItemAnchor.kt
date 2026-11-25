@@ -2,7 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import com.android.purebilibili.core.ui.AppContentColors
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -62,7 +62,7 @@ internal fun SettingsItemAnchor(
         label = "settingsSearchRowHighlight",
     )
     val highlightColor = AppContentColors.accent()
-    Box(
+    Column(
         modifier.fillMaxWidth()
             .bringIntoViewRequester(bringIntoView)
             .drawWithContent {

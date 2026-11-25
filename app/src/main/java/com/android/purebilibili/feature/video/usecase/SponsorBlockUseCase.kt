@@ -51,6 +51,8 @@ class SponsorBlockUseCase {
             _segments.value = loadedSegments
             skippedSegmentIds.clear()
             Logger.d(TAG, "Loaded ${loadedSegments.size} segments for $bvid")
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             Logger.w(TAG, "Load failed: ${e.message}")
             _segments.value = emptyList()

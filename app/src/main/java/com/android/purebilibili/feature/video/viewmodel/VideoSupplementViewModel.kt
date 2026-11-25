@@ -1,31 +1,38 @@
 package com.android.purebilibili.feature.video.viewmodel
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.data.model.response.AiSummaryData
 import com.android.purebilibili.data.model.response.VideoTag
 import com.android.purebilibili.feature.video.note.VideoNoteUiState
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
+@Immutable
 data class VideoSupplementSeed(
     val aiSummary: AiSummaryData? = null,
     val videoNoteState: VideoNoteUiState = VideoNoteUiState(),
-    val videoTags: List<VideoTag> = emptyList(),
+    val videoTags: ImmutableList<VideoTag> = persistentListOf(),
     val onlineCount: String = "",
     val ownerFollowerCount: Int? = null,
     val ownerVideoCount: Int? = null
 )
 
+@Immutable
 data class VideoSupplementUiState(
     val subject: VideoSubjectSnapshot? = null,
     val visible: Boolean = true,
     val aiSummary: AiSummaryData? = null,
     val videoNoteState: VideoNoteUiState = VideoNoteUiState(),
-    val videoTags: List<VideoTag> = emptyList(),
+    val videoTags: ImmutableList<VideoTag> = persistentListOf(),
     val onlineCount: String = "",
     val ownerFollowerCount: Int? = null,
     val ownerVideoCount: Int? = null
@@ -51,36 +58,48 @@ class VideoSupplementViewModel(
             return
         }
         subjectJob?.cancel()
-        _uiState.value = VideoSupplementUiState(
-            subject = subject,
-            visible = _uiState.value.visible,
-            aiSummary = seed.aiSummary,
-            videoNoteState = seed.videoNoteState,
-            videoTags = seed.videoTags,
-            onlineCount = seed.onlineCount,
-            ownerFollowerCount = seed.ownerFollowerCount,
-            ownerVideoCount = seed.ownerVideoCount
-        )
+        _uiState.update { prev ->
+            VideoSupplementUiState(
+                subject = subject,
+                visible = prev.visible,
+                aiSummary = seed.aiSummary,
+                videoNoteState = seed.videoNoteState,
+                videoTags = seed.videoTags,
+                onlineCount = seed.onlineCount,
+                ownerFollowerCount = seed.ownerFollowerCount,
+                ownerVideoCount = seed.ownerVideoCount
+            )
+        }
         startDeferredLoad(subject)
     }
 
     fun sync(seed: VideoSupplementSeed) {
-        val current = _uiState.value
-        _uiState.value = current.copy(
-            aiSummary = seed.aiSummary,
-            videoNoteState = seed.videoNoteState,
-            videoTags = seed.videoTags,
-            onlineCount = seed.onlineCount,
-            ownerFollowerCount = seed.ownerFollowerCount,
-            ownerVideoCount = seed.ownerVideoCount
-        )
+        _uiState.update { current ->
+            current.copy(
+                aiSummary = seed.aiSummary,
+                videoNoteState = seed.videoNoteState,
+                videoTags = seed.videoTags,
+                onlineCount = seed.onlineCount,
+                ownerFollowerCount = seed.ownerFollowerCount,
+                ownerVideoCount = seed.ownerVideoCount
+            )
+        }
     }
 
     fun setVisible(visible: Boolean) {
-        if (_uiState.value.visible == visible) return
-        _uiState.value = _uiState.value.copy(visible = visible)
+        var changed = false
+        var currentSubject: VideoSubjectSnapshot? = null
+        _uiState.update { current ->
+            if (current.visible == visible) current
+            else {
+                changed = true
+                currentSubject = current.subject
+                current.copy(visible = visible)
+            }
+        }
+        if (!changed) return
         if (!visible) subjectJob?.cancel()
-        else _uiState.value.subject?.let(::startDeferredLoad)
+        else currentSubject?.let(::startDeferredLoad)
     }
 
     private fun startDeferredLoad(subject: VideoSubjectSnapshot) {
@@ -106,7 +125,7 @@ internal fun VideoPlaybackUiState.Success.toSupplementSeed(): VideoSupplementSee
     VideoSupplementSeed(
         aiSummary = aiSummary,
         videoNoteState = videoNoteState,
-        videoTags = videoTags,
+        videoTags = videoTags.toImmutableList(),
         onlineCount = onlineCount,
         ownerFollowerCount = ownerFollowerCount,
         ownerVideoCount = ownerVideoCount

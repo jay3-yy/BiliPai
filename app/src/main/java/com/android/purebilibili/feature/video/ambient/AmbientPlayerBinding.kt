@@ -113,7 +113,18 @@ internal fun BindPlayerAmbient(
             true
         }
         observer?.addOnPreDrawListener(listener)
-        onDispose { if (observer?.isAlive == true) observer.removeOnPreDrawListener(listener) }
+        onDispose {
+            val activeObserver = if (observer?.isAlive == true) observer else texture?.viewTreeObserver
+            if (activeObserver?.isAlive == true) {
+                activeObserver.removeOnPreDrawListener(listener)
+            }
+        }
+    }
+    LaunchedEffect(foreground, presentation, statusBarFrame) {
+        if (!foreground) {
+            presentation.clear()
+            statusBarFrame?.value = null
+        }
     }
     val recoveryReady = rememberUpdatedState {
         visualActive && foreground && !excluded && !transitioning && navigationSettled()

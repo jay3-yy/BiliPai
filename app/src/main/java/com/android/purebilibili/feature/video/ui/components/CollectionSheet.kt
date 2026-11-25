@@ -325,15 +325,18 @@ fun CollectionSheet(
             // （胶囊指示器/拖拽选档/按压折射），关闭时回落主题原生样式
             if (sections.size > 1) {
                 val glassTabsEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+                val sectionOptions = remember(sections) {
+                    sections.mapIndexed { index, section ->
+                        AppSegmentOption(index, section.title.ifBlank { "第${index + 1}季" })
+                    }
+                }
                 AppThemeAdaptiveTabRow(
                     // Glass indicator fills the measured slot; native geometry keeps its defaults.
                     liquidGlassAdaptIndicatorToLabel = !glassTabsEnabled,
                     role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
                     // 玻璃分组栏内容放得下时居中，超宽时沿用可滚动轨道；原生保持左对齐。
                     centerContent = glassTabsEnabled,
-                    options = sections.mapIndexed { index, section ->
-                        AppSegmentOption(index, section.title.ifBlank { "第${index + 1}季" })
-                    },
+                    options = sectionOptions,
                     selectedValue = selectedSectionIndex,
                     onSelectionChange = { selectedSectionIndex = it },
                     scrollable = true,

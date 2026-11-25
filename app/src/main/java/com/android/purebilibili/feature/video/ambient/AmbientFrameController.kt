@@ -161,6 +161,9 @@ internal class AmbientFrameController(
             var reportAt = clock()
             try {
                 while (currentCoroutineContext().isActive && generation == session) {
+                    if (!policy().active) {
+                        source.release()
+                    }
                     // snapshotFlow waits without a timer while hidden or paused on the final frame.
                     val config = awaitAmbientSamplePolicy(lastRefresh, policy)
                     val started = clock()

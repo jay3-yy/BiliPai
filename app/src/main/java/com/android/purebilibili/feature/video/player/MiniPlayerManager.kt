@@ -2264,9 +2264,15 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
 
     fun updateSystemPipActive(isActive: Boolean) {
+        val wasActive = isSystemPipActive
         isSystemPipActive = isActive
         if (isActive) {
             pendingPlaybackRoutePip = false
+        } else if (wasActive && com.android.purebilibili.core.lifecycle.BackgroundManager.isInBackground) {
+            onMemoryPressureTrim(
+                level = android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
+                requestIdlePlaybackRelease = !shouldContinueBackgroundAudio(),
+            )
         }
     }
 
@@ -3188,7 +3194,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     videoSecondCodecPreference = videoSecondCodecPreference,
                     playWhenReady = true,
                     isHdrSupportedOverride = MediaUtils.isHdrSupported(context),
-                    isDolbyVisionSupportedOverride = MediaUtils.isDolbyVisionSupported(context)
+                    isDolbyVisionSupportedOverride = MediaUtils.isDolbyVisionSupported(context),
+                    playbackSpeedOverride = currentPlayer.playbackParameters.speed,
                 )
             ) {
                 is VideoLoadResult.Success -> {

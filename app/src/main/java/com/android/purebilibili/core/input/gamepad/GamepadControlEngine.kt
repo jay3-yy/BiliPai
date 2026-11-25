@@ -50,7 +50,7 @@ data class GamepadUiState(
     val scene: GamepadScene = GamepadScene.BROWSING,
     /** 仅在光标显隐离散切换时变化，用于全屏提示栏文案切换；高频坐标更新走 [GamepadControlEngine.cursorState]。 */
     val cursorVisible: Boolean = false,
-    val hudVisible: Boolean = true,
+    val hudVisible: Boolean = false,
     val rtBoostActive: Boolean = false,
     val capturingKeyForSlot: GamepadActionSlot? = null,
     val statusBanner: String? = null,

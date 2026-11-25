@@ -133,6 +133,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
     contentReveal: androidx.compose.runtime.State<Float>,
     onBodyPlaced: () -> Unit,
 ) {
+    val detailRelatedVisibility = rememberDetailRelatedVisibility()
     val engagementSuccess = success.withEngagementUiState(engagementState)
     var pendingVideoShare by remember { mutableStateOf<VideoSharePayload?>(null) }
     val shareAnchorState = remember(success.info.bvid) { com.android.purebilibili.feature.video.share.VideoShareAnchorState() }
@@ -303,6 +304,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                                         bottomContentPadding = videoContentBottomPadding,
                                         commentPullToRefreshEnabled = commentPullToRefreshEnabled,
                                         relatedContentReady = relatedContentReady,
+                                        detailRelatedVisibility = detailRelatedVisibility,
                                     ),
                                     primaryActions = VideoContentPrimaryActions(
                                         onFollowClick = engagementActions.toggleFollow,

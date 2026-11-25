@@ -80,10 +80,11 @@ internal fun VideoDetailDomainEffects(
         val seed = supplementSeed ?: return@LaunchedEffect
         supplementViewModel.bindSubject(subject, seed)
     }
-    LaunchedEffect(favoriteFolderSaveEvent?.version) {
+    LaunchedEffect(favoriteFolderSaveEvent?.version, subjectSnapshot?.aid) {
         favoriteFolderSaveEvent?.let { event ->
             if (subjectSnapshot?.aid == event.aid) {
                 engagementViewModel.applyFavoriteFolderResult(event.isFavorited)
+                playbackViewModel.consumeFavoriteFolderSaveEvent(event.version)
             }
         }
     }

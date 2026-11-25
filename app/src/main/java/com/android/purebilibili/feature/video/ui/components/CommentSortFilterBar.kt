@@ -186,6 +186,9 @@ fun CommentSortHeader(
                 }
             }
             if (uiStyle == AppUiStyle.MIUIX) {
+                val sortOptions = remember(sortModes) {
+                    sortModes.map { AppSegmentOption(it, it.label) }
+                }
                 Box(
                     modifier = Modifier.width((spec.itemWidthDp * sortModes.size).dp),
                     contentAlignment = Alignment.CenterStart,
@@ -194,7 +197,7 @@ fun CommentSortHeader(
                         // Glass indicator fills the measured slot; native geometry keeps its defaults.
                         liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
                         role = com.android.purebilibili.core.ui.components.AppTabRowRole.FILTER,
-                        options = sortModes.map { AppSegmentOption(it, it.label) },
+                        options = sortOptions,
                         selectedValue = sortMode,
                         onSelectionChange = onSortModeChange,
                         modifier = Modifier.fillMaxWidth(),
@@ -263,12 +266,13 @@ fun CommentSortFilterBar(
                 )
             }
         }
+        val sortLabels = remember(sortModes) { sortModes.map { it.label } }
         Box(
             modifier = Modifier.requiredWidth((spec.itemWidthDp * sortModes.size).dp),
             contentAlignment = Alignment.CenterStart,
         ) {
             CommentSegmentedControl(
-                items = sortModes.map { it.label },
+                items = sortLabels,
                 selectedIndex = sortModes.indexOf(sortMode).coerceAtLeast(0),
                 onScaleChange = { index ->
                     sortModes.getOrNull(index)?.let(onSortModeChange)
