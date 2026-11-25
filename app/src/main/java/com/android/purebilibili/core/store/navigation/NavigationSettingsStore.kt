@@ -3,6 +3,7 @@ package com.android.purebilibili.core.store.navigation
 import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -67,6 +68,7 @@ internal fun parseBottomBarItemLabels(raw: String): Map<String, String> {
 
 object NavigationSettingsStore {
     private val keyVideoCompanionEnabled = booleanPreferencesKey("video_companion_enabled")
+    private val keyVideoCompanionSplitFraction = floatPreferencesKey("video_companion_split_fraction")
 
     fun getVideoCompanionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { it[keyVideoCompanionEnabled] ?: true }
@@ -74,6 +76,17 @@ object NavigationSettingsStore {
 
     suspend fun setVideoCompanionEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { it[keyVideoCompanionEnabled] = enabled }
+    }
+
+    fun getVideoCompanionSplitFraction(context: Context): Flow<Float?> = context.settingsDataStore.data
+        .map { it[keyVideoCompanionSplitFraction]?.takeIf { v -> v.isFinite() && v in 0.15f..0.85f } }
+        .distinctUntilChanged()
+
+    suspend fun setVideoCompanionSplitFraction(context: Context, fraction: Float) {
+        if (!fraction.isFinite()) return
+        context.settingsDataStore.edit {
+            it[keyVideoCompanionSplitFraction] = fraction.coerceIn(0.15f, 0.85f)
+        }
     }
 
     private val keyTabletUseSidebar = booleanPreferencesKey("tablet_use_sidebar")

@@ -97,6 +97,8 @@ import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayCont
 import com.android.purebilibili.feature.video.ui.gesture.SwipeToFullscreenHint
 import com.android.purebilibili.feature.video.ui.gesture.TwoFingerSpeedGestureMode
 import com.android.purebilibili.feature.video.ui.gesture.rememberGestureLevelOverlayStyle
+import com.android.purebilibili.core.util.AppFoldPosture
+import com.android.purebilibili.core.util.tabletopUpperViewportLayout
 import com.android.purebilibili.feature.video.ui.gesture.detectEdgeSafeDragGestures
 import com.android.purebilibili.feature.video.ui.gesture.detectPlayerTapGestures
 import com.android.purebilibili.feature.video.ui.gesture.resolveLockedTwoFingerSpeedAxis
@@ -1138,9 +1140,15 @@ fun OfflineVideoPlayerScreen(
                     )
                 }
         ) {
-            // 画面比例只约束视频视口，弹幕、控件和手势继续使用完整播放区域。
+            // 画面比例只约束视频视口；悬停态（Tabletop）收进上半屏，控制条留于下半屏。
             BoxWithConstraints(
-                modifier = Modifier.fillMaxSize().clipToBounds(),
+                modifier = Modifier
+                    .tabletopUpperViewportLayout(
+                        enabled = appWindowAdaptiveInfo.posture == AppFoldPosture.Tabletop,
+                        adaptiveInfo = appWindowAdaptiveInfo,
+                    )
+                    .fillMaxSize()
+                    .clipToBounds(),
                 contentAlignment = Alignment.Center,
             ) {
                 val density = LocalDensity.current

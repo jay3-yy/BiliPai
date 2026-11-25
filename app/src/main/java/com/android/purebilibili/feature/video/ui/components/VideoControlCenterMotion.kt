@@ -60,11 +60,7 @@ internal class VideoControlCenterMotion {
             initialValue = progress,
             targetValue = target,
             initialVelocity = velocity,
-            animationSpec = spring(
-                dampingRatio = if (closing) 1f else 0.72f,
-                stiffness = 300f,
-                visibilityThreshold = 0.001f,
-            ),
+            animationSpec = ControlCenterMotionSpec.springSpec(closing),
         ) { value, _ -> progress = value }
         progress = target
     }

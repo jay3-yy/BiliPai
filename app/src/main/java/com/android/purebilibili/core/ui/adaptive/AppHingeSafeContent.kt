@@ -35,10 +35,6 @@ internal fun AppHingeSafeContent(
     // isSeparating=true（视为两个逻辑屏），若按 separating 避让，Tabletop/半折
     // 姿态下信息流会被整体钳进单侧 pane，另一侧整块留白。国内折叠机全是软折痕
     // （FOLD、无物理缝隙），跨折痕滚动可接受；仅 HINGE 类遮挡铰链仍走分窗避让。
-    android.util.Log.d(
-        "AppHingeSafeContent",
-        "hinges=$hinges avoid=${adaptiveInfo.shouldAvoidHinge}",
-    )
     if (hinges.all { hinge -> !hinge.isOccluding }) {
         BoxWithConstraints(modifier = modifier, content = savedContent)
         return

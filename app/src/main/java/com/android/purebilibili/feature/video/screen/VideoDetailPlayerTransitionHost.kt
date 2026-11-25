@@ -101,6 +101,7 @@ internal fun Modifier.continuousPlayerViewportHeight(
     fullscreenHeight: Dp,
     enabled: Boolean,
     preferLayoutWidthInline: Boolean = false,
+    inlineVideoAspectRatio: Float = PHONE_DETAIL_VIDEO_ASPECT_RATIO,
     inlineTopInset: Dp = 0.dp,
     removedInlineTopInsetProvider: () -> Dp = { 0.dp },
 ): Modifier {
@@ -114,6 +115,7 @@ internal fun Modifier.continuousPlayerViewportHeight(
             preferLayoutWidthInline = preferLayoutWidthInline,
             callerInlineHeightPx = callerInlinePx,
             inlineTopInsetPx = insetPx,
+            videoAspectRatio = inlineVideoAspectRatio,
         )
         val fraction = progressProvider().coerceIn(0f, 1f)
         val fullscreenPx = fullscreenHeight.toPx()
@@ -155,14 +157,17 @@ internal fun resolveContinuousPlayerInlineHeightPx(
     preferLayoutWidthInline: Boolean,
     callerInlineHeightPx: Int,
     inlineTopInsetPx: Int,
+    videoAspectRatio: Float = PHONE_DETAIL_VIDEO_ASPECT_RATIO,
 ): Int {
     val callerPx = callerInlineHeightPx.coerceAtLeast(0)
     if (!preferLayoutWidthInline) {
         return callerPx.coerceAtLeast(1)
     }
     val expandedFromLayoutPx =
-        resolvePhoneDetailPlayerContentHeightPx(layoutWidthPx = layoutWidthPx) +
-            inlineTopInsetPx.coerceAtLeast(0)
+        resolvePhoneDetailPlayerContentHeightPx(
+            layoutWidthPx = layoutWidthPx,
+            videoAspectRatio = videoAspectRatio,
+        ) + inlineTopInsetPx.coerceAtLeast(0)
     // 展开：layout 宽计算的高度通常 ≤ screenWidthDp 估高，取 min 消黑边。
     // 折叠/半折叠：caller 更小，取 min 保留上滑缩小。
     return minOf(expandedFromLayoutPx, callerPx).coerceAtLeast(1)

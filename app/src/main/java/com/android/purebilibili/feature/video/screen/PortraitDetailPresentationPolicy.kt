@@ -239,6 +239,16 @@ internal fun resolveInlinePlayerCollapsedViewportHeightDp(
  * so vertical videos get a tall preview without becoming full-screen cards.
  * Wide foldable portrait windows stay capped so intro/comment remain reachable.
  */
+internal fun resolvePortraitPagerStageWidthDp(
+    containerWidthDp: Float,
+    containerHeightDp: Float,
+    isInPipMode: Boolean,
+): Float? {
+    if (isInPipMode || containerWidthDp < 600f || containerHeightDp <= 0f) return null
+    val idealStageWidth = maxOf(containerHeightDp * 9f / 16f + 104f, 460f).coerceAtMost(620f)
+    return if (containerWidthDp - idealStageWidth >= 64f) idealStageWidth else null
+}
+
 internal fun resolvePortraitInlinePlayerLayoutSpec(
     screenWidthDp: Float,
     screenHeightDp: Float,
@@ -291,12 +301,16 @@ internal fun resolvePortraitInlinePlayerLayoutSpec(
 }
 
 /**
- * 普通视频竖屏详情播放器内容高度：按真实布局宽度计算，加载封面与播放画面均为 16:9，
- * 避免 configuration.screenWidthDp 与窗口可用宽度不一致时左右黑边。
+ * 普通视频竖屏详情播放器内容高度：按真实布局宽度与当前视频比例计算，
+ * 避免 configuration.screenWidthDp 与窗口可用宽度不一致时左右黑边，
+ * 同时保留 4:3 / 1:1 等高于 16:9 的横向视频外框高度。
  */
 internal fun resolvePhoneDetailPlayerContentHeightPx(
     layoutWidthPx: Int,
+    videoAspectRatio: Float = PHONE_DETAIL_VIDEO_ASPECT_RATIO,
 ): Int {
     val width = layoutWidthPx.coerceAtLeast(1)
-    return (width / PHONE_DETAIL_VIDEO_ASPECT_RATIO).roundToInt().coerceAtLeast(1)
+    val safeRatio = videoAspectRatio.takeIf { it.isFinite() && it > 0f }
+        ?: PHONE_DETAIL_VIDEO_ASPECT_RATIO
+    return (width / safeRatio).roundToInt().coerceAtLeast(1)
 }

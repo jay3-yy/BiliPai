@@ -3,6 +3,11 @@ package com.android.purebilibili.core.util
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.os.Build
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 internal data class PlayerWindowOrientationPolicy(
     val currentWindowWidthDp: Int,
@@ -226,4 +231,32 @@ internal fun resolvePlayerTabletopLayoutPolicy(
         isTabletop = videoHostHeightDp != null,
         videoHostHeightDp = videoHostHeightDp,
     )
+}
+
+/** 全屏悬停态（Tabletop）上屏媒体高度；null 表示非悬停态或沿用整窗布局。 */
+internal val LocalTabletopVideoHostHeightDp = compositionLocalOf<Dp?> { null }
+
+/**
+ * 将媒体或上屏浮层约束到铰链上方的上半屏区域，同时保持外层占位高度不变，
+ * 供各播放器统一复用，避免画面、弹幕与手势/加载指示器横跨水平折痕。
+ */
+internal fun Modifier.tabletopUpperViewportLayout(
+    enabled: Boolean,
+    adaptiveInfo: AppWindowAdaptiveInfo,
+    hostTopInWindowPxProvider: () -> Int = { 0 },
+): Modifier = if (!enabled) this else this.layout { measurable, constraints ->
+    val policy = resolvePlayerTabletopLayoutPolicy(
+        foldPosture = adaptiveInfo.posture,
+        hingeOrientation = adaptiveInfo.foldingFeature.hingeOrientation,
+        hingeTopPx = adaptiveInfo.foldingFeature.hingeBounds?.top?.minus(hostTopInWindowPxProvider()),
+        windowWidthPx = constraints.maxWidth,
+        windowHeightPx = constraints.maxHeight,
+        density = density,
+    )
+    val mediaHeight = policy.videoHostHeightDp?.dp?.roundToPx()
+    val placeable = measurable.measure(
+        if (mediaHeight != null) constraints.copy(minHeight = mediaHeight, maxHeight = mediaHeight)
+        else constraints,
+    )
+    layout(placeable.width, constraints.maxHeight) { placeable.placeRelative(0, 0) }
 }

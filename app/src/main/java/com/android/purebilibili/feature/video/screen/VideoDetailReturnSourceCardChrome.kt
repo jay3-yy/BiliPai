@@ -434,7 +434,8 @@ internal fun BoxScope.VideoDetailReturnSourceCardChrome(
         )
     }
 
-    val nativeCardLayer = CardPositionManager.nativeVideoCardLayerFor(sourceChromeSnapshot)
+    // 小横条采样导航底栏 backdrop，禁止作为实时 GraphicsLayer 回放到导航内容层内，避免 RenderNode 自采样环。
+    val nativeCardLayer = if (isNowPlayingBar) null else CardPositionManager.nativeVideoCardLayerFor(sourceChromeSnapshot)
     if (nativeCardLayer != null) {
         val infoCropXPx = layout.coverOffsetXPx + layout.coverWidthPx
         val infoCropYPx = frozenInfoAnchorYPx

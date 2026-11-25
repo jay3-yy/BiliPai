@@ -251,6 +251,7 @@ internal fun Modifier.videoCardSourceAnchor(
     enabled: Boolean = LocalVideoCardSourceTrackingEnabled.current,
     sharedSource: com.android.purebilibili.navigation3.NavigationSharedContainerSource? = null,
     drawSharedContent: Boolean = true,
+    recordSharedSourceLayer: Boolean = true,
     returnHandledByOwner: Boolean = false,
     landingStyle: NavigationReturnLandingStyle = NavigationReturnLandingStyle.CONTROL,
     // 卡片自身布局：系统接口落位按它取与引擎一致的压缩行程。
@@ -285,7 +286,11 @@ internal fun Modifier.videoCardSourceAnchor(
         sourceLayout = sourceLayout,
         isSourceVisible = { source.coordinates.isVisibleReturnLanding() },
     ).then(
-        if (drawSharedContent) com.android.purebilibili.navigation3.navigationSharedContainerSourceModifier(fallback, shape)
+        if (drawSharedContent) com.android.purebilibili.navigation3.navigationSharedContainerSourceModifier(
+            source = fallback,
+            shape = shape,
+            recordSourceLayer = recordSharedSourceLayer,
+        )
         else Modifier,
     )
 }

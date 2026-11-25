@@ -1945,6 +1945,38 @@ class VideoPlayerSectionPolicyTest {
     }
 
     @Test
+    fun playerScreenLock_clearsOutsideLandscapeFullscreenAndDuringPip() {
+        assertFalse(
+            shouldClearPlayerScreenLock(
+                isFullscreen = true,
+                isInPipMode = false,
+                isPortraitFullscreen = false,
+            )
+        )
+        assertTrue(
+            shouldClearPlayerScreenLock(
+                isFullscreen = false,
+                isInPipMode = false,
+                isPortraitFullscreen = false,
+            )
+        )
+        assertTrue(
+            shouldClearPlayerScreenLock(
+                isFullscreen = true,
+                isInPipMode = true,
+                isPortraitFullscreen = false,
+            )
+        )
+        assertTrue(
+            shouldClearPlayerScreenLock(
+                isFullscreen = true,
+                isInPipMode = false,
+                isPortraitFullscreen = true,
+            )
+        )
+    }
+
+    @Test
     fun progressOverride_bypassesFrozenSeekSessionDuringLongPressSpeed() {
         val frozenSeekSession = updatePlaybackSeekInteraction(
             state = startPlaybackSeekInteraction(

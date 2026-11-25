@@ -20,9 +20,16 @@ internal class CompanionPaneState(
         private set
     var splitFraction by mutableFloatStateOf(initialSplitFraction)
         private set
+    var splitCommitRevision by mutableStateOf(0)
+        private set
     var isDragging by mutableStateOf(false)
         private set
     private var dragFraction by mutableFloatStateOf(initialSplitFraction)
+
+    fun applyPersistedSplitFraction(fraction: Float, widthDp: Float) {
+        if (isDragging || splitCommitRevision > 0 || !fraction.isFinite()) return
+        splitFraction = if (widthDp > 0f) constrainSplit(fraction, widthDp) else fraction.coerceIn(0.15f, 0.85f)
+    }
 
     fun beginDrag() {
         dragFraction = when (mode) {
@@ -44,6 +51,7 @@ internal class CompanionPaneState(
             dragFraction >= 0.85f -> mode = CompanionPaneMode.Feed
             else -> {
                 splitFraction = constrainSplit(dragFraction, widthDp)
+                splitCommitRevision++
                 mode = CompanionPaneMode.Split
             }
         }
@@ -60,7 +68,10 @@ internal class CompanionPaneState(
 
     fun restoreSplit() {
         isDragging = false
-        if (mode == CompanionPaneMode.Split) splitFraction = defaultFeedFraction
+        if (mode == CompanionPaneMode.Split) {
+            splitFraction = defaultFeedFraction
+            splitCommitRevision++
+        }
         mode = CompanionPaneMode.Split
     }
 

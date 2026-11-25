@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.adaptive.AppHingePaneLayout
+import com.android.purebilibili.core.util.AppFoldPosture
+import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 
 /** 只包含直播间背景，顶栏玻璃不得采样包含自身的页面录制。 */
 internal val LocalLiveRoomHeaderBackdrop = compositionLocalOf<top.yukonga.miuix.kmp.blur.Backdrop?> { null }
@@ -45,12 +47,15 @@ internal fun LiveRoomLayout(
             header()
         }
     }
+    val adaptiveInfo = LocalAppWindowAdaptiveInfo.current
+    val tabletopFullscreen = isFullscreen && adaptiveInfo.posture == AppFoldPosture.Tabletop
     Box(modifier.background(Color.Black)) {
         if (!isFullscreen) LiveRoomBackground(
             backgroundUrl,
             Modifier.fillMaxSize().then(headerBackdrop?.modifier ?: Modifier),
         )
-        if (hasObstructingHinge) {
+        // 全屏悬停态（Tabletop）由播放器内部将画面收进上半屏、控制条留于下半屏，避免整屏下黑。
+        if (hasObstructingHinge && !tabletopFullscreen) {
             AppHingePaneLayout(
                 modifier = Modifier.fillMaxSize(),
                 primaryContent = {

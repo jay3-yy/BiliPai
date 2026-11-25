@@ -378,6 +378,11 @@ internal fun TabletVideoLayout(
             )
         }
     }
+    com.android.purebilibili.core.ui.LocalNavigationBackHandler(
+        enabled = isTheaterMode,
+    ) {
+        theaterController?.toggle()
+    }
     val activity = remember(context) {
         (context as? android.app.Activity)
             ?: (context as? android.content.ContextWrapper)?.baseContext as? android.app.Activity
@@ -545,7 +550,14 @@ internal fun TabletVideoLayout(
                                     onDismissPartResumeNotice = playbackActions.dismissPartResumeNotice,
                                     onToggleFullscreen = onToggleFullscreen,
                                     onQualityChange = playbackActions.changeQuality,
-                                    onBack = onBack,
+                                    onBack = if (isTheaterMode) {
+                                        {
+                                            theaterController?.toggle()
+                                            Unit
+                                        }
+                                    } else {
+                                        onBack
+                                    },
                                     onHomeClick = onHomeClick,
                                     menuActions = playbackActions.menuActions,
                                     onQuickFavorite = { engagementActions.onFavoriteAction(true) },

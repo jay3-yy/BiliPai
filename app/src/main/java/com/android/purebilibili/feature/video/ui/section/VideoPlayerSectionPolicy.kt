@@ -1792,6 +1792,13 @@ internal fun shouldLoadDanmakuForForegroundHost(
     return hostLifecycleStarted && shouldLoadImmediately
 }
 
+/** 锁屏仅在横屏全屏生效；退回竖屏半屏、进入画中画或切入竖屏全屏时自动解锁，避免无解锁入口卡死。 */
+internal fun shouldClearPlayerScreenLock(
+    isFullscreen: Boolean,
+    isInPipMode: Boolean,
+    isPortraitFullscreen: Boolean,
+): Boolean = !isFullscreen || isInPipMode || isPortraitFullscreen
+
 internal fun rebindPlayerSurfaceIfNeeded(
     playerView: PlayerView,
     player: Player,

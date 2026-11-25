@@ -56,6 +56,15 @@ internal fun resolveDanmakuToolbarPosition(
     return IntOffset((anchor.tapX.roundToInt() - content.width / 2).coerceIn(minX, maxX), y.coerceIn(minY, maxY))
 }
 
+// Keep the player window focused so selecting an item does not suspend playback, and use the
+// same edge-to-edge host coordinate space as DanmakuTapAnchor (getLocationInWindow) so system
+// bars / display cutouts do not offset the popup twice.
+internal val DanmakuToolbarPopupProperties = PopupProperties(
+    focusable = false,
+    dismissOnClickOutside = true,
+    clippingEnabled = false,
+)
+
 @Composable
 internal fun DanmakuActionToolbar(
     anchor: DanmakuTapAnchor,
@@ -104,8 +113,7 @@ internal fun DanmakuActionToolbar(
     Popup(
         popupPositionProvider = position,
         onDismissRequest = onDismiss,
-        // Keep the player window focused so selecting an item does not suspend playback.
-        properties = PopupProperties(focusable = false, dismissOnClickOutside = true),
+        properties = DanmakuToolbarPopupProperties,
     ) {
         // The shared popup surface selects glass explicitly and retains MD3/Miuix rendering otherwise.
         AppPopupSurface(

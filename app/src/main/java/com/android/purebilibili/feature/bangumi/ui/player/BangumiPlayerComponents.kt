@@ -88,6 +88,9 @@ import com.android.purebilibili.feature.video.ui.components.resolveVideoViewport
 import com.android.purebilibili.feature.video.ui.components.toAnime4KDisplayScaleMode
 import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayContent
 import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayHost
+import com.android.purebilibili.core.util.AppFoldPosture
+import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
+import com.android.purebilibili.core.util.tabletopUpperViewportLayout
 import com.android.purebilibili.feature.video.ui.gesture.detectEdgeSafeDragGestures
 import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelKind
 import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelOverlaySpec
@@ -659,8 +662,15 @@ fun BangumiPlayerView(
                 }
             )
     ) {
+        val bangumiAdaptiveInfo = LocalAppWindowAdaptiveInfo.current
+        val bangumiTabletopFullscreen = isFullscreen && !features.isInPipMode &&
+            bangumiAdaptiveInfo.posture == AppFoldPosture.Tabletop
+        val bangumiTabletopUpperModifier = Modifier.tabletopUpperViewportLayout(
+            enabled = bangumiTabletopFullscreen,
+            adaptiveInfo = bangumiAdaptiveInfo,
+        )
         BoxWithConstraints(
-            modifier = Modifier
+            modifier = bangumiTabletopUpperModifier
                 .fillMaxSize()
                 .then(if (capturePlayerPage) playerPageBackdrop.video.modifier else Modifier)
                 .clipToBounds(),
@@ -820,7 +830,7 @@ fun BangumiPlayerView(
                         }
                     },
                     onRelease = { view -> danmakuManager.detachView(view) },
-                    modifier = Modifier
+                    modifier = bangumiTabletopUpperModifier
                         .fillMaxSize()
                         .then(if (capturePlayerPage) playerPageBackdrop.danmaku.modifier else Modifier)
                         .padding(top = danmakuTopInset)
@@ -829,18 +839,20 @@ fun BangumiPlayerView(
             }
         }
 
-        // 详情页与全屏都显示当前手势反馈。
+        // 详情页与全屏都显示当前手势反馈；悬停态锚定在上半屏避免压在水平折痕上。
         val showGestureIndicator = gestureMode != BangumiGestureMode.None
-        GestureLevelOverlayHost(
-            visible = gestureMode == BangumiGestureMode.Brightness || gestureMode == BangumiGestureMode.Volume,
-            mode = if (gestureMode == BangumiGestureMode.Brightness) VideoGestureMode.Brightness else VideoGestureMode.Volume,
-            percent = if (gestureMode == BangumiGestureMode.Brightness) currentBrightness else gestureValue,
-            compact = !isFullscreen,
-            glassBackdrop = playerPageBackdrop.backdrop.takeIf {
-                capturePlayerPage && playerPageBackdrop.video.isReady &&
-                    playerViewRef?.videoSurfaceView is android.view.TextureView
-            },
-        )
+        Box(modifier = bangumiTabletopUpperModifier.fillMaxSize()) {
+            GestureLevelOverlayHost(
+                visible = gestureMode == BangumiGestureMode.Brightness || gestureMode == BangumiGestureMode.Volume,
+                mode = if (gestureMode == BangumiGestureMode.Brightness) VideoGestureMode.Brightness else VideoGestureMode.Volume,
+                percent = if (gestureMode == BangumiGestureMode.Brightness) currentBrightness else gestureValue,
+                compact = !isFullscreen || bangumiTabletopFullscreen,
+                glassBackdrop = playerPageBackdrop.backdrop.takeIf {
+                    capturePlayerPage && playerPageBackdrop.video.isReady &&
+                        playerViewRef?.videoSurfaceView is android.view.TextureView
+                },
+            )
+        }
         if (showGestureIndicator && gestureMode == BangumiGestureMode.Seek) {
             // 与普通视频一致：预览气泡展示目标时间与相对起点的时间增量；
             // 无缩略图时使用简版气泡，同样带增量文本。

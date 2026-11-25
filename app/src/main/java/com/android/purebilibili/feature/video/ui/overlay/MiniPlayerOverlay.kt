@@ -9,6 +9,7 @@ import com.android.purebilibili.core.ui.components.AppText
 
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.core.util.layoutHinges
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -234,6 +235,26 @@ private fun MiniPlayerSessionOverlay(
     val cardPosition = com.android.purebilibili.core.util.CardPositionManager.cardHorizontalPosition
     val entryFromLeft = miniPlayerManager.entryFromLeft
 
+    val miniAdaptiveInfo = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
+    val miniPlayerHingeSafeRegions = remember(
+        miniAdaptiveInfo.foldingFeature,
+        miniAdaptiveInfo.shouldAvoidHinge,
+        screenWidthPx,
+        screenHeightPx,
+        paddingPx,
+    ) {
+        if (!miniAdaptiveInfo.shouldAvoidHinge) {
+            emptyList()
+        } else {
+            com.android.purebilibili.core.util.resolveHingeSafeContentRegions(
+                containerWidthPx = screenWidthPx.toInt(),
+                containerHeightPx = screenHeightPx.toInt(),
+                hinges = miniAdaptiveInfo.foldingFeature.layoutHinges(),
+                clearancePx = paddingPx.toInt(),
+            )
+        }
+    }
+
     val initialOverlayOffset = remember(
         entryFromLeft,
         cardBounds,
@@ -243,7 +264,8 @@ private fun MiniPlayerSessionOverlay(
         miniPlayerHeightPx,
         paddingPx,
         dragTopInsetPx,
-        dragBottomInsetPx
+        dragBottomInsetPx,
+        miniPlayerHingeSafeRegions,
     ) {
         resolveMiniPlayerInitialOverlayOffset(
             cardLeftPx = cardBounds?.left,
@@ -254,7 +276,8 @@ private fun MiniPlayerSessionOverlay(
             miniPlayerHeightPx = miniPlayerHeightPx,
             outerPaddingPx = paddingPx,
             topInsetPx = dragTopInsetPx,
-            bottomInsetPx = dragBottomInsetPx
+            bottomInsetPx = dragBottomInsetPx,
+            hingeSafeRegions = miniPlayerHingeSafeRegions,
         )
     }
 
@@ -551,10 +574,17 @@ private fun MiniPlayerSessionOverlay(
             miniPlayerHeightPx = miniPlayerHeightPx,
             outerPaddingPx = paddingPx,
             topInsetPx = dragTopInsetPx,
-            bottomInsetPx = dragBottomInsetPx
+            bottomInsetPx = dragBottomInsetPx,
+            hingeSafeRegions = miniPlayerHingeSafeRegions,
         )
         offsetX = clamped.x
         offsetY = clamped.y
+    }
+
+    LaunchedEffect(miniPlayerHingeSafeRegions) {
+        if (miniPlayerHingeSafeRegions.size > 1 && !isDraggingPosition && !isStashed) {
+            clampCurrentOffset()
+        }
     }
 
     fun moveMiniPlayerBy(deltaX: Float, deltaY: Float) {

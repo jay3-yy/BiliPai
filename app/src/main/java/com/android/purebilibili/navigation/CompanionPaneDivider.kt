@@ -1,8 +1,16 @@
 package com.android.purebilibili.navigation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -73,6 +81,16 @@ internal fun CompanionPaneDivider(
     val feed = stringResource(R.string.companion_show_feed)
     val video = stringResource(R.string.companion_show_video)
     val gripColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val handleInteractionSource = remember { MutableInteractionSource() }
+    val handleFocused by handleInteractionSource.collectIsFocusedAsState()
+    val handleBorderColor = if (handleFocused) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+    }
+    val haptic = com.android.purebilibili.core.util.rememberHapticFeedback(
+        com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION,
+    )
     // 单栏折叠停靠时用贴边细条减少遮挡；拖动中或双栏态显示完整胶囊。
     val collapsed = state.mode != CompanionPaneMode.Split && !state.isDragging
     val collapsedAtStart = state.mode == CompanionPaneMode.Video
@@ -82,7 +100,7 @@ internal fun CompanionPaneDivider(
                 .offset { IntOffset((state.layoutFeedFraction(contentWidth.value) * widthPx).roundToInt(), 0) }
                 .width(1.dp)
                 .fillMaxHeight()
-                .background(MaterialTheme.colorScheme.outlineVariant),
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
         )
         Box(
             modifier = Modifier
@@ -90,8 +108,11 @@ internal fun CompanionPaneDivider(
                 .offset {
                     val handleWidth = with(density) { 48.dp.roundToPx() }
                     val x = if (collapsed) {
-                        val edgeGap = with(density) { 4.dp.roundToPx() }
-                        if (collapsedAtStart) edgeGap else widthPx.roundToInt() - handleWidth - edgeGap
+                        val edgeGap = with(density) { 6.dp.roundToPx() }
+                        val safeStart = maxOf(edgeGap, startInset / 2)
+                        val safeEnd = maxOf(edgeGap, endInset / 2)
+                        if (collapsedAtStart) safeStart
+                        else (widthPx.roundToInt() - handleWidth - safeEnd).coerceAtLeast(safeStart)
                     } else {
                         (state.layoutFeedFraction(contentWidth.value) * widthPx - handleWidth / 2f)
                             .roundToInt().coerceIn(startInset, (widthPx.roundToInt() - handleWidth - endInset).coerceAtLeast(startInset))
@@ -99,6 +120,9 @@ internal fun CompanionPaneDivider(
                     IntOffset(x, 0)
                 }
                 .size(48.dp, 96.dp)
+                // 避免折叠态贴边把手或边缘拖动与 Android 系统侧滑返回冲突。
+                .systemGestureExclusion()
+                .focusable(interactionSource = handleInteractionSource)
                 .pointerHoverIcon(resizePointerIcon)
                 .testTag("companion_pane_divider")
                 .semantics {
@@ -125,25 +149,44 @@ internal fun CompanionPaneDivider(
                 }
                 .pointerInput(state, contentWidth, direction) {
                     detectHorizontalDragGestures(
-                        onDragStart = { state.beginDrag() },
-                        onDragEnd = { state.endDrag(contentWidth.value) },
+                        onDragStart = {
+                            haptic(com.android.purebilibili.core.util.HapticType.LIGHT)
+                            state.beginDrag()
+                        },
+                        onDragEnd = {
+                            val previousMode = state.mode
+                            state.endDrag(contentWidth.value)
+                            if (state.mode != previousMode) {
+                                haptic(com.android.purebilibili.core.util.HapticType.MEDIUM)
+                            }
+                        },
                         onDragCancel = { state.cancelDrag() },
                     ) { change, delta ->
                         change.consume()
                         state.dragBy(delta * direction / widthPx)
                     }
                 }
-                .clickable(onClickLabel = restore, onClick = state::restoreSplit),
+                .clickable(onClickLabel = restore) {
+                    haptic(com.android.purebilibili.core.util.HapticType.LIGHT)
+                    state.restoreSplit()
+                },
             contentAlignment = when {
                 collapsed && collapsedAtStart -> Alignment.CenterStart
                 collapsed -> Alignment.CenterEnd
                 else -> Alignment.Center
             },
         ) {
+            val handleShape = RoundedCornerShape(if (collapsed) 7.dp else 11.dp)
             Box(
                 Modifier
-                    .size(if (collapsed) 10.dp else 20.dp, 64.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(if (collapsed) 5.dp else 10.dp))
+                    .graphicsLayer {
+                        val s = if (handleFocused) 1.08f else 1f
+                        scaleX = s
+                        scaleY = s
+                    }
+                    .size(if (collapsed) 14.dp else 22.dp, 64.dp)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, handleShape)
+                    .border(if (handleFocused) 2.dp else 0.75.dp, handleBorderColor, handleShape)
                     .drawBehind {
                         val stroke = 2.dp.toPx()
                         val armX = 2.dp.toPx()

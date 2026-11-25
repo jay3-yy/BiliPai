@@ -15,6 +15,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -279,14 +280,16 @@ internal fun captureNativeCoverOverlayLayer(
 internal suspend fun captureNativeVideoCardBitmap(
     layer: GraphicsLayer,
     expectedSourceKey: String?,
-) {
-    if (!isNativeVideoCardLayerDrawable(layer.size.width, layer.size.height)) return
-    if (!CardPositionManager.isNativeVideoCardLayerCurrentOwner(layer)) return
-    val owner = CardPositionManager.videoCardPixelOwnerFor(expectedSourceKey) ?: return
+): ImageBitmap? {
+    if (!isNativeVideoCardLayerDrawable(layer.size.width, layer.size.height)) return null
+    if (!CardPositionManager.isNativeVideoCardLayerCurrentOwner(layer)) return null
+    val owner = CardPositionManager.videoCardPixelOwnerFor(expectedSourceKey) ?: return null
+    val bitmap = layer.toImageBitmap()
     CardPositionManager.recordNativeCardBitmap(
-        bitmap = layer.toImageBitmap(),
+        bitmap = bitmap,
         expectedOwner = owner,
     )
+    return bitmap
 }
 
 /** 冻结已保留的来源图层；开始和完成时均只认同一次点击身份。 */

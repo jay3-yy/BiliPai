@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntRect
@@ -80,6 +81,31 @@ internal fun resolveSafeVideoAspectRatio(
     preferred: VideoAspectRatio,
     @Suppress("UNUSED_PARAMETER") isVerticalVideo: Boolean,
 ): VideoAspectRatio = preferred
+
+/**
+ * 竖屏半屏（非全屏）统一使用 [VideoAspectRatio.FIT] 保持源视频比例；
+ * 全屏选择的比例（含「固定全屏画面比例」设置）只在全屏生效，避免退出全屏后
+ * 3:4 / 4:3 等非 16:9 视频在半屏容器内被裁切或拉伸，同时保证三材质行为一致。
+ */
+internal fun resolvePlayerViewportAspectRatio(
+    isFullscreen: Boolean,
+    selectedAspectRatio: VideoAspectRatio,
+): VideoAspectRatio = if (isFullscreen) selectedAspectRatio else VideoAspectRatio.FIT
+
+/** 交接截图跟随当前视口比例模式，避免横屏截图在竖屏半屏容器内被 FillBounds 拉伸变形。 */
+internal fun resolvePlayerHandoffContentScale(
+    aspectRatio: VideoAspectRatio,
+): ContentScale = when (aspectRatio) {
+    VideoAspectRatio.FILL -> ContentScale.Crop
+    VideoAspectRatio.STRETCH -> ContentScale.FillBounds
+    VideoAspectRatio.FIT,
+    VideoAspectRatio.RATIO_16_9,
+    VideoAspectRatio.RATIO_4_3,
+    VideoAspectRatio.FIT_WIDTH,
+    VideoAspectRatio.FIT_HEIGHT,
+    VideoAspectRatio.ORIGINAL,
+    VideoAspectRatio.SCALE_DOWN -> ContentScale.Fit
+}
 
 internal fun resolveVideoViewportLayout(
     containerWidth: Int,

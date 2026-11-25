@@ -52,6 +52,8 @@ import com.android.purebilibili.feature.video.ui.components.TwoFingerSpeedFeedba
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.applyPlayerViewResizeMode
 import com.android.purebilibili.feature.video.ui.components.resolveExpectedPlayerViewportSize
+import com.android.purebilibili.feature.video.ui.components.resolvePlayerHandoffContentScale
+import com.android.purebilibili.feature.video.ui.components.resolvePlayerViewportAspectRatio
 import com.android.purebilibili.feature.video.ui.components.resolveSafeVideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.resolveVideoViewportLayout
 import com.android.purebilibili.feature.video.ui.components.schedulePlayerViewViewportRefresh
@@ -113,7 +115,6 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import com.android.purebilibili.feature.video.ui.gesture.PlayerGestureInputSurface
 import androidx.compose.foundation.clickable
@@ -1522,7 +1523,15 @@ private fun VideoPlayerSectionContent(
 
     // 🔒 [新增] 屏幕锁定状态（全屏时防误触）
     var isScreenLocked by remember { mutableStateOf(false) }
-    LaunchedEffect(isFullscreen, isInPipMode, isScreenLocked) {
+    LaunchedEffect(isFullscreen, isInPipMode, isPortraitFullscreen, isScreenLocked) {
+        if (shouldClearPlayerScreenLock(
+                isFullscreen = isFullscreen,
+                isInPipMode = isInPipMode,
+                isPortraitFullscreen = isPortraitFullscreen,
+            ) && isScreenLocked
+        ) {
+            isScreenLocked = false
+        }
         if (!isFullscreen || isInPipMode || isScreenLocked) {
             showFullscreenRelatedDrawer = false
         }
@@ -3502,33 +3511,37 @@ private fun VideoPlayerSectionContent(
                 ) {
                     return@pointerInput
                 }
-                var inBottomCenterZone = false
-                var dragY = 0f
-                detectVerticalDragGestures(
-                    onDragStart = { startOffset ->
-                        val halfWidthPx = 160.dp.toPx()
-                        val zoneHeightPx = 64.dp.toPx()
-                        inBottomCenterZone =
-                            startOffset.y >= size.height - zoneHeightPx &&
-                            kotlin.math.abs(startOffset.x - size.width / 2f) <= halfWidthPx
-                        dragY = 0f
-                    },
-                    onDragEnd = { inBottomCenterZone = false },
-                    onDragCancel = { inBottomCenterZone = false },
-                    onVerticalDrag = { change, amount ->
-                        if (!inBottomCenterZone) return@detectVerticalDragGestures
-                        dragY += amount
-                        if (dragY < -20.dp.toPx()) {
-                            inBottomCenterZone = false
+                val halfWidthPx = 160.dp.toPx()
+                val zoneHeightPx = 64.dp.toPx()
+                val triggerDistancePx = 20.dp.toPx()
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val inBottomCenterZone =
+                        down.position.y >= size.height - zoneHeightPx &&
+                        kotlin.math.abs(down.position.x - size.width / 2f) <= halfWidthPx
+                    if (!inBottomCenterZone) return@awaitEachGesture
+                    var dragX = 0f
+                    var dragY = 0f
+                    var lastPosition = down.position
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed) break
+                        val delta = change.position - lastPosition
+                        lastPosition = change.position
+                        dragX += delta.x
+                        dragY += delta.y
+                        if (dragY < -triggerDistancePx && kotlin.math.abs(dragY) > kotlin.math.abs(dragX)) {
                             change.consume()
                             showControls = false
                             showFullscreenRelatedDrawer = true
                             haptic.performHapticFeedback(
                                 androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
                             )
+                            break
                         }
-                    },
-                )
+                    }
+                }
             }
     ) {
         val scope = rememberCoroutineScope()  //  用于设置弹幕开关
@@ -4276,7 +4289,10 @@ private fun VideoPlayerSectionContent(
         // LaunchedEffect 在退出瞬间直接重绑 surface（rebindPlayerSurfaceIfNeeded）恢复画面。
         // HDR/色彩元数据与纹理翻转维度仍触发重建。
         key(effectiveFlippedHorizontal, effectiveFlippedVertical, useTextureSurface) {
-            val viewportAspectRatio = if (liquidGlassLayoutEnabled && !isFullscreen) VideoAspectRatio.FIT else currentAspectRatio
+            val viewportAspectRatio = resolvePlayerViewportAspectRatio(
+                isFullscreen = isFullscreen,
+                selectedAspectRatio = currentAspectRatio,
+            )
             val playerVideoSize = playerState.player.videoSize
             BoxWithConstraints(
                 modifier = playerContentModifier
@@ -4477,7 +4493,7 @@ private fun VideoPlayerSectionContent(
                     androidx.compose.foundation.Image(
                         bitmap = frame,
                         contentDescription = null,
-                        contentScale = ContentScale.FillBounds,
+                        contentScale = resolvePlayerHandoffContentScale(viewportAspectRatio),
                         modifier = with(density) {
                             Modifier
                                 .requiredSize(
@@ -5101,7 +5117,10 @@ private fun VideoPlayerSectionContent(
             // video-relative geometry, especially authored advanced/BAS coordinates.
 
             // 玻璃、MD3 与 Miuix 共用可复用弹幕视图；全屏切换仅更新视口和字体。
-            val viewportAspectRatio = if (liquidGlassLayoutEnabled && !isFullscreen) VideoAspectRatio.FIT else currentAspectRatio
+            val viewportAspectRatio = resolvePlayerViewportAspectRatio(
+                isFullscreen = isFullscreen,
+                selectedAspectRatio = currentAspectRatio,
+            )
             BoxWithConstraints(
                 modifier = playerContentModifier
                     .then(if (capturePlayerPage) playerPageBackdrop.danmaku.modifier else Modifier)
@@ -5603,17 +5622,32 @@ private fun VideoPlayerSectionContent(
         val shouldShowLevelIndicator = shouldShowGestureIndicator &&
             (gestureMode == VideoGestureMode.Brightness || gestureMode == VideoGestureMode.Volume)
 
-        PlayerSeekPreview(
-            visible = shouldShowSeekIndicator,
-            videoshotData = videoshotData,
-            player = playerState.player,
-            isPortraitFullscreen = isPortraitFullscreen,
-            seekTargetTime = seekTargetTime,
-            startPosition = startPosition,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .zIndex(120f),
-        )
+        val tabletopUpperOverlayModifier = if (tabletopPlayback) {
+            tabletopMediaModifier.matchParentSize()
+        } else {
+            Modifier.matchParentSize()
+        }
+        Box(modifier = tabletopUpperOverlayModifier.zIndex(120f)) {
+            PlayerSeekPreview(
+                visible = shouldShowSeekIndicator,
+                videoshotData = videoshotData,
+                player = playerState.player,
+                isPortraitFullscreen = isPortraitFullscreen,
+                seekTargetTime = seekTargetTime,
+                startPosition = startPosition,
+                modifier = Modifier.align(Alignment.Center),
+            )
+            // 主题原生的音量/亮度反馈：悬停态锚定在上半屏媒体区，避免居中胶囊压在折痕上。
+            GestureLevelOverlayHost(
+                visible = shouldShowLevelIndicator,
+                compact = !isFullscreen || uiLayoutPolicy.compactWindowHeight || tabletopPlayback,
+                mode = gestureMode,
+                percent = gesturePercent,
+                glassBackdrop = playerPageBackdrop.backdrop.takeIf {
+                    capturePlayerPage && playerPageBackdrop.video.isReady
+                },
+            )
+        }
 
         // 「上次看到第 N P」提示：点击跳转，左滑移除；画中画/封面态/锁定时不展示。
         val partResumeNotice = (uiState as? VideoPlaybackUiState.Success)?.partResumeNotice
@@ -5639,17 +5673,6 @@ private fun VideoPlayerSectionContent(
                 !showControls && !isGestureVisible && !landscapeCommentPanelVisible && !danmakuComposerVisible,
             resolve = actions.resolveNextWatch,
             play = actions.playNextWatch,
-        )
-
-        // 主题原生的音量/亮度反馈。
-        GestureLevelOverlayHost(
-            visible = shouldShowLevelIndicator,
-            compact = !isFullscreen || uiLayoutPolicy.compactWindowHeight,
-            mode = gestureMode,
-            percent = gesturePercent,
-            glassBackdrop = playerPageBackdrop.backdrop.takeIf {
-                capturePlayerPage && playerPageBackdrop.video.isReady
-            },
         )
 
         // 上滑/下滑进入全屏的拖动跟随反馈；手势结束(mode 复位)即隐藏。
@@ -6371,17 +6394,36 @@ private fun VideoPlayerSectionContent(
                 VideoPlayerOverlay(state = overlayState, actions = overlayActions)
             }
 
-            VideoPlayerOverlayHost(
-                panelViewport = panelViewport.takeIf { panelAvoidanceEnabled },
-                levelGestureActive = shouldShowLevelIndicator,
-                pageBackdrop = pageChromeBackdrop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = transitionChromeAlphaProvider()
-                    },
-                content = renderVideoPlayerOverlay,
-            )
+            val tabletopOverlayHeightDp = if (tabletopPlayback) {
+                val hostWidthPx = measuredPlayerViewportSize.value.width.takeIf { it > 0 }
+                    ?: with(localDensity) { configuration.screenWidthDp.dp.roundToPx() }
+                val hostHeightPx = measuredPlayerViewportSize.value.height.takeIf { it > 0 }
+                    ?: with(localDensity) { configuration.screenHeightDp.dp.roundToPx() }
+                com.android.purebilibili.core.util.resolvePlayerTabletopLayoutPolicy(
+                    foldPosture = adaptiveInfo.posture,
+                    hingeOrientation = adaptiveInfo.foldingFeature.hingeOrientation,
+                    hingeTopPx = adaptiveInfo.foldingFeature.hingeBounds?.top?.minus(playerTopInWindowPx),
+                    windowWidthPx = hostWidthPx,
+                    windowHeightPx = hostHeightPx,
+                    density = localDensity.density,
+                ).videoHostHeightDp?.dp
+            } else null
+
+            CompositionLocalProvider(
+                com.android.purebilibili.core.util.LocalTabletopVideoHostHeightDp provides tabletopOverlayHeightDp,
+            ) {
+                VideoPlayerOverlayHost(
+                    panelViewport = panelViewport.takeIf { panelAvoidanceEnabled },
+                    levelGestureActive = shouldShowLevelIndicator,
+                    pageBackdrop = pageChromeBackdrop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = transitionChromeAlphaProvider()
+                        },
+                    content = renderVideoPlayerOverlay,
+                )
+            }
 
             SponsorSkipButton(
                 segment = sponsorSegment,

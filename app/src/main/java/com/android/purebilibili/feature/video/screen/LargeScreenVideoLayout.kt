@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
@@ -27,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -178,16 +181,21 @@ internal fun LargeScreenVideoLayout(
                 enableVerticalExpand = true,
             )
         }
+        val companionPane = LocalVideoCompanionPane.current
         val theaterModePreferred by SettingsManager
             .getTabletTheaterModeEnabled(context)
             .collectAsStateWithLifecycle(initialValue = false)
         val theaterScope = rememberCoroutineScope()
-        val canUseTheater = resolveLargeScreenTheaterAvailable(
+        var theaterSideCurtainOpen by rememberSaveable(bvid) { mutableStateOf(false) }
+        val canUseTheater = !companionPane && resolveLargeScreenTheaterAvailable(
             windowWidthDp = windowWidthDp,
             windowHeightDp = windowHeightDp,
             mode = metrics.mode,
         )
         val isTheaterMode = canUseTheater && theaterModePreferred
+        LaunchedEffect(isTheaterMode) {
+            if (!isTheaterMode) theaterSideCurtainOpen = false
+        }
         val theaterController = remember(canUseTheater, isTheaterMode, theaterModePreferred) {
             if (!canUseTheater) {
                 null
@@ -201,6 +209,19 @@ internal fun LargeScreenVideoLayout(
                     },
                 )
             }
+        }
+        com.android.purebilibili.core.ui.LocalNavigationBackHandler(
+            enabled = isTheaterMode,
+        ) {
+            theaterController?.toggle()
+        }
+        val effectiveBackAction: () -> Unit = if (isTheaterMode) {
+            {
+                theaterController?.toggle()
+                Unit
+            }
+        } else {
+            onBack
         }
         val applySideStatusBarPadding =
             metrics.mode != LargeScreenVideoLayoutMode.AlmostSquare
@@ -240,7 +261,7 @@ internal fun LargeScreenVideoLayout(
                 isPlayerSurfaceReady = isPlayerSurfaceReady,
                 playbackActions = playbackActions,
                 engagementActions = engagementActions,
-                onBack = onBack,
+                onBack = effectiveBackAction,
                 onHomeClick = onHomeClick,
                 onToggleFullscreen = onToggleFullscreen,
                 onPortraitFullscreen = onPortraitFullscreen,
@@ -250,7 +271,23 @@ internal fun LargeScreenVideoLayout(
                 onSecondCodecChange = onSecondCodecChange,
                 onAudioQualityChange = onAudioQualityChange,
                 onPlayModeClick = onPlayModeClick,
-                viewportWidthDpOverride = (if (isTheaterMode) windowWidthDp else metrics.playerWidthDp).toInt(),
+                viewportWidthDpOverride = (if (isTheaterMode) {
+                    val curtain = if (theaterSideCurtainOpen) {
+                        metrics.sidePaneWidthDp.coerceIn(
+                            LARGE_SCREEN_VIDEO_MIN_SIDE_PANE_DP,
+                            LARGE_SCREEN_VIDEO_MAX_SIDE_PANE_DP,
+                        )
+                    } else 0f
+                    resolveTabletTheaterPlayerSizeDp(
+                        availableWidthDp = (windowWidthDp - curtain).coerceAtLeast(1f),
+                        screenHeightDp = windowHeightDp.toInt(),
+                        isTheaterMode = true,
+                        useTabletopLayout = false,
+                        policyMaxWidthDp = (windowWidthDp - curtain).coerceAtLeast(1f).toInt(),
+                    ).first
+                } else {
+                    metrics.playerWidthDp
+                }).toInt(),
             )
         }
         val intro: @Composable (Modifier) -> Unit = { modifier ->
@@ -351,21 +388,107 @@ internal fun LargeScreenVideoLayout(
             }
         }
         CompositionLocalProvider(LocalTabletTheaterModeController provides theaterController) {
-        if (isTheaterMode) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black),
-            ) {
-                player(
-                    Modifier
-                        .fillMaxSize()
-                        .then(playerBackdropModifier),
-                )
-            }
-        } else {
         val sidePaneSurfaceColor = AppSurfaceTokens.surface()
         val splitDividerColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
+        if (isTheaterMode) {
+            val curtainWidthDp = if (theaterSideCurtainOpen) {
+                metrics.sidePaneWidthDp.coerceIn(LARGE_SCREEN_VIDEO_MIN_SIDE_PANE_DP, LARGE_SCREEN_VIDEO_MAX_SIDE_PANE_DP)
+            } else {
+                0f
+            }
+            val stageColumnWidthDp = (windowWidthDp - curtainWidthDp).coerceAtLeast(1f)
+            val (theaterPlayerWidthDp, theaterPlayerHeightDp) = resolveTabletTheaterPlayerSizeDp(
+                availableWidthDp = stageColumnWidthDp,
+                screenHeightDp = windowHeightDp.toInt(),
+                isTheaterMode = true,
+                useTabletopLayout = false,
+                policyMaxWidthDp = stageColumnWidthDp.toInt(),
+            )
+            Row(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Black)
+                            .statusBarsPadding(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        player(
+                            Modifier
+                                .width(theaterPlayerWidthDp.dp)
+                                .height(theaterPlayerHeightDp.dp)
+                                .then(playerBackdropModifier),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .widthIn(max = 1080.dp)
+                            .fillMaxWidth()
+                            .align(Alignment.CenterHorizontally)
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        com.android.purebilibili.core.ui.components.AppSurface(
+                            onClick = { theaterSideCurtainOpen = !theaterSideCurtainOpen },
+                            shape = com.android.purebilibili.core.ui.AppShapes.container(
+                                com.android.purebilibili.core.ui.ContainerLevel.Pill,
+                            ),
+                            color = AppSurfaceTokens.surfaceContainer(),
+                        ) {
+                            com.android.purebilibili.core.ui.components.AppText(
+                                text = if (theaterSideCurtainOpen) "收起评论侧栏" else "展开评论侧栏",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = com.android.purebilibili.core.ui.AppContentColors.primaryText(),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                            )
+                        }
+                        com.android.purebilibili.core.ui.components.AppSurface(
+                            onClick = { theaterController?.toggle() },
+                            shape = com.android.purebilibili.core.ui.AppShapes.container(
+                                com.android.purebilibili.core.ui.ContainerLevel.Pill,
+                            ),
+                            color = AppSurfaceTokens.surfaceContainer(),
+                        ) {
+                            com.android.purebilibili.core.ui.components.AppText(
+                                text = "退出影院",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = com.android.purebilibili.core.ui.AppContentColors.secondaryText(),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                            )
+                        }
+                    }
+                    intro(
+                        Modifier
+                            .widthIn(max = 1080.dp)
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .align(Alignment.CenterHorizontally),
+                    )
+                }
+                if (theaterSideCurtainOpen) {
+                    VerticalDivider(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .videoDetailTransitionChrome(transitionChromeAlphaProvider),
+                        color = splitDividerColor,
+                        thickness = 0.5.dp,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(curtainWidthDp.dp)
+                            .fillMaxHeight()
+                            .background(sidePaneSurfaceColor),
+                    ) {
+                        side(false)
+                    }
+                }
+            }
+        } else {
         when (metrics.mode) {
             LargeScreenVideoLayoutMode.VerticalThreePane -> {
                 Row(modifier = Modifier.fillMaxSize()) {
@@ -579,35 +702,24 @@ internal fun LargeScreenVideoLayout(
                 }
             }
             LargeScreenVideoLayoutMode.Phone -> {
-                Row(modifier = Modifier.fillMaxSize()) {
-                    Column(
+                // 窄宽分栏瞬态退化为单列：上方播放器 + 下方含简介/评论/推荐的完整 Tab，不出现 0dp 侧栏。
+                Column(modifier = Modifier.fillMaxSize()) {
+                    player(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(metrics.playerHeightDp.dp)
+                            .then(playerBackdropModifier),
+                    )
+                    Box(
                         modifier = Modifier
-                            .width(metrics.playerWidthDp.dp)
-                            .fillMaxHeight(),
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .background(sidePaneSurfaceColor),
                     ) {
-                        player(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(metrics.playerHeightDp.dp)
-                                .then(playerBackdropModifier),
-                        )
-                        if (metrics.introBelowPlayer) {
-                            intro(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                            )
-                        }
-                    }
-                    Column(
-                        modifier = Modifier
-                            .width(metrics.sidePaneWidthDp.dp)
-                            .fillMaxHeight(),
-                    ) {
-                        side(!metrics.introBelowPlayer)
+                        side(true)
                     }
                 }
-        }
+            }
         }
         }
         }

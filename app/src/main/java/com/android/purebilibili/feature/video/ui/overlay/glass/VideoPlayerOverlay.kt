@@ -1782,6 +1782,7 @@ private fun VideoPlayerOverlayContent(
             (pluginPlaybackStatus.first || player.playbackState == Player.STATE_READY ||
                 player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_ENDED) &&
             !isSeekScrubbing && !endDrawerVisible && !landscapeCommentPanelVisible && !showInsightDetails
+        val tabletopUpperHeight = com.android.purebilibili.core.util.LocalTabletopVideoHostHeightDp.current
         if (centerPlaybackSupported) {
             com.android.purebilibili.feature.video.ui.overlay.CenterPlaybackControl(
                 visible = showCenterPlaybackControl,
@@ -1789,12 +1790,16 @@ private fun VideoPlayerOverlayContent(
                 isPlaying = effectiveIsPlaying,
                 onPlayPause = { togglePlayPause() },
                 diameter = if (isFullscreen) 72.dp else 56.dp,
-                modifier = Modifier.align(Alignment.Center),
+                modifier = if (tabletopUpperHeight != null) {
+                    Modifier.padding(top = tabletopUpperHeight, bottom = 72.dp)
+                } else {
+                    Modifier.align(Alignment.Center)
+                },
             )
         }
 
         // --- 3.5 🔒 [新增] 屏幕锁定按钮 (仅全屏模式) ---
-        if (isFullscreen && showFullscreenLockButton) {
+        if (isFullscreen && (showFullscreenLockButton || isScreenLocked)) {
             AnimatedVisibility(
                 visible = isVisible && !danmakuComposerVisible,  // 锁定后按控制栏状态自动隐藏
                 enter = fadeIn(OverlayControlFadeSpec),
@@ -2020,83 +2025,87 @@ private fun VideoPlayerOverlayContent(
             }
         }
 
-        // --- 5.4  缓冲加载指示器 ---
-        AnimatedVisibility(
-            visible = showRebufferingIndicator && !showCenterPlaybackControl,
-            modifier = Modifier.align(Alignment.Center),
-            // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
-            // 看起来像又一次进场闪烁。
-            enter = EnterTransition.None,
-            exit = fadeOut(OverlayControlFadeSpec)
-        ) {
-            if (loadingIndicatorsActive && !showCenterPlaybackControl) {
-                BiliTvBufferingIndicator(
-                    tint = centerLoadingVisualState.indicatorColor,
-                    bufferedProvider = { progressProvider().buffered },
-                )
-            }
+        val glassCenterIndicatorHostModifier = if (tabletopUpperHeight != null) {
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().height(tabletopUpperHeight)
+        } else {
+            Modifier.fillMaxSize()
         }
+        Box(modifier = glassCenterIndicatorHostModifier, contentAlignment = Alignment.Center) {
+            // --- 5.4  缓冲加载指示器 ---
+            AnimatedVisibility(
+                visible = showRebufferingIndicator && !showCenterPlaybackControl,
+                // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
+                // 看起来像又一次进场闪烁。
+                enter = EnterTransition.None,
+                exit = fadeOut(OverlayControlFadeSpec)
+            ) {
+                if (loadingIndicatorsActive && !showCenterPlaybackControl) {
+                    BiliTvBufferingIndicator(
+                        tint = centerLoadingVisualState.indicatorColor,
+                        bufferedProvider = { progressProvider().buffered },
+                    )
+                }
+            }
 
-        AnimatedVisibility(
-            visible = centerLoadingUiState != null && !showCenterPlaybackControl,
-            modifier = Modifier.align(Alignment.Center),
-            enter = fadeIn(OverlayControlFadeSpec),
-            exit = fadeOut(OverlayControlFadeSpec)
-        ) {
-            if (!loadingIndicatorsActive || showCenterPlaybackControl) return@AnimatedVisibility
-            val loadingState = centerLoadingUiState ?: return@AnimatedVisibility
-            Box(modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(
-                        horizontal = overlayVisualPolicy.qualitySwitchContentHorizontalPaddingDp.dp,
-                        vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
-                    )
-                ) {
-                    BiliTvAnimatedBufferingIndicator(tint = centerLoadingVisualState.indicatorColor)
-                    Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
-                    AppText(
-                        text = loadingState.primaryText,
-                        color = centerLoadingVisualState.primaryTextColor,
-                        fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    loadingState.secondaryText?.let { secondaryText ->
-                        Spacer(modifier = Modifier.height(6.dp))
-                        AppText(
-                            text = secondaryText,
-                            color = centerLoadingVisualState.secondaryTextColor,
-                            fontSize = (overlayVisualPolicy.qualitySwitchMessageFontSp - 1).sp,
-                            fontWeight = FontWeight.Medium
+            AnimatedVisibility(
+                visible = centerLoadingUiState != null && !showCenterPlaybackControl,
+                enter = fadeIn(OverlayControlFadeSpec),
+                exit = fadeOut(OverlayControlFadeSpec)
+            ) {
+                if (!loadingIndicatorsActive || showCenterPlaybackControl) return@AnimatedVisibility
+                val loadingState = centerLoadingUiState ?: return@AnimatedVisibility
+                Box(modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(
+                            horizontal = overlayVisualPolicy.qualitySwitchContentHorizontalPaddingDp.dp,
+                            vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
                         )
+                    ) {
+                        BiliTvAnimatedBufferingIndicator(tint = centerLoadingVisualState.indicatorColor)
+                        Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
+                        AppText(
+                            text = loadingState.primaryText,
+                            color = centerLoadingVisualState.primaryTextColor,
+                            fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        loadingState.secondaryText?.let { secondaryText ->
+                            Spacer(modifier = Modifier.height(6.dp))
+                            AppText(
+                                text = secondaryText,
+                                color = centerLoadingVisualState.secondaryTextColor,
+                                fontSize = (overlayVisualPolicy.qualitySwitchMessageFontSp - 1).sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        // --- 5.5  清晰度切换中 Loading 指示器 ---
-        AnimatedVisibility(
-            visible = isQualitySwitching && centerLoadingUiState == null && !showCenterPlaybackControl,
-            modifier = Modifier.align(Alignment.Center),
-            enter = fadeIn(OverlayControlFadeSpec),
-            exit = fadeOut(OverlayControlFadeSpec)
-        ) {
-            Box(modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(
-                        horizontal = overlayVisualPolicy.qualitySwitchContentHorizontalPaddingDp.dp,
-                        vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
-                    )
-                ) {
-                    BiliTvAnimatedBufferingIndicator(tint = centerLoadingVisualState.indicatorColor)
-                    Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
-                    AppText(
-                        text = "正在切换清晰度...",
-                        color = centerLoadingVisualState.primaryTextColor,
-                        fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+            // --- 5.5  清晰度切换中 Loading 指示器 ---
+            AnimatedVisibility(
+                visible = isQualitySwitching && centerLoadingUiState == null && !showCenterPlaybackControl,
+                enter = fadeIn(OverlayControlFadeSpec),
+                exit = fadeOut(OverlayControlFadeSpec)
+            ) {
+                Box(modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(
+                            horizontal = overlayVisualPolicy.qualitySwitchContentHorizontalPaddingDp.dp,
+                            vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
+                        )
+                    ) {
+                        BiliTvAnimatedBufferingIndicator(tint = centerLoadingVisualState.indicatorColor)
+                        Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
+                        AppText(
+                            text = "正在切换清晰度...",
+                            color = centerLoadingVisualState.primaryTextColor,
+                            fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }

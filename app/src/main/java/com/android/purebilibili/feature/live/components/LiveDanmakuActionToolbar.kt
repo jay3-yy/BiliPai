@@ -24,13 +24,13 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
 import com.android.purebilibili.core.ui.AppPopupSurface
 import com.android.purebilibili.core.ui.AppPopupSurfaceType
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.feature.live.LiveDanmakuItem
 import com.android.purebilibili.feature.video.danmaku.DanmakuTapAnchor
+import com.android.purebilibili.feature.video.ui.components.DanmakuToolbarPopupProperties
 import com.android.purebilibili.feature.video.ui.components.resolveDanmakuToolbarPosition
 
 /** 直播消息工具条不提供单条点赞；举报继续使用直播消息携带的签名信息。 */
@@ -56,7 +56,7 @@ internal fun LiveDanmakuActionToolbar(
     Popup(
         popupPositionProvider = position,
         onDismissRequest = onDismiss,
-        properties = PopupProperties(focusable = false, dismissOnClickOutside = true),
+        properties = DanmakuToolbarPopupProperties,
     ) {
         // 材质由公共弹出表面选择，玻璃和原生路径共用消息操作与定位。
         AppPopupSurface(

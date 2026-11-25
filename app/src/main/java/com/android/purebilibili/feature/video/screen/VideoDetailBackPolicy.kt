@@ -4,6 +4,7 @@ internal enum class VideoDetailLocalBackTarget {
     NAVIGATE_BACK,
     EXIT_LANDSCAPE_FULLSCREEN,
     EXIT_PORTRAIT_FULLSCREEN,
+    EXIT_THEATER_MODE,
     SHOW_LANDSCAPE_COMMENTS,
     NAVIGATE_BACK_KEEP_LANDSCAPE,
 }
@@ -16,6 +17,7 @@ internal fun resolveVideoDetailLocalBackTarget(
     landscapeBackShowsComments: Boolean = false,
     canShowLandscapeComments: Boolean = false,
     landscapeCommentsVisible: Boolean = false,
+    isTheaterModeActive: Boolean = false,
 ): VideoDetailLocalBackTarget = when {
     isPortraitFullscreen && !directPortraitEntry -> VideoDetailLocalBackTarget.EXIT_PORTRAIT_FULLSCREEN
     landscapeBackShowsComments && isLandscapeFullscreen && canShowLandscapeComments &&
@@ -26,5 +28,6 @@ internal fun resolveVideoDetailLocalBackTarget(
     continuousPlayerPhase != null && continuousPlayerPhase != ContinuousPlayerTransitionPhase.Inline ->
         VideoDetailLocalBackTarget.EXIT_LANDSCAPE_FULLSCREEN
     isLandscapeFullscreen -> VideoDetailLocalBackTarget.EXIT_LANDSCAPE_FULLSCREEN
+    isTheaterModeActive -> VideoDetailLocalBackTarget.EXIT_THEATER_MODE
     else -> VideoDetailLocalBackTarget.NAVIGATE_BACK
 }

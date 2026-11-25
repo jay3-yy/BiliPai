@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video.ui.components
 
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
+import com.android.purebilibili.core.ui.motion.GlassMorphSprings
 
 /** Shared only by opted-in liquid-glass panels; progress is 0 closed, 1 open. */
 internal object ControlCenterMotionSpec {
@@ -28,9 +29,12 @@ internal object ControlCenterMotionSpec {
 
     fun releaseVelocity(velocity: Float): Float = velocity.coerceIn(-4f, 4f)
 
-    fun springSpec(closing: Boolean): SpringSpec<Float> = spring(
-        dampingRatio = if (closing) 1f else 0.72f,
-        stiffness = 300f,
-        visibilityThreshold = 0.001f,
-    )
+    fun springSpec(closing: Boolean): SpringSpec<Float> {
+        val morph = if (closing) GlassMorphSprings.Return else GlassMorphSprings.Expand
+        return spring(
+            dampingRatio = morph.dampingRatio,
+            stiffness = morph.stiffness,
+            visibilityThreshold = 0.001f,
+        )
+    }
 }

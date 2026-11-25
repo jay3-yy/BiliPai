@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import androidx.compose.ui.layout.ContentScale
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.android.purebilibili.feature.anime4k.gl.Anime4KDisplayScaleMode
 import kotlin.test.Test
@@ -186,5 +187,28 @@ class VideoAspectRatioLayoutPolicyTest {
             assertTrue(shouldRunComposeSurfaceSyncWorkaround(sdkInt = sdkInt, isSurfaceView = true))
             assertFalse(shouldRunComposeSurfaceSyncWorkaround(sdkInt = sdkInt, isSurfaceView = false))
         }
+    }
+
+    @Test
+    fun `inline viewport always uses FIT while fullscreen preserves selected aspect ratio`() {
+        VideoAspectRatio.entries.forEach { ratio ->
+            assertEquals(
+                VideoAspectRatio.FIT,
+                resolvePlayerViewportAspectRatio(isFullscreen = false, selectedAspectRatio = ratio),
+            )
+            assertEquals(
+                ratio,
+                resolvePlayerViewportAspectRatio(isFullscreen = true, selectedAspectRatio = ratio),
+            )
+        }
+    }
+
+    @Test
+    fun `handoff frame content scale matches viewport aspect ratio without stretching FIT`() {
+        assertEquals(ContentScale.Fit, resolvePlayerHandoffContentScale(VideoAspectRatio.FIT))
+        assertEquals(ContentScale.Crop, resolvePlayerHandoffContentScale(VideoAspectRatio.FILL))
+        assertEquals(ContentScale.FillBounds, resolvePlayerHandoffContentScale(VideoAspectRatio.STRETCH))
+        assertEquals(ContentScale.Fit, resolvePlayerHandoffContentScale(VideoAspectRatio.RATIO_4_3))
+        assertEquals(ContentScale.Fit, resolvePlayerHandoffContentScale(VideoAspectRatio.ORIGINAL))
     }
 }

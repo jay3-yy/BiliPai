@@ -112,6 +112,8 @@ import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.resolveDanmakuSettingsScope
 import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.AppFoldPosture
+import com.android.purebilibili.core.util.tabletopUpperViewportLayout
 import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 import com.android.purebilibili.core.util.applyPlayerRequestedOrientation
 import com.android.purebilibili.data.model.response.LiveQuality
@@ -1175,9 +1177,17 @@ private fun LiveRoomScreen(
                     } else Modifier
                 )
         ) {
-            // Video View
+            // Video View：全屏悬停态收进上半屏，控制条留于下半屏触控区。
+            val liveTabletopFullscreen = isFullscreen && !pipPresentation &&
+                hingeAdaptiveInfo.posture == AppFoldPosture.Tabletop
             BoxWithConstraints(
-                modifier = Modifier.fillMaxSize().clipToBounds()
+                modifier = Modifier
+                    .tabletopUpperViewportLayout(
+                        enabled = liveTabletopFullscreen,
+                        adaptiveInfo = hingeAdaptiveInfo,
+                    )
+                    .fillMaxSize()
+                    .clipToBounds()
                     .then(if (captureLivePlayerPage) livePlayerBackdrop.video.modifier else Modifier),
                 contentAlignment = if (liveLayoutMode == LiveRoomLayoutMode.PortraitVerticalOverlay && !isFullscreen) Alignment.TopCenter else Alignment.Center
             ) {

@@ -317,6 +317,7 @@ private fun FullscreenPlayerOverlayContent(
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     val latestPlayerView by rememberUpdatedState(playerViewRef)
     val latestPlayer by rememberUpdatedState(player)
+    val latestShowControls by rememberUpdatedState(showControls)
     var keepFullscreenPlaybackAwake by remember(player) {
         mutableStateOf(
             player?.let {
@@ -929,7 +930,7 @@ private fun FullscreenPlayerOverlayContent(
                     }
                 )
             }
-            .pointerInput(player, gesturesEnabled, playerInteractionSettings, showControls) {
+            .pointerInput(player, gesturesEnabled, playerInteractionSettings) {
                 if (gestureMode == FullscreenGestureMode.Seek) {
                     gestureMode = FullscreenGestureMode.None
                     seekCancelPending = false
@@ -946,7 +947,7 @@ private fun FullscreenPlayerOverlayContent(
                     shouldIgnoreStart = { downOffset ->
                         !shouldStartFullscreenDragGesture(
                             gesturesEnabled = gesturesEnabled,
-                            showControls = showControls,
+                            showControls = latestShowControls,
                             startY = downOffset.y,
                             screenHeight = screenHeight,
                             statusBarExclusionZonePx = statusBarExclusionZonePx,
@@ -1340,50 +1341,61 @@ private fun FullscreenPlayerOverlayContent(
         // Same stable hit surface as inline/fullscreen detail playback; controls stay above it.
         PlayerGestureInputSurface(modifier = Modifier.matchParentSize())
 
-        // 手势指示器（SwipeToExit 无需指示器）
-        if (gestureMode != FullscreenGestureMode.None &&
-            gestureMode != FullscreenGestureMode.SwipeToExit
+        // 手势指示器与 Seek 取消提示：悬停态锚定在上半屏，避免压在水平折痕上。
+        Box(
+            modifier = if (tabletopVideoHostHeightDp != null) {
+                Modifier
+                    .fillMaxWidth()
+                    .height(tabletopVideoHostHeightDp)
+                    .align(Alignment.TopCenter)
+            } else {
+                Modifier.matchParentSize()
+            },
         ) {
-            GestureIndicator(
-                mode = gestureMode,
-                value = when (gestureMode) {
-                    FullscreenGestureMode.Brightness -> currentBrightness
-                    FullscreenGestureMode.Volume -> gestureValue
-                    FullscreenGestureMode.Seek -> currentProgress
-                    else -> 0f
-                },
-                seekTime = if (gestureMode == FullscreenGestureMode.Seek) seekPreviewPosition else null,
-                duration = duration,
-                hazeState = overlayHazeState,
-                // Level overlays (esp. MIUIX edge rails) need full-size host for side alignment.
-                modifier = if (gestureMode == FullscreenGestureMode.Seek) {
-                    Modifier.align(Alignment.Center)
-                } else {
-                    Modifier.fillMaxSize()
-                }
-            )
-        }
-
-        //  Seek 逃生口提示：拖动进度时手指进入顶部角落，松手取消进退
-        AnimatedVisibility(
-            visible = gestureMode == FullscreenGestureMode.Seek && seekCancelPending,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(top = 96.dp),
-            enter = fadeIn(tween(200)),
-            exit = fadeOut(tween(300))
-        ) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                shadowElevation = 4.dp
+            if (gestureMode != FullscreenGestureMode.None &&
+                gestureMode != FullscreenGestureMode.SwipeToExit
             ) {
-                AppText(
-                    text = "松开手指，取消进退",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                GestureIndicator(
+                    mode = gestureMode,
+                    value = when (gestureMode) {
+                        FullscreenGestureMode.Brightness -> currentBrightness
+                        FullscreenGestureMode.Volume -> gestureValue
+                        FullscreenGestureMode.Seek -> currentProgress
+                        else -> 0f
+                    },
+                    seekTime = if (gestureMode == FullscreenGestureMode.Seek) seekPreviewPosition else null,
+                    duration = duration,
+                    hazeState = overlayHazeState,
+                    // Level overlays (esp. MIUIX edge rails) need full-size host for side alignment.
+                    modifier = if (gestureMode == FullscreenGestureMode.Seek) {
+                        Modifier.align(Alignment.Center)
+                    } else {
+                        Modifier.fillMaxSize()
+                    }
                 )
+            }
+
+            //  Seek 逃生口提示：拖动进度时手指进入顶部角落，松手取消进退
+            AnimatedVisibility(
+                visible = gestureMode == FullscreenGestureMode.Seek && seekCancelPending,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(top = 96.dp),
+                enter = fadeIn(tween(200)),
+                exit = fadeOut(tween(300))
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    shadowElevation = 4.dp
+                ) {
+                    AppText(
+                        text = "松开手指，取消进退",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
         }
 
@@ -1461,16 +1473,26 @@ private fun FullscreenPlayerOverlayContent(
 
                 //  [修改] 移除中间大按钮，改为在底部控制栏左侧显示
 
-                // 底部进度条和控制按钮
+                // 底部进度条和控制按钮：悬停态置入下半屏舒适触控区，普通全屏贴底保留视觉沉浸。
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(90.dp)
-                        .align(Alignment.BottomCenter)
-                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
+                    modifier = if (tabletopVideoHostHeightDp != null) {
+                        Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight()
+                            .padding(top = tabletopVideoHostHeightDp)
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .height(90.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
+                    },
+                    contentAlignment = Alignment.Center,
                 ) {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).align(Alignment.Center)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = if (tabletopVideoHostHeightDp != null) 24.dp else 16.dp)
                     ) {
                         // 进度条行
                         Row(

@@ -1412,10 +1412,14 @@ internal fun VideoDetailScreenStateHolder(
     val landscapeBackShowsComments by remember(context) {
         com.android.purebilibili.core.store.SettingsManager.getLandscapeBackShowsComments(context)
     }.collectAsStateWithLifecycle(initialValue = false, lifecycle = lifecycleOwner.lifecycle)
+    val effectiveLayoutWidthDp = windowSizeClass.widthDp.value.takeIf { it > 0f }
+        ?: configuration.screenWidthDp.toFloat()
+    val effectiveLayoutHeightDp = windowSizeClass.heightDp.value.takeIf { it > 0f }
+        ?: configuration.screenHeightDp.toFloat()
     val useTabletLayout = appWindowAdaptiveInfo.shouldAvoidHinge || (
         horizontalAdaptationEnabled.value && shouldUseLargeScreenVideoLayout(
-            windowWidthDp = configuration.screenWidthDp.toFloat(),
-            windowHeightDp = configuration.screenHeightDp.toFloat(),
+            windowWidthDp = effectiveLayoutWidthDp,
+            windowHeightDp = effectiveLayoutHeightDp,
             horizontalAdaptationEnabled = true,
             isFoldableCoverWindow = displayContext.isFoldableCoverWindow,
         )
@@ -3698,6 +3702,7 @@ internal fun VideoDetailScreenStateHolder(
                 changeFullscreen(ContinuousPlayerTransitionEvent.ExitFullscreen)
                 true
             }
+            VideoDetailLocalBackTarget.EXIT_THEATER_MODE -> false
             VideoDetailLocalBackTarget.NAVIGATE_BACK -> false
             VideoDetailLocalBackTarget.SHOW_LANDSCAPE_COMMENTS -> {
                 landscapeCommentCloseProgress.floatValue = 1f
@@ -4422,18 +4427,19 @@ internal fun VideoDetailScreenStateHolder(
                             immersiveStatusBarBackdropEnabled = true,
                             isSharedCardTransition = detailShellSharedBoundsEnabled,
                         ).dp
-                        val screenWidthDp = configuration.screenWidthDp.dp
-                        val screenHeightDp = configuration.screenHeightDp.dp
+                        val screenWidthDp = effectiveLayoutWidthDp.dp
+                        val screenHeightDp = effectiveLayoutHeightDp.dp
+                        val inlineVideoAspectRatio = resolvePhoneInlineVideoAspectRatio(
+                            info = detailContentState?.info,
+                            bvid = currentBvid,
+                            cid = playbackTargetCid,
+                        )
                         val videoHeight = resolvePhoneInlineVideoViewportHeightDp(
-                            windowWidthDp = configuration.screenWidthDp.toFloat(),
-                            windowHeightDp = configuration.screenHeightDp.toFloat(),
+                            windowWidthDp = effectiveLayoutWidthDp,
+                            windowHeightDp = effectiveLayoutHeightDp,
                             isFoldableCoverWindow = displayContext.isFoldableCoverWindow,
                             // 三种材质共用内容比例；不改变竖屏视频专用布局与大屏分栏参数。
-                            videoAspectRatio = resolvePhoneInlineVideoAspectRatio(
-                                info = detailContentState?.info,
-                                bvid = currentBvid,
-                                cid = playbackTargetCid,
-                            ),
+                            videoAspectRatio = inlineVideoAspectRatio,
                         ).dp
                         val playerChromeProfile = rememberAppPlayerChromeProfile()
                         val liquidGlassTabMotion = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
@@ -4485,13 +4491,13 @@ internal fun VideoDetailScreenStateHolder(
                             }
                         }
                         val expandedPortraitInlineSpec = remember(
-                            configuration.screenWidthDp,
-                            configuration.screenHeightDp,
+                            effectiveLayoutWidthDp,
+                            effectiveLayoutHeightDp,
                             displayContext.isFoldableCoverWindow,
                         ) {
                             resolvePortraitInlinePlayerLayoutSpec(
-                                screenWidthDp = configuration.screenWidthDp.toFloat(),
-                                screenHeightDp = configuration.screenHeightDp.toFloat(),
+                                screenWidthDp = effectiveLayoutWidthDp,
+                                screenHeightDp = effectiveLayoutHeightDp,
                                 isCollapsed = false,
                                 isFoldableCoverWindow = displayContext.isFoldableCoverWindow,
                             )
@@ -4508,13 +4514,13 @@ internal fun VideoDetailScreenStateHolder(
                             )
                         // 📏 [Collapsing Player] 上滑隐藏播放器逻辑
                         val collapsedPortraitInlineSpec = remember(
-                            configuration.screenWidthDp,
-                            configuration.screenHeightDp,
+                            effectiveLayoutWidthDp,
+                            effectiveLayoutHeightDp,
                             displayContext.isFoldableCoverWindow,
                         ) {
                             resolvePortraitInlinePlayerLayoutSpec(
-                                screenWidthDp = configuration.screenWidthDp.toFloat(),
-                                screenHeightDp = configuration.screenHeightDp.toFloat(),
+                                screenWidthDp = effectiveLayoutWidthDp,
+                                screenHeightDp = effectiveLayoutHeightDp,
                                 isCollapsed = true,
                                 isFoldableCoverWindow = displayContext.isFoldableCoverWindow,
                             )
@@ -5282,7 +5288,9 @@ internal fun VideoDetailScreenStateHolder(
                                     enabled = continuousFullscreenTransitionEnabled,
                                     // Loading cover and playback share 16:9 geometry; the first frame must not resize the viewport.
                                     preferLayoutWidthInline = !useOfficialInlinePortraitDetailExperience &&
-                                        !suppressPhoneDetailBodyForDirectPortrait,
+                                        !suppressPhoneDetailBodyForDirectPortrait &&
+                                        !isPhoneTheaterActive,
+                                    inlineVideoAspectRatio = inlineVideoAspectRatio,
                                     inlineTopInset = if (!useOfficialInlinePortraitDetailExperience) {
                                         playerTopInset
                                     } else {

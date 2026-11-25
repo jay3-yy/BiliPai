@@ -10,6 +10,10 @@ import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -20,12 +24,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
@@ -370,6 +377,7 @@ fun VideoCommentSheetHost(
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
     threadListModifier: Modifier = Modifier,
     pullToRefreshFromTopOnly: Boolean = false,
+    preferEndSideSheet: Boolean = false,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -730,7 +738,6 @@ fun VideoCommentSheetHost(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = overlayVisual.scrimAlpha))
                 .then(
                     if (interceptBackdropTap) {
                         Modifier.clickable(
@@ -748,6 +755,15 @@ fun VideoCommentSheetHost(
                 )
         ) {
             val density = LocalDensity.current
+            val useEndSideSheet = preferEndSideSheet && maxWidth >= 840.dp
+            val sideSheetWidth = (maxWidth * 0.36f).coerceIn(360.dp, 440.dp)
+            if (!useEndSideSheet) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = overlayVisual.scrimAlpha)),
+                )
+            }
             val hostHeightPx = with(density) { maxHeight.toPx().roundToInt() }
             val sheetHeightPx = remember(hostContent, hostHeightPx, topReservedPx) {
                 resolveVideoCommentSheetHostHeightPx(
@@ -759,26 +775,48 @@ fun VideoCommentSheetHost(
             val sheetHeight = with(density) { sheetHeightPx.toDp() }
             AnimatedVisibility(
                 visibleState = sheetVisibility,
-                enter = motionSpec.contentEnter,
-                exit = motionSpec.contentExit,
-                modifier = Modifier.align(Alignment.BottomCenter)
+                enter = if (useEndSideSheet) {
+                    slideInHorizontally(animationSpec = tween(260)) { it } + fadeIn(tween(180))
+                } else {
+                    motionSpec.contentEnter
+                },
+                exit = if (useEndSideSheet) {
+                    slideOutHorizontally(animationSpec = tween(220)) { it } + fadeOut(tween(160))
+                } else {
+                    motionSpec.contentExit
+                },
+                modifier = Modifier.align(if (useEndSideSheet) Alignment.CenterEnd else Alignment.BottomCenter)
             ) {
                 AppSurface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(sheetHeight)
-                        .onSizeChanged { size ->
-                            mainSheetMeasuredHeightPx = size.height.toFloat()
-                        }
-                        .offset { IntOffset(x = 0, y = sheetDragOffsetPx.roundToInt()) }
-                        .graphicsLayer {
-                            translationY = size.height * mainBackProgress.value
-                        }
+                    modifier = (if (useEndSideSheet) {
+                        Modifier
+                            .width(sideSheetWidth)
+                            .fillMaxHeight()
+                            .graphicsLayer {
+                                translationX = size.width * mainBackProgress.value
+                            }
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .height(sheetHeight)
+                            .onSizeChanged { size ->
+                                mainSheetMeasuredHeightPx = size.height.toFloat()
+                            }
+                            .offset { IntOffset(x = 0, y = sheetDragOffsetPx.roundToInt()) }
+                            .graphicsLayer {
+                                translationY = size.height * mainBackProgress.value
+                            }
+                    })
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             onClick = {}
                         ),
+                    shape = if (useEndSideSheet) {
+                        RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)
+                    } else {
+                        androidx.compose.ui.graphics.RectangleShape
+                    },
                     color = if (mainSheetVisible) {
                         appearance.panelColor.copy(
                             alpha = appearance.panelColor.alpha * overlayVisual.surfaceAlphaMultiplier
@@ -787,7 +825,11 @@ fun VideoCommentSheetHost(
                         Color.Transparent
                     }
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(if (useEndSideSheet) Modifier.statusBarsPadding() else Modifier),
+                    ) {
                         if (mainSheetVisible && hostContent != VideoCommentSheetHostContent.HIDDEN) {
                             Box(
                                 modifier = Modifier
@@ -807,15 +849,18 @@ fun VideoCommentSheetHost(
                                     onImagePreview = previewCallback,
                                     onRefresh = commentViewModel::refreshComments,
                                     pullToRefreshFromTopOnly = pullToRefreshFromTopOnly,
-                                    headerDragModifier = Modifier.pointerInput(
-                                        mainSheetVisible,
-                                        hostContent,
-                                        mainSheetMeasuredHeightPx,
-                                    ) {
-                                        if (hostContent != VideoCommentSheetHostContent.MAIN_LIST) {
-                                            return@pointerInput
-                                        }
-                                        detectVerticalDragGestures(
+                                    headerDragModifier = if (useEndSideSheet) {
+                                        Modifier
+                                    } else {
+                                        Modifier.pointerInput(
+                                            mainSheetVisible,
+                                            hostContent,
+                                            mainSheetMeasuredHeightPx,
+                                        ) {
+                                            if (hostContent != VideoCommentSheetHostContent.MAIN_LIST) {
+                                                return@pointerInput
+                                            }
+                                            detectVerticalDragGestures(
                                             onDragStart = {
                                                 isDismissDragSettling = false
                                                 isDragDismissExitPending = false
@@ -862,6 +907,7 @@ fun VideoCommentSheetHost(
                                                 sheetDragTargetOffsetPx = 0f
                                             },
                                         )
+                                        }
                                     },
                                     onBackToTop = onBackToTop,
                                     listState = mainCommentListState,

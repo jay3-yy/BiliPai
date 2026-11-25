@@ -747,6 +747,19 @@ class PortraitDetailPresentationPolicyTest {
                 inlineTopInsetPx = 80,
             ),
         )
+        // 4:3 等偏高横向视频：展开态必须保留按真实比例算出的高度，不能被硬夹回 16:9
+        val fourByThreeExpanded =
+            resolvePhoneDetailPlayerContentHeightPx(layoutWidthPx = layoutWidth, videoAspectRatio = 4f / 3f) + 80
+        assertEquals(
+            fourByThreeExpanded,
+            resolveContinuousPlayerInlineHeightPx(
+                layoutWidthPx = layoutWidth,
+                preferLayoutWidthInline = true,
+                callerInlineHeightPx = fourByThreeExpanded + 24,
+                inlineTopInsetPx = 80,
+                videoAspectRatio = 4f / 3f,
+            ),
+        )
     }
 
     @Test

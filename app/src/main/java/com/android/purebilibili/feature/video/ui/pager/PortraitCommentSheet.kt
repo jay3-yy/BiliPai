@@ -23,6 +23,7 @@ fun PortraitCommentSheet(
     onReplyClick: ((ReplyItem) -> Unit)? = null,
     onUserClick: (Long) -> Unit,
     onOpenBilibiliLink: ((String) -> Unit)? = null,
+    preferEndSideSheet: Boolean = false,
 ) {
     if (!active) return
 
@@ -52,5 +53,6 @@ fun PortraitCommentSheet(
         onUserClick = onUserClick,
         onOpenBilibiliLink = onOpenBilibiliLink,
         pullToRefreshFromTopOnly = true,
+        preferEndSideSheet = preferEndSideSheet,
     )
 }
