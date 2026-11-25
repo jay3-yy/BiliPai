@@ -1,6 +1,11 @@
 import { defineConfig } from 'vitepress'
 
+const rawBase = process.env.VITEPRESS_BASE ?? '/BiliPai/'
+const normalizedBase = rawBase.startsWith('/') ? rawBase : `/${rawBase}`
+const base = normalizedBase.endsWith('/') ? normalizedBase : `${normalizedBase}/`
+
 export default defineConfig({
+  base,
   lang: 'zh-CN',
   title: 'BiliPai 扩展工坊 (Beta)',
   description: 'Beta 公开测试 · 一句话用 AI 造扩展 · 浏览器本地体检 · 手机扫码即装的三材质原生扩展生态',

@@ -1,0 +1,277 @@
+# BiliPai Extension 2.0 (.bpx) — Complete LLM Authoring Context
+
+You are generating a **BiliPai Extension (`.bpx`)** for BiliPai (an Android Bilibili client featuring Material 3, Miuix, and Android 13+ Liquid Glass optics).
+Follow every rule in this specification strictly. Never invent undocumented APIs, browser DOM globals, or manifest keys.
+
+---
+
+## 1. Golden Rules (Zero-Hallucination Checklist)
+
+1. **Single Format**: Output either a single-file **`.bpx.json`** (for pure declarative rules or skins) OR a single-file **`.bpx.js`** module (using `globalThis.BPX = { manifest, handlers }`) unless the user explicitly asks for multi-asset `.bpx` ZIP packaging instructions.
+2. **Sandbox Isolation**: Scripts run in a background QuickJS worker, NOT a browser or Node.js.
+   - ALLOWED globals: standard ES2022 built-ins (`JSON`, `Math`, `Date`, `RegExp`, `Promise`, `Map`, `Set`, `URLSearchParams`, `TextEncoder`, `TextDecoder`) + `BiliPai.{http, ws, html, crypto, storage, log}`.
+   - FORBIDDEN globals: `window`, `document`, `fetch`, `XMLHttpRequest`, `localStorage`, `sessionStorage`, `WebSocket` (use `BiliPai.ws`), `eval`, `Function`, `require`, `process`.
+3. **Host-Owned UI**: Never return raw HTML strings for UI rendering. Return structured blocks (`markdown`, `timestamps`, `kv`, `actions`, `badge`, `TimelineSegment`). BiliPai renders all UI natively in MD3 / Miuix / Liquid Glass.
+4. **Exact Network Allowlist**: Every external hostname accessed via `BiliPai.http` or `BiliPai.ws` MUST be listed verbatim in `manifest.permissions.networkDomains` (e.g. `["api.deepseek.com"]`). Wildcards (`*`) are rejected.
+5. **Three Compliance Red Lines**:
+   - Never bypass Bilibili VIP / paid content authentication or hardcode pirated movie sites.
+   - Never minify or obfuscate code.
+   - Avoid catastrophic backtracking regexes (e.g. `(.*)+` or `(\w+)+$`).
+
+---
+
+## 2. Manifest v1 Schema & Settings UI Schema
+
+```ts
+export interface BpxManifest {
+  bpxVersion: 1;
+  /** Reverse-domain ID matching /^[a-z0-9]+(\.[a-z0-9_]+){1,4}$/, 5..64 chars */
+  id: string;
+  name: string;
+  /** SemVer e.g. "1.0.0" */
+  version: string;
+  description: string;
+  license?: string;
+  licenseNote?: string; // Required when slot === 'theme.skin'
+  author: {
+    name: string;
+    /** Optional Bilibili UID — renders a native "Visit Bilibili Space" button in BiliPai's Creator Card */
+    biliMid?: number;
+    github?: string;
+    bio?: string;
+  };
+  mounts: Array<{
+    slot: 'feed.pipe' | 'detail.companion' | 'player.track' | 'home.lens' | 'community.craft' | 'theme.skin';
+    id: string;
+    title: string;
+    entry?: string; // Required for script slots; omit for pure declarative feed.pipe / theme.skin
+    mode?: 'rerank' | 'channel'; // Used when slot === 'home.lens'
+  }>;
+  permissions?: {
+    videoContext?: Array<'metadata' | 'subtitles' | 'danmaku' | 'comments' | 'candidates' | 'historySummary'>;
+    networkDomains?: string[];
+    storage?: boolean;
+    externalPlayback?: boolean;
+  };
+  /** Automatically rendered by BiliPai into a native Settings screen & indexed in Settings Search */
+  settings?: Array<
+    | { key: string; type: 'switch'; title: string; description?: string; default: boolean }
+    | { key: string; type: 'segment' | 'select'; title: string; description?: string; default: string; options: Array<{ label: string; value: string }> }
+    | { key: string; type: 'slider'; title: string; description?: string; default: number; min: number; max: number; step?: number; unit?: string }
+    | { key: string; type: 'text' | 'secret'; title: string; description?: string; default?: string; placeholder?: string; required?: boolean }
+    | { key: string; type: 'stringList'; title: string; description?: string; default: string[] }
+  >;
+}
+```
+
+---
+
+## 3. Host Bridge API (`BiliPai.*`)
+
+```ts
+interface HttpResponse {
+  status: number;
+  body: string;
+  headers: Record<string, string>;
+}
+
+interface BpxHtmlNode {
+  text: string;
+  html: string;
+  attr(name: string): string | null;
+  select(cssSelector: string): BpxHtmlNode[];
+  selectOne(cssSelector: string): BpxHtmlNode | null;
+}
+
+declare const BiliPai: {
+  http: {
+    get(url: string, headers?: Record<string, string>): Promise<HttpResponse>;
+    post(url: string, body: string, headers?: Record<string, string>): Promise<HttpResponse>;
+    streamSse(
+      url: string,
+      init: { method?: 'GET' | 'POST'; headers?: Record<string, string>; body?: string },
+      onEvent: (ev: { event?: string; data: string }) => void | Promise<void>
+    ): Promise<void>;
+  };
+  ws: {
+    connect(url: string, options?: { headers?: Record<string, string> }): Promise<{
+      send(payload: string): void;
+      onMessage(handler: (payload: string) => void): void;
+      close(): void;
+    }>;
+  };
+  html: {
+    parse(html: string): BpxHtmlNode;
+  };
+  crypto: {
+    md5(text: string): string;
+    sha256(text: string): string;
+    hmacSha256(key: string, message: string): string;
+    base64Encode(text: string): string;
+    base64Decode(b64: string): string;
+  };
+  storage: {
+    get(key: string): Promise<string | null>;
+    set(key: string, value: string): Promise<void>;
+    remove(key: string): Promise<void>;
+  };
+  log(level: 'info' | 'warn' | 'error', message: string): void;
+};
+```
+
+---
+
+## 4. Slot Data Contracts & Canonical Templates
+
+### Template A: Declarative `feed.pipe` (`.bpx.json`) — De-clickbait & Topic Folding
+Fields available in `feed.pipe`: `title`, `durationSec`, `owner.mid`, `owner.name`, `stat.view`, `stat.like`, `stat.danmaku`, `zoneName`, `isPromoted`.
+Operators: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `contains`, `startsWith`, `endsWith`, `regex`, `in`.
+Actions:
+- `{ "action": "hide" }`
+- `{ "action": "fold", "groupLabel": "已折叠相似热点" }`
+- `{ "action": "badge", "text": "长片精读", "tone": "accent" | "warning" | "neutral" }`
+- `{ "action": "rewriteTitle", "pattern": "^【[^】]{1,10}】\\s*", "replacement": "" }`
+
+```json
+{
+  "bpxVersion": 1,
+  "id": "community.clean.declickbait",
+  "name": "去标题党与短视频降噪",
+  "version": "1.0.0",
+  "description": "剥离夸张震惊体前缀，折叠超短引流视频并为深度长片打标",
+  "author": { "name": "BiliPai 共创示例", "biliMid": 233333 },
+  "mounts": [{ "slot": "feed.pipe", "id": "main_pipe", "title": "推荐流净化管线" }],
+  "rules": [
+    {
+      "condition": { "field": "title", "op": "regex", "value": "^(震惊！|千万别[^，。！？]{1,8}[！!]|家人们谁懂啊[！!，,]?)" },
+      "action": "rewriteTitle",
+      "pattern": "^(震惊！|千万别[^，。！？]{1,8}[！!]|家人们谁懂啊[！!，,]?)\\s*",
+      "replacement": ""
+    },
+    {
+      "condition": {
+        "and": [
+          { "field": "durationSec", "op": "lt", "value": 25 },
+          { "field": "stat.like", "op": "lt", "value": 500 }
+        ]
+      },
+      "action": "fold",
+      "groupLabel": "低赞超短视频"
+    },
+    {
+      "condition": { "field": "durationSec", "op": "ge", "value": 1800 },
+      "action": "badge",
+      "text": "深度长片",
+      "tone": "accent"
+    }
+  ]
+}
+```
+
+### Template B: `detail.companion` (`.bpx.js`) — Streaming AI Chapter Summary Sheet
+`videoContext`: `{ bvid, cid, aid, title, desc, durationSec, owner: { mid, name }, subtitles: Array<{ fromSec: number; toSec: number; content: string }> }`.
+`emit(doc)` updates the Glass/MD3/Miuix Bottom Sheet incrementally. Clicking any `timestamps` item seeks the player on the main thread safely.
+
+```js
+globalThis.BPX = {
+  manifest: {
+    bpxVersion: 1,
+    id: 'community.ai.class_rep',
+    name: 'AI 省流课代表',
+    version: '1.0.0',
+    description: '读取视频字幕流式生成要点摘要与可点击跳转章节时间轴',
+    author: { name: 'BiliPai Lab', biliMid: 10001 },
+    mounts: [
+      { slot: 'detail.companion', id: 'ai_summary', title: '省流课代表', entry: 'onOpenSummary' }
+    ],
+    permissions: {
+      videoContext: ['metadata', 'subtitles'],
+      networkDomains: ['api.deepseek.com']
+    },
+    settings: [
+      { key: 'apiKey', type: 'secret', title: 'DeepSeek API Key', required: true },
+      {
+        key: 'mode',
+        type: 'segment',
+        title: '总结风格',
+        default: 'bullet',
+        options: [
+          { label: '三句话省流', value: 'brief' },
+          { label: '章节时间轴', value: 'bullet' }
+        ]
+      }
+    ]
+  },
+  handlers: {
+    async onOpenSummary(ctx, settings, emit) {
+      if (!settings.apiKey) {
+        throw new Error('请先在扩展设置中填写 DeepSeek API Key');
+      }
+      if (!ctx.subtitles || ctx.subtitles.length === 0) {
+        return {
+          blocks: [{ type: 'markdown', content: '当前视频暂无可用 CC 字幕，仅根据简介提炼：\n\n' + (ctx.desc || '暂无简介') }]
+        };
+      }
+      const transcript = ctx.subtitles
+        .slice(0, 300)
+        .map((s) => `[${Math.floor(s.fromSec)}s] ${s.content}`)
+        .join('\n');
+
+      let markdownAcc = '';
+      await BiliPai.http.streamSse(
+        'https://api.deepseek.com/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer ' + settings.apiKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            stream: true,
+            messages: [
+              { role: 'system', content: '你是B站视频课代表。输出精炼Markdown要点，并在关键节点保留 [秒数s] 标记。' },
+              { role: 'user', content: `标题：${ctx.title}\n字幕：\n${transcript}` }
+            ]
+          })
+        },
+        (ev) => {
+          if (ev.data === '[DONE]') return;
+          const chunk = JSON.parse(ev.data);
+          const delta = chunk.choices?.[0]?.delta?.content || '';
+          if (delta) {
+            markdownAcc += delta;
+            emit({ blocks: [{ type: 'markdown', content: markdownAcc }] });
+          }
+        }
+      );
+
+      const anchors = [];
+      const re = /\[(\d+)s\]\s*([^\n]+)/g;
+      let match;
+      while ((match = re.exec(markdownAcc)) !== null && anchors.length < 8) {
+        anchors.push({ timeSec: Number(match[1]), label: match[2].slice(0, 28) });
+      }
+      return {
+        blocks: [
+          ...(anchors.length > 0 ? [{ type: 'timestamps', items: anchors }] : []),
+          { type: 'markdown', content: markdownAcc },
+          { type: 'actions', buttons: [{ id: 'copy', label: '复制全文笔记', copyText: markdownAcc }] }
+        ]
+      };
+    }
+  }
+};
+```
+
+### Template C: `player.track` (`.bpx.js`) — External Danmaku Supplement
+Returns `{ segments?: Array<{ startMs, endMs, category, action: 'skip'|'mark', label }>, danmaku?: Array<{ timeMs, text, mode: 'scroll'|'top'|'bottom', color?: string }> }`.
+
+### Template D: `home.lens` (`.bpx.js`) — Hidden Gems Recommendation Lens
+`mode: 'rerank'` receives `{ candidates: Array<{ bvid, title, durationSec, playCount, likeCount, coinCount, ownerMid, ownerFans }>, consumedBvids: string[] }` and returns `Array<{ bvid: string, score: number, reasonBadge?: string }>`.
+
+### Template E: `community.craft` (`.bpx.js`) — Comment Timestamp Rep Pinner
+Receives `{ comments: Array<{ rpid, memberName, content, likeCount }> }` and returns `{ pinnedCard?: { title: string, timestamps?: Array<{ timeSec: number, label: string }>, summary?: string }, foldRpids?: number[] }`.
+
+### Template F: `theme.skin` (`.bpx.json` or `.bpx` archive) — Three-Material Adaptive Skin
+Declares `tokens.light`, `tokens.dark`, and `tokens.liquidGlass` (`tintOpacity` between `0.08` and `0.45` so live refraction remains crystal clear).

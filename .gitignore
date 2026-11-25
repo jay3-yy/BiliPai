@@ -194,3 +194,11 @@ reasonix.toml
 /plugins/samples/watch-compass/README.md
 /plugins/samples/winter-cloud-skin/README.md
 /plugins/sdk/README.md
+
+# VitePress 扩展工坊文档站页面与 AI 契约资产需随源码部署
+!docs-site/
+!docs-site/**/*.md
+!docs-site/public/llms-full.txt
+docs-site/node_modules/
+docs-site/.vitepress/cache/
+docs-site/.vitepress/dist/

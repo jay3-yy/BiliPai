@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vitepress'
+import { useRouter, withBase } from 'vitepress'
 import { STARTER_RECIPES, buildCapsuleAiPrompt, type BpxRecipe } from '../bpxRecipes'
 
 const router = useRouter()
 const copiedId = ref<string | null>(null)
 
 function openInPlayground(recipe: BpxRecipe) {
-  router.go(`/playground?recipe=${encodeURIComponent(recipe.id)}`)
+  router.go(withBase(`/playground?recipe=${encodeURIComponent(recipe.id)}`))
 }
 
 async function copyAiRemixPrompt(recipe: BpxRecipe) {
@@ -49,7 +49,7 @@ async function copyAiRemixPrompt(recipe: BpxRecipe) {
         <button type="button" class="bpx-btn bpx-btn-ghost" @click="copyAiRemixPrompt(recipe)">
           {{ copiedId === recipe.id ? '✓ 已复制 AI 配方' : '🤖 复制 AI 改写模板' }}
         </button>
-        <a :href="recipe.docLink" class="bpx-detail-link">详解 →</a>
+        <a :href="withBase(recipe.docLink)" class="bpx-detail-link">详解 →</a>
       </div>
     </article>
   </div>

@@ -31,11 +31,17 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
       - name: Verify all official .bpx cookbook samples
         run: node plugins/tools/validate-bpx.mjs plugins/bpx-cookbook
 
       - name: Install docs-site dependencies and build VitePress
         working-directory: docs-site
+        env:
+          VITEPRESS_BASE: ${{ steps.pages.outputs.base_path }}/
         run: |
           npm install
           npm run docs:build
