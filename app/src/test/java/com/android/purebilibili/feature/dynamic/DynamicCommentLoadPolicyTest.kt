@@ -130,7 +130,7 @@ class DynamicCommentLoadPolicyTest {
     fun `unknown or underestimated count cannot block an available next page`() {
         for (displayCount in listOf(0, 1, 20)) {
             val state = DynamicCommentUiState(
-                comments = List(20) { ReplyItem(rpid = it.toLong() + 1) },
+                comments = kotlinx.collections.immutable.persistentListOf(*Array(20) { ReplyItem(rpid = it.toLong() + 1) }),
                 totalCount = displayCount,
                 hasMore = true,
                 nextPage = 2,
@@ -278,7 +278,7 @@ class DynamicCommentLoadPolicyTest {
         val first = ReplyItem(rpid = 10L)
         val selected = ReplyItem(rpid = 20L)
         val last = ReplyItem(rpid = 30L)
-        val remote = listOf(first, selected, last)
+        val remote = kotlinx.collections.immutable.persistentListOf(first, selected, last)
         val state = DynamicCommentUiState(
             comments = remote,
             pinnedRootReplyId = selected.rpid,

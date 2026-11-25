@@ -1053,13 +1053,27 @@ internal fun HomeScreen(
     // 当使用滑动动画时，Theme.kt 的 SideEffect 可能不会重新执行
     val backgroundColor = AppSurfaceTokens.chromeBackground()
     val isLightBackground = remember(backgroundColor) { backgroundColor.luminance() > 0.5f }
-    val useDarkStatusBarIcons = remember(homeUiSkinDecoration, isLightBackground) {
+    val sampledTopSkinLuminance by com.android.purebilibili.core.plugin.skin.rememberSkinRegionLuminance(
+        filePath = homeUiSkinDecoration?.topAtmosphereImagePath,
+        topFraction = 0f,
+        bottomFraction = 0.28f,
+    )
+    val useDarkStatusBarIcons = remember(
+        homeUiSkinDecoration,
+        isLightBackground,
+        sampledTopSkinLuminance,
+        uiSkinState.tonePolicy,
+    ) {
+        val fgTint = homeUiSkinDecoration?.topForegroundTint ?: Color.Unspecified
         resolveHomeStatusBarDarkIcons(
             hasTopSkinArtwork = !homeUiSkinDecoration?.topAtmosphereImagePath.isNullOrBlank(),
             skinColorMode = homeUiSkinDecoration?.colorMode,
             topSkinTintIsLight = homeUiSkinDecoration?.topAtmosphereTint?.luminance()?.let { it > 0.5f }
                 ?: isLightBackground,
             defaultBackgroundIsLight = isLightBackground,
+            sampledTopArtworkLuminance = sampledTopSkinLuminance,
+            skinForegroundLuminance = if (fgTint != Color.Unspecified) fgTint.luminance() else null,
+            tonePolicy = uiSkinState.tonePolicy,
         )
     }
     val homeWallpaperBackdropAppearance = remember(

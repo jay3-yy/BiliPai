@@ -413,8 +413,8 @@ fun AppModalBottomSheet(
         val blurRadius = backdropSpec.blurRadiusDp.dp
         val configuration = LocalConfiguration.current
         val hingeSafeRegions = LocalHingeSafeOverlayRegions.current.sheet
-        val layoutSpec = remember(configuration.screenWidthDp, miuix) {
-            resolveAppModalLayoutSpec(configuration.screenWidthDp, miuixNonGlass = miuix)
+        val layoutSpec = remember(configuration.screenWidthDp, nativeMiuix) {
+            resolveAppModalLayoutSpec(configuration.screenWidthDp, miuixNonGlass = nativeMiuix)
         }
         val centered = (presentationOverride ?: layoutSpec.presentation) == AppModalPresentation.CenteredDialog
         val resolvedColor = if (containerColor == MaterialTheme.colorScheme.surface) {
@@ -699,7 +699,16 @@ fun AppModalBottomSheet(
                                 onDismissRequest = onDismissRequest,
                             ) { surface() }
                         } else {
-                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { surface() }
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .safeDrawingPadding()
+                                    .imePadding()
+                                    .pointerInput(onDismissRequest) {
+                                        detectTapGestures { onDismissRequest() }
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) { surface() }
                         }
                     }
                 }

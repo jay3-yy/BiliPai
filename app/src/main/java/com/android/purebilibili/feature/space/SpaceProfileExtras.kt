@@ -24,7 +24,12 @@ import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
 import com.android.purebilibili.core.util.FormatUtils
 
-data class SpaceProfileNotice(val title: String, val text: String)
+@androidx.compose.runtime.Immutable
+data class SpaceProfileNotice(
+    val title: String,
+    val text: String,
+    val id: Long = System.nanoTime(),
+)
 
 enum class SpaceAccountPage { EDIT_PROFILE, LOGIN_ACTIVITY, COINS, EXPERIENCE, PRIVACY }
 
@@ -50,7 +55,7 @@ internal fun SpaceProfileDialogs(
     showReservations: Boolean,
     onDismissReservations: () -> Unit,
     onToggleReservation: (Long) -> Unit,
-    onDismissNotice: () -> Unit,
+    onDismissNotice: (Long) -> Unit,
     onDismissMedals: () -> Unit,
     onDismissFollowedUsers: () -> Unit,
     onLoadMoreFollowedUsers: () -> Unit,
@@ -162,7 +167,7 @@ internal fun SpaceProfileDialogs(
         )
     }
     state.profileNotice?.let { notice ->
-        AppAlertDialog(onDismissRequest = onDismissNotice, title = { AppText(notice.title) },
-            text = { AppText(notice.text) }, confirmButton = { AppTextButton(onClick = onDismissNotice) { AppText("关闭") } })
+        AppAlertDialog(onDismissRequest = { onDismissNotice(notice.id) }, title = { AppText(notice.title) },
+            text = { AppText(notice.text) }, confirmButton = { AppTextButton(onClick = { onDismissNotice(notice.id) }) { AppText("关闭") } })
     }
 }

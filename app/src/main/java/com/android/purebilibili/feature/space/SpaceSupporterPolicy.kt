@@ -8,6 +8,7 @@ import com.android.purebilibili.data.model.response.SpaceSupportersData
  * 头部「N人为TA充电 / N人加入大航海」行的展示数据（对齐 PiliPlus 的 charge/guard 行）：
  * 前 3 个支持者头像堆叠 + 总数文案。
  */
+@androidx.compose.runtime.Immutable
 data class SpaceSupporterGroup(
     val count: Long,
     val avatarUrls: List<String>

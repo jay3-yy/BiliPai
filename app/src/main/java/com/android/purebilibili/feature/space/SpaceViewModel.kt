@@ -27,6 +27,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.job
@@ -46,6 +47,7 @@ enum class SpaceSubTab {
 // UI 状态
 sealed class SpaceUiState {
     object Loading : SpaceUiState()
+    @androidx.compose.runtime.Immutable
     data class Success(
         val userInfo: SpaceUserInfo,
         val relationStat: RelationStatData? = null,
@@ -151,7 +153,6 @@ sealed class SpaceUiState {
         val watchProgressByBvid: Map<String, SpaceWatchProgress> = emptyMap(),
         val lastWatchedVideo: SpaceWatchProgress? = null,
         val pendingLocateBvid: String? = null,
-        val locateMessage: String? = null,
         val isSearchMode: Boolean = false,
         val searchQuery: String = "",
         val headerState: SpaceHeaderState = SpaceHeaderState(null, null, null, null, "", emptyList(), emptyList()),
@@ -266,17 +267,21 @@ class SpaceViewModel(
         }
         viewModelScope.launch {
             ActionRepository.followStateChanges.collect { change ->
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@collect
-                if (currentState.userInfo.mid == change.mid && currentState.userInfo.isFollowed != change.isFollowing) {
-                    val nextStatus = if (change.isFollowing) 2 else 0
-                    val newUserInfo = currentState.userInfo.copy(
-                        isFollowed = change.isFollowing,
-                        relationStatus = nextStatus
-                    )
-                    _uiState.value = currentState.copy(
-                        userInfo = newUserInfo,
-                        headerState = currentState.headerState.copy(userInfo = newUserInfo)
-                    )
+                _uiState.update { state ->
+                    val currentState = state as? SpaceUiState.Success ?: return@update state
+                    if (currentState.userInfo.mid == change.mid && currentState.userInfo.isFollowed != change.isFollowing) {
+                        val nextStatus = if (change.isFollowing) 2 else 0
+                        val newUserInfo = currentState.userInfo.copy(
+                            isFollowed = change.isFollowing,
+                            relationStatus = nextStatus
+                        )
+                        currentState.copy(
+                            userInfo = newUserInfo,
+                            headerState = currentState.headerState.copy(userInfo = newUserInfo)
+                        )
+                    } else {
+                        currentState
+                    }
                 }
             }
         }
@@ -523,17 +528,20 @@ class SpaceViewModel(
                     return@launch
                 }
 
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                val mergedRelation = relationStat ?: currentState.relationStat
-                val mergedUpStat = upStat ?: currentState.upStat
-                _uiState.value = currentState.copy(
-                    relationStat = mergedRelation,
-                    upStat = mergedUpStat,
-                    headerState = currentState.headerState.copy(
+                _uiState.update { state ->
+                    val currentState = state as? SpaceUiState.Success ?: return@update state
+                    if (currentState.userInfo.mid != mid) return@update currentState
+                    val mergedRelation = relationStat ?: currentState.relationStat
+                    val mergedUpStat = upStat ?: currentState.upStat
+                    currentState.copy(
                         relationStat = mergedRelation,
-                        upStat = mergedUpStat
+                        upStat = mergedUpStat,
+                        headerState = currentState.headerState.copy(
+                            relationStat = mergedRelation,
+                            upStat = mergedUpStat
+                        )
                     )
-                )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -564,15 +572,18 @@ class SpaceViewModel(
                 Pair(following, if (following) 2 else 0)
             }
             if (!shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) return@launch
-            val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-            val userInfo = currentState.userInfo.copy(
-                isFollowed = isFollowed,
-                relationStatus = relationStatus
-            )
-            _uiState.value = currentState.copy(
-                userInfo = userInfo,
-                headerState = currentState.headerState.copy(userInfo = userInfo),
-            )
+            _uiState.update { state ->
+                val currentState = state as? SpaceUiState.Success ?: return@update state
+                if (currentState.userInfo.mid != mid) return@update currentState
+                val userInfo = currentState.userInfo.copy(
+                    isFollowed = isFollowed,
+                    relationStatus = relationStatus
+                )
+                currentState.copy(
+                    userInfo = userInfo,
+                    headerState = currentState.headerState.copy(userInfo = userInfo),
+                )
+            }
         }
     }
 
@@ -595,11 +606,15 @@ class SpaceViewModel(
             }
 
             val progressByBvid = resolveSpaceWatchProgressByBvid(records, upMid = mid)
-            val current = _uiState.value as? SpaceUiState.Success ?: return@launch
-            _uiState.value = current.copy(
-                watchProgressByBvid = progressByBvid,
-                lastWatchedVideo = resolveSpaceLastWatchedVideo(progressByBvid)
-            )
+            val lastWatched = resolveSpaceLastWatchedVideo(progressByBvid)
+            _uiState.update { state ->
+                val current = state as? SpaceUiState.Success ?: return@update state
+                if (current.userInfo.mid != mid) return@update current
+                current.copy(
+                    watchProgressByBvid = progressByBvid,
+                    lastWatchedVideo = lastWatched
+                )
+            }
         }
     }
 
@@ -623,45 +638,48 @@ class SpaceViewModel(
                     return@launch
                 }
 
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                val resolvedTopPhoto = currentState.userInfo.topPhoto.ifBlank {
-                    resolveSpaceTopPhoto(
-                        topPhoto = info.topPhoto,
-                        cardLargePhoto = "",
-                        cardSmallPhoto = ""
+                _uiState.update { state ->
+                    val currentState = state as? SpaceUiState.Success ?: return@update state
+                    if (currentState.userInfo.mid != mid) return@update currentState
+                    val resolvedTopPhoto = currentState.userInfo.topPhoto.ifBlank {
+                        resolveSpaceTopPhoto(
+                            topPhoto = info.topPhoto,
+                            cardLargePhoto = "",
+                            cardSmallPhoto = ""
+                        )
+                    }
+                    val resolvedIpLocation = info.ipLocation?.takeIf { it.isNotBlank() }
+                        ?: currentState.userInfo.ipLocation
+                    val updatedTags = if (currentState.userInfo.spaceTags.none { it.type == "location" || it.title.contains("IP") } && !resolvedIpLocation.isNullOrBlank()) {
+                        val locationTitle = if (resolvedIpLocation.startsWith("IP属地")) resolvedIpLocation else "IP属地：$resolvedIpLocation"
+                        currentState.userInfo.spaceTags + SpaceTagItem(type = "location", title = locationTitle)
+                    } else {
+                        currentState.userInfo.spaceTags
+                    }
+                    val mergedUserInfo = currentState.userInfo.copy(
+                        name = info.name.ifBlank { currentState.userInfo.name },
+                        sex = info.sex.ifBlank { currentState.userInfo.sex },
+                        face = info.face.ifBlank { currentState.userInfo.face },
+                        sign = info.sign,
+                        level = info.level.takeIf { it > 0 } ?: currentState.userInfo.level,
+                        official = info.official.takeIf {
+                            it.title.isNotBlank() || it.desc.isNotBlank() || it.type >= 0
+                        } ?: currentState.userInfo.official,
+                        vip = info.vip.takeIf {
+                            it.status > 0 || it.type > 0 || it.label.text.isNotBlank()
+                        } ?: currentState.userInfo.vip,
+                        topPhoto = resolvedTopPhoto,
+                        liveRoom = info.liveRoom ?: currentState.userInfo.liveRoom,
+                        livePlace = info.livePlace ?: currentState.userInfo.livePlace,
+                        ipLocation = resolvedIpLocation,
+                        spaceTags = updatedTags
+                    )
+
+                    currentState.copy(
+                        userInfo = mergedUserInfo,
+                        headerState = currentState.headerState.copy(userInfo = mergedUserInfo)
                     )
                 }
-                val resolvedIpLocation = info.ipLocation?.takeIf { it.isNotBlank() }
-                    ?: currentState.userInfo.ipLocation
-                val updatedTags = if (currentState.userInfo.spaceTags.none { it.type == "location" || it.title.contains("IP") } && !resolvedIpLocation.isNullOrBlank()) {
-                    val locationTitle = if (resolvedIpLocation.startsWith("IP属地")) resolvedIpLocation else "IP属地：$resolvedIpLocation"
-                    currentState.userInfo.spaceTags + SpaceTagItem(type = "location", title = locationTitle)
-                } else {
-                    currentState.userInfo.spaceTags
-                }
-                val mergedUserInfo = currentState.userInfo.copy(
-                    name = info.name.ifBlank { currentState.userInfo.name },
-                    sex = info.sex.ifBlank { currentState.userInfo.sex },
-                    face = info.face.ifBlank { currentState.userInfo.face },
-                    sign = info.sign,
-                    level = info.level.takeIf { it > 0 } ?: currentState.userInfo.level,
-                    official = info.official.takeIf {
-                        it.title.isNotBlank() || it.desc.isNotBlank() || it.type >= 0
-                    } ?: currentState.userInfo.official,
-                    vip = info.vip.takeIf {
-                        it.status > 0 || it.type > 0 || it.label.text.isNotBlank()
-                    } ?: currentState.userInfo.vip,
-                    topPhoto = resolvedTopPhoto,
-                    liveRoom = info.liveRoom ?: currentState.userInfo.liveRoom,
-                    livePlace = info.livePlace ?: currentState.userInfo.livePlace,
-                    ipLocation = resolvedIpLocation,
-                    spaceTags = updatedTags
-                )
-
-                _uiState.value = currentState.copy(
-                    userInfo = mergedUserInfo,
-                    headerState = currentState.headerState.copy(userInfo = mergedUserInfo)
-                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -690,14 +708,17 @@ class SpaceViewModel(
         val requestKeyword = currentKeyword
         val requestSpecialType = currentVideoSpecialType
 
-        _uiState.value = current.copy(isLoadingMore = true)
+        _uiState.update { state ->
+            (state as? SpaceUiState.Success)?.copy(isLoadingMore = true) ?: state
+        }
 
         activeVideoListJob = viewModelScope.launch {
             try {
                 if (!ensureWbiKeysLoaded()) {
-                    val latest = _uiState.value as? SpaceUiState.Success ?: return@launch
                     if (shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) {
-                        _uiState.value = latest.copy(isLoadingMore = false)
+                        _uiState.update { state ->
+                            (state as? SpaceUiState.Success)?.copy(isLoadingMore = false) ?: state
+                        }
                     }
                     return@launch
                 }
@@ -716,24 +737,30 @@ class SpaceViewModel(
                 if (!shouldApplySpaceVideoResult(mid, currentMid, requestVideoGeneration, activeVideoListGeneration, requestTid, currentTid, requestOrder, currentOrder, requestKeyword, currentKeyword)) {
                     return@launch
                 }
-                val latest = _uiState.value as? SpaceUiState.Success ?: return@launch
                 if (result == null) {
-                    _uiState.value = latest.copy(isLoadingMore = false)
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(isLoadingMore = false) ?: state
+                    }
                     return@launch
                 }
                 currentPage = result.resolvedPage
-                _uiState.value = latest.copy(
-                    videos = result.data.list.vlist,
-                    totalVideos = result.data.page.count,
-                    hasMoreVideos = resolveNextSpaceVideoPage(
-                        order = requestOrder,
-                        currentPage = currentPage,
-                        totalCount = result.data.page.count,
-                        pageSize = pageSize
-                    ) != null,
-                    categories = extractCategories(result.data.list.vlist),
-                    isLoadingMore = false
-                )
+                val extractedCategories = extractCategories(result.data.list.vlist)
+                val hasMore = resolveNextSpaceVideoPage(
+                    order = requestOrder,
+                    currentPage = currentPage,
+                    totalCount = result.data.page.count,
+                    pageSize = pageSize
+                ) != null
+                _uiState.update { state ->
+                    val latest = state as? SpaceUiState.Success ?: return@update state
+                    latest.copy(
+                        videos = result.data.list.vlist,
+                        totalVideos = result.data.page.count,
+                        hasMoreVideos = hasMore,
+                        categories = extractedCategories,
+                        isLoadingMore = false
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -741,8 +768,9 @@ class SpaceViewModel(
                 if (!shouldApplySpaceVideoResult(mid, currentMid, requestVideoGeneration, activeVideoListGeneration, requestTid, currentTid, requestOrder, currentOrder, requestKeyword, currentKeyword)) {
                     return@launch
                 }
-                val latest = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = latest.copy(isLoadingMore = false)
+                _uiState.update { state ->
+                    (state as? SpaceUiState.Success)?.copy(isLoadingMore = false) ?: state
+                }
             }
         }
     }
@@ -807,18 +835,20 @@ class SpaceViewModel(
                     return@launch
                 }
 
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                val updatedSupplementalState = applySpaceSupplementalData(
-                    state = currentState,
-                    seasons = seasons,
-                    series = series,
-                    createdFavoriteFolders = createdFavoriteFolders,
-                    collectedFavoriteFolders = collectedFavoriteFolders,
-                    seasonArchives = embeddedSeasonArchives,
-                    seriesArchives = embeddedSeriesArchives
-                )
                 // 目录只合并到当前状态；头部摘要与动态属地由各自的加载入口更新。
-                _uiState.value = updatedSupplementalState
+                _uiState.update { state ->
+                    val currentState = state as? SpaceUiState.Success ?: return@update state
+                    if (currentState.userInfo.mid != mid) return@update currentState
+                    applySpaceSupplementalData(
+                        state = currentState,
+                        seasons = seasons,
+                        series = series,
+                        createdFavoriteFolders = createdFavoriteFolders,
+                        collectedFavoriteFolders = collectedFavoriteFolders,
+                        seasonArchives = embeddedSeasonArchives,
+                        seriesArchives = embeddedSeriesArchives
+                    )
+                }
                 ensureSelectedContributionContentLoaded()
             } catch (e: CancellationException) {
                 throw e
@@ -866,8 +896,11 @@ class SpaceViewModel(
     ) {
         if (groups.first == null && groups.second == null) return
         if (!shouldApplySpaceLoadResult(mid, currentMid, requestGeneration, activeSpaceLoadGeneration)) return
-        val current = _uiState.value as? SpaceUiState.Success ?: return
-        _uiState.value = current.copy(chargeGroup = groups.first, guardGroup = groups.second)
+        _uiState.update { state ->
+            val current = state as? SpaceUiState.Success ?: return@update state
+            if (current.userInfo.mid != mid) return@update current
+            current.copy(chargeGroup = groups.first, guardGroup = groups.second)
+        }
     }
 
     fun selectMainTab(tab: Int) {
@@ -879,30 +912,37 @@ class SpaceViewModel(
         val newTabIndex = mainTabToTabIndex(tab)
         _selectedMainTab.value = newTabIndex
         savedStateHandle[KEY_SELECTED_MAIN_TAB] = newTabIndex
-        val current = _uiState.value as? SpaceUiState.Success ?: return
-        val previousScope = resolveSpaceSearchScope(
-            selectedMainTab = current.tabShellState.selectedTab,
-            selectedSubTab = current.selectedSubTab
-        )
-        val nextScope = resolveSpaceSearchScope(
-            selectedMainTab = newTab,
-            selectedSubTab = current.selectedSubTab
-        )
-        _uiState.value = current.copy(
-            isSearchMode = if (previousScope == nextScope) current.isSearchMode else false,
-            searchQuery = if (previousScope == nextScope) current.searchQuery else "",
-            tabShellState = current.tabShellState.withSelectedTab(newTab)
-        )
+        var previousScope = SpaceSearchScope.NONE
+        var nextScope = SpaceSearchScope.NONE
+        var cheeseNeedsLoad = false
+        var wasSuccess = false
+        _uiState.update { state ->
+            val current = state as? SpaceUiState.Success ?: return@update state
+            wasSuccess = true
+            previousScope = resolveSpaceSearchScope(
+                selectedMainTab = current.tabShellState.selectedTab,
+                selectedSubTab = current.selectedSubTab
+            )
+            nextScope = resolveSpaceSearchScope(
+                selectedMainTab = newTab,
+                selectedSubTab = current.selectedSubTab
+            )
+            val cheeseTabState = current.tabShellState.tabStates[SpaceMainTab.CHEESE]
+            cheeseNeedsLoad = cheeseTabState?.hasLoaded != true && !current.isLoadingCheese
+            current.copy(
+                isSearchMode = if (previousScope == nextScope) current.isSearchMode else false,
+                searchQuery = if (previousScope == nextScope) current.searchQuery else "",
+                tabShellState = current.tabShellState.withSelectedTab(newTab)
+            )
+        }
+        if (!wasSuccess) return
         if (previousScope == SpaceSearchScope.VIDEO && previousScope != nextScope && currentKeyword.isNotBlank()) {
             clearVideoSearchResults()
         }
         if (newTab == SpaceMainTab.CONTRIBUTION) {
             ensureSelectedContributionContentLoaded()
-        } else if (newTab == SpaceMainTab.CHEESE) {
-            val cheeseTabState = current.tabShellState.tabStates[SpaceMainTab.CHEESE]
-            if (cheeseTabState?.hasLoaded != true && !current.isLoadingCheese) {
-                loadSpaceCheese()
-            }
+        } else if (newTab == SpaceMainTab.CHEESE && cheeseNeedsLoad) {
+            loadSpaceCheese()
         }
     }
     
@@ -947,11 +987,17 @@ class SpaceViewModel(
                 ) {
                     val failed = states.refresh is LoadState.Error || states.append is LoadState.Error
                     val ready = states.refresh is LoadState.NotLoading && pages.size > appliedPages
+                    val newItems = if (ready) pages.drop(appliedPages).flatMap { it.items } else emptyList()
                     val completed = (ready && pages.size > 1) || (failed && !lastFailed)
+                    if (ready && newItems.isNotEmpty()) {
+                        // 新一页到手就预热横竖屏判定（首屏已在 Success 构建时预热过）。
+                        com.android.purebilibili.data.repository.VideoRepository
+                            .prefetchVerticalFlags(newItems.map { it.bvid })
+                    }
                     _uiState.update { state ->
                         val latest = state as? SpaceUiState.Success
                         if (latest == null) state else latest.copy(
-                            videos = if (ready) mergeSpaceVideoPages(latest.videos, pages.drop(appliedPages).flatMap { it.items }) else latest.videos,
+                            videos = if (ready) mergeSpaceVideoPages(latest.videos, newItems) else latest.videos,
                             isLoadingMore = states.refresh is LoadState.Loading || states.append is LoadState.Loading,
                             hasMoreVideos = !states.append.endOfPaginationReached,
                             videoPageLoadCompletionVersion = latest.videoPageLoadCompletionVersion + if (completed) 1 else 0,
@@ -959,9 +1005,6 @@ class SpaceViewModel(
                         )
                     }
                     if (ready) {
-                        // 新一页到手就预热横竖屏判定（首屏已在 Success 构建时预热过）。
-                        com.android.purebilibili.data.repository.VideoRepository
-                            .prefetchVerticalFlags(pages.drop(appliedPages).flatMap { it.items }.map { it.bvid })
                         appliedPages = pages.size
                         currentPage = pages.last().number
                     }
@@ -1198,19 +1241,22 @@ class SpaceViewModel(
         val requestSpecialType = currentVideoSpecialType
         
         activeVideoListJob = viewModelScope.launch {
-            _uiState.value = current.copy(
-                sortOrder = order,
-                videos = emptyList(),
-                isLoadingMore = true
-            )
+            _uiState.update { state ->
+                (state as? SpaceUiState.Success)?.copy(
+                    sortOrder = order,
+                    videos = emptyList(),
+                    isLoadingMore = true
+                ) ?: state
+            }
             
             try {
                 if (!ensureWbiKeysLoaded()) {
                     if (!shouldApplySpaceVideoResult(currentMid, currentMid, requestGeneration, activeVideoListGeneration, requestTid, currentTid, order, currentOrder, requestKeyword, currentKeyword)) {
                         return@launch
                     }
-                    val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                    _uiState.value = currentState.copy(isLoadingMore = false)
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(isLoadingMore = false) ?: state
+                    }
                     return@launch
                 }
                 val result = fetchInitialSpaceVideos(
@@ -1225,30 +1271,37 @@ class SpaceViewModel(
                 if (!shouldApplySpaceVideoResult(currentMid, currentMid, requestGeneration, activeVideoListGeneration, requestTid, currentTid, order, currentOrder, requestKeyword, currentKeyword)) {
                     return@launch
                 }
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 
                 if (result != null) {
                     currentPage = result.resolvedPage
-                    _uiState.value = currentState.copy(
-                        videos = result.data.list.vlist,
-                        totalVideos = result.data.page.count,
-                        hasMoreVideos = resolveNextSpaceVideoPage(
-                            order = order,
-                            currentPage = currentPage,
-                            totalCount = result.data.page.count,
-                            pageSize = pageSize
-                        ) != null,
-                        isLoadingMore = false
-                    )
+                    val hasMore = resolveNextSpaceVideoPage(
+                        order = order,
+                        currentPage = currentPage,
+                        totalCount = result.data.page.count,
+                        pageSize = pageSize
+                    ) != null
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(
+                            videos = result.data.list.vlist,
+                            totalVideos = result.data.page.count,
+                            hasMoreVideos = hasMore,
+                            isLoadingMore = false
+                        ) ?: state
+                    }
                 } else {
-                    _uiState.value = currentState.copy(isLoadingMore = false)
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(isLoadingMore = false) ?: state
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (!shouldApplySpaceVideoResult(currentMid, currentMid, requestGeneration, activeVideoListGeneration, requestTid, currentTid, order, currentOrder, requestKeyword, currentKeyword)) {
                     return@launch
                 }
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = currentState.copy(isLoadingMore = false)
+                _uiState.update { state ->
+                    (state as? SpaceUiState.Success)?.copy(isLoadingMore = false) ?: state
+                }
             }
         }
     }
@@ -1266,19 +1319,22 @@ class SpaceViewModel(
         val requestSpecialType = currentVideoSpecialType
         
         activeVideoListJob = viewModelScope.launch {
-            _uiState.value = current.copy(
-                selectedTid = tid,
-                videos = emptyList(),
-                isLoadingMore = true
-            )
+            _uiState.update { state ->
+                (state as? SpaceUiState.Success)?.copy(
+                    selectedTid = tid,
+                    videos = emptyList(),
+                    isLoadingMore = true
+                ) ?: state
+            }
             
             try {
                 if (!ensureWbiKeysLoaded()) {
                     if (!shouldApplySpaceVideoResult(currentMid, currentMid, requestGeneration, activeVideoListGeneration, tid, currentTid, requestOrder, currentOrder, requestKeyword, currentKeyword)) {
                         return@launch
                     }
-                    val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                    _uiState.value = currentState.copy(isLoadingMore = false)
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(isLoadingMore = false) ?: state
+                    }
                     return@launch
                 }
                 val result = fetchInitialSpaceVideos(
@@ -1293,33 +1349,40 @@ class SpaceViewModel(
                 if (!shouldApplySpaceVideoResult(currentMid, currentMid, requestGeneration, activeVideoListGeneration, tid, currentTid, requestOrder, currentOrder, requestKeyword, currentKeyword)) {
                     return@launch
                 }
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 
                 if (result != null) {
                     currentPage = result.resolvedPage
                     android.util.Log.d("SpaceVM", " selectCategory success: ${result.data.list.vlist.size} videos")
-                    _uiState.value = currentState.copy(
-                        videos = result.data.list.vlist,
-                        totalVideos = result.data.page.count,
-                        hasMoreVideos = resolveNextSpaceVideoPage(
-                            order = currentOrder,
-                            currentPage = currentPage,
-                            totalCount = result.data.page.count,
-                            pageSize = pageSize
-                        ) != null,
-                        isLoadingMore = false
-                    )
+                    val hasMore = resolveNextSpaceVideoPage(
+                        order = currentOrder,
+                        currentPage = currentPage,
+                        totalCount = result.data.page.count,
+                        pageSize = pageSize
+                    ) != null
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(
+                            videos = result.data.list.vlist,
+                            totalVideos = result.data.page.count,
+                            hasMoreVideos = hasMore,
+                            isLoadingMore = false
+                        ) ?: state
+                    }
                 } else {
                     android.util.Log.e("SpaceVM", " selectCategory failed: result is null")
-                    _uiState.value = currentState.copy(isLoadingMore = false)
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(isLoadingMore = false) ?: state
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 android.util.Log.e("SpaceVM", " selectCategory error: ${e.message}", e)
                 if (!shouldApplySpaceVideoResult(currentMid, currentMid, requestGeneration, activeVideoListGeneration, tid, currentTid, requestOrder, currentOrder, requestKeyword, currentKeyword)) {
                     return@launch
                 }
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = currentState.copy(isLoadingMore = false)
+                _uiState.update { state ->
+                    (state as? SpaceUiState.Success)?.copy(isLoadingMore = false) ?: state
+                }
             }
         }
     }
@@ -1422,7 +1485,9 @@ class SpaceViewModel(
         if (activeSpaceHomeJob?.isActive == true || current.tabShellState.tabStates[SpaceMainTab.HOME]?.hasLoaded == true) return
         val mid = currentMid
         val generation = activeSpaceLoadGeneration
-        _uiState.value = current.markTabLoading(SpaceMainTab.HOME)
+        _uiState.update { state ->
+            (state as? SpaceUiState.Success)?.markTabLoading(SpaceMainTab.HOME) ?: state
+        }
         activeSpaceHomeJob = viewModelScope.launch {
             try {
                 val topVideo = async { fetchTopArc(mid) }
@@ -1497,15 +1562,19 @@ class SpaceViewModel(
         val identity = TokenManager.accountIdentity.value
         if (current.userInfo.mid != requestMid) return
 
+        val initialOffset = if (refresh) "" else current.dynamicOffset
         activeSpaceDynamicJob = viewModelScope.launch {
-            val loadingState = current.markTabLoading(SpaceMainTab.DYNAMIC).copy(
-                isLoadingDynamics = true,
-                lastDynamicLoadFailed = false
-            )
-            _uiState.value = loadingState
+            _uiState.update { state ->
+                val latest = state as? SpaceUiState.Success ?: return@update state
+                if (latest.userInfo.mid != requestMid) return@update latest
+                latest.markTabLoading(SpaceMainTab.DYNAMIC).copy(
+                    isLoadingDynamics = true,
+                    lastDynamicLoadFailed = false
+                )
+            }
             
             try {
-                var offset = if (refresh) "" else current.dynamicOffset
+                var offset = initialOffset
                 val accumulated = mutableListOf<SpaceDynamicItem>()
                 var hasMore = true
                 var pagesFetched = 0
@@ -1545,56 +1614,62 @@ class SpaceViewModel(
                 if (identity != TokenManager.accountIdentity.value ||
                     !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
                 ) return@launch
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                val dynamics = if (refresh) enriched else currentState.dynamics + enriched
+                var totalDynamicCount = 0
+                _uiState.update { state ->
+                    val currentState = state as? SpaceUiState.Success ?: return@update state
+                    if (currentState.userInfo.mid != requestMid) return@update currentState
+                    val dynamics = if (refresh) enriched else currentState.dynamics + enriched
+                    totalDynamicCount = dynamics.size
 
-                val fallbackLocation = if (currentState.headerState.userInfo?.ipLocation.isNullOrBlank()) {
-                    dynamics.firstNotNullOfOrNull { item ->
-                        item.modules.module_author?.pub_location_text?.takeIf { it.isNotBlank() }
-                    }
-                } else {
-                    null
-                }
-                val currentUserInfo = currentState.headerState.userInfo ?: currentState.userInfo
-                val (nextUserInfo, nextHeaderState) = if (!fallbackLocation.isNullOrBlank()) {
-                    val locationTitle = if (fallbackLocation.startsWith("IP属地")) fallbackLocation else "IP属地：$fallbackLocation"
-                    val updatedTags = if (currentUserInfo.spaceTags.none { it.type == "location" || it.title.contains("IP") }) {
-                        currentUserInfo.spaceTags + SpaceTagItem(type = "location", title = locationTitle)
+                    val fallbackLocation = if (currentState.headerState.userInfo?.ipLocation.isNullOrBlank()) {
+                        dynamics.firstNotNullOfOrNull { item ->
+                            item.modules.module_author?.pub_location_text?.takeIf { it.isNotBlank() }
+                        }
                     } else {
-                        currentUserInfo.spaceTags
+                        null
                     }
-                    val updatedUserInfo = currentUserInfo.copy(
-                        ipLocation = fallbackLocation,
-                        spaceTags = updatedTags
-                    )
-                    Pair(updatedUserInfo, currentState.headerState.copy(userInfo = updatedUserInfo))
-                } else {
-                    Pair(currentState.userInfo, currentState.headerState)
-                }
+                    val currentUserInfo = currentState.headerState.userInfo ?: currentState.userInfo
+                    val (nextUserInfo, nextHeaderState) = if (!fallbackLocation.isNullOrBlank()) {
+                        val locationTitle = if (fallbackLocation.startsWith("IP属地")) fallbackLocation else "IP属地：$fallbackLocation"
+                        val updatedTags = if (currentUserInfo.spaceTags.none { it.type == "location" || it.title.contains("IP") }) {
+                            currentUserInfo.spaceTags + SpaceTagItem(type = "location", title = locationTitle)
+                        } else {
+                            currentUserInfo.spaceTags
+                        }
+                        val updatedUserInfo = currentUserInfo.copy(
+                            ipLocation = fallbackLocation,
+                            spaceTags = updatedTags
+                        )
+                        Pair(updatedUserInfo, currentState.headerState.copy(userInfo = updatedUserInfo))
+                    } else {
+                        Pair(currentState.userInfo, currentState.headerState)
+                    }
 
-                _uiState.value = currentState.copy(
-                    userInfo = nextUserInfo,
-                    headerState = nextHeaderState,
-                    dynamics = dynamics,
-                    dynamicOffset = offset,
-                    hasMoreDynamics = hasMore,
-                    isLoadingDynamics = false,
-                    hasLoadedDynamicsOnce = true,
-                    lastDynamicLoadFailed = failed
-                ).markTabResult(
-                    SpaceMainTab.DYNAMIC,
-                    error = if (failed) "加载失败" else null
-                )
+                    currentState.copy(
+                        userInfo = nextUserInfo,
+                        headerState = nextHeaderState,
+                        dynamics = dynamics,
+                        dynamicOffset = offset,
+                        hasMoreDynamics = hasMore,
+                        isLoadingDynamics = false,
+                        hasLoadedDynamicsOnce = true,
+                        lastDynamicLoadFailed = failed
+                    ).markTabResult(
+                        SpaceMainTab.DYNAMIC,
+                        error = if (failed) "加载失败" else null
+                    )
+                }
                 android.util.Log.d(
                     "SpaceVM",
-                    " loadSpaceDynamic: total=${dynamics.size}, hasMore=$hasMore, pagesFetched=$pagesFetched, failed=$failed"
+                    " loadSpaceDynamic: total=$totalDynamicCount, hasMore=$hasMore, pagesFetched=$pagesFetched, failed=$failed"
                 )
             } catch (e: CancellationException) {
                 if (identity == TokenManager.accountIdentity.value &&
                     shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
                 ) {
-                    val latest = _uiState.value as? SpaceUiState.Success
-                    if (latest != null) _uiState.value = latest.copy(isLoadingDynamics = false)
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(isLoadingDynamics = false) ?: state
+                    }
                 }
                 throw e
             } catch (e: Exception) {
@@ -1602,25 +1677,31 @@ class SpaceViewModel(
                     !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
                 ) return@launch
                 android.util.Log.e("SpaceVM", "loadSpaceDynamic error: ${e.message}", e)
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = currentState.copy(
-                    isLoadingDynamics = false,
-                    hasLoadedDynamicsOnce = true,
-                    lastDynamicLoadFailed = true,
-                    hasMoreDynamics = false
-                ).markTabResult(
-                    SpaceMainTab.DYNAMIC,
-                    error = e.message ?: "加载失败"
-                )
+                val errorMessage = e.message ?: "加载失败"
+                _uiState.update { state ->
+                    val currentState = state as? SpaceUiState.Success ?: return@update state
+                    if (currentState.userInfo.mid != requestMid) return@update currentState
+                    currentState.copy(
+                        isLoadingDynamics = false,
+                        hasLoadedDynamicsOnce = true,
+                        lastDynamicLoadFailed = true,
+                        hasMoreDynamics = false
+                    ).markTabResult(
+                        SpaceMainTab.DYNAMIC,
+                        error = errorMessage
+                    )
+                }
             }
         }
     }
 
     fun removeSpaceDynamic(dynamicId: String) {
-        val current = _uiState.value as? SpaceUiState.Success ?: return
-        _uiState.value = current.copy(
-            dynamics = current.dynamics.filterNot { it.id_str == dynamicId }
-        )
+        _uiState.update { state ->
+            val current = state as? SpaceUiState.Success ?: return@update state
+            current.copy(
+                dynamics = current.dynamics.filterNot { it.id_str == dynamicId }
+            )
+        }
     }
 
     fun loadSpaceBangumi(refresh: Boolean = false) {
@@ -1631,7 +1712,9 @@ class SpaceViewModel(
         val requestMid = currentMid
         val generation = activeSpaceLoadGeneration
         val page = if (refresh || !current.hasLoadedBangumiOnce) 1 else current.bangumiPage + 1
-        _uiState.value = current.copy(isLoadingBangumi = true).markTabLoading(SpaceMainTab.BANGUMI)
+        _uiState.update { state ->
+            (state as? SpaceUiState.Success)?.copy(isLoadingBangumi = true)?.markTabLoading(SpaceMainTab.BANGUMI) ?: state
+        }
         viewModelScope.launch {
             BangumiRepository.getMyFollowBangumi(
                 type = MY_FOLLOW_TYPE_BANGUMI,
@@ -1641,45 +1724,53 @@ class SpaceViewModel(
             ).fold(
                 onSuccess = { data ->
                     if (!shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)) return@fold
-                    val latest = _uiState.value as? SpaceUiState.Success ?: return@fold
                     val incomingItems = data.list.orEmpty()
-                    val previousItems = if (refresh) emptyList() else latest.bangumiItems
-                    val mergedItems = if (refresh) {
-                        incomingItems
-                    } else {
-                        mergeSpaceBangumiItems(previousItems, incomingItems)
+                    _uiState.update { state ->
+                        val latest = state as? SpaceUiState.Success ?: return@update state
+                        if (latest.userInfo.mid != requestMid) return@update latest
+                        val previousItems = if (refresh) emptyList() else latest.bangumiItems
+                        val mergedItems = if (refresh) {
+                            incomingItems
+                        } else {
+                            mergeSpaceBangumiItems(previousItems, incomingItems)
+                        }
+                        latest.copy(
+                            bangumiItems = mergedItems,
+                            bangumiTotal = data.total,
+                            bangumiPage = data.pn.coerceAtLeast(page),
+                            isLoadingBangumi = false,
+                            hasMoreBangumi = shouldContinueSpaceBangumiPagination(
+                                previousItemCount = previousItems.size,
+                                mergedItemCount = mergedItems.size,
+                                incomingItemCount = incomingItems.size,
+                                responsePage = data.pn,
+                                pageSize = data.ps,
+                                total = data.total,
+                            ),
+                            hasLoadedBangumiOnce = true,
+                            lastBangumiLoadFailed = false,
+                        ).markTabResult(SpaceMainTab.BANGUMI)
                     }
-                    _uiState.value = latest.copy(
-                        bangumiItems = mergedItems,
-                        bangumiTotal = data.total,
-                        bangumiPage = data.pn.coerceAtLeast(page),
-                        isLoadingBangumi = false,
-                        hasMoreBangumi = shouldContinueSpaceBangumiPagination(
-                            previousItemCount = previousItems.size,
-                            mergedItemCount = mergedItems.size,
-                            incomingItemCount = incomingItems.size,
-                            responsePage = data.pn,
-                            pageSize = data.ps,
-                            total = data.total,
-                        ),
-                        hasLoadedBangumiOnce = true,
-                        lastBangumiLoadFailed = false,
-                    ).markTabResult(SpaceMainTab.BANGUMI)
                 },
                 onFailure = { error ->
+                    if (error is CancellationException) throw error
                     if (!shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)) return@fold
-                    val latest = _uiState.value as? SpaceUiState.Success ?: return@fold
-                    _uiState.value = latest.copy(
-                        isLoadingBangumi = false,
-                        lastBangumiLoadFailed = true,
-                        hasLoadedBangumiOnce = true
-                    ).markTabResult(
-                        SpaceMainTab.BANGUMI,
-                        error = error.message ?: "追番加载失败",
-                        // An automatic initial request must settle even on privacy/network errors;
-                        // otherwise the keyed screen effect immediately retries forever.
-                        hasLoaded = true,
-                    )
+                    val errorMsg = error.message ?: "追番加载失败"
+                    _uiState.update { state ->
+                        val latest = state as? SpaceUiState.Success ?: return@update state
+                        if (latest.userInfo.mid != requestMid) return@update latest
+                        latest.copy(
+                            isLoadingBangumi = false,
+                            lastBangumiLoadFailed = true,
+                            hasLoadedBangumiOnce = true
+                        ).markTabResult(
+                            SpaceMainTab.BANGUMI,
+                            error = errorMsg,
+                            // An automatic initial request must settle even on privacy/network errors;
+                            // otherwise the keyed screen effect immediately retries forever.
+                            hasLoaded = true,
+                        )
+                    }
                 }
             )
         }
@@ -1696,10 +1787,12 @@ class SpaceViewModel(
         val generation = activeSpaceLoadGeneration
         val page = if (refresh || !current.hasLoadedCheeseOnce) 1 else current.cheesePage + 1
         activeSpaceCheeseProbeJob?.cancel()
-        _uiState.value = current.copy(
-            isLoadingCheese = true,
-            lastCheeseLoadFailed = false
-        ).markTabLoading(SpaceMainTab.CHEESE)
+        _uiState.update { state ->
+            (state as? SpaceUiState.Success)?.copy(
+                isLoadingCheese = true,
+                lastCheeseLoadFailed = false
+            )?.markTabLoading(SpaceMainTab.CHEESE) ?: state
+        }
         activeSpaceCheeseJob = viewModelScope.launch {
             try {
                 val response = spaceApi.getSpaceCheese(
@@ -1708,50 +1801,62 @@ class SpaceViewModel(
                     pageSize = 30
                 )
                 if (!shouldApplySpaceLoadResult(mid, currentMid, generation, activeSpaceLoadGeneration)) return@launch
-                val latest = _uiState.value as? SpaceUiState.Success ?: return@launch
                 if (response.code == 0 && response.data != null) {
                     val checkedResponseData = requireNotNull(response.data)
                     val incomingItems = checkedResponseData.items
-                    val previousItems = if (refresh) emptyList() else latest.cheeseItems
-                    val mergedItems = if (refresh) {
-                        incomingItems
-                    } else {
-                        mergeSpaceCheeseItems(previousItems, incomingItems)
-                    }
                     val hasNext = checkedResponseData.page?.next == true
-                    _uiState.value = latest.copy(
-                        cheeseItems = mergedItems,
-                        cheesePage = page,
-                        isLoadingCheese = false,
-                        hasMoreCheese = hasNext && incomingItems.isNotEmpty(),
-                        hasLoadedCheeseOnce = true,
-                        lastCheeseLoadFailed = false
-                    ).markTabResult(SpaceMainTab.CHEESE)
+                    _uiState.update { state ->
+                        val latest = state as? SpaceUiState.Success ?: return@update state
+                        if (latest.userInfo.mid != mid) return@update latest
+                        val previousItems = if (refresh) emptyList() else latest.cheeseItems
+                        val mergedItems = if (refresh) {
+                            incomingItems
+                        } else {
+                            mergeSpaceCheeseItems(previousItems, incomingItems)
+                        }
+                        latest.copy(
+                            cheeseItems = mergedItems,
+                            cheesePage = page,
+                            isLoadingCheese = false,
+                            hasMoreCheese = hasNext && incomingItems.isNotEmpty(),
+                            hasLoadedCheeseOnce = true,
+                            lastCheeseLoadFailed = false
+                        ).markTabResult(SpaceMainTab.CHEESE)
+                    }
                 } else {
-                    _uiState.value = latest.copy(
-                        isLoadingCheese = false,
-                        lastCheeseLoadFailed = true,
-                        hasLoadedCheeseOnce = true
-                    ).markTabResult(
-                        SpaceMainTab.CHEESE,
-                        error = response.message.ifBlank { "课堂加载失败" },
-                        hasLoaded = true
-                    )
+                    val errorMsg = response.message.ifBlank { "课堂加载失败" }
+                    _uiState.update { state ->
+                        val latest = state as? SpaceUiState.Success ?: return@update state
+                        if (latest.userInfo.mid != mid) return@update latest
+                        latest.copy(
+                            isLoadingCheese = false,
+                            lastCheeseLoadFailed = true,
+                            hasLoadedCheeseOnce = true
+                        ).markTabResult(
+                            SpaceMainTab.CHEESE,
+                            error = errorMsg,
+                            hasLoaded = true
+                        )
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 if (!shouldApplySpaceLoadResult(mid, currentMid, generation, activeSpaceLoadGeneration)) return@launch
-                val latest = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = latest.copy(
-                    isLoadingCheese = false,
-                    lastCheeseLoadFailed = true,
-                    hasLoadedCheeseOnce = true
-                ).markTabResult(
-                    SpaceMainTab.CHEESE,
-                    error = e.message ?: "课堂加载失败",
-                    hasLoaded = true
-                )
+                val errorMsg = e.message ?: "课堂加载失败"
+                _uiState.update { state ->
+                    val latest = state as? SpaceUiState.Success ?: return@update state
+                    if (latest.userInfo.mid != mid) return@update latest
+                    latest.copy(
+                        isLoadingCheese = false,
+                        lastCheeseLoadFailed = true,
+                        hasLoadedCheeseOnce = true
+                    ).markTabResult(
+                        SpaceMainTab.CHEESE,
+                        error = errorMsg,
+                        hasLoaded = true
+                    )
+                }
             }
         }
     }
@@ -1788,21 +1893,28 @@ class SpaceViewModel(
         nextSubTab: SpaceSubTab,
         nextContributionTabId: String
     ) {
-        val previousScope = resolveSpaceSearchScope(
-            selectedMainTab = current.tabShellState.selectedTab,
-            selectedSubTab = current.selectedSubTab
-        )
-        val nextScope = resolveSpaceSearchScope(
-            selectedMainTab = current.tabShellState.selectedTab,
-            selectedSubTab = nextSubTab
-        )
-
-        _uiState.value = current.copy(
-            selectedSubTab = nextSubTab,
-            selectedContributionTabId = nextContributionTabId,
-            isSearchMode = if (previousScope == nextScope) current.isSearchMode else false,
-            searchQuery = if (previousScope == nextScope) current.searchQuery else ""
-        )
+        var previousScope = SpaceSearchScope.NONE
+        var nextScope = SpaceSearchScope.NONE
+        var wasSuccess = false
+        _uiState.update { state ->
+            val latest = state as? SpaceUiState.Success ?: return@update state
+            wasSuccess = true
+            previousScope = resolveSpaceSearchScope(
+                selectedMainTab = latest.tabShellState.selectedTab,
+                selectedSubTab = latest.selectedSubTab
+            )
+            nextScope = resolveSpaceSearchScope(
+                selectedMainTab = latest.tabShellState.selectedTab,
+                selectedSubTab = nextSubTab
+            )
+            latest.copy(
+                selectedSubTab = nextSubTab,
+                selectedContributionTabId = nextContributionTabId,
+                isSearchMode = if (previousScope == nextScope) latest.isSearchMode else false,
+                searchQuery = if (previousScope == nextScope) latest.searchQuery else ""
+            )
+        }
+        if (!wasSuccess) return
         if (previousScope == SpaceSearchScope.VIDEO && previousScope != nextScope && currentKeyword.isNotBlank()) {
             clearVideoSearchResults()
         }
@@ -1818,8 +1930,10 @@ class SpaceViewModel(
         ensureSelectedContributionContentLoaded()
     }
 
-    fun dismissProfileNotice() {
-        _uiState.update { if (it is SpaceUiState.Success) it.copy(profileNotice = null) else it }
+    fun dismissProfileNotice(id: Long) {
+        _uiState.update {
+            if (it is SpaceUiState.Success && it.profileNotice?.id == id) it.copy(profileNotice = null) else it
+        }
     }
 
     fun dismissMedalWall() {
@@ -1948,13 +2062,15 @@ class SpaceViewModel(
         val identity = TokenManager.accountIdentity.value
         val offset = if (refresh) "" else current.opusOffset
         val filter = current.opusFilter
-        _uiState.value = current.copy(isLoadingOpus = true, opusError = null)
+        _uiState.update { state ->
+            (state as? SpaceUiState.Success)?.copy(isLoadingOpus = true, opusError = null) ?: state
+        }
         activeSpaceOpusJob = viewModelScope.launch {
             val result = com.android.purebilibili.data.repository.SpaceProfileRepository.opus(mid, offset, filter)
             if (identity != TokenManager.accountIdentity.value ||
                 !shouldApplySpaceLoadResult(mid, currentMid, generation, activeSpaceLoadGeneration)) return@launch
             _uiState.update { state ->
-                if (state !is SpaceUiState.Success) state else result.fold(
+                if (state !is SpaceUiState.Success || state.opusFilter != filter) state else result.fold(
                     onSuccess = { data -> state.copy(
                         opusItems = ((if (refresh) emptyList() else state.opusItems) + data.items).distinctBy { it.id },
                         opusCollections = if (refresh || offset.isBlank()) data.collections else state.opusCollections,
@@ -1973,7 +2089,9 @@ class SpaceViewModel(
         if (current.isLoadingComics) return
         val mid = currentMid
         val generation = activeSpaceLoadGeneration
-        _uiState.value = current.copy(isLoadingComics = true, comicError = null)
+        _uiState.update { state ->
+            (state as? SpaceUiState.Success)?.copy(isLoadingComics = true, comicError = null) ?: state
+        }
         viewModelScope.launch {
             val result = com.android.purebilibili.data.repository.SpaceProfileRepository.comics(mid)
             if (!shouldApplySpaceLoadResult(mid, currentMid, generation, activeSpaceLoadGeneration)) return@launch
@@ -2108,15 +2226,19 @@ class SpaceViewModel(
         if (scope == SpaceSearchScope.NONE) return
 
         if (enabled) {
-            _uiState.value = current.copy(isSearchMode = true)
+            _uiState.update { state ->
+                (state as? SpaceUiState.Success)?.copy(isSearchMode = true) ?: state
+            }
             return
         }
 
         activeSpaceSearchJob?.cancel()
-        _uiState.value = current.copy(
-            isSearchMode = false,
-            searchQuery = ""
-        )
+        _uiState.update { state ->
+            (state as? SpaceUiState.Success)?.copy(
+                isSearchMode = false,
+                searchQuery = ""
+            ) ?: state
+        }
         if (scope == SpaceSearchScope.VIDEO && currentKeyword.isNotBlank()) {
             clearVideoSearchResults()
         } else {
@@ -2132,10 +2254,12 @@ class SpaceViewModel(
         )
         if (scope == SpaceSearchScope.NONE) return
 
-        _uiState.value = current.copy(
-            isSearchMode = true,
-            searchQuery = query
-        )
+        _uiState.update { state ->
+            (state as? SpaceUiState.Success)?.copy(
+                isSearchMode = true,
+                searchQuery = query
+            ) ?: state
+        }
 
         activeSpaceSearchJob?.cancel()
         when (scope) {
@@ -2169,11 +2293,14 @@ class SpaceViewModel(
         openVideoContributionPosition(normalizedBvid)
     }
 
+    private val _locateEvents = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.BUFFERED)
+    val locateEvents: kotlinx.coroutines.flow.Flow<String> = _locateEvents.receiveAsFlow()
+
     private fun openVideoContributionPosition(targetBvid: String) {
         val current = _uiState.value as? SpaceUiState.Success ?: return
         val videoTab = current.contributionTabs.firstOrNull { it.subTab == SpaceSubTab.VIDEO }
         if (videoTab == null) {
-            _uiState.value = current.copy(locateMessage = "该空间没有可定位的视频投稿")
+            _locateEvents.trySend("该空间没有可定位的视频投稿")
             return
         }
 
@@ -2182,63 +2309,62 @@ class SpaceViewModel(
         currentKeyword = ""
         _selectedMainTab.value = mainTabToTabIndex(SpaceMainTab.CONTRIBUTION)
         savedStateHandle[KEY_SELECTED_MAIN_TAB] = _selectedMainTab.value
-        _uiState.value = current.copy(
-            selectedTid = 0,
-            sortOrder = VideoSortOrder.PUBDATE,
-            selectedSubTab = SpaceSubTab.VIDEO,
-            selectedContributionTabId = videoTab.id,
-            isSearchMode = false,
-            searchQuery = "",
-            pendingLocateBvid = targetBvid,
-            locateMessage = null,
-            lastVideoPageLoadFailed = false,
-            tabShellState = current.tabShellState.withSelectedTab(SpaceMainTab.CONTRIBUTION)
-        )
+        _uiState.update { state ->
+            val latest = state as? SpaceUiState.Success ?: return@update state
+            latest.copy(
+                selectedTid = 0,
+                sortOrder = VideoSortOrder.PUBDATE,
+                selectedSubTab = SpaceSubTab.VIDEO,
+                selectedContributionTabId = videoTab.id,
+                isSearchMode = false,
+                searchQuery = "",
+                pendingLocateBvid = targetBvid,
+                lastVideoPageLoadFailed = false,
+                tabShellState = latest.tabShellState.withSelectedTab(SpaceMainTab.CONTRIBUTION)
+            )
+        }
         refreshVideoSearchResults()
     }
 
     private fun locateVideo(target: SpaceWatchProgress?) {
-        val current = _uiState.value as? SpaceUiState.Success ?: return
+        if (_uiState.value !is SpaceUiState.Success) return
         val targetBvid = target?.bvid?.trim().orEmpty()
         if (targetBvid.isBlank()) {
-            _uiState.value = current.copy(locateMessage = "未找到可定位的最近观看视频")
+            _locateEvents.trySend("未找到可定位的最近观看视频")
             return
         }
         openVideoContributionPosition(targetBvid)
     }
 
     fun consumePendingLocateBvid(bvid: String) {
-        val current = _uiState.value as? SpaceUiState.Success ?: return
-        if (current.pendingLocateBvid == bvid) {
-            _uiState.value = current.copy(pendingLocateBvid = null)
+        _uiState.update { state ->
+            val current = state as? SpaceUiState.Success ?: return@update state
+            if (current.pendingLocateBvid == bvid) current.copy(pendingLocateBvid = null) else current
         }
     }
 
     fun reportPendingLocateBvidMissing(bvid: String) {
-        val current = _uiState.value as? SpaceUiState.Success ?: return
-        if (current.pendingLocateBvid == bvid) {
-            _uiState.value = current.copy(
-                pendingLocateBvid = null,
-                locateMessage = "未在该 UP 的投稿中找到该视频",
-            )
+        var matched = false
+        _uiState.update { state ->
+            val current = state as? SpaceUiState.Success ?: return@update state
+            if (current.pendingLocateBvid == bvid) {
+                matched = true
+                current.copy(pendingLocateBvid = null)
+            } else current
         }
+        if (matched) _locateEvents.trySend("未在该 UP 的投稿中找到该视频")
     }
 
     fun reportPendingLocateBvidLoadFailed(bvid: String) {
-        val current = _uiState.value as? SpaceUiState.Success ?: return
-        if (current.pendingLocateBvid == bvid) {
-            _uiState.value = current.copy(
-                pendingLocateBvid = null,
-                locateMessage = "加载投稿失败，请稍后重试定位",
-            )
+        var matched = false
+        _uiState.update { state ->
+            val current = state as? SpaceUiState.Success ?: return@update state
+            if (current.pendingLocateBvid == bvid) {
+                matched = true
+                current.copy(pendingLocateBvid = null)
+            } else current
         }
-    }
-
-    fun consumeLocateMessage(message: String) {
-        val current = _uiState.value as? SpaceUiState.Success ?: return
-        if (current.locateMessage == message) {
-            _uiState.value = current.copy(locateMessage = null)
-        }
+        if (matched) _locateEvents.trySend("加载投稿失败，请稍后重试定位")
     }
 
     /**
@@ -2289,31 +2415,40 @@ class SpaceViewModel(
      * @return true if a network page was applied; false on failure / no more / cancelled.
      */
     private suspend fun fetchNextSpaceDynamicPage(): Boolean {
-        val current = _uiState.value as? SpaceUiState.Success ?: return false
-        if (current.isLoadingDynamics || !current.hasMoreDynamics) return false
         val requestMid = currentMid
         val generation = activeSpaceLoadGeneration
         val identity = TokenManager.accountIdentity.value
-        if (current.userInfo.mid != requestMid) return false
-
-        _uiState.value = current.markTabLoading(SpaceMainTab.DYNAMIC).copy(
-            isLoadingDynamics = true,
-            lastDynamicLoadFailed = false
-        )
+        var offsetToFetch = ""
+        var started = false
+        _uiState.update { state ->
+            val current = state as? SpaceUiState.Success ?: return@update state
+            if (current.isLoadingDynamics || !current.hasMoreDynamics || current.userInfo.mid != requestMid) {
+                return@update current
+            }
+            started = true
+            offsetToFetch = current.dynamicOffset
+            current.markTabLoading(SpaceMainTab.DYNAMIC).copy(
+                isLoadingDynamics = true,
+                lastDynamicLoadFailed = false
+            )
+        }
+        if (!started) return false
 
         return try {
-            val stateBefore = _uiState.value as? SpaceUiState.Success ?: return false
-            val response = spaceApi.getSpaceDynamic(requestMid, stateBefore.dynamicOffset)
+            val response = spaceApi.getSpaceDynamic(requestMid, offsetToFetch)
             if (identity != TokenManager.accountIdentity.value ||
                 !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
             ) return false
             val responseData = response.data
             if (response.code != 0 || responseData == null) {
-                val failed = _uiState.value as? SpaceUiState.Success ?: return false
-                _uiState.value = failed.copy(
-                    isLoadingDynamics = false,
-                    lastDynamicLoadFailed = true
-                ).markTabResult(SpaceMainTab.DYNAMIC, error = "加载失败")
+                _uiState.update { state ->
+                    val failed = state as? SpaceUiState.Success ?: return@update state
+                    if (failed.userInfo.mid != requestMid) return@update failed
+                    failed.copy(
+                        isLoadingDynamics = false,
+                        lastDynamicLoadFailed = true
+                    ).markTabResult(SpaceMainTab.DYNAMIC, error = "加载失败")
+                }
                 return false
             }
 
@@ -2325,23 +2460,29 @@ class SpaceViewModel(
                 !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
             ) return false
 
-            val latest = _uiState.value as? SpaceUiState.Success ?: return false
-            val merged = mergeSpaceDynamicPages(existing = latest.dynamics, incoming = incoming)
-            _uiState.value = latest.copy(
-                dynamics = merged,
-                dynamicOffset = responseData.offset,
-                hasMoreDynamics = responseData.has_more,
-                isLoadingDynamics = false,
-                hasLoadedDynamicsOnce = true,
-                lastDynamicLoadFailed = false
-            ).markTabResult(SpaceMainTab.DYNAMIC, error = null)
-            true
+            var applied = false
+            _uiState.update { state ->
+                val latest = state as? SpaceUiState.Success ?: return@update state
+                if (latest.userInfo.mid != requestMid) return@update latest
+                applied = true
+                val merged = mergeSpaceDynamicPages(existing = latest.dynamics, incoming = incoming)
+                latest.copy(
+                    dynamics = merged,
+                    dynamicOffset = responseData.offset,
+                    hasMoreDynamics = responseData.has_more,
+                    isLoadingDynamics = false,
+                    hasLoadedDynamicsOnce = true,
+                    lastDynamicLoadFailed = false
+                ).markTabResult(SpaceMainTab.DYNAMIC, error = null)
+            }
+            applied
         } catch (e: CancellationException) {
-            val cancelled = _uiState.value as? SpaceUiState.Success
-            if (cancelled != null && identity == TokenManager.accountIdentity.value &&
+            if (identity == TokenManager.accountIdentity.value &&
                 shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
             ) {
-                _uiState.value = cancelled.copy(isLoadingDynamics = false)
+                _uiState.update { state ->
+                    (state as? SpaceUiState.Success)?.copy(isLoadingDynamics = false) ?: state
+                }
             }
             throw e
         } catch (e: Exception) {
@@ -2349,11 +2490,15 @@ class SpaceViewModel(
                 !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
             ) return false
             android.util.Log.e("SpaceVM", "fetchNextSpaceDynamicPage error: ${e.message}", e)
-            val failed = _uiState.value as? SpaceUiState.Success ?: return false
-            _uiState.value = failed.copy(
-                isLoadingDynamics = false,
-                lastDynamicLoadFailed = true
-            ).markTabResult(SpaceMainTab.DYNAMIC, error = e.message ?: "加载失败")
+            val errorMsg = e.message ?: "加载失败"
+            _uiState.update { state ->
+                val failed = state as? SpaceUiState.Success ?: return@update state
+                if (failed.userInfo.mid != requestMid) return@update failed
+                failed.copy(
+                    isLoadingDynamics = false,
+                    lastDynamicLoadFailed = true
+                ).markTabResult(SpaceMainTab.DYNAMIC, error = errorMsg)
+            }
             false
         }
     }
@@ -2569,51 +2714,42 @@ class SpaceViewModel(
     fun toggleFollow() {
         val current = _uiState.value as? SpaceUiState.Success ?: return
         if (followToggleInFlight) return
-        val isFollowing = current.userInfo.isFollowed
+        val previousFollowed = current.userInfo.isFollowed
+        val previousRelationStatus = current.userInfo.relationStatus
         val mid = current.userInfo.mid
 
         followToggleInFlight = true
         viewModelScope.launch {
-            // 1. 乐观更新 UI
-            val nextFollowed = !isFollowing
+            // 1. 乐观更新 UI（基于最新状态原子写入，避免后续请求返回后被旧快照覆盖）
+            val nextFollowed = !previousFollowed
             val nextRelationStatus = if (nextFollowed) 2 else 0
-            val newUserInfo = current.userInfo.copy(
-                isFollowed = nextFollowed,
-                relationStatus = nextRelationStatus
-            )
-            _uiState.value = current.copy(
-                userInfo = newUserInfo,
-                headerState = current.headerState.copy(userInfo = newUserInfo)
-            )
+            fun applyRelationToLatest(followed: Boolean, relationStatus: Int) {
+                _uiState.update { state ->
+                    val latest = state as? SpaceUiState.Success ?: return@update state
+                    if (latest.userInfo.mid != mid) return@update state
+                    val updatedUserInfo = latest.userInfo.copy(
+                        isFollowed = followed,
+                        relationStatus = relationStatus,
+                    )
+                    latest.copy(
+                        userInfo = updatedUserInfo,
+                        headerState = latest.headerState.copy(userInfo = updatedUserInfo),
+                    )
+                }
+            }
+            applyRelationToLatest(nextFollowed, nextRelationStatus)
             
             try {
                 // 2. 调用统一仓库逻辑
                 val result = ActionRepository.followUser(mid = mid, follow = nextFollowed)
                 if (result.isFailure) {
-                    _uiState.value = current.copy(
-                        userInfo = current.userInfo,
-                        headerState = current.headerState.copy(userInfo = current.userInfo)
-                    )
+                    applyRelationToLatest(previousFollowed, previousRelationStatus)
                     com.android.purebilibili.core.util.Logger.e(
                         "SpaceVM",
                         "toggleFollow failed: ${result.exceptionOrNull()?.message}"
                     )
                 } else {
-                    val latestState = _uiState.value as? SpaceUiState.Success
-                    if (latestState != null) {
-                        _uiState.value = latestState.copy(
-                            userInfo = latestState.userInfo.copy(
-                                isFollowed = nextFollowed,
-                                relationStatus = nextRelationStatus
-                            ),
-                            headerState = latestState.headerState.copy(
-                                userInfo = latestState.userInfo.copy(
-                                    isFollowed = nextFollowed,
-                                    relationStatus = nextRelationStatus
-                                )
-                            )
-                        )
-                    }
+                    applyRelationToLatest(nextFollowed, nextRelationStatus)
 
                     if (nextFollowed) {
                         showFollowGroupDialogForUser(mid)
@@ -2621,22 +2757,22 @@ class SpaceViewModel(
 
                     val relationStat = fetchRelationStat(mid)
                     if (relationStat != null) {
-                        val currentState = _uiState.value as? SpaceUiState.Success
-                        if (currentState != null) {
-                            _uiState.value = currentState.copy(
+                        _uiState.update { state ->
+                            val currentState = state as? SpaceUiState.Success ?: return@update state
+                            if (currentState.userInfo.mid != mid) return@update state
+                            currentState.copy(
                                 relationStat = relationStat,
                                 headerState = currentState.headerState.copy(relationStat = relationStat)
                             )
                         }
                     }
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 // 失败回滚
                 com.android.purebilibili.core.util.Logger.e("SpaceVM", "modifyRelation error: ${e.message}", e)
-                _uiState.value = current.copy(
-                    userInfo = current.userInfo,
-                    headerState = current.headerState.copy(userInfo = current.userInfo)
-                ) // Revert
+                applyRelationToLatest(previousFollowed, previousRelationStatus)
             } finally {
                 followToggleInFlight = false
             }
@@ -2777,7 +2913,7 @@ class SpaceViewModel(
     }
 
     private fun refreshVideoSearchResults() {
-        val current = _uiState.value as? SpaceUiState.Success ?: return
+        if (_uiState.value !is SpaceUiState.Success) return
         val requestGeneration = beginVideoListRequest()
         val requestTid = currentTid
         val requestOrder = currentOrder
@@ -2785,23 +2921,25 @@ class SpaceViewModel(
         val requestSpecialType = currentVideoSpecialType
 
         activeVideoListJob = viewModelScope.launch {
-            val loadingState = (_uiState.value as? SpaceUiState.Success ?: current).copy(
-                videos = emptyList(),
-                isLoadingMore = true,
-                hasMoreVideos = true
-            )
-            _uiState.value = loadingState
+            _uiState.update { state ->
+                (state as? SpaceUiState.Success)?.copy(
+                    videos = emptyList(),
+                    isLoadingMore = true,
+                    hasMoreVideos = true
+                ) ?: state
+            }
 
             try {
                 if (!ensureWbiKeysLoaded()) {
                     if (!shouldApplySpaceVideoResult(currentMid, currentMid, requestGeneration, activeVideoListGeneration, requestTid, currentTid, requestOrder, currentOrder, requestKeyword, currentKeyword)) {
                         return@launch
                     }
-                    val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                    _uiState.value = currentState.copy(
-                        isLoadingMore = false,
-                        hasMoreVideos = false
-                    )
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(
+                            isLoadingMore = false,
+                            hasMoreVideos = false
+                        ) ?: state
+                    }
                     return@launch
                 }
                 val result = fetchInitialSpaceVideos(
@@ -2816,34 +2954,41 @@ class SpaceViewModel(
                 if (!shouldApplySpaceVideoResult(currentMid, currentMid, requestGeneration, activeVideoListGeneration, requestTid, currentTid, requestOrder, currentOrder, requestKeyword, currentKeyword)) {
                     return@launch
                 }
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 if (result != null) {
                     currentPage = result.resolvedPage
-                    _uiState.value = currentState.copy(
-                        videos = result.data.list.vlist,
-                        totalVideos = result.data.page.count,
-                        hasMoreVideos = resolveNextSpaceVideoPage(
-                            order = requestOrder,
-                            currentPage = currentPage,
-                            totalCount = result.data.page.count,
-                            pageSize = pageSize
-                        ) != null,
-                        isLoadingMore = false
-                    )
+                    val hasMore = resolveNextSpaceVideoPage(
+                        order = requestOrder,
+                        currentPage = currentPage,
+                        totalCount = result.data.page.count,
+                        pageSize = pageSize
+                    ) != null
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(
+                            videos = result.data.list.vlist,
+                            totalVideos = result.data.page.count,
+                            hasMoreVideos = hasMore,
+                            isLoadingMore = false
+                        ) ?: state
+                    }
                 } else {
-                    _uiState.value = currentState.copy(
-                        isLoadingMore = false,
-                        hasMoreVideos = false
-                    )
+                    _uiState.update { state ->
+                        (state as? SpaceUiState.Success)?.copy(
+                            isLoadingMore = false,
+                            hasMoreVideos = false
+                        ) ?: state
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 if (!shouldApplySpaceVideoResult(currentMid, currentMid, requestGeneration, activeVideoListGeneration, requestTid, currentTid, requestOrder, currentOrder, requestKeyword, currentKeyword)) {
                     return@launch
                 }
-                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
-                _uiState.value = currentState.copy(
-                    isLoadingMore = false
-                )
+                _uiState.update { state ->
+                    (state as? SpaceUiState.Success)?.copy(
+                        isLoadingMore = false
+                    ) ?: state
+                }
             }
         }
     }

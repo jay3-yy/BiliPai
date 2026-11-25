@@ -194,7 +194,7 @@ fun <T> AppLiquidAwareTabRow(
         return
     }
     val labels = remember(options) { options.map { it.label } }
-    val measurementLabels = if (liquidGlassEnabled) options.map { it.measurementLabel ?: it.label } else labels
+    val measurementLabels = remember(options) { options.map { it.measurementLabel ?: it.label } }
     val resolvedMinTabWidth = resolveAppAdaptiveTabMinWidth(minTabWidth)
     val resolvedLabelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(labelFontSize)
     // Measure once before choosing the material. Glass and native renderers own

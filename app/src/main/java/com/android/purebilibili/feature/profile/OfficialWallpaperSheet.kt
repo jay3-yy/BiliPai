@@ -79,15 +79,27 @@ fun OfficialWallpaperSheet(
     val error by viewModel.officialWallpapersError.collectAsStateWithLifecycle()
 
     var selectedUrl by remember { mutableStateOf<String?>(null) }
+    val dismissSheet = {
+        viewModel.clearWallpaperSaveError()
+        viewModel.clearSplashSaveError()
+        onDismiss()
+    }
 
-    // 初始化加载
-    LaunchedEffect(Unit) {
+    LaunchedEffect(viewModel) {
+        viewModel.clearWallpaperSaveError()
+        viewModel.clearSplashSaveError()
         viewModel.loadOfficialWallpapers()
+    }
+    DisposableEffect(viewModel) {
+        onDispose {
+            viewModel.clearWallpaperSaveError()
+            viewModel.clearSplashSaveError()
+        }
     }
 
     // ModalBottomSheet 容器
     AppModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismissSheet,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.background,
         dragHandle = null // 自定义头部
@@ -108,7 +120,7 @@ fun OfficialWallpaperSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    AppIconButton(onClick = onDismiss) {
+                    AppIconButton(onClick = dismissSheet) {
                         AppIcon(clearIcon, contentDescription = "关闭")
                     }
 

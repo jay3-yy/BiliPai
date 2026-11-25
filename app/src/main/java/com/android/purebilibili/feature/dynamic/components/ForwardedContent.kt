@@ -385,6 +385,7 @@ fun ForwardedContent(
             initialIndex = state.initialIndex,
             sourceRect = previewSourceAnchor?.rect,
             sourceRects = previewSourceAnchor?.galleryRects.orEmpty(),
+            sourceKey = previewSourceAnchor?.sourceKey,
             sourceCornerRadiusDp = previewSourceAnchor?.cornerRadiusDp
                 ?: resolveDrawGridCornerRadiusDp().toFloat(),
             textContent = previewTextContent,

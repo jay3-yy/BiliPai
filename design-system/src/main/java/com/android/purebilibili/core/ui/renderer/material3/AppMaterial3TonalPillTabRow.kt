@@ -104,10 +104,17 @@ fun <T> AppTonalPillTabRow(
                     val labelWidthPx = textMeasurer.measure(
                         option.label, style = textStyle, maxLines = 1, softWrap = false,
                     ).size.width
+                    val measurementWidthPx = option.measurementLabel
+                        ?.takeIf { it != option.label }
+                        ?.let { candidate ->
+                            textMeasurer.measure(
+                                candidate, style = textStyle, maxLines = 1, softWrap = false,
+                            ).size.width
+                        } ?: 0
                     // Padding rounds each edge separately. Adding dp first can leave the
                     // label one pixel short and ellipsize even a two-character title.
                     val paddingPx = resolveTonalPillTabItemHorizontalPadding().roundToPx()
-                    (labelWidthPx + paddingPx * 2).toDp()
+                    (maxOf(labelWidthPx, measurementWidthPx) + paddingPx * 2).toDp()
                 }
             }
         }

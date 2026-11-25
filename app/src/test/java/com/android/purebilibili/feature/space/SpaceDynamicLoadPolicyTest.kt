@@ -17,6 +17,7 @@ import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.DynamicInteractionItem
 import com.android.purebilibili.data.model.response.DynamicInteractionModule
 import com.android.purebilibili.data.model.response.DynamicOfficialVerify
+import com.android.purebilibili.data.model.response.DynamicTagModule
 import com.android.purebilibili.data.model.response.DynamicVipInfo
 import com.android.purebilibili.data.model.response.DynamicMoreModule
 import com.android.purebilibili.data.model.response.DynamicThreePointItem
@@ -675,5 +676,22 @@ class SpaceDynamicLoadPolicyTest {
         assertEquals(true, archive?.isChargingArc)
         assertEquals(1, archive?.elecArcType)
         assertEquals("充电专属", archive?.let(::resolveDynamicArchiveBadgeLabel))
+    }
+
+    @Test
+    fun resolveSpaceDynamicCardItems_preserves_pinned_module_tag() {
+        val mapped = resolveSpaceDynamicCardItems(
+            listOf(
+                SpaceDynamicItem(
+                    id_str = "999",
+                    type = "DYNAMIC_TYPE_WORD",
+                    modules = SpaceDynamicModules(
+                        module_tag = DynamicTagModule(text = "置顶")
+                    )
+                )
+            )
+        ).first()
+
+        assertEquals("置顶", mapped.modules.module_tag?.text)
     }
 }

@@ -50,6 +50,10 @@ internal fun rememberProfileHeaderFlingBehavior(
                         scrollBy(value - previous)
                         previous = value
                     }
+                    if (listState.firstVisibleItemIndex == 0) {
+                        val remaining = target - listState.firstVisibleItemScrollOffset.toFloat()
+                        if (remaining != 0f) scrollBy(remaining)
+                    }
                 }
                 return 0f
             }

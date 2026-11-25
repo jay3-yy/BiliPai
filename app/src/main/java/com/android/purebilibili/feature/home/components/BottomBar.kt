@@ -1291,8 +1291,23 @@ internal data class BottomBarSkinContentColors(
 
 internal fun resolveFloatingBottomBarLabelColor(
     contentColor: Color,
-    hasSkinArtwork: Boolean,
-): Color = if (hasSkinArtwork) OpticalContrastPalette.Highlight else contentColor
+    @Suppress("UNUSED_PARAMETER") hasSkinArtwork: Boolean,
+): Color = contentColor
+
+internal fun resolveEffectiveSkinBackdropReferenceColor(
+    skinTrimTint: Color?,
+    sampledTailLuminance: Float?,
+): Color? {
+    if (sampledTailLuminance != null) {
+        val neutralSample = Color(sampledTailLuminance, sampledTailLuminance, sampledTailLuminance, 1f)
+        return if (skinTrimTint != null && skinTrimTint != Color.Unspecified) {
+            lerpColor(neutralSample, skinTrimTint.copy(alpha = 1f), 0.22f)
+        } else {
+            neutralSample
+        }
+    }
+    return skinTrimTint?.takeUnless { it == Color.Unspecified }
+}
 
 internal fun resolveBottomBarSkinContentColors(
     selectedColor: Color,
@@ -2423,6 +2438,11 @@ private fun MaterialBottomBar(
         onSurfaceVariant = AppContentColors.secondaryText(),
         secondaryContainer = if (glassEnabled) MaterialTheme.colorScheme.secondaryContainer else nativeSelectionColors.backgroundColor,
     )
+    val sampledDockedTailLum by com.android.purebilibili.core.plugin.skin.rememberSkinRegionLuminance(
+        filePath = uiSkinDecoration?.bottomTrimImagePath,
+        topFraction = 0.35f,
+        bottomFraction = 1f,
+    )
     val skinDockedItemColors = resolveBottomBarSkinContentColors(
         selectedColor = uiSkinDecoration?.bottomSelectedTint
             ?.takeUnless { it == Color.Unspecified }
@@ -2430,7 +2450,10 @@ private fun MaterialBottomBar(
         unselectedColor = uiSkinDecoration?.bottomUnselectedTint
             ?.takeUnless { it == Color.Unspecified }
             ?: dockedItemColors.unselectedIconColor,
-        skinTrimTint = uiSkinDecoration?.bottomTrimTint
+        skinTrimTint = resolveEffectiveSkinBackdropReferenceColor(
+            skinTrimTint = uiSkinDecoration?.bottomTrimTint,
+            sampledTailLuminance = sampledDockedTailLum,
+        )
     )
     val dockedIndicatorColor = resolveDockedBottomBarIndicatorColor(
         defaultColor = dockedItemColors.indicatorColor,
@@ -2438,7 +2461,7 @@ private fun MaterialBottomBar(
     )
 
     if (
-        !uiSkinDecoration.usesIllustratedNavigation(isTablet) && shouldUseOfficialMd3FloatingToolbar(
+        uiSkinDecoration == null && shouldUseOfficialMd3FloatingToolbar(
             isFloating = isFloating,
             liquidGlassEnabled = glassEnabled,
         )
@@ -2602,10 +2625,16 @@ private fun MaterialBottomBar(
             ),
         tonalElevation = if (blurEnabled) AppSpacingTokens.None else AppSpacingTokens.ExtraSmall - AppSpacingTokens.Micro / 2,
         shadowElevation = AppSpacingTokens.None,
-        color = containerColor
+        color = if (uiSkinDecoration != null && (glassEnabled || blurEnabled)) {
+            Color.Transparent
+        } else {
+            containerColor
+        }
     ) {
         DockedBottomBarSkinContainer(
-            decoration = uiSkinDecoration
+            decoration = uiSkinDecoration,
+            liquidGlassEnabled = glassEnabled,
+            blurEnabled = blurEnabled,
         ) {
             AppNavigationBar(
                 containerColor = Color.Transparent,
@@ -2622,7 +2651,11 @@ private fun MaterialBottomBar(
                 bottomBarVisibleItems.forEach { item ->
                     val itemLabel = resolveBottomNavItemLabel(item, itemLabels)
                     val itemContentDescription = resolveBottomNavItemContentDescription(item)
-                    val skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = currentItem == item)
+                    val skinIconPath = uiSkinDecoration?.iconPathFor(
+                        item,
+                        selected = currentItem == item,
+                        visibleItems = bottomBarVisibleItems,
+                    )
                     AppNavigationBarItem(
                         selected = currentItem == item,
                         onClick = {
@@ -3207,7 +3240,15 @@ private fun MiuixBottomBar(
 
     DockedBottomBarSkinContainer(
         decoration = uiSkinDecoration,
-        modifier = barModifier.background(containerColor)
+        liquidGlassEnabled = sharedLiquidGlassEnabled,
+        blurEnabled = blurEnabled,
+        modifier = barModifier.background(
+            if (uiSkinDecoration != null && (sharedLiquidGlassEnabled || blurEnabled)) {
+                Color.Transparent
+            } else {
+                containerColor
+            }
+        )
     ) {
         AppPlatformNavigationBar(
             modifier = Modifier
@@ -3252,19 +3293,31 @@ private fun MiuixBottomBar(
                 },
                 hasUiSkinDecoration = uiSkinDecoration != null,
             )
-        val skinItemColors = resolveBottomBarSkinContentColors(
+            val sampledMiuixTailLum by com.android.purebilibili.core.plugin.skin.rememberSkinRegionLuminance(
+                filePath = uiSkinDecoration?.bottomTrimImagePath,
+                topFraction = 0.35f,
+                bottomFraction = 1f,
+            )
+            val skinItemColors = resolveBottomBarSkinContentColors(
                 selectedColor = uiSkinDecoration?.bottomSelectedTint
                     ?.takeUnless { it == Color.Unspecified }
                     ?: selectedItemColor,
-            unselectedColor = uiSkinDecoration?.bottomUnselectedTint
-                ?.takeUnless { it == Color.Unspecified }
-                ?: unselectedItemColor,
-                skinTrimTint = uiSkinDecoration?.bottomTrimTint
+                unselectedColor = uiSkinDecoration?.bottomUnselectedTint
+                    ?.takeUnless { it == Color.Unspecified }
+                    ?: unselectedItemColor,
+                skinTrimTint = resolveEffectiveSkinBackdropReferenceColor(
+                    skinTrimTint = uiSkinDecoration?.bottomTrimTint,
+                    sampledTailLuminance = sampledMiuixTailLum,
+                )
             )
 
             bottomBarVisibleItems.forEachIndexed { index, item ->
                 val itemLabel = resolveBottomNavItemLabel(item, itemLabels)
-                val skinIconPath = uiSkinDecoration?.iconPathFor(item, selected = currentItem == item)
+                val skinIconPath = uiSkinDecoration?.iconPathFor(
+                    item,
+                    selected = currentItem == item,
+                    visibleItems = bottomBarVisibleItems,
+                )
                 val reminderBadgeText = formatBottomBarDynamicReminderBadge(
                     if (shouldShowBottomBarDynamicReminderBadge(item, dynamicUnreadCount)) {
                         dynamicUnreadCount
@@ -3367,12 +3420,20 @@ internal fun IllustratedSkinBottomBar(
     showText: Boolean = true,
     includeNavigationInset: Boolean = true,
 ) {
+    val sampledIllustratedTailLum by com.android.purebilibili.core.plugin.skin.rememberSkinRegionLuminance(
+        filePath = decoration.bottomTrimImagePath,
+        topFraction = 0.35f,
+        bottomFraction = 1f,
+    )
     val colors = resolveBottomBarSkinContentColors(
         selectedColor = decoration.bottomSelectedTint.takeUnless { it == Color.Unspecified }
             ?: AppContentColors.accent(),
         unselectedColor = decoration.bottomUnselectedTint.takeUnless { it == Color.Unspecified }
             ?: AppContentColors.primaryText(),
-        skinTrimTint = decoration.bottomTrimTint,
+        skinTrimTint = resolveEffectiveSkinBackdropReferenceColor(
+            skinTrimTint = decoration.bottomTrimTint,
+            sampledTailLuminance = sampledIllustratedTailLum,
+        ),
     )
     BoxWithConstraints(modifier = modifier) {
         val preferredIconSize = resolveIllustratedSkinIconSize(maxWidth / visibleItems.size.coerceAtLeast(1))
@@ -3394,7 +3455,7 @@ internal fun IllustratedSkinBottomBar(
                     val selected = item == currentItem
                     val label = resolveBottomNavItemLabel(item, itemLabels)
                     val contentColor = if (selected) colors.selectedColor else colors.unselectedColor
-                    val iconPath = decoration.illustratedIconPathFor(item, selected)
+                    val iconPath = decoration.illustratedIconPathFor(item, selected, visibleItems)
                     val badge = formatBottomBarDynamicReminderBadge(
                         if (shouldShowBottomBarDynamicReminderBadge(item, dynamicUnreadCount)) {
                             dynamicUnreadCount
@@ -3460,11 +3521,15 @@ internal fun IllustratedSkinBottomBar(
 private fun DockedBottomBarSkinContainer(
     decoration: BottomBarUiSkinDecoration?,
     modifier: Modifier = Modifier,
+    liquidGlassEnabled: Boolean = false,
+    blurEnabled: Boolean = false,
     content: @Composable BoxScope.() -> Unit
 ) {
     Box(modifier = modifier) {
         BottomBarSkinDecorativeTrim(
             decoration = decoration,
+            liquidGlassEnabled = liquidGlassEnabled,
+            blurEnabled = blurEnabled,
             modifier = Modifier.matchParentSize()
         )
         content()
@@ -3677,6 +3742,8 @@ private fun BiliPaiFloatingBottomBar(
             navigationLabelMode = labelMode,
             navigationMinEdgePadding = tuning.outerHorizontalPaddingDp.dp,
             hasUiSkinDecoration = uiSkinDecoration != null,
+            uiSkinDecoration = uiSkinDecoration,
+            visibleItems = visibleItems,
             nowPlayingContent = nowPlayingContent,
             modifier = modifier,
             navigationContent = { allocatedWidth ->
@@ -3858,6 +3925,11 @@ private fun BiliPaiFloatingBottomBarChrome(
     } else {
         AppContentColors.primaryText()
     }
+    val sampledFloatingTailLum by com.android.purebilibili.core.plugin.skin.rememberSkinRegionLuminance(
+        filePath = uiSkinDecoration?.bottomTrimImagePath,
+        topFraction = 0.35f,
+        bottomFraction = 1f,
+    )
     val skinContentColors = resolveBottomBarSkinContentColors(
         selectedColor = uiSkinDecoration?.bottomSelectedTint
             ?.takeUnless { it == Color.Unspecified }
@@ -3865,16 +3937,23 @@ private fun BiliPaiFloatingBottomBarChrome(
         unselectedColor = uiSkinDecoration?.bottomUnselectedTint
             ?.takeUnless { it == Color.Unspecified }
             ?: baseUnselectedColor,
-        skinTrimTint = uiSkinDecoration?.bottomTrimTint
+        skinTrimTint = resolveEffectiveSkinBackdropReferenceColor(
+            skinTrimTint = uiSkinDecoration?.bottomTrimTint,
+            sampledTailLuminance = sampledFloatingTailLum,
+        )
     )
     val readableContentColor = AppContentColors.primaryText()
     // Keep the moving capsule's captured glyphs in the selected theme/skin color.
     val selectedColor = skinContentColors.selectedColor
-    val unselectedColor = lerpColor(
-        skinContentColors.unselectedColor,
-        readableContentColor,
-        if (themedMiuixSelection) 0f else liquidGlassTuning.contentReadabilityBoost,
-    ).copy(alpha = 1f)
+    val unselectedColor = if (uiSkinDecoration != null) {
+        skinContentColors.unselectedColor
+    } else {
+        lerpColor(
+            skinContentColors.unselectedColor,
+            readableContentColor,
+            if (themedMiuixSelection) 0f else liquidGlassTuning.contentReadabilityBoost,
+        ).copy(alpha = 1f)
+    }
     val totalItems = allItems.size.coerceAtLeast(1)
 
     var searchExpansionOverride by remember {
@@ -3959,7 +4038,13 @@ private fun BiliPaiFloatingBottomBarChrome(
         mode = floatingMode,
         hasUiSkinDecoration = uiSkinDecoration != null,
     )
+    val hasIllustratedSkinIcons = uiSkinDecoration?.bottomBarIconPaths?.isNotEmpty() == true
     val themedIndicatorContainerColor = when {
+        hasIllustratedSkinIcons -> if (isDarkTheme) {
+            OpticalContrastPalette.Highlight.copy(alpha = 0.08f)
+        } else {
+            OpticalContrastPalette.Highlight.copy(alpha = 0.34f)
+        }
         themedMiuixSelection -> AppInteractionColors.miuixNavigationBarIndicatorColor()
         themedMd3Selection -> nativeSelectionColors.backgroundColor
         else -> null
@@ -4114,12 +4199,20 @@ private fun BiliPaiFloatingBottomBarChrome(
                         // Allow reminder badges to paint slightly outside the dock band.
                         .graphicsLayer { clip = false }
                 ) {
-                    // Skin trim behind the BiliPai glass dock so it never steals hits.
-                    BottomBarSkinDecorativeTrim(
-                        decoration = uiSkinDecoration,
-                        modifier = Modifier.matchParentSize(),
-                        clipShape = resolveSharedBottomBarCapsuleShape()
-                    )
+                    // 装扮饰面注入到胶囊外壳内部（位于玻璃 backdrop 模糊层之上、图标与文字之下），
+                    // 避免外层 drawBackdrop 实心覆盖底部导致开启液态玻璃时 tail_bg 完全消失。
+                    val skinShellOverlay: (@Composable BoxScope.() -> Unit)? = if (uiSkinDecoration != null) {
+                        {
+                            BottomBarSkinDecorativeTrim(
+                                decoration = uiSkinDecoration,
+                                modifier = Modifier.matchParentSize(),
+                                clipShape = null,
+                                isFloating = true,
+                                liquidGlassEnabled = floatingMode == FloatingBottomBarMode.LiquidGlass,
+                                blurEnabled = floatingMode == FloatingBottomBarMode.Blur,
+                            )
+                        }
+                    } else null
                     if (shouldComposeDockContent) {
                         val dockModifier = Modifier
                             .bottomBarAnimatedSize(
@@ -4133,16 +4226,17 @@ private fun BiliPaiFloatingBottomBarChrome(
                         val dockContent: @Composable RowScope.() -> Unit = {
                             visibleItems.forEachIndexed { index, item ->
                                 val label = resolveBottomNavItemLabel(item, itemLabels)
-                                val routeSelected = currentItem == item
-                                // Export filled accent glyphs for every slot. The moving
-                                // capsule reveals the active copy at its current position;
-                                // the base row continues to reflect the selected route.
-                                val selected = index == selectedIndexForBar ||
+                                val routeSelected = index == selectedIndexForBar
+                                // 矢量图标允许在液态玻璃隐藏捕获层提前渲染选中态以配合透镜滑入染色；
+                                // 装扮插画 PNG 前后造型迥异（如角色头与皇冠），必须严格绑定真实选中项，防止滑动/折射时串图跳变。
+                                val vectorSelected = routeSelected ||
                                     LocalFloatingBottomBarActiveContent.current
                                 val skinIconPath = uiSkinDecoration?.iconPathFor(
                                     item,
-                                    selected = routeSelected
+                                    selected = routeSelected,
+                                    visibleItems = visibleItems,
                                 )
+                                val effectiveSelected = if (skinIconPath != null) routeSelected else vectorSelected
                                 val reminderBadgeText = formatBottomBarDynamicReminderBadge(
                                     if (shouldShowBottomBarDynamicReminderBadge(item, dynamicUnreadCount)) {
                                         dynamicUnreadCount
@@ -4152,14 +4246,14 @@ private fun BiliPaiFloatingBottomBarChrome(
                                 )
                                 FloatingBottomBarItem(
                                     onClick = { handleBottomBarItemClick(index, item) },
-                                    selected = index == selectedIndexForBar,
+                                    selected = routeSelected,
                                     itemIndex = index,
-                                    iconCrossScaleEnabled = navigationIconCrossScaleEnabled,
+                                    iconCrossScaleEnabled = navigationIconCrossScaleEnabled && skinIconPath == null,
                                 ) {
                                     FloatingBottomBarTabVisual(
                                         item = item,
                                         label = label,
-                                        selected = selected,
+                                        selected = effectiveSelected,
                                         showIcon = showIcon,
                                         showText = showText,
                                         iconStyle = iconStyle,
@@ -4208,6 +4302,7 @@ private fun BiliPaiFloatingBottomBarChrome(
                                 colors = floatingColors,
                                 indicatorContainerColor = themedIndicatorContainerColor
                                     ?: floatingColors.indicatorColor.copy(alpha = 0.14f),
+                                shellOverlay = skinShellOverlay,
                                 content = dockContent,
                             )
                         } else {
@@ -4241,6 +4336,7 @@ private fun BiliPaiFloatingBottomBarChrome(
                                     pagerTargetPositionProvider = pagerTargetPositionProvider,
                                     isPagerNavigatingProvider = isPagerNavigatingProvider,
                                     liquidGlassTuning = liquidGlassTuning,
+                                    shellOverlay = skinShellOverlay,
                                 ) {
                                     dockContent()
                                 }
@@ -4288,7 +4384,8 @@ private fun BiliPaiFloatingBottomBarChrome(
                         ) {
                             val homeSkinIconPath = uiSkinDecoration?.iconPathFor(
                                 BottomNavItem.HOME,
-                                selected = currentItem == BottomNavItem.HOME
+                                selected = currentItem == BottomNavItem.HOME,
+                                visibleItems = visibleItems,
                             )
                             if (homeSkinIconPath != null) {
                                 BottomBarSkinIcon(
@@ -4511,13 +4608,21 @@ private fun ColumnScope.FloatingBottomBarTabVisual(
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
             style = appTextStyleWithLineHeightStyle(DockLabelLineHeightStyle).let { baseStyle ->
-                if (hasSkinArtwork) baseStyle.copy(
-                    shadow = androidx.compose.ui.graphics.Shadow(
-                        color = OpticalContrastPalette.Shadow.copy(alpha = 0.9f),
-                        offset = Offset(0f, 1f),
-                        blurRadius = 3f,
+                val resolvedLabelColor = resolveFloatingBottomBarLabelColor(contentColor, hasSkinArtwork)
+                if (hasSkinArtwork) {
+                    val haloColor = if (resolvedLabelColor.luminance() > 0.52f) {
+                        OpticalContrastPalette.Shadow.copy(alpha = 0.62f)
+                    } else {
+                        OpticalContrastPalette.Highlight.copy(alpha = 0.78f)
+                    }
+                    baseStyle.copy(
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = haloColor,
+                            offset = Offset(0f, 0.6f),
+                            blurRadius = 2.2f,
+                        )
                     )
-                ) else baseStyle
+                } else baseStyle
             },
             modifier = Modifier.bottomBarSkinLabelScrim(
                 color = labelScrimColor,

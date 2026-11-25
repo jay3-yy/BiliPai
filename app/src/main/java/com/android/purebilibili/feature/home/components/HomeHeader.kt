@@ -188,13 +188,22 @@ internal fun resolveHomeSkinSearchSurfaceColor(
 
 internal fun resolveHomeSkinTopTabContentColor(
     topAtmosphereTint: Color,
+    explicitForegroundTint: Color = Color.Unspecified,
+    colorMode: String? = null,
     hasTopAtmosphereImage: Boolean = false,
     darkTheme: Boolean = false
 ): Color {
-    if (hasTopAtmosphereImage && darkTheme) {
+    if (explicitForegroundTint != Color.Unspecified) {
+        return explicitForegroundTint.copy(alpha = 0.96f)
+    }
+    when (colorMode?.trim()?.lowercase()) {
+        "light" -> return HomeVisualPalette.IosDarkChrome.copy(alpha = 0.96f)
+        "dark" -> return OpticalContrastPalette.Highlight.copy(alpha = 0.98f)
+    }
+    if (hasTopAtmosphereImage && darkTheme && topAtmosphereTint.luminance() < 0.55f) {
         return OpticalContrastPalette.Highlight.copy(alpha = 0.98f)
     }
-    return if (topAtmosphereTint.luminance() < 0.72f) {
+    return if (topAtmosphereTint.luminance() < 0.68f) {
         OpticalContrastPalette.Highlight.copy(alpha = 0.98f)
     } else {
         HomeVisualPalette.IosDarkChrome.copy(alpha = 0.96f)
@@ -1829,7 +1838,11 @@ internal fun HomeHeader(
     val topTrimImagePath = uiSkinDecoration?.topAtmosphereImagePath
     val hasIllustratedHeader = !topTrimImagePath.isNullOrBlank() ||
         !uiSkinDecoration?.topTabBackgroundImagePath.isNullOrBlank()
-    val useUnifiedTopPanel = !hasIllustratedHeader && shouldUseUnifiedHomeTopPanel(topChromePolicy)
+    // 显式隔离液态玻璃与官方原画通栏：
+    // 关闭液态玻璃时 100% 沿用官方全幅原画顶栏与纯文字指示分栏；
+    // 开启液态玻璃时保留悬浮玻璃胶囊分栏的折射与透镜形变，顶栏原画退让为通透背景氛围层。
+    val usePlainIllustratedTopTabs = hasIllustratedHeader && !topChromeLiquidGlassEnabled
+    val useUnifiedTopPanel = !usePlainIllustratedTopTabs && shouldUseUnifiedHomeTopPanel(topChromePolicy)
     val useDetachedTopTabDock = shouldUseDetachedHomeTopTabDock(
         presentation = topChromePolicy.tabPresentation,
         liquidGlassEnabled = topChromeLiquidGlassEnabled,
@@ -1947,7 +1960,21 @@ internal fun HomeHeader(
             blurEnabled = enableTopTabSecondaryBlur || effectiveTabMaterialMode != TopTabMaterialMode.PLAIN
         )
     }
-    val topForegroundColor = resolveHomeTopForegroundColor(isLightMode = isLightMode)
+    val baseTopForegroundColor = resolveHomeTopForegroundColor(isLightMode = isLightMode)
+    val resolvedSkinHeaderForeground = uiSkinDecoration?.takeIf { hasIllustratedHeader }?.let {
+        resolveHomeSkinTopTabContentColor(
+            topAtmosphereTint = it.topAtmosphereTint,
+            explicitForegroundTint = it.topForegroundTint,
+            colorMode = it.colorMode,
+            hasTopAtmosphereImage = true,
+            darkTheme = !isLightMode,
+        )
+    }
+    val topForegroundColor = if (!topChromeLiquidGlassEnabled && resolvedSkinHeaderForeground != null) {
+        resolvedSkinHeaderForeground
+    } else {
+        baseTopForegroundColor
+    }
     val topSearchContentAlpha = resolveHomeTopSearchContentAlpha(topChromeRenderMode)
     val topActionIconAlpha = resolveHomeTopActionIconAlpha(topChromeRenderMode)
     val topChromeMotionPolicy = resolveHomeTopChromeMotionPolicy(
@@ -2581,6 +2608,7 @@ internal fun HomeHeader(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     alignment = Alignment.BottomCenter,
+                    alpha = if (topChromeLiquidGlassEnabled) 0.42f else 1.0f,
                     modifier = Modifier.matchParentSize().clearAndSetSemantics {},
                 )
             }
@@ -2589,7 +2617,7 @@ internal fun HomeHeader(
                 tabAlpha = tabAlpha,
                 tabContentAlpha = tabContentAlpha,
                 // The illustrated tab background is a sibling behind this chrome.
-                containerZIndex = if (hasIllustratedHeader || useUnifiedTopPanel) 0f else -1f,
+                containerZIndex = if (usePlainIllustratedTopTabs || useUnifiedTopPanel) 0f else -1f,
                 // 分栏 dock 最大宽度 = 顶部三控件合计宽度，保证左右对齐。
                 maxDockWidth = maxDockWidth,
                 tabHorizontalPadding = if (embedTopTabsInUnifiedPanel) {
@@ -2603,21 +2631,28 @@ internal fun HomeHeader(
                     resolveNonNegativeHomeTopPadding(tabVerticalPadding)
                 },
                 tabVerticalOffset = if (embedTopTabsInUnifiedPanel) AppSpacingTokens.None else tabVerticalOffset,
-                isTabFloating = if (hasIllustratedHeader || embedTopTabsInUnifiedPanel) false else isTabFloating,
+                isTabFloating = if (usePlainIllustratedTopTabs || embedTopTabsInUnifiedPanel) false else isTabFloating,
                 effectiveTabShadowElevation = if (embedTopTabsInUnifiedPanel) AppSpacingTokens.None else effectiveTabShadowElevation,
                 tabShape = if (useUnifiedTopPanel) {
                     resolveSharedBottomBarCapsuleShape()
                 } else {
                     tabShape
                 },
-                tabChromeRenderMode = if (hasIllustratedHeader) {
+                tabChromeRenderMode = if (usePlainIllustratedTopTabs) {
                     HomeTopChromeRenderMode.PLAIN
                 } else if (useTopTabBottomBarMatchedDock) {
                     topTabDockChromeRenderMode
                 } else {
                     effectiveTabChromeRenderMode
                 },
-                tabSurfaceColor = if (hasIllustratedHeader) Color.Transparent else effectiveTabSurfaceColor,
+                tabSurfaceColor = if (usePlainIllustratedTopTabs) {
+                    Color.Transparent
+                } else if (hasIllustratedHeader && topChromeLiquidGlassEnabled && uiSkinDecoration != null) {
+                    (uiSkinDecoration.liquidGlassSurfaceTint ?: uiSkinDecoration.topAtmosphereTint)
+                        .copy(alpha = uiSkinDecoration.liquidGlassTintOpacity.coerceIn(0.08f, 0.30f))
+                } else {
+                    effectiveTabSurfaceColor
+                },
                 hazeState = topTabDockHazeState,
                 miuixBackdrop = miuixBackdrop,
                 liquidStyle = liquidStyle,
@@ -2634,7 +2669,7 @@ internal fun HomeHeader(
                     tabBorderAlpha
                 },
                 tabHighlightColor = Color.Transparent,
-                tabContentUnderlayColor = if (hasIllustratedHeader || embedTopTabsInUnifiedPanel) {
+                tabContentUnderlayColor = if (usePlainIllustratedTopTabs || embedTopTabsInUnifiedPanel) {
                     Color.Transparent
                 } else {
                     resolveHomeTopInnerUnderlayColor(
@@ -2649,17 +2684,17 @@ internal fun HomeHeader(
                     !isTopTabsAutoCollapseEnabled,
                 isTabsCollapsed = topTabsCollapsed && returnTabRevealFraction == null,
                 onTabsCollapsedChange = onTopTabsCollapsedChange,
-                drawChromeSurface = !hasIllustratedHeader && shouldHomeTopTabChromeDrawOuterShell(
+                drawChromeSurface = !usePlainIllustratedTopTabs && shouldHomeTopTabChromeDrawOuterShell(
                     drawOuterChrome = drawTopTabDockChrome,
                     innerOwnsFloatingDock = topTabInnerOwnsFloatingDockShell,
                 ),
-                useBottomBarMatchedSurface = !hasIllustratedHeader && useTopTabBottomBarMatchedDock,
+                useBottomBarMatchedSurface = !usePlainIllustratedTopTabs && useTopTabBottomBarMatchedDock,
                 drawMatchedShellLens = topTabLiquidGlassEnabled,
                 matchedShellLensIntensity = resolveFloatingDockGeometryScale(
                     currentTabHeight.value
                 ),
                 // Floating / matched dock: length follows icon+text × tab count (no full-bleed empty glass).
-                wrapDockWidth = !hasIllustratedHeader && wrapTopTabDockWidth,
+                wrapDockWidth = !usePlainIllustratedTopTabs && wrapTopTabDockWidth,
                 dockCategoryCount = topCategories.size,
                 dockLabelMode = topTabLabelMode,
             ) {
@@ -2677,7 +2712,7 @@ internal fun HomeHeader(
                             if (topTabsVisible) onPartitionClick()
                         },
                         pagerState = pagerState,
-                        labelMode = if (hasIllustratedHeader) 2 else topTabLabelMode,
+                        labelMode = if (usePlainIllustratedTopTabs) 2 else topTabLabelMode,
                         isLiquidGlassEnabled = resolveHomeTopTabIndicatorLiquidGlassEnabled(
                             homeSettings = homeSettings,
                         ),
@@ -2686,19 +2721,13 @@ internal fun HomeHeader(
                         liquidGlassPreset = bottomBarLiquidGlassPreset,
                         hazeState = hazeState,
                         miuixBackdrop = miuixBackdrop,
-                        skinPlainStyle = hasIllustratedHeader,
-                        skinPlainContentColor = uiSkinDecoration?.takeIf { hasIllustratedHeader }?.let {
-                            resolveHomeSkinTopTabContentColor(
-                                topAtmosphereTint = it.topAtmosphereTint,
-                                hasTopAtmosphereImage = true,
-                                darkTheme = !isLightMode,
-                            )
-                        },
-                        isFloatingStyle = !hasIllustratedHeader && isTabFloating,
+                        skinPlainStyle = usePlainIllustratedTopTabs,
+                        skinPlainContentColor = resolvedSkinHeaderForeground?.takeIf { usePlainIllustratedTopTabs },
+                        isFloatingStyle = !usePlainIllustratedTopTabs && isTabFloating,
                         edgeToEdge = integratedCollapsedTopBar,
-                        hasOuterChromeSurface = !hasIllustratedHeader && drawTopTabDockChrome,
+                        hasOuterChromeSurface = !usePlainIllustratedTopTabs && drawTopTabDockChrome,
                         // Same wrap decision as HomeTopTabChrome so shell length matches tab content.
-                        wrapDockWidth = !hasIllustratedHeader && wrapTopTabDockWidth,
+                        wrapDockWidth = !usePlainIllustratedTopTabs && wrapTopTabDockWidth,
                         interactionBudget = interactionBudget,
                         motionTier = motionTier,
                         isTransitionRunning = isTransitionRunning,
@@ -2801,31 +2830,66 @@ internal fun HomeHeader(
         // search/tabs panel. Drawing it here lets the same crop continue behind the
         // transparent status bar while the controls remain layered above it.
         if (!topTrimImagePath.isNullOrBlank()) {
+            val featherSkinHeaderBottom = topChromeLiquidGlassEnabled ||
+                isProgressiveBlurEligible ||
+                isProgressiveFadeActive
+            val skinHeaderFeatherTail = if (featherSkinHeaderBottom) 24.dp else 0.dp
             AsyncImage(
                 model = File(topTrimImagePath),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                alignment = Alignment.Center,
+                alignment = Alignment.TopCenter,
+                alpha = if (topChromeLiquidGlassEnabled) 0.86f else if (featherSkinHeaderBottom) 0.92f else 1.0f,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .homeHeaderDeferredHeight(pinnedChromeContentHeightProvider)
-                    .clearAndSetSemantics {}
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .homeHeaderDeferredHeight(pinnedChromeContentHeightProvider)
-                    .background(
-                        Brush.verticalGradient(
-                            0.00f to Color.Transparent,
-                            0.72f to Color.Transparent,
-                            1.00f to (uiSkinDecoration?.topAtmosphereTint
-                                ?: headerChromeColors.containerColor).copy(alpha = 0.42f),
-                        )
+                    .homeHeaderDeferredHeight { pinnedChromeContentHeightProvider() + skinHeaderFeatherTail }
+                    .then(
+                        if (featherSkinHeaderBottom) {
+                            Modifier
+                                .graphicsLayer {
+                                    compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                                }
+                                .drawWithContent {
+                                    drawContent()
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            0.00f to Color.Black,
+                                            0.56f to Color.Black,
+                                            0.82f to Color.Black.copy(alpha = 0.44f),
+                                            1.00f to Color.Transparent,
+                                        ),
+                                        blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                                    )
+                                }
+                        } else {
+                            Modifier
+                        }
                     )
                     .clearAndSetSemantics {}
             )
+            if (!featherSkinHeaderBottom) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .homeHeaderDeferredHeight(pinnedChromeContentHeightProvider)
+                        .background(
+                            Brush.verticalGradient(
+                                0.00f to Color.Transparent,
+                                0.76f to Color.Transparent,
+                                1.00f to (uiSkinDecoration?.topAtmosphereTint
+                                    ?: headerChromeColors.containerColor).copy(alpha = 0.28f),
+                            )
+                        )
+                        .clearAndSetSemantics {}
+                )
+            }
         }
+        CompositionLocalProvider(
+            com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible provides (
+                com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible.current ||
+                    hasIllustratedHeader
+                )
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -3096,8 +3160,22 @@ internal fun HomeHeader(
                                         .then(landingMotion(HomeHeaderControl.SEARCH))
                                         .then(searchAnchor),
                                 ) {
+                                    val searchContainerShape = resolveHomeTopSearchContainerShape(topChromePolicy)
+                                    val skinSearchImagePath = uiSkinDecoration?.searchCapsuleImagePath
+                                    if (!skinSearchImagePath.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = File(skinSearchImagePath),
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            alpha = if (searchLiquidGlassEnabled) 0.42f else 0.90f,
+                                            modifier = Modifier
+                                                .matchParentSize()
+                                                .clip(searchContainerShape)
+                                                .clearAndSetSemantics {},
+                                        )
+                                    }
                                     BottomBarMatchedReusableLiquidDock(
-                                        shape = resolveHomeTopSearchContainerShape(topChromePolicy),
+                                        shape = searchContainerShape,
                                         modifier = Modifier.matchParentSize()
                                             .then(
                                                 if (useTopControlBlur && !useBottomBarMatchedTopControls) {
@@ -3217,8 +3295,8 @@ internal fun HomeHeader(
                                     AppIcon(
                                         topRightActionIcon,
                                         contentDescription = null,
-                                        tint = if (hasIllustratedHeader) {
-                                            OpticalContrastPalette.Highlight
+                                        tint = if (!topChromeLiquidGlassEnabled && resolvedSkinHeaderForeground != null) {
+                                            resolvedSkinHeaderForeground
                                         } else if (isLightMode) {
                                             topForegroundColor
                                         } else {
@@ -3278,6 +3356,7 @@ internal fun HomeHeader(
                     }
                 }
             }
+        }
         }
     }
 }

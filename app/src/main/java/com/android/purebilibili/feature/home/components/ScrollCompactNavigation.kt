@@ -51,6 +51,7 @@ internal fun ScrollCompactNavigation(
     blurEnabled: Boolean,
     hazeState: HazeState?,
     liquidGlassTuning: LiquidGlassTuning,
+    uiSkinDecoration: BottomBarUiSkinDecoration? = null,
     onExpand: () -> Unit,
     content: @Composable () -> Unit,
 ) {
@@ -143,16 +144,29 @@ internal fun ScrollCompactNavigation(
                     else Modifier.clearAndSetSemantics {}),
             contentAlignment = Alignment.Center,
         ) {
-            AppIcon(
-                imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
-                    resolveHomeNavigationBarIcon(currentItem, true)
-                } else resolveMaterialBottomBarIcon(currentItem, true),
-                contentDescription = "$currentLabel，展开底栏",
-                tint = accent,
-                modifier = Modifier.graphicsLayer {
-                    alpha = ((progress.value - 0.2f) / 0.8f).coerceIn(0f, 1f)
-                },
-            )
+            val compactSkinIconPath = uiSkinDecoration?.iconPathFor(currentItem, selected = true)
+            if (compactSkinIconPath != null) {
+                BottomBarSkinIcon(
+                    iconPath = compactSkinIconPath,
+                    contentDescription = "$currentLabel，展开底栏",
+                    selected = true,
+                    size = resolveBottomBarCompactSkinHomeIconSize(),
+                    modifier = Modifier.graphicsLayer {
+                        alpha = ((progress.value - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                    },
+                )
+            } else {
+                AppIcon(
+                    imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
+                        resolveHomeNavigationBarIcon(currentItem, true)
+                    } else resolveMaterialBottomBarIcon(currentItem, true),
+                    contentDescription = "$currentLabel，展开底栏",
+                    tint = accent,
+                    modifier = Modifier.graphicsLayer {
+                        alpha = ((progress.value - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                    },
+                )
+            }
         }
     }
 }

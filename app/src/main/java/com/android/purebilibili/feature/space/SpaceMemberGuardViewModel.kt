@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.SpaceGuardMemberItem
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** UP主大航海（舰队）列表页（对齐 PiliPlus member_guard）。 */
@@ -33,6 +35,7 @@ class SpaceMemberGuardViewModel(
     val uiState = _uiState.asStateFlow()
 
     private var page = 1
+    private var fetchJob: Job? = null
 
     init {
         refresh()
@@ -43,20 +46,31 @@ class SpaceMemberGuardViewModel(
     }
 
     fun loadMore() {
-        val state = _uiState.value
-        if (state.isLoading || state.isLoadingMore || !state.hasMore || state.error != null) return
-        _uiState.value = state.copy(isLoadingMore = true)
-        fetch(page = page + 1, isLoadMore = true)
+        var shouldFetch = false
+        _uiState.update { state ->
+            if (state.isLoading || state.isLoadingMore || !state.hasMore || state.error != null) {
+                shouldFetch = false
+                state
+            } else {
+                shouldFetch = true
+                state.copy(isLoadingMore = true)
+            }
+        }
+        if (shouldFetch) {
+            fetch(page = page + 1, isLoadMore = true)
+        }
     }
 
     private fun refresh() {
+        fetchJob?.cancel()
         page = 1
-        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        _uiState.update { it.copy(isLoading = true, isLoadingMore = false, error = null) }
         fetch(page = 1, isLoadMore = false)
     }
 
     private fun fetch(page: Int, isLoadMore: Boolean) {
-        viewModelScope.launch {
+        fetchJob?.cancel()
+        fetchJob = viewModelScope.launch {
             try {
                 val response = spaceApi.getMemberGuard(
                     mapOf(
@@ -67,39 +81,43 @@ class SpaceMemberGuardViewModel(
                 )
                 val data = response.data
                 if (response.code != 0 || data == null) {
-                    _uiState.value = _uiState.value.let {
-                        it.copy(
+                    val fallbackErr = response.message.ifBlank { "获取舰队信息失败" }
+                    _uiState.update { current ->
+                        current.copy(
                             isLoading = false,
                             isLoadingMore = false,
-                            error = if (isLoadMore) it.error else response.message.ifBlank { "获取舰队信息失败" },
+                            error = if (isLoadMore) current.error else fallbackErr,
                         )
                     }
                     return@launch
                 }
-                var list = data.guardTopList
-                var tops = _uiState.value.tops
-                if (!isLoadMore) {
-                    tops = list.take(3)
-                    list = list.drop(3)
-                }
+                val rawList = data.guardTopList
+                val resolvedTops = if (!isLoadMore) rawList.take(3) else null
+                val incomingItems = if (!isLoadMore) rawList.drop(3) else rawList
+                val hasMore = data.hasMore == 1
                 this@SpaceMemberGuardViewModel.page = page
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isLoadingMore = false,
-                    error = null,
-                    items = if (isLoadMore) _uiState.value.items + list else list,
-                    tops = tops,
-                    hasMore = data.hasMore == 1,
-                )
+                _uiState.update { current ->
+                    current.copy(
+                        isLoading = false,
+                        isLoadingMore = false,
+                        error = null,
+                        items = if (isLoadMore) current.items + incomingItems else incomingItems,
+                        tops = resolvedTops ?: current.tops,
+                        hasMore = hasMore,
+                    )
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 android.util.Log.e("SpaceMemberGuard", "load failed: ${e.message}")
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isLoadingMore = false,
-                    error = if (isLoadMore) _uiState.value.error else (e.message ?: "网络请求失败"),
-                )
+                val fallbackErr = e.message ?: "网络请求失败"
+                _uiState.update { current ->
+                    current.copy(
+                        isLoading = false,
+                        isLoadingMore = false,
+                        error = if (isLoadMore) current.error else fallbackErr,
+                    )
+                }
             }
         }
     }

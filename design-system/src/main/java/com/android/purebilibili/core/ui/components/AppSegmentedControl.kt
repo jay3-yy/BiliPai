@@ -453,6 +453,9 @@ fun <T> AppNativeTabRow(
     // Label measurement and native slot spacing follow the renderer, not the glass switch.
     val nativeMiuix = !forceMaterial3 && LocalAppUiStyle.current == AppUiStyle.MIUIX
     val labels = androidx.compose.runtime.remember(options) { options.map { it.label } }
+    val measurementLabels = androidx.compose.runtime.remember(options) {
+        options.map { it.measurementLabel ?: it.label }
+    }
     // 确定会滚动的内容宽度标签由原生渲染器逐项测量，无需先计算统一宽度。
     val useKnownScrollableMiuixContentWidths = nativeMiuix && !forceEqualWidth &&
         miuixNonGlassItemWidthMode == MiuixNonGlassTabItemWidthMode.CONTENT &&
@@ -467,19 +470,19 @@ fun <T> AppNativeTabRow(
         val labelStyle = if (labelFontSize.isSpecified) defaultLabelStyle.copy(fontSize = labelFontSize) else defaultLabelStyle
         rememberMeasuredTabMinWidth(
             requestedMinWidth = AppChromeSizeTokens.MinimumTouchTarget,
-            labels = labels,
+            labels = measurementLabels,
             textStyle = labelStyle,
         )
     } else AppChromeSizeTokens.MinimumTouchTarget
     val resolvedLabelContentMinWidth = fixedItemWidth ?: if (nativeMiuix) {
         labelContentMinWidth
     } else {
-        resolveLiquidGlassLabelContentMinWidth(labels)
+        resolveLiquidGlassLabelContentMinWidth(measurementLabels)
     }
     val readableMinTabWidth = fixedItemWidth ?: if (nativeMiuix) {
         maxOf(minTabWidth, labelContentMinWidth)
     } else {
-        resolveLiquidGlassTabMinWidth(minTabWidth, labels, allowLabelOverflow)
+        resolveLiquidGlassTabMinWidth(minTabWidth, measurementLabels, allowLabelOverflow)
     }
     val compactItemWidth = maxOf(minTabWidth, readableMinTabWidth, resolvedLabelContentMinWidth)
     val equalizeMiuixNonGlassItems = shouldEqualizeMiuixNonGlassTabItems(

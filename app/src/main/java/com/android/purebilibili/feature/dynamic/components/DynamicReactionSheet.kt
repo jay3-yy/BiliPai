@@ -95,7 +95,11 @@ fun DynamicReactionSheet(item: DynamicItem, onDismiss: () -> Unit, onUserClick: 
             state = listState,
             contentPadding = PaddingValues(16.dp),
         ) {
-            itemsIndexed(users) { _, user ->
+            itemsIndexed(
+                items = users,
+                key = { index, user -> "${user.mid}_${user.action}_$index" },
+                contentType = { _, _ -> "reaction_user" },
+            ) { _, user ->
                 Row(
                     Modifier.fillMaxWidth().appActionClickable { onDismiss(); onUserClick(user.mid) }.padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),

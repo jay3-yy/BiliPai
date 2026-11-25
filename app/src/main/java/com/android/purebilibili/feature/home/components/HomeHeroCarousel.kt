@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
@@ -240,7 +241,7 @@ internal fun HomeHeroCarousel(
                 repeat(videos.size) { index ->
                     val selected = index == pagerState.currentPage
                     val targetWidth = if (selected) AppSpacingTokens.Medium else AppSpacingTokens.ExtraSmall
-                    val width by animateDpAsState(
+                    val widthState = animateDpAsState(
                         targetValue = targetWidth,
                         animationSpec = spring(
                             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -249,7 +250,7 @@ internal fun HomeHeroCarousel(
                         label = "hero_dot_width_$index",
                     )
                     val targetAlpha = if (selected) 0.92f else 0.38f
-                    val alpha by animateFloatAsState(
+                    val alphaState = animateFloatAsState(
                         targetValue = targetAlpha,
                         animationSpec = spring(
                             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -259,14 +260,23 @@ internal fun HomeHeroCarousel(
                     )
                     Box(
                         modifier = Modifier
-                            .height(AppSpacingTokens.ExtraSmall)
-                            .width(width)
-                            .clip(CircleShape)
-                            .background(
-                                MediaContrastPalette.Foreground.copy(
-                                    alpha = alpha
+                            .layout { measurable, constraints ->
+                                val widthPx = widthState.value.roundToPx().coerceAtLeast(0)
+                                val heightPx = AppSpacingTokens.ExtraSmall.roundToPx().coerceAtLeast(0)
+                                val placeable = measurable.measure(
+                                    androidx.compose.ui.unit.Constraints.fixed(widthPx, heightPx)
                                 )
-                            )
+                                layout(widthPx, heightPx) {
+                                    placeable.placeRelative(0, 0)
+                                }
+                            }
+                            .drawBehind {
+                                val radius = size.height / 2f
+                                drawRoundRect(
+                                    color = MediaContrastPalette.Foreground.copy(alpha = alphaState.value),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+                                )
+                            }
                     )
                 }
             }

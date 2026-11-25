@@ -1721,6 +1721,7 @@ fun DynamicCardV2(
                         initialIndex = fullContentSelectedImageIndex,
                         sourceRect = thumbnailSourceAnchor?.rect,
                         sourceRects = thumbnailSourceAnchor?.galleryRects.orEmpty(),
+                        sourceKey = thumbnailSourceAnchor?.sourceKey,
                         sourceCornerRadiusDp = thumbnailSourceAnchor?.cornerRadiusDp
                             ?: resolveDrawGridCornerRadiusDp().toFloat(),
                         textContent = opusPreviewText,
@@ -1742,8 +1743,10 @@ fun DynamicCardV2(
                             4f / 3f
                         }
                         val imageRequest = remember(pic.url) {
+                            val cacheKey = resolveImagePreviewPlaceholderCacheKey(pic.url) ?: pic.url
                             coil3.request.ImageRequest.Builder(context)
                                 .data(pic.url)
+                                .memoryCacheKey(cacheKey)
                                 .httpHeaders(
                                     NetworkHeaders.Builder()
                                         .set("Referer", "https://www.bilibili.com/")
@@ -1767,14 +1770,16 @@ fun DynamicCardV2(
                                 .alpha(if (isImagePreviewSourceHidden(expandedImageSourceRect.value)) 0f else 1f)
                                 .appActionClickable(interactionSource = null, indication = null) {
                                     selectedImageIndex = index
+                                    val sourceKey = resolveImagePreviewPlaceholderCacheKey(pic.url)
                                     val anchor = expandedImageSourceRect.value?.let {
                                         ImagePreviewSourceAnchor(
                                             rect = it,
                                             cornerRadiusDp = opusExpandedImageCornerRadiusDp,
                                             galleryRects = opusExpandedSourceRects.toMap(),
+                                            sourceKey = sourceKey,
                                         )
                                     }
-                                    prepareImagePreviewSourceTransition(anchor?.rect)
+                                    prepareImagePreviewSourceTransition(anchor?.rect, sourceKey)
                                     sourceAnchor = anchor
                                 },
                             contentScale = ContentScale.FillWidth,
@@ -1826,6 +1831,7 @@ fun DynamicCardV2(
                         initialIndex = selectedImageIndex,
                         sourceRect = sourceAnchor?.rect,
                         sourceRects = sourceAnchor?.galleryRects.orEmpty(),
+                        sourceKey = sourceAnchor?.sourceKey,
                         sourceCornerRadiusDp = sourceAnchor?.cornerRadiusDp ?: if (expandOpusFallbackImages) {
                             AppShapes.containerCornerDp(ContainerLevel.Card).value
                         } else {
@@ -1893,6 +1899,7 @@ fun DynamicCardV2(
                         initialIndex = selectedImageIndex,
                         sourceRect = sourceAnchor?.rect,
                         sourceRects = sourceAnchor?.galleryRects.orEmpty(),
+                        sourceKey = sourceAnchor?.sourceKey,
                         sourceCornerRadiusDp = sourceAnchor?.cornerRadiusDp
                             ?: resolveDrawGridCornerRadiusDp().toFloat(),
                         textContent = articlePreviewText,

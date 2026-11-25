@@ -1,6 +1,7 @@
 /** 头像融合视图的 Compose 宿主与生命周期适配。 */
 package com.android.purebilibili.feature.profile
 
+import android.view.View
 import android.widget.FrameLayout
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -151,11 +152,14 @@ internal fun ProfileAvatarEffect(
                         expandedFraction = expanded,
                         circularCutoutWidthPx = if (cutout != null && cutout.isLikelyCircle) cutout.bounds.width() else 0f,
                     )
-                    // 入场缩放围绕头像中心，收起时继续沿用刘海融合的原始尺寸。
+                    // 入场缩放围绕头像中心，收起时居中落入挖孔圆心避免底部残留。
                     val sizePx = restingSizePx * (1f + (latestEntranceScale.value() - 1f) * expanded)
                     val scale = sizePx / avatar.layoutParams.width
-                    val endY = if (cutout != null && cutout.isLikelyCircle) cutout.bounds.centerY() else -29f * layoutDensity
+                    val endY = if (cutout != null && cutout.isLikelyCircle) {
+                        cutout.bounds.bottom - cutout.bounds.width() * 0.75f
+                    } else -29f * layoutDensity
                     val startY = latestTop.value + PROFILE_EXPANDED_AVATAR_TOP_DP * layoutDensity
+                    avatar.visibility = if (expanded <= 0f) View.INVISIBLE else View.VISIBLE
                     avatar.scaleX = scale
                     avatar.scaleY = scale
                     avatar.translationX = (width - sizePx) / 2f

@@ -120,6 +120,19 @@ fun CutePersonLoadingIndicator(
     strokeWidth: Dp = 2.dp,
     size: Dp? = null,
 ) {
+    val uiSkinState = LocalUiSkinState.current
+    val skinLoadingPath = uiSkinState.assetPath(UiSkinSurface.LOADING_INDICATOR) {
+        it.loadingAnimation ?: it.loadingFrame
+    }
+    if (skinLoadingPath != null && (size == null || size >= 28.dp)) {
+        UiSkinAnimatedAsset(
+            path = skinLoadingPath,
+            size = size ?: 36.dp,
+            contentDescription = "加载中",
+            modifier = modifier,
+        )
+        return
+    }
     AdaptiveLoadingIndicator(
         modifier = modifier,
         size = size,

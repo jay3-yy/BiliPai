@@ -77,4 +77,17 @@ class ProfileChromePolicyTest {
         assertTrue(resolveProfileContentUsesOpaqueSurface(hasWallpaper = true))
     }
 
+    @Test
+    fun tabletHeaderSurfaceChrome_keepsDarkTextBelowWallpaperOnLightTheme() {
+        val surfaceChrome = resolveProfileTabletHeaderSurfaceChrome(
+            isDarkTheme = false,
+            onSurfaceColor = Color.Black,
+            onSurfaceVariantColor = Color.DarkGray,
+        )
+
+        assertEquals(Color.Black, surfaceChrome.textColor)
+        assertEquals(Color.DarkGray, surfaceChrome.secondaryTextColor)
+        assertEquals(Color.Black, surfaceChrome.actionButtonContentColor)
+    }
+
 }

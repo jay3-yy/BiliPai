@@ -44,4 +44,43 @@ class ImagePreviewPlaceholderTest {
             loader.shutdown()
         }
     }
+
+    @Test
+    fun previewMatchesWidthBucketedThumbnailCacheEntry() {
+        val context: Context = RuntimeEnvironment.getApplication()
+        val source = "https://i0.hdslb.com/bfs/new_dyn/sample.jpg"
+        val cache = MemoryCache.Builder().maxSizeBytes(1024 * 1024L).build()
+        val loader = ImageLoader.Builder(context).memoryCache(cache).build()
+        try {
+            val bucketedRequest = ImageRequest.Builder(context).data(source).memoryCacheKey(source).build()
+                .withBiliImageQuality(dataSaver = false, listQuality = 80, targetWidthPx = 400)
+            val actualKey = MemoryCache.Key(source, bucketedRequest.memoryCacheKeyExtras)
+            val image = Bitmap.createBitmap(160, 90, Bitmap.Config.ARGB_8888).asImage()
+            cache[actualKey] = MemoryCache.Value(image)
+
+            val previewFromExactWidth = resolveImagePreviewPlaceholder(
+                context = context,
+                imageLoader = loader,
+                source = source,
+                dataSaver = false,
+                listQuality = 80,
+                sourceWidthPx = 400,
+            )
+            val previewWithoutWidth = resolveImagePreviewPlaceholder(
+                context = context,
+                imageLoader = loader,
+                source = source,
+                dataSaver = false,
+                listQuality = 80,
+            )
+
+            assertEquals(actualKey, previewFromExactWidth.cacheKey)
+            assertSame(image, previewFromExactWidth.image)
+            assertEquals(actualKey, previewWithoutWidth.cacheKey)
+            assertSame(image, previewWithoutWidth.image)
+            assertNull(resolveImagePreviewPlaceholder(context, loader, source, true, 80).image)
+        } finally {
+            loader.shutdown()
+        }
+    }
 }

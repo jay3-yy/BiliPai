@@ -35,6 +35,7 @@ internal fun HomeRefreshFeedbackHost(
     val coroutineScope = rememberCoroutineScope()
     val refreshKey by viewModel.refreshKey.collectAsStateWithLifecycle()
     val refreshMessage by viewModel.refreshMessage.collectAsStateWithLifecycle()
+    val refreshMessageHandledKey by viewModel.refreshMessageHandledKey.collectAsStateWithLifecycle()
     val refreshNewItemsKey by viewModel.refreshNewItemsKey.collectAsStateWithLifecycle()
     val refreshNewItemsCount by viewModel.refreshNewItemsCount.collectAsStateWithLifecycle()
     val refreshNewItemsHandledKey by viewModel.refreshNewItemsHandledKey.collectAsStateWithLifecycle()
@@ -46,15 +47,20 @@ internal fun HomeRefreshFeedbackHost(
             )
         }
     }
-    val lastFilteredCount by com.android.purebilibili.core.plugin.json.JsonPluginManager.lastFilteredCount.collectAsStateWithLifecycle()
+    val filterFeedbackEvent by com.android.purebilibili.core.plugin.json.JsonPluginManager.filterFeedbackEvent.collectAsStateWithLifecycle()
 
     //  当有视频被过滤时显示提示
-    LaunchedEffect(lastFilteredCount) {
-        if (lastFilteredCount > 0) {
-            snackbarHostState.showSnackbar(
-                message = " 已过滤 $lastFilteredCount 个视频",
-                duration = SnackbarDuration.Short
-            )
+    LaunchedEffect(filterFeedbackEvent?.id) {
+        val event = filterFeedbackEvent ?: return@LaunchedEffect
+        if (event.count > 0) {
+            try {
+                snackbarHostState.showSnackbar(
+                    message = " 已过滤 ${event.count} 个视频",
+                    duration = SnackbarDuration.Short
+                )
+            } finally {
+                com.android.purebilibili.core.plugin.json.JsonPluginManager.consumeFilterFeedbackEvent(event.id)
+            }
         }
     }
 
@@ -62,8 +68,14 @@ internal fun HomeRefreshFeedbackHost(
 
     //  [彩蛋] 下拉刷新成功后显示趣味提示（仅在开关开启时）
     LaunchedEffect(refreshKey, easterEggEnabled) {
+        val currentRefreshKey = refreshKey
         val message = refreshMessage
-        if (message != null && refreshKey > 0 && easterEggEnabled) {
+        if (
+            message != null &&
+            shouldHandleRefreshNewItemsEvent(currentRefreshKey, refreshMessageHandledKey) &&
+            easterEggEnabled
+        ) {
+            viewModel.markRefreshMessageHandled(currentRefreshKey)
             val result = snackbarHostState.showSnackbar(
                 message = message,
                 actionLabel = "关闭彩蛋",

@@ -1105,8 +1105,12 @@ private fun PopularSubCategorySegmentedControl(
 ) {
     val subCategories = PopularSubCategory.entries
     val selectedIndex = subCategories.indexOf(selectedSubCategory).coerceAtLeast(0)
-    val labels = subCategories.map { subCategory ->
-        stringResource(resolvePopularSubCategoryLabelRes(subCategory))
+    val comprehensiveLabel = stringResource(resolvePopularSubCategoryLabelRes(PopularSubCategory.COMPREHENSIVE))
+    val rankingLabel = stringResource(resolvePopularSubCategoryLabelRes(PopularSubCategory.RANKING))
+    val weeklyLabel = stringResource(resolvePopularSubCategoryLabelRes(PopularSubCategory.WEEKLY))
+    val preciousLabel = stringResource(resolvePopularSubCategoryLabelRes(PopularSubCategory.PRECIOUS))
+    val labels = remember(comprehensiveLabel, rankingLabel, weeklyLabel, preciousLabel) {
+        listOf(comprehensiveLabel, rankingLabel, weeklyLabel, preciousLabel)
     }
 
     Box(
@@ -1116,6 +1120,11 @@ private fun PopularSubCategorySegmentedControl(
         // Glass owns content-sized slots; center the actual rail, not a wider wrapper
         // whose child dock is start-aligned. Disabled materials retain the equal-slot path.
         if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
+            val options = remember(subCategories, labels) {
+                subCategories.mapIndexed { index, category ->
+                    com.android.purebilibili.core.ui.components.AppSegmentOption(category, labels[index])
+                }
+            }
             // 页内标签栏只取壁纸层，避免采到包含自身的首页内容录制层。
             val wallpaperBackdrop = LocalHomeWallpaperBackdrop.current
             val glassContainerColor = wallpaperBackdrop?.let {
@@ -1128,9 +1137,7 @@ private fun PopularSubCategorySegmentedControl(
             com.android.purebilibili.core.ui.components.AppLiquidAwareTabRow(
                 // Glass indicator fills the measured slot; native geometry keeps its defaults.
                 liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
-                options = subCategories.mapIndexed { index, category ->
-                    com.android.purebilibili.core.ui.components.AppSegmentOption(category, labels[index])
-                },
+                options = options,
                 selectedValue = selectedSubCategory,
                 onSelectionChange = onSubCategoryChange,
                 role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
@@ -1191,8 +1198,10 @@ private fun TodayWatchModeSegmentedControl(
 ) {
     val modes = TodayWatchMode.entries
     val selectedIndex = modes.indexOf(selectedMode).coerceAtLeast(0)
-    val labels = modes.map { mode ->
-        stringResource(resolveTodayWatchModeLabelRes(mode))
+    val relaxLabel = stringResource(resolveTodayWatchModeLabelRes(TodayWatchMode.RELAX))
+    val learnLabel = stringResource(resolveTodayWatchModeLabelRes(TodayWatchMode.LEARN))
+    val labels = remember(relaxLabel, learnLabel) {
+        listOf(relaxLabel, learnLabel)
     }
     BottomBarLiquidSegmentedControl(
         // Glass indicator fills the measured slot; native geometry keeps its defaults.

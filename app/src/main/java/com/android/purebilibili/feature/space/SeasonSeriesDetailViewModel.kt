@@ -150,26 +150,32 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                     if (ready && pages.size > appliedPages && ordinaryFavorite) {
                         pages.lastOrNull()?.page?.info?.let(::updateFavoriteResourceInfo)
                     }
-                    val items = if (ready) pages.flatMap { it.page.items } else _uiState.value.items
-                    _uiState.update { it.copy(
-                        items = items,
-                        isLoading = states.refresh is LoadState.Loading && (showLoading || it.items.isEmpty()),
-                        error = refreshError?.let { error -> error.message ?: "加载失败" },
-                        loadMoreError = appendError?.let { error -> error.message ?: "加载更多失败，请稍后重试" },
-                    ) }
-                    _isLoadingMoreState.value = states.append is LoadState.Loading
-                    _hasMoreState.value = !states.append.endOfPaginationReached
-                    if (ready && favoriteDetail) {
-                        val last = pages.last()
-                        _favoriteDetailProgressState.value = FavoriteDetailProgressState(
-                            loadedCount = items.size,
-                            expectedCount = pages.lastOrNull { it.page.info != null }?.page?.info?.media_count
-                                ?: _favoriteDetailProgressState.value.expectedCount,
-                            currentPage = last.number,
-                            lastAddedCount = last.page.items.size,
-                            invalidCount = pages.sumOf { it.page.invalidCount },
-                            hasMore = _hasMoreState.value,
+                    val readyItems = if (ready) pages.flatMap { it.page.items } else null
+                    _uiState.update { current ->
+                        current.copy(
+                            items = readyItems ?: current.items,
+                            isLoading = states.refresh is LoadState.Loading && (showLoading || current.items.isEmpty()),
+                            error = refreshError?.let { error -> error.message ?: "加载失败" },
+                            loadMoreError = appendError?.let { error -> error.message ?: "加载更多失败，请稍后重试" },
                         )
+                    }
+                    _isLoadingMoreState.value = states.append is LoadState.Loading
+                    val hasMore = !states.append.endOfPaginationReached
+                    _hasMoreState.value = hasMore
+                    if (ready && favoriteDetail && readyItems != null) {
+                        val last = pages.last()
+                        val serverExpectedCount = pages.lastOrNull { it.page.info != null }?.page?.info?.media_count
+                        val invalidTotal = pages.sumOf { it.page.invalidCount }
+                        _favoriteDetailProgressState.update { prev ->
+                            FavoriteDetailProgressState(
+                                loadedCount = readyItems.size,
+                                expectedCount = serverExpectedCount ?: prev.expectedCount,
+                                currentPage = last.number,
+                                lastAddedCount = last.page.items.size,
+                                invalidCount = invalidTotal,
+                                hasMore = hasMore,
+                            )
+                        }
                     }
                     if (ready) appliedPages = pages.size
                 }
@@ -205,10 +211,14 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
         _favoriteDetailProgressState.value = FavoriteDetailProgressState()
         _transferFolders.value = emptyList()
         _isManagingState.value = false
-        _uiState.value = _uiState.value.copy(
-            title = pageTitle,
-            canRemoveItems = canManageFavoriteResources,
-        )
+        val currentTitle = pageTitle
+        val canRemove = canManageFavoriteResources
+        _uiState.update {
+            it.copy(
+                title = currentTitle,
+                canRemoveItems = canRemove,
+            )
+        }
         if (id > 0L) loadData()
     }
 
@@ -243,14 +253,16 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
             this.ownerName = ownerName
             this.pageTitle = title
             _hasMoreState.value = false
-            _uiState.value = _uiState.value.copy(
-                title = title,
-                items = emptyList(),
-                isLoading = false,
-                canRemoveItems = false,
-                error = null,
-                loadMoreError = null,
-            )
+            _uiState.update {
+                it.copy(
+                    title = title,
+                    items = emptyList(),
+                    isLoading = false,
+                    canRemoveItems = false,
+                    error = null,
+                    loadMoreError = null,
+                )
+            }
             return
         }
         this.type = request.type.raw
@@ -259,11 +271,13 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
         this.ownerName = ownerName
         this.pageTitle = request.title
         _favoriteDetailProgressState.value = FavoriteDetailProgressState()
-        
-        _uiState.value = _uiState.value.copy(
-            title = request.title,
-            canRemoveItems = canManageFavoriteResources,
-        )
+        val canRemove = canManageFavoriteResources
+        _uiState.update {
+            it.copy(
+                title = request.title,
+                canRemoveItems = canRemove,
+            )
+        }
         loadData()
     }
 
@@ -274,10 +288,14 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
         favoriteFolderOwnerMid = info.upper?.mid?.takeIf { it > 0L } ?: info.mid
         mid = favoriteFolderOwnerMid.takeIf { it > 0L } ?: mid
         if (info.title.isNotBlank()) pageTitle = info.title
-        _uiState.value = _uiState.value.copy(
-            title = pageTitle,
-            canRemoveItems = canManageFavoriteResources,
-        )
+        val currentTitle = pageTitle
+        val canRemove = canManageFavoriteResources
+        _uiState.update {
+            it.copy(
+                title = currentTitle,
+                canRemoveItems = canRemove,
+            )
+        }
     }
 
 

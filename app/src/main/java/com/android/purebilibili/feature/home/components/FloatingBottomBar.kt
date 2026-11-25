@@ -33,6 +33,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -193,6 +194,7 @@ fun PlainMiuixFloatingBottomBar(
     modifier: Modifier = Modifier,
     colors: FloatingBottomBarColors = FloatingBottomBarDefaults.colors(),
     indicatorContainerColor: Color = colors.indicatorColor.copy(alpha = 0.14f),
+    shellOverlay: (@Composable BoxScope.() -> Unit)? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
     val safeCount = tabsCount.coerceAtLeast(1)
@@ -220,9 +222,21 @@ fun PlainMiuixFloatingBottomBar(
                 shape = shape,
                 shadow = Shadow(radius = 10.dp, color = Color.Black, alpha = 0.16f),
             )
-            .background(colors.containerColor, shape)
-            .padding(horizontal = 6.dp, vertical = 3.dp),
+            .background(colors.containerColor, shape),
     ) {
+        if (shellOverlay != null) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(shape),
+                content = shellOverlay,
+            )
+        }
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 6.dp, vertical = 3.dp),
+        ) {
         val itemWidth = maxWidth / safeCount
         val itemWidthPx = with(density) { itemWidth.toPx() }
         val dragAnimation = remember(animationScope, safeCount, itemWidthPx, isLtr) {
@@ -310,6 +324,7 @@ fun PlainMiuixFloatingBottomBar(
                 .width(itemWidth)
                 .fillMaxHeight(),
         )
+        }
     }
 }
 
@@ -600,6 +615,7 @@ fun FloatingBottomBar(
     pagerTargetPositionProvider: (() -> Float)? = null,
     isPagerNavigatingProvider: (() -> Boolean)? = null,
     enabled: Boolean = true,
+    shellOverlay: (@Composable BoxScope.() -> Unit)? = null,
     content: @Composable RowScope.() -> Unit
 ) {
     // Do not use the system night flag here: BiliPai supports an app-only dark theme.
@@ -1579,8 +1595,17 @@ fun FloatingBottomBar(
                             translationX = panelOffset
                             translationY = dockDragTranslationY()
                         }
-                        .then(shellModifier)
-                )
+                        .then(shellModifier),
+                ) {
+                    if (shellOverlay != null) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(pillShape),
+                            content = shellOverlay,
+                        )
+                    }
+                }
             }
             Row(
                 Modifier
@@ -1709,7 +1734,16 @@ fun FloatingBottomBar(
                                         }
                                     },
                                 ),
-                        )
+                        ) {
+                            if (shellOverlay != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .clip(indicatorShape),
+                                    content = shellOverlay,
+                                )
+                            }
+                        }
                     }
                     Row(
                         Modifier

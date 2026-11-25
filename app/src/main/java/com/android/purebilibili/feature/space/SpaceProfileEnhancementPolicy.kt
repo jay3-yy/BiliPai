@@ -13,11 +13,13 @@ enum class SpaceMainTab {
     SHOP
 }
 
+@androidx.compose.runtime.Immutable
 data class SpaceMainTabItem(
     val tab: SpaceMainTab,
     val title: String
 )
 
+@androidx.compose.runtime.Immutable
 data class SpaceContributionTab(
     val id: String,
     val title: String,
@@ -28,12 +30,14 @@ data class SpaceContributionTab(
     val filters: List<SpaceOpusFilter> = emptyList(),
 )
 
+@androidx.compose.runtime.Immutable
 data class SpaceTabContentState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val hasLoaded: Boolean = false
 )
 
+@androidx.compose.runtime.Immutable
 data class SpaceTabShellState(
     val selectedTab: SpaceMainTab,
     val tabStates: Map<SpaceMainTab, SpaceTabContentState>
@@ -50,6 +54,7 @@ data class SpaceTabShellState(
     }
 }
 
+@androidx.compose.runtime.Immutable
 data class SpaceHeaderState(
     val userInfo: SpaceUserInfo?,
     val relationStat: RelationStatData?,

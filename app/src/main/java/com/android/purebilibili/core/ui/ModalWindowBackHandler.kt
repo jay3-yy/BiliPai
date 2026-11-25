@@ -36,6 +36,11 @@ internal fun ModalWindowBackHandler(
             )
             onDispose { dispose() }
         }
+    } else if (enabled) {
+        LocalNavigationBackHandler(
+            enabled = true,
+            onBackCompleted = { completed.value() },
+        )
     }
 }
 

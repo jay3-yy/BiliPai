@@ -796,12 +796,16 @@ internal fun performHomeTopBarTap(
 fun Modifier.premiumClickable(onClick: () -> Unit): Modifier = composed {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
+    val scaleState = animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,
         label = "scale"
     )
     this
-        .scale(scale)
+        .graphicsLayer {
+            val s = scaleState.value
+            scaleX = s
+            scaleY = s
+        }
         .appActionClickable(interactionSource = interactionSource, indication = null, onClick = onClick)
 }
 

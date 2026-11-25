@@ -130,6 +130,7 @@ import com.android.purebilibili.core.theme.resolveAccessibleContainerColors
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.PickGalleryVisualMedia
 import com.android.purebilibili.feature.home.UserState
+import kotlin.math.roundToInt
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceHidden
 import com.android.purebilibili.feature.dynamic.components.prepareImagePreviewSourceTransition
@@ -625,6 +626,12 @@ private fun ProfileScreenContent(
         onLoad = viewModel::loadProfile,
     )
 
+    LaunchedEffect(viewModel, context) {
+        viewModel.events.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     LaunchedEffect(Unit) {
         //  [埋点] 页面浏览追踪
         com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("ProfileScreen")
@@ -867,12 +874,6 @@ private fun ProfileScreenContent(
                         folders = currentUiState.favoriteFolders,
                         ownerMid = currentUiState.user.mid
                     )
-                }
-                LaunchedEffect(currentUiState.space.signSaveMessage) {
-                    currentUiState.space.signSaveMessage?.let { message ->
-                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                        viewModel.clearProfileSpaceMessage()
-                    }
                 }
 
                 AppScaffold(
@@ -1551,6 +1552,8 @@ private fun ProfileSpaceContent(
     val profileCollapseRangeProvider: () -> Float = {
         with(density) {
             (profileStatsTopProvider() - (statusBarTopPadding + 56.dp + 24.dp).toPx())
+                .roundToInt()
+                .toFloat()
                 .coerceAtLeast(1f)
         }
     }
@@ -1649,6 +1652,17 @@ private fun ProfileSpaceContent(
                         .verticalScroll(tabletRailScrollState),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    val tabletSurfaceChrome = remember(
+                        isDarkTheme,
+                        colorScheme.onSurface,
+                        colorScheme.onSurfaceVariant,
+                    ) {
+                        resolveProfileTabletHeaderSurfaceChrome(
+                            isDarkTheme = isDarkTheme,
+                            onSurfaceColor = colorScheme.onSurface,
+                            onSurfaceVariantColor = colorScheme.onSurfaceVariant,
+                        )
+                    }
                     ProfileSpaceHeader(
                         user = user,
                         editableAccount = editableAccount,
@@ -1657,6 +1671,7 @@ private fun ProfileSpaceContent(
                         avatarEntranceScale = avatarEntranceScale,
                         compact = true,
                         heroChrome = heroChrome,
+                        surfaceChrome = tabletSurfaceChrome,
                         showWallpaperAction = true,
                         showEditProfileButton = showProfileEditButton,
                         onEditClick = { showEditDialog = true },
@@ -2416,6 +2431,7 @@ private fun ProfileSpaceHeader(
     avatarSourceRect: androidx.compose.runtime.MutableState<Rect?>,
     compact: Boolean,
     heroChrome: ProfileHeroChrome,
+    surfaceChrome: ProfileHeroChrome = heroChrome,
     showWallpaperAction: Boolean,
     showEditProfileButton: Boolean = false,
     onEditClick: () -> Unit,
@@ -2429,7 +2445,8 @@ private fun ProfileSpaceHeader(
 ) = NavigationControlMotionGroup {
     val openLedger = LocalProfileLedgerNavigation.current
     val textColor = heroChrome.textColor
-    val secondaryColor = heroChrome.secondaryTextColor
+    val surfaceTextColor = surfaceChrome.textColor
+    val secondaryColor = surfaceChrome.secondaryTextColor
     val meta = remember(editableAccount.sign, editableAccount.ipLocation, editableAccount.sex) {
         resolveProfileSpaceIdentityMeta(
             sign = editableAccount.sign,
@@ -2437,8 +2454,8 @@ private fun ProfileSpaceHeader(
             sex = editableAccount.sex
         )
     }
-    val metaChipContainer = heroChrome.metaChipContainerColor
-    val metaChipBorder = heroChrome.metaChipBorderColor
+    val metaChipContainer = surfaceChrome.metaChipContainerColor
+    val metaChipBorder = surfaceChrome.metaChipBorderColor
     var identityExpanded by remember(user.mid, editableAccount.sign, editableAccount.ipLocation, editableAccount.sex) {
         mutableStateOf(false)
     }
@@ -2495,12 +2512,12 @@ private fun ProfileSpaceHeader(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ProfileSpaceStat("动态", user.dynamic, textColor, onClick = onDynamicsClick)
+            ProfileSpaceStat("动态", user.dynamic, surfaceTextColor, onClick = onDynamicsClick)
             val statShape = AppShapes.container(ContainerLevel.Card)
             val following = rememberSystemWindowNavigationControl(BiliPaiNavKey.Following(user.mid), statShape, onFollowingClick)
             val fans = rememberSystemWindowNavigationControl(BiliPaiNavKey.Following(user.mid, fans = true), statShape, onFansClick)
-            ProfileSpaceStat("关注", user.following, textColor, onClick = following.onClick, modifier = following.modifier)
-            ProfileSpaceStat("粉丝", user.follower, textColor, onClick = fans.onClick, modifier = fans.modifier)
+            ProfileSpaceStat("关注", user.following, surfaceTextColor, onClick = following.onClick, modifier = following.modifier)
+            ProfileSpaceStat("粉丝", user.follower, surfaceTextColor, onClick = fans.onClick, modifier = fans.modifier)
             val identityMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
                 !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
             val identityArrowRotation = androidx.compose.animation.core.animateFloatAsState(
@@ -2571,7 +2588,7 @@ private fun ProfileSpaceHeader(
         ProfileIdentityDrawer(
             meta = meta,
             expanded = identityExpanded,
-            contentColor = textColor,
+            contentColor = surfaceTextColor,
             secondaryColor = secondaryColor,
             containerColor = metaChipContainer,
             borderColor = metaChipBorder,
@@ -2589,8 +2606,8 @@ private fun ProfileSpaceHeader(
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = heroChrome.actionButtonContentColor),
-                        border = BorderStroke(1.dp, heroChrome.actionButtonContentColor.copy(alpha = heroChrome.actionButtonBorderAlpha)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = surfaceChrome.actionButtonContentColor),
+                        border = BorderStroke(1.dp, surfaceChrome.actionButtonContentColor.copy(alpha = surfaceChrome.actionButtonBorderAlpha)),
                         shape = AppShapes.container(ContainerLevel.Card)
                     ) {
                         AppText("编辑资料")
@@ -2598,8 +2615,8 @@ private fun ProfileSpaceHeader(
                 }
                 if (showWallpaperAction) {
                     ProfileWallpaperMenuButton(
-                        contentColor = heroChrome.actionButtonContentColor,
-                        borderColor = heroChrome.actionButtonContentColor.copy(alpha = heroChrome.actionButtonBorderAlpha),
+                        contentColor = surfaceChrome.actionButtonContentColor,
+                        borderColor = surfaceChrome.actionButtonContentColor.copy(alpha = surfaceChrome.actionButtonBorderAlpha),
                         onClick = onWallpaperActionClick,
                         modifier = if (!showEditProfileButton) Modifier.weight(1f) else Modifier
                     )

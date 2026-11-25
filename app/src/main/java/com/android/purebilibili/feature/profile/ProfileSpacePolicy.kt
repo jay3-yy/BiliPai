@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.profile
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.data.model.response.FavFolder
@@ -15,6 +16,13 @@ import com.android.purebilibili.feature.dynamic.DynamicDeleteAction
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.feature.list.resolveFavoriteFolderMediaId
 import com.android.purebilibili.core.util.FormatUtils
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
+import kotlinx.collections.immutable.toImmutableList
 
 enum class ProfileSpaceMainTab(val title: String) {
     HOME("主页"),
@@ -86,25 +94,24 @@ enum class ProfileContributionContentState {
     ERROR
 }
 
+@Immutable
 data class ProfileSpaceUiState(
     val selectedTab: ProfileSpaceMainTab = ProfileSpaceMainTab.HOME,
-    val loadingTabs: Set<ProfileSpaceMainTab> = emptySet(),
-    val contentErrors: Map<ProfileSpaceMainTab, String> = emptyMap(),
+    val loadingTabs: ImmutableSet<ProfileSpaceMainTab> = persistentSetOf(),
+    val contentErrors: ImmutableMap<ProfileSpaceMainTab, String> = persistentMapOf(),
     val isLoading: Boolean = false,
-    val favoriteFolders: List<FavFolder> = emptyList(),
-    val bangumiItems: List<FollowBangumiItem> = emptyList(),
-    val contributionVideos: List<SpaceVideoItem> = emptyList(),
+    val favoriteFolders: ImmutableList<FavFolder> = persistentListOf(),
+    val bangumiItems: ImmutableList<FollowBangumiItem> = persistentListOf(),
+    val contributionVideos: ImmutableList<SpaceVideoItem> = persistentListOf(),
     val contributionLoadState: ProfileContributionLoadState = ProfileContributionLoadState.IDLE,
-    val coinVideos: List<SpaceAggregateArchiveItem> = emptyList(),
-    val likeVideos: List<SpaceAggregateArchiveItem> = emptyList(),
-    val dynamicItems: List<SpaceDynamicItem> = emptyList(),
+    val coinVideos: ImmutableList<SpaceAggregateArchiveItem> = persistentListOf(),
+    val likeVideos: ImmutableList<SpaceAggregateArchiveItem> = persistentListOf(),
+    val dynamicItems: ImmutableList<SpaceDynamicItem> = persistentListOf(),
     val favoriteFolderCount: Int = 0,
     val bangumiCount: Int = 0,
     val contributionVideoCount: Int = 0,
     val coinVideoCount: Int = 0,
     val likeVideoCount: Int = 0,
-    val message: String? = null,
-    val signSaveMessage: String? = null,
     val isSavingSign: Boolean = false
 )
 
@@ -319,17 +326,17 @@ fun resolveProfileSpaceStateFromAggregate(
     val aggregateFavoriteFolders = aggregate?.favourite2?.item.orEmpty().map(::mapProfileAggregateFavoriteFolder)
     val contributionVideos = aggregate?.archive?.item.orEmpty().map(::mapProfileAggregateVideoItem)
     return ProfileSpaceUiState(
-        favoriteFolders = aggregateFavoriteFolders.ifEmpty { favoriteFoldersFallback },
+        favoriteFolders = aggregateFavoriteFolders.ifEmpty { favoriteFoldersFallback }.toImmutableList(),
         favoriteFolderCount = aggregate?.favourite2?.count ?: favoriteFoldersFallback.size,
-        bangumiItems = bangumiItems,
+        bangumiItems = bangumiItems.toImmutableList(),
         bangumiCount = bangumiItems.size,
-        contributionVideos = contributionVideos,
+        contributionVideos = contributionVideos.toImmutableList(),
         contributionVideoCount = aggregate?.archive?.count ?: contributionVideos.size,
-        coinVideos = aggregate?.coinArchive?.item.orEmpty(),
+        coinVideos = aggregate?.coinArchive?.item.orEmpty().toImmutableList(),
         coinVideoCount = aggregate?.coinArchive?.count ?: aggregate?.coinArchive?.item.orEmpty().size,
-        likeVideos = aggregate?.likeArchive?.item.orEmpty(),
+        likeVideos = aggregate?.likeArchive?.item.orEmpty().toImmutableList(),
         likeVideoCount = aggregate?.likeArchive?.count ?: aggregate?.likeArchive?.item.orEmpty().size,
-        dynamicItems = dynamicItems.filter { it.visible }
+        dynamicItems = dynamicItems.filter { it.visible }.toImmutableList()
     )
 }
 
@@ -344,13 +351,13 @@ internal fun mergeProfileAggregateState(
         current.contributionVideos.isEmpty()
     return current.copy(
         favoriteFolders = if (aggregate.favourite2 != null) {
-            mergeProfileFavoriteFolders(current.favoriteFolders, aggregateFavoriteFolders)
+            mergeProfileFavoriteFolders(current.favoriteFolders, aggregateFavoriteFolders).toImmutableList()
         } else {
             current.favoriteFolders
         },
         favoriteFolderCount = aggregate.favourite2?.count ?: current.favoriteFolderCount,
         contributionVideos = if (aggregate.archive != null && shouldSeedContributions) {
-            contributionVideos
+            contributionVideos.toImmutableList()
         } else {
             current.contributionVideos
         },
@@ -360,9 +367,9 @@ internal fun mergeProfileAggregateState(
         } else {
             current.contributionVideoCount
         },
-        coinVideos = aggregate.coinArchive?.item ?: current.coinVideos,
+        coinVideos = aggregate.coinArchive?.item?.toImmutableList() ?: current.coinVideos,
         coinVideoCount = aggregate.coinArchive?.count ?: current.coinVideoCount,
-        likeVideos = aggregate.likeArchive?.item ?: current.likeVideos,
+        likeVideos = aggregate.likeArchive?.item?.toImmutableList() ?: current.likeVideos,
         likeVideoCount = aggregate.likeArchive?.count ?: current.likeVideoCount
     )
 }
@@ -387,7 +394,7 @@ internal fun mergeProfileContributionVideoState(
     totalCount: Int
 ): ProfileSpaceUiState {
     return current.copy(
-        contributionVideos = videos,
+        contributionVideos = videos.toImmutableList(),
         contributionVideoCount = maxOf(totalCount, videos.size),
         contributionLoadState = ProfileContributionLoadState.LOADED
     )
@@ -399,7 +406,7 @@ internal fun mergeProfileFavoriteFolderState(
     current: ProfileSpaceUiState,
     folders: List<FavFolder>
 ): ProfileSpaceUiState {
-    val merged = mergeProfileFavoriteFolders(current.favoriteFolders, folders)
+    val merged = mergeProfileFavoriteFolders(current.favoriteFolders, folders).toImmutableList()
     return current.copy(
         favoriteFolders = merged,
         favoriteFolderCount = maxOf(current.favoriteFolderCount, folders.size)
@@ -446,7 +453,7 @@ internal fun mergeProfileBangumiState(
     items: List<FollowBangumiItem>
 ): ProfileSpaceUiState {
     return current.copy(
-        bangumiItems = items,
+        bangumiItems = items.toImmutableList(),
         bangumiCount = items.size
     )
 }
@@ -455,7 +462,7 @@ internal fun mergeProfileDynamicState(
     current: ProfileSpaceUiState,
     items: List<SpaceDynamicItem>
 ): ProfileSpaceUiState {
-    return current.copy(dynamicItems = items.filter { it.visible })
+    return current.copy(dynamicItems = items.filter { it.visible }.toImmutableList())
 }
 
 internal fun shouldApplyProfileLoadResult(

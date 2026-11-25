@@ -208,7 +208,14 @@ fun MineSideDrawer(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .matchParentSize()
-                        .alpha(if (isDark) 0.58f else 0.72f)
+                        .alpha(
+                            when {
+                                liquidGlassActive && isDark -> 0.34f
+                                liquidGlassActive -> 0.42f
+                                isDark -> 0.58f
+                                else -> 0.72f
+                            }
+                        )
                         .clearAndSetSemantics {}
                 )
             }
@@ -221,7 +228,7 @@ fun MineSideDrawer(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .alpha(0.90f)
+                        .alpha(if (liquidGlassActive) 0.62f else 0.90f)
                         .clearAndSetSemantics {}
                 )
             }

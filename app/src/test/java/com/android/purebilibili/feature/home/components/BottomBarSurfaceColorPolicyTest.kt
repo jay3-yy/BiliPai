@@ -15,16 +15,25 @@ import kotlin.test.assertTrue
 class BottomBarSurfaceColorPolicyTest {
 
     @Test
-    fun `floating skin artwork uses readable labels regardless of manifest tint`() {
-        val tintBasedColor = Color.Black
+    fun `floating skin label preserves resolved contrast tint over sampled tail artwork`() {
+        val glacierTeal = Color(0xFF42707F)
+        val snowBackdrop = resolveEffectiveSkinBackdropReferenceColor(
+            skinTrimTint = Color(0xFFAAE8FC),
+            sampledTailLuminance = 0.92f,
+        )
+        val snowColors = resolveBottomBarSkinContentColors(
+            selectedColor = Color(0xFF103B49),
+            unselectedColor = glacierTeal,
+            skinTrimTint = snowBackdrop,
+        )
 
         assertEquals(
-            OpticalContrastPalette.Highlight,
-            resolveFloatingBottomBarLabelColor(tintBasedColor, hasSkinArtwork = true),
+            glacierTeal,
+            resolveFloatingBottomBarLabelColor(snowColors.unselectedColor, hasSkinArtwork = true),
         )
         assertEquals(
-            tintBasedColor,
-            resolveFloatingBottomBarLabelColor(tintBasedColor, hasSkinArtwork = false),
+            Color(0xFF103B49),
+            resolveFloatingBottomBarLabelColor(snowColors.selectedColor, hasSkinArtwork = false),
         )
     }
 

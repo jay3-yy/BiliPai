@@ -31,6 +31,14 @@ internal object DynamicEmoteCatalog {
     @Volatile
     private var lastAttemptMs = 0L
 
+    fun clear() {
+        cached = emptyMap()
+        cachedPackages = emptyList()
+        loadedSessionKey = null
+        fullyLoaded = false
+        lastAttemptMs = 0L
+    }
+
     fun snapshot(): Map<String, String> = cached.takeIf {
         loadedSessionKey == currentSessionKey()
     }.orEmpty()
@@ -109,6 +117,8 @@ internal object DynamicEmoteCatalog {
                         }
                     }
                 }
+            }.onFailure { error ->
+                if (error is kotlinx.coroutines.CancellationException) throw error
             }.onSuccess { completedBusinessCount += 1 }
         }
         return DynamicEmoteCatalogLoadResult(

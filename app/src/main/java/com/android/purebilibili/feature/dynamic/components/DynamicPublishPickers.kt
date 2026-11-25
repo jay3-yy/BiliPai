@@ -28,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
+import com.android.purebilibili.core.plugin.skin.LocalUiSkinState
+import com.android.purebilibili.core.plugin.skin.toSkinEmotePackage
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppDialogAction
 import com.android.purebilibili.core.ui.AppShapes
@@ -219,19 +221,28 @@ internal fun DynamicEmotePanel(
     enabled: Boolean = true,
     onSelected: (String) -> Unit,
 ) {
+    val uiSkinState = LocalUiSkinState.current
+    val skinEmotePkg = remember(uiSkinState) { uiSkinState.toSkinEmotePackage() }
     var emotes by remember { mutableStateOf(DynamicEmoteCatalog.snapshot()) }
-    var packages by remember { mutableStateOf(DynamicEmoteCatalog.snapshotPackages()) }
-    var selectedPackageId by remember { mutableStateOf(packages.firstOrNull()?.id) }
-    var loading by remember { mutableStateOf(emotes.isEmpty()) }
+    var remotePackages by remember { mutableStateOf(DynamicEmoteCatalog.snapshotPackages()) }
+    val packages = remember(skinEmotePkg, remotePackages) {
+        listOfNotNull(skinEmotePkg) + remotePackages
+    }
+    var selectedPackageId by remember(skinEmotePkg?.id) {
+        mutableStateOf(skinEmotePkg?.id ?: packages.firstOrNull()?.id)
+    }
+    var loading by remember { mutableStateOf(emotes.isEmpty() && skinEmotePkg == null) }
     val sessionKey = DynamicEmoteCatalog.currentSessionKey()
     LaunchedEffect(sessionKey) {
         loading = true
         emotes = DynamicEmoteCatalog.ensureLoaded()
-        packages = DynamicEmoteCatalog.snapshotPackages()
-        if (packages.none { it.id == selectedPackageId }) selectedPackageId = packages.firstOrNull()?.id
+        remotePackages = DynamicEmoteCatalog.snapshotPackages()
+        if (packages.none { it.id == selectedPackageId }) {
+            selectedPackageId = skinEmotePkg?.id ?: remotePackages.firstOrNull()?.id
+        }
         loading = false
     }
-    if (emotes.isEmpty()) {
+    if (emotes.isEmpty() && skinEmotePkg == null) {
         androidx.compose.foundation.layout.Box(modifier, contentAlignment = Alignment.Center) {
             AppText(if (loading) "正在加载表情…" else "暂无表情")
         }

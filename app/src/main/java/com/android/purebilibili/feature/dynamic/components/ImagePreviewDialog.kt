@@ -85,6 +85,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -262,11 +263,13 @@ private object ImagePreviewOverlayController {
     fun recordSourceImage(token: Long, sourceKey: String, image: Image) {
         if (_request.value?.token != token) return
         // Keep only the current pager window; source tiles retain their own image reference.
-        val images = LinkedHashMap(_sourceImages.value)
-        images.remove(sourceKey)
-        images[sourceKey] = image
-        if (images.size > 3) images.remove(images.keys.first())
-        _sourceImages.value = images
+        _sourceImages.update { current ->
+            val images = LinkedHashMap(current)
+            images.remove(sourceKey)
+            images[sourceKey] = image
+            if (images.size > 3) images.remove(images.keys.first())
+            images
+        }
     }
 
     fun prepareSourceTransition(
@@ -296,14 +299,17 @@ private object ImagePreviewOverlayController {
         sourceRect: androidx.compose.ui.geometry.Rect?,
         sourceKey: String? = _activeSourceKey.value,
     ) {
-        val current = _request.value ?: return
-        if (current.token != token) return
+        if (_request.value?.token != token) return
         // 翻到无身份键的页时清空键，回退到几何判定。
         if (_activeSourceKey.value != sourceKey) {
             _activeSourceKey.value = sourceKey
         }
-        if (current.activeSourceRect != sourceRect) {
-            _request.value = current.copy(activeSourceRect = sourceRect)
+        _request.update { current ->
+            if (current == null || current.token != token || current.activeSourceRect == sourceRect) {
+                current
+            } else {
+                current.copy(activeSourceRect = sourceRect)
+            }
         }
         if (_activeSourceRect.value != sourceRect) {
             _activeSourceRect.value = sourceRect
@@ -598,10 +604,11 @@ private fun ImagePreviewOverlayContent(
 
     val contentImageSettings = com.android.purebilibili.core.ui.components.LocalContentImageSettings.current
     val sourceDataSaver by remember(context) { com.android.purebilibili.core.store.DataSaverState.get(context).active }
-    val initialPlaceholder = remember(images, initialIndex, sourceKey, gifImageLoader, sourceDataSaver, contentImageSettings.listQuality) {
+    val initialPlaceholder = remember(images, initialIndex, sourceKey, sourceRect, gifImageLoader, sourceDataSaver, contentImageSettings.listQuality) {
         resolveImagePreviewPlaceholder(
             context, gifImageLoader, sourceKey ?: images.getOrNull(initialIndex).orEmpty(),
             sourceDataSaver, contentImageSettings.listQuality,
+            sourceWidthPx = sourceRect?.width?.toInt()?.takeIf { it > 0 },
         )
     }
     var openingHasDrawable by remember { mutableStateOf(initialPlaceholder.image != null) }
@@ -1085,11 +1092,17 @@ private fun ImagePreviewOverlayContent(
 
             if (!openingStarted && initialPlaceholder.image == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    com.android.purebilibili.core.ui.components.AppText("图片加载中…")
+                    com.android.purebilibili.core.ui.components.AppText(
+                        "图片加载中…",
+                        color = MediaContrastPalette.Foreground,
+                    )
                 }
             } else if (previewLoadFailed) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    com.android.purebilibili.core.ui.components.AppText("图片加载失败，点击关闭")
+                    com.android.purebilibili.core.ui.components.AppText(
+                        "图片加载失败，点击关闭",
+                        color = MediaContrastPalette.Foreground,
+                    )
                 }
             }
 
@@ -1287,10 +1300,11 @@ private fun ImagePreviewOverlayContent(
                         // 原图下载前内容层只剩黑底。把网格已加载的缩略图 URL 设为
                         // placeholderMemoryCacheKey，morph 期间立即垫图，杜绝「先黑后图」。
                         val sourcePlaceholder = if (page == initialIndex) initialPlaceholder else
-                            remember(images.getOrNull(page), gifImageLoader, sourceDataSaver, contentImageSettings.listQuality) {
+                            remember(images.getOrNull(page), sourceRects[page], gifImageLoader, sourceDataSaver, contentImageSettings.listQuality) {
                                 resolveImagePreviewPlaceholder(
                                     context, gifImageLoader, images.getOrNull(page).orEmpty(),
                                     sourceDataSaver, contentImageSettings.listQuality,
+                                    sourceWidthPx = sourceRects[page]?.width?.toInt()?.takeIf { it > 0 },
                                 )
                             }
                         val placeholderCacheKey = sourcePlaceholder.cacheKey

@@ -184,6 +184,8 @@ data class HomeUiState(
     val displayedTabEntry: HomeTopTabEntry = HomeTopTabEntry.Category(currentCategory),
     //  [彩蛋] 刷新成功后的趣味消息
     val refreshMessage: String? = null,
+    //  [彩蛋] 趣味消息已消费键（防止旋转或返回页面后重复弹出）
+    val refreshMessageHandledKey: Long = 0L,
     //  [新增] 增量刷新新增条数（null 表示不展示）
     val refreshNewItemsCount: Int? = null,
     //  [新增] 新增条数提示触发键（用于一次性 UI 动效）

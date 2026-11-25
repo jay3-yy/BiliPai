@@ -22,6 +22,7 @@ import com.android.purebilibili.data.model.response.SpaceDynamicModules
 import com.android.purebilibili.data.model.response.SpaceDynamicOpus
 import com.android.purebilibili.data.model.response.SpaceDynamicRichText
 import com.android.purebilibili.data.model.response.SpaceVideoItem
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,10 +33,10 @@ class ProfileSpacePolicyTest {
 
     @Test
     fun `home uses aggregate video preview without loading the full contribution or dynamic lists`() {
-        val space = ProfileSpaceUiState(contributionVideos = listOf(SpaceVideoItem(bvid = "BVpreview")))
+        val space = ProfileSpaceUiState(contributionVideos = persistentListOf(SpaceVideoItem(bvid = "BVpreview")))
         assertEquals(setOf(ProfileSpaceMainTab.FAVORITE, ProfileSpaceMainTab.BANGUMI), resolveProfileContentLoadTargets(space))
         assertEquals(setOf(ProfileSpaceMainTab.CONTRIBUTION, ProfileSpaceMainTab.FAVORITE, ProfileSpaceMainTab.BANGUMI),
-            resolveProfileContentLoadTargets(space.copy(contributionVideos = emptyList())))
+            resolveProfileContentLoadTargets(space.copy(contributionVideos = persistentListOf())))
     }
 
     @Test
@@ -221,9 +222,9 @@ class ProfileSpacePolicyTest {
         val bangumi = FollowBangumiItem(seasonId = 2, title = "追番")
         val dynamic = SpaceDynamicItem(id_str = "dynamic-1")
         val current = ProfileSpaceUiState(
-            bangumiItems = listOf(bangumi),
+            bangumiItems = persistentListOf(bangumi),
             bangumiCount = 1,
-            dynamicItems = listOf(dynamic),
+            dynamicItems = persistentListOf(dynamic),
             isLoading = true
         )
 
@@ -294,7 +295,7 @@ class ProfileSpacePolicyTest {
     @Test
     fun `hydrated contribution result remains authoritative over late aggregate`() {
         val hydrated = ProfileSpaceUiState(
-            contributionVideos = listOf(SpaceVideoItem(aid = 9, bvid = "BV9", title = "WBI 投稿")),
+            contributionVideos = persistentListOf(SpaceVideoItem(aid = 9, bvid = "BV9", title = "WBI 投稿")),
             contributionVideoCount = 1,
             contributionLoadState = ProfileContributionLoadState.LOADED
         )
@@ -316,7 +317,7 @@ class ProfileSpacePolicyTest {
     @Test
     fun `successful empty contribution response clears aggregate seed`() {
         val seeded = ProfileSpaceUiState(
-            contributionVideos = listOf(SpaceVideoItem(aid = 3, bvid = "BV3", title = "聚合投稿")),
+            contributionVideos = persistentListOf(SpaceVideoItem(aid = 3, bvid = "BV3", title = "聚合投稿")),
             contributionVideoCount = 1,
             contributionLoadState = ProfileContributionLoadState.LOADING
         )
@@ -331,7 +332,7 @@ class ProfileSpacePolicyTest {
     @Test
     fun `profile contribution merge prefers hydrated videos`() {
         val current = ProfileSpaceUiState(
-            contributionVideos = emptyList(),
+            contributionVideos = persistentListOf(),
             contributionVideoCount = 3
         )
         val hydrated = listOf(
@@ -349,7 +350,7 @@ class ProfileSpacePolicyTest {
     @Test
     fun `favorite merge keeps aggregate cover without requesting folder content`() {
         val current = ProfileSpaceUiState(
-            favoriteFolders = listOf(
+            favoriteFolders = persistentListOf(
                 FavFolder(
                     id = 10,
                     title = "默认收藏夹",

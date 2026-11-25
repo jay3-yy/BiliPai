@@ -161,9 +161,20 @@ fun SplashWallpaperPickerSheet(
         WallpaperPickerTarget.SUBSCRIPTION_ARTICLE -> "设为正文壁纸"
     }
 
+    val dismissSheet = {
+        viewModel.clearSplashSaveError()
+        onDismiss()
+    }
+
     // 初始化加载
-    LaunchedEffect(Unit) {
+    LaunchedEffect(viewModel) {
+        viewModel.clearSplashSaveError()
         viewModel.loadOfficialWallpapers()
+    }
+    DisposableEffect(viewModel) {
+        onDispose {
+            viewModel.clearSplashSaveError()
+        }
     }
     LaunchedEffect(officialWallpapers) {
         val randomPool = resolveVisibleSplashWallpaperPool(officialWallpapers)
@@ -173,7 +184,7 @@ fun SplashWallpaperPickerSheet(
     }
 
     AppModalBottomSheet(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismissSheet,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.background,
         dragHandle = null
@@ -194,7 +205,7 @@ fun SplashWallpaperPickerSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    AppIconButton(onClick = onDismiss) {
+                    AppIconButton(onClick = dismissSheet) {
                         AppIcon(clearIcon, contentDescription = "关闭")
                     }
 
@@ -400,7 +411,10 @@ fun SplashWallpaperPickerSheet(
                             } else homeEffectMode,
                             saving = isSaving,
                             saveError = (saveState as? WallpaperSaveState.Error)?.message,
-                            onDismiss = { showHomeAdjustmentSheet = false },
+                            onDismiss = {
+                                viewModel.clearSplashSaveError()
+                                showHomeAdjustmentSheet = false
+                            },
                             onSave = { mobile, tablet ->
                                 val done = {
                                     showHomeAdjustmentSheet = false

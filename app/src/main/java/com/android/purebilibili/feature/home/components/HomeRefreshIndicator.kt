@@ -31,7 +31,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppPullRefreshLoadingIndicator
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.plugin.skin.LocalUiSkinState
+import com.android.purebilibili.core.plugin.skin.UiSkinAnimatedAsset
+import com.android.purebilibili.core.plugin.skin.UiSkinSurface
+import com.android.purebilibili.core.plugin.skin.assetPath
 import com.android.purebilibili.feature.home.resolvePullRefreshHintText
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import java.io.File
 
 /**
  * Renderer kind for [HomeRefreshIndicator]. iOS keeps its Cupertino spinner with
@@ -86,10 +93,28 @@ fun Md3ScreenshotRefreshIndicator(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            val uiSkinState = LocalUiSkinState.current
+            val skinLoadingAnim = uiSkinState.assetPath(UiSkinSurface.LOADING_INDICATOR) { it.loadingAnimation ?: it.loadingFrame }
+            val skinLoadingFrame = uiSkinState.assetPath(UiSkinSurface.LOADING_INDICATOR) { it.loadingFrame ?: it.loadingAnimation }
             if (isRefreshing) {
-                // Official M3 morphing LoadingIndicator (dynamic primary).
-                AdaptiveLoadingIndicator(
-                    color = AppContentColors.accent(),
+                if (skinLoadingAnim != null) {
+                    UiSkinAnimatedAsset(
+                        path = skinLoadingAnim,
+                        size = 42.dp,
+                        contentDescription = "正在刷新",
+                    )
+                } else {
+                    // Official M3 morphing LoadingIndicator (dynamic primary).
+                    AdaptiveLoadingIndicator(
+                        color = AppContentColors.accent(),
+                    )
+                }
+            } else if (skinLoadingFrame != null && !skinLoadingFrame.endsWith(".json", ignoreCase = true)) {
+                AsyncImage(
+                    model = File(skinLoadingFrame),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(38.dp),
                 )
             } else {
                 Box(
@@ -191,17 +216,37 @@ fun HomeRefreshIndicator(
                 .fillMaxWidth()
                 .padding(vertical = AppSpacingTokens.Medium)
         ) {
+            val uiSkinState = LocalUiSkinState.current
+            val skinLoadingAnim = uiSkinState.assetPath(UiSkinSurface.LOADING_INDICATOR) { it.loadingAnimation ?: it.loadingFrame }
+            val skinLoadingFrame = uiSkinState.assetPath(UiSkinSurface.LOADING_INDICATOR) { it.loadingFrame ?: it.loadingAnimation }
             if (isRefreshing) {
-                AppPullRefreshLoadingIndicator()
+                if (skinLoadingAnim != null) {
+                    UiSkinAnimatedAsset(
+                        path = skinLoadingAnim,
+                        size = 34.dp,
+                        contentDescription = "正在刷新",
+                    )
+                } else {
+                    AppPullRefreshLoadingIndicator()
+                }
             } else if (progress > 0.1f) {
-                //  箭头图标（旋转表示状态变化）
-                AppText(
-                    text = "↓",
-                    fontSize = MaterialTheme.typography.titleMedium.fontSize,
-                    fontWeight = FontWeight.Bold,
-                    color = AppContentColors.accent(),
-                    modifier = Modifier.graphicsLayer { rotationZ = arrowRotationState.value }
-                )
+                if (skinLoadingFrame != null && !skinLoadingFrame.endsWith(".json", ignoreCase = true)) {
+                    AsyncImage(
+                        model = File(skinLoadingFrame),
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(30.dp),
+                    )
+                } else {
+                    //  箭头图标（旋转表示状态变化）
+                    AppText(
+                        text = "↓",
+                        fontSize = MaterialTheme.typography.titleMedium.fontSize,
+                        fontWeight = FontWeight.Bold,
+                        color = AppContentColors.accent(),
+                        modifier = Modifier.graphicsLayer { rotationZ = arrowRotationState.value }
+                    )
+                }
             }
 
             if (hintText.isNotEmpty()) {

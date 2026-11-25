@@ -2,22 +2,30 @@ package com.android.purebilibili.feature.dynamic.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 
+@Stable
+private class NonSnapshotImagePreviewRectState(
+    override var value: Rect? = null,
+) : MutableState<Rect?> {
+    override fun component1(): Rect? = value
+    override fun component2(): (Rect?) -> Unit = { value = it }
+}
+
 /**
  * 记录缩略图在窗口中的坐标，供 [ImagePreviewDialog] 做「落位/回位」morph。
  *
- * 与 DrawGrid 内联的 `onGloballyPositioned + boundsInWindow` 捕获是同一模式，
- * 这里收敛成助手，供没有网格回调的入口（头像、封面、订阅文章图等）复用。
+ * 使用非快照状态引用承载布局坐标，避免列表滚动时 `onGloballyPositioned` 逐帧回写快照状态触发组合阶段重算；
+ * 预览开合与翻页由 [ImagePreviewDialog] 内部激活源矩形的 `StateFlow` 驱动显隐刷新。
  */
 @Composable
 fun rememberImagePreviewSourceRect(): MutableState<Rect?> {
-    return remember { mutableStateOf(null) }
+    return remember { NonSnapshotImagePreviewRectState() }
 }
 
 fun Modifier.imagePreviewSourceBounds(target: MutableState<Rect?>): Modifier =

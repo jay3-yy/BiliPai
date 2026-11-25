@@ -567,7 +567,6 @@ fun DynamicScreen(
             } else {
                 0.dp
             }
-    val pullRefreshState = rememberPullToRefreshState()
 
     // GIF 图片加载器
     val gifImageLoader = context.imageLoader
@@ -1032,10 +1031,11 @@ fun DynamicScreen(
                                 // Overlay top bar (not Scaffold-padded) — anchor indicator under chrome.
                                 val dynamicRefreshIndicatorTopInset =
                                     statusBarHeight + pageListTopExtra
+                                val pagePullRefreshState = rememberPullToRefreshState()
                                 AdaptivePullToRefreshBox(
-                                    isRefreshing = isRefreshing,
+                                    isRefreshing = isRefreshing && tab.logicalIndex == activeSelectedTab,
                                     onRefresh = { viewModel.refresh(tab.logicalIndex) },
-                                    state = pullRefreshState,
+                                    state = pagePullRefreshState,
                                     indicatorTopInset = dynamicRefreshIndicatorTopInset,
                                     modifier = Modifier.fillMaxSize()
                                 ) {
@@ -1267,10 +1267,11 @@ fun DynamicScreen(
                             ).dp
                             val dynamicRefreshIndicatorTopInset =
                                 statusBarHeight + pageListTopExtra
+                            val pagePullRefreshState = rememberPullToRefreshState()
                             AdaptivePullToRefreshBox(
-                                isRefreshing = isRefreshing,
+                                isRefreshing = isRefreshing && tab.logicalIndex == activeSelectedTab,
                                 onRefresh = { viewModel.refresh(tab.logicalIndex) },
-                                state = pullRefreshState,
+                                state = pagePullRefreshState,
                                 indicatorTopInset = dynamicRefreshIndicatorTopInset,
                                 modifier = Modifier.fillMaxSize()
                             ) {

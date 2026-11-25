@@ -87,16 +87,25 @@ internal suspend fun prepareHomeFeedVideos(
     blockedMids: Set<Long>,
     feedKind: FeedKind,
     feedbackFilter: (List<VideoItem>) -> List<VideoItem>,
+    appContext: android.content.Context? = null,
 ): PreparedHomeFeedVideos {
     val validVideos = videos.filter { it.bvid.isNotEmpty() && it.title.isNotEmpty() }
     val blockedFiltered = validVideos.filter { video -> video.owner.mid !in blockedMids }
     val feedbackFiltered = feedbackFilter(blockedFiltered)
     val builtinFiltered = PluginManager.filterFeedItemsBeforeContentProjection(feedbackFiltered, feedKind = feedKind)
-    val filteredVideos = com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+    val ruleFiltered = com.android.purebilibili.feature.plugin.filterVideoTagMatches(
         com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(builtinFiltered),
         bvid = { it.bvid },
         asVideoItem = { it },
     )
+    val filteredVideos = if (appContext != null && feedKind == FeedKind.HOME_RECOMMEND) {
+        com.android.purebilibili.core.plugin.bpx.BpxSandboxRuntime.applyHomeLensIfEnabled(
+            context = appContext,
+            videos = ruleFiltered,
+        )
+    } else {
+        ruleFiltered
+    }
     return PreparedHomeFeedVideos(
         validVideoCount = validVideos.size,
         filteredVideos = filteredVideos,

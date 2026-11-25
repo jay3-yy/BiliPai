@@ -90,6 +90,8 @@ internal fun LinkedBottomDock(
     currentLabel: String = "",
     animateNowPlayingPresence: Boolean = true,
     hasUiSkinDecoration: Boolean = false,
+    uiSkinDecoration: BottomBarUiSkinDecoration? = null,
+    visibleItems: List<BottomNavItem> = emptyList(),
     modifier: Modifier = Modifier,
     blurEnabled: Boolean = false,
     hazeState: HazeState? = null,
@@ -603,6 +605,7 @@ internal fun LinkedBottomDock(
                                 blurEnabled = blurEnabled,
                                 hazeState = hazeState,
                                 liquidGlassTuning = liquidGlassTuning,
+                                uiSkinDecoration = uiSkinDecoration,
                                 onExpand = { compactNavigation = false },
                                 content = {
                                     CompositionLocalProvider(LocalLinkedDockFusedGlassActive provides fusedDockActive) {
@@ -689,6 +692,16 @@ internal fun LinkedBottomDock(
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
+                        val skinCollapsedContainerColor = if (uiSkinDecoration != null) {
+                            val skinTint = uiSkinDecoration.liquidGlassSurfaceTint ?: uiSkinDecoration.bottomTrimTint
+                            androidx.compose.ui.graphics.lerp(
+                                containerColor,
+                                skinTint.copy(alpha = containerColor.alpha.coerceAtLeast(if (glassEnabled) 0.56f else 0.90f)),
+                                if (glassEnabled) 0.34f else 0.65f,
+                            )
+                        } else {
+                            containerColor
+                        }
                         Box(
                             Modifier
                                 .fillMaxSize()
@@ -696,7 +709,7 @@ internal fun LinkedBottomDock(
                                     backdrop = backdrop,
                                     interactionLayerBlock = homeElasticState.layerBlock.takeIf { homeGlassMotion },
                                     interactionState = homeElasticState.takeIf { homeGlassMotion },
-                                    containerColor = containerColor,
+                                    containerColor = skinCollapsedContainerColor,
                                     pressProgress = 0f,
                                     shape = shape,
                                     enabled = glassEnabled,
@@ -705,14 +718,33 @@ internal fun LinkedBottomDock(
                                     liquidGlassTuning = liquidGlassTuning,
                                 )
                         )
-                        AppIcon(
-                            imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
-                                resolveHomeNavigationBarIcon(currentItem, selected = true)
-                            } else resolveMaterialBottomBarIcon(currentItem, selected = true),
-                            contentDescription = "$currentLabel，展开底栏",
-                            tint = navigationColor,
-                            modifier = if (homeGlassMotion) Modifier.graphicsLayer(homeElasticState.layerBlock) else Modifier,
+                        val collapsedSkinIconPath = uiSkinDecoration?.iconPathFor(
+                            item = currentItem,
+                            selected = true,
+                            visibleItems = visibleItems,
                         )
+                        if (collapsedSkinIconPath != null) {
+                            BottomBarSkinIcon(
+                                iconPath = collapsedSkinIconPath,
+                                contentDescription = "$currentLabel，展开底栏",
+                                selected = true,
+                                size = resolveBottomBarCompactSkinHomeIconSize(),
+                                modifier = if (homeGlassMotion) {
+                                    Modifier.graphicsLayer(homeElasticState.layerBlock)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                        } else {
+                            AppIcon(
+                                imageVector = if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
+                                    resolveHomeNavigationBarIcon(currentItem, selected = true)
+                                } else resolveMaterialBottomBarIcon(currentItem, selected = true),
+                                contentDescription = "$currentLabel，展开底栏",
+                                tint = navigationColor,
+                                modifier = if (homeGlassMotion) Modifier.graphicsLayer(homeElasticState.layerBlock) else Modifier,
+                            )
+                        }
                     }
                 }
                 if (nowPlayingSlot != null) {
@@ -873,6 +905,16 @@ internal fun LinkedBottomDock(
                                 )
                         ) {
                             if (!fusedDockActive) {
+                                val skinSearchContainerColor = if (uiSkinDecoration != null) {
+                                    val skinTint = uiSkinDecoration.liquidGlassSurfaceTint ?: uiSkinDecoration.bottomTrimTint
+                                    androidx.compose.ui.graphics.lerp(
+                                        containerColor,
+                                        skinTint.copy(alpha = containerColor.alpha.coerceAtLeast(if (glassEnabled) 0.62f else 0.90f)),
+                                        if (glassEnabled) 0.28f else 0.45f,
+                                    )
+                                } else {
+                                    containerColor
+                                }
                                 Box(
                                     Modifier
                                         .fillMaxSize()
@@ -880,7 +922,7 @@ internal fun LinkedBottomDock(
                                             backdrop = backdrop,
                                             interactionLayerBlock = searchElasticState.layerBlock.takeIf { searchGlassMotion },
                                             interactionState = searchElasticState.takeIf { searchGlassMotion },
-                                            containerColor = containerColor,
+                                            containerColor = skinSearchContainerColor,
                                             pressProgress = 0f,
                                             shape = shape,
                                             enabled = glassEnabled,

@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.dynamic
 
+import androidx.compose.runtime.Immutable
 import com.android.purebilibili.data.model.response.CommentMainListContinuation
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.ReplyData
@@ -9,6 +10,10 @@ import com.android.purebilibili.feature.dynamic.components.resolveDynamicCardPri
 import com.android.purebilibili.feature.video.viewmodel.SubReplyPageRequest
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import com.android.purebilibili.feature.video.viewmodel.mergeSentSubReplies
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableSet
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlin.math.ceil
 
@@ -159,8 +164,9 @@ internal fun resolveDynamicSubReplyStateAfterFailure(
  * 加载完成时会依次发射，中间帧会出现「评论已经渲染但 loading 仍为 true」这类不一致状态，
  * 表现就是列表先跳一下再稳定。收敛成一个对象后，一次发射即一个完整画面。
  */
+@Immutable
 internal data class DynamicCommentUiState(
-    val comments: List<ReplyItem> = emptyList(),
+    val comments: ImmutableList<ReplyItem> = persistentListOf(),
     val totalCount: Int = 0,
     val totalCountKnown: Boolean = false,
     val isLoading: Boolean = false,
@@ -174,7 +180,7 @@ internal data class DynamicCommentUiState(
     val pinnedTargetReplyId: Long = 0L,
     val pinnedReply: ReplyItem? = null,
     val pinnedReplyError: String? = null,
-    val pinnedReplyIds: Set<Long> = emptySet(),
+    val pinnedReplyIds: ImmutableSet<Long> = persistentSetOf(),
 )
 
 /** Route-local placement does not change the server order or the cached first page. */

@@ -224,7 +224,7 @@ fun AppLiquidGlassBackToTopButton(
                     )
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
-                        indication = if (elasticEnabled) null else ripple(),
+                        indication = if (elasticEnabled) null else androidx.compose.foundation.LocalIndication.current,
                         onClick = {
                             if (!isDragging && !dragJustFinished) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+@androidx.compose.runtime.Immutable
 internal data class FavoriteResourceOrderState(
     val identity: AccountSessionIdentity = TokenManager.accountIdentity.value,
     val folderId: Long = 0L,

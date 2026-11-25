@@ -94,3 +94,15 @@ fun resolveProfileContentChrome(
 fun resolveProfileContentUsesOpaqueSurface(hasWallpaper: Boolean): Boolean = true
 
 fun resolveProfileHeroUsesWallpaperBackground(hasWallpaper: Boolean): Boolean = hasWallpaper
+
+/** 大屏分栏左侧仅有头像与昵称落在头图上，其下方的 UID、统计与操作区落在普通页面底色上。 */
+fun resolveProfileTabletHeaderSurfaceChrome(
+    isDarkTheme: Boolean,
+    onSurfaceColor: Color,
+    onSurfaceVariantColor: Color,
+): ProfileHeroChrome = resolveProfileHeroChrome(
+    hasWallpaper = false,
+    isDarkTheme = isDarkTheme,
+    onSurfaceColor = onSurfaceColor,
+    onSurfaceVariantColor = onSurfaceVariantColor,
+)

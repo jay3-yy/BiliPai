@@ -51,18 +51,68 @@ data class BottomBarUiSkinDecoration(
     val bottomUnselectedTint: Color = Color.Unspecified,
     val bottomSelectedTint: Color = Color.Unspecified,
     val bottomTrimImagePath: String? = null,
+    val liquidGlassSurfaceTint: Color? = null,
+    val liquidGlassTintOpacity: Float = 0.22f,
     val iconMotion: BottomBarSkinMotionSpec = BottomBarSkinMotionSpec(),
-    val bottomBarIconPaths: Map<BottomNavItem, BottomBarSkinIconPaths> = emptyMap()
+    val bottomBarIconPaths: Map<BottomNavItem, BottomBarSkinIconPaths> = emptyMap(),
+    val distinctRolePool: List<BottomBarSkinIconPaths> = emptyList(),
 ) {
-    @Suppress("UNUSED_PARAMETER")
-    fun iconPathFor(item: BottomNavItem, selected: Boolean = false): String? {
-        val paths = bottomBarIconPaths[item] ?: return null
-        // Compact navigation keeps a stable icon while the host indicator moves.
-        return paths.unselected
+    fun iconPathFor(
+        item: BottomNavItem,
+        selected: Boolean = false,
+        visibleItems: List<BottomNavItem> = emptyList(),
+    ): String? {
+        if (visibleItems.size > 1 && distinctRolePool.size > 1 && item in visibleItems) {
+            val deduplicated = resolveDeduplicatedVisibleIconPaths(visibleItems)
+            deduplicated[item]?.let { return it.pathFor(selected) }
+        }
+        return bottomBarIconPaths[item]?.pathFor(selected)
     }
 
-    fun illustratedIconPathFor(item: BottomNavItem, selected: Boolean): String? {
-        return bottomBarIconPaths[item]?.pathFor(selected)
+    fun illustratedIconPathFor(
+        item: BottomNavItem,
+        selected: Boolean,
+        visibleItems: List<BottomNavItem> = emptyList(),
+    ): String? {
+        return iconPathFor(item = item, selected = selected, visibleItems = visibleItems)
+    }
+
+    private fun resolveDeduplicatedVisibleIconPaths(
+        visibleItems: List<BottomNavItem>,
+    ): Map<BottomNavItem, BottomBarSkinIconPaths> {
+        val canonical = setOf(
+            BottomNavItem.HOME,
+            BottomNavItem.DYNAMIC,
+            BottomNavItem.LISTEN_VIDEO,
+            BottomNavItem.HISTORY,
+            BottomNavItem.PROFILE,
+        )
+        val assigned = linkedMapOf<BottomNavItem, BottomBarSkinIconPaths>()
+        val usedUnselectedPaths = linkedSetOf<String>()
+        // 1. 先固定匹配官方原生语义槽位
+        visibleItems.filter { it in canonical }.forEach { navItem ->
+            val paths = bottomBarIconPaths[navItem] ?: return@forEach
+            if (usedUnselectedPaths.add(paths.unselected)) {
+                assigned[navItem] = paths
+            }
+        }
+        // 2. 其余可见自定义槽位（如设置、收藏、短视频、直播等）优先分配尚未出场的装扮角色图标，避免相邻 Tab 撞脸
+        visibleItems.forEach { navItem ->
+            if (navItem in assigned) return@forEach
+            val preferred = bottomBarIconPaths[navItem]
+            val picked = if (preferred != null && preferred.unselected !in usedUnselectedPaths) {
+                preferred
+            } else {
+                distinctRolePool.firstOrNull { it.unselected !in usedUnselectedPaths }
+                    ?: preferred
+                    ?: distinctRolePool.firstOrNull()
+            }
+            if (picked != null) {
+                usedUnselectedPaths.add(picked.unselected)
+                assigned[navItem] = picked
+            }
+        }
+        return assigned
     }
 }
 
@@ -121,6 +171,7 @@ data class TopTabSkinIconPaths(
 data class HomeUiSkinDecoration(
     val skinId: String,
     val topAtmosphereTint: Color,
+    val topForegroundTint: Color = Color.Unspecified,
     val searchCapsuleTint: Color,
     val searchCapsuleImagePath: String? = null,
     val topAtmosphereImagePath: String? = null,
@@ -132,6 +183,8 @@ data class HomeUiSkinDecoration(
     val profileSquaredBackgroundImagePath: String? = null,
     val profileVideoBackgroundPath: String? = null,
     val profileVideoPlayMode: String? = null,
+    val liquidGlassSurfaceTint: Color? = null,
+    val liquidGlassTintOpacity: Float = 0.22f,
     val colorMode: String? = null,
     val topTabSkinIconPaths: Map<String, TopTabSkinIconPaths> = emptyMap(),
     val topTabPartitionSkinIconPaths: TopTabSkinIconPaths? = null
@@ -209,8 +262,9 @@ fun rememberDynamicPublishSkinDecoration(uiSkinState: UiSkinState): DynamicPubli
 
 @Composable
 fun rememberHomeUiSkinDecoration(uiSkinState: UiSkinState): HomeUiSkinDecoration? {
-    return remember(uiSkinState) {
-        resolveHomeUiSkinDecoration(uiSkinState)
+    val isDark = com.android.purebilibili.core.ui.isAppInDarkTheme()
+    return remember(uiSkinState, isDark) {
+        resolveHomeUiSkinDecoration(uiSkinState, isDark)
     }
 }
 
@@ -255,11 +309,17 @@ fun resolveBottomBarUiSkinDecoration(
                 fallback = HomeVisualPalette.BottomBarIce
             ),
             bottomTrimImagePath = activeSkin.assetFilePath(activeSkin.manifest.assets.bottomBarTrim),
+            liquidGlassSurfaceTint = activeSkin.manifest.colors.liquidGlassSurfaceTint?.let {
+                parseUiSkinColor(it, Color.Unspecified).takeUnless { c -> c == Color.Unspecified }
+            },
+            liquidGlassTintOpacity = (activeSkin.manifest.colors.liquidGlassTintOpacity ?: 0.22f)
+                .coerceIn(0.08f, 0.45f),
             iconMotion = BottomBarSkinMotionSpec(
                 enabled = activeSkin.manifest.motion.bottomBarIconAnimated,
                 mode = activeSkin.manifest.motion.bottomBarIconAnimationMode,
             ),
-            bottomBarIconPaths = resolveBottomBarSkinIconPaths(activeSkin)
+            bottomBarIconPaths = resolveBottomBarSkinIconPaths(activeSkin),
+            distinctRolePool = resolveDistinctBottomBarSkinRolePool(activeSkin),
         )
     }
 }
@@ -293,17 +353,19 @@ fun resolveDynamicPublishSkinDecoration(uiSkinState: UiSkinState): DynamicPublis
     }
 }
 
-fun resolveHomeUiSkinDecoration(uiSkinState: UiSkinState): HomeUiSkinDecoration? {
+fun resolveHomeUiSkinDecoration(
+    uiSkinState: UiSkinState,
+    isDark: Boolean = false,
+): HomeUiSkinDecoration? {
     val activeSkin = uiSkinState.activeSkin
     return if (!uiSkinState.enabled || activeSkin == null) {
         null
     } else {
         val manifest = activeSkin.manifest
-        val hasTopDecoration = manifest.surfaces.any {
-            it == UiSkinSurface.HOME_TOP_CHROME ||
-                it == UiSkinSurface.HOME_DRAWER ||
-                it == UiSkinSurface.PROFILE
-        } &&
+        val hasTopChrome = UiSkinSurface.HOME_TOP_CHROME in manifest.surfaces
+        val hasDrawer = UiSkinSurface.HOME_DRAWER in manifest.surfaces
+        val hasProfile = UiSkinSurface.PROFILE in manifest.surfaces
+        val hasTopDecoration = (hasTopChrome || hasDrawer || hasProfile) &&
             (
                 manifest.assets.topAtmosphere != null ||
                     manifest.assets.homeTopTabBackground != null ||
@@ -314,6 +376,7 @@ fun resolveHomeUiSkinDecoration(uiSkinState: UiSkinState): HomeUiSkinDecoration?
                     manifest.assets.homeProfileSquaredBackground != null ||
                     manifest.assets.homeProfileVideoBackground != null ||
                     manifest.colors.topAtmosphereTint != null ||
+                    manifest.colors.topForegroundTint != null ||
                     manifest.colors.searchCapsuleTint != null ||
                     manifest.colors.sideBackgroundTint != null
                 )
@@ -324,26 +387,55 @@ fun resolveHomeUiSkinDecoration(uiSkinState: UiSkinState): HomeUiSkinDecoration?
                 value = manifest.colors.topAtmosphereTint,
                 fallback = HomeVisualPalette.BottomBarIce
             ),
+            topForegroundTint = if (hasTopChrome) {
+                parseUiSkinColor(
+                    value = if (isDark) {
+                        manifest.colors.topForegroundDarkTint ?: manifest.colors.topForegroundTint
+                    } else {
+                        manifest.colors.topForegroundTint
+                    },
+                    fallback = Color.Unspecified,
+                )
+            } else Color.Unspecified,
             searchCapsuleTint = parseUiSkinColor(
                 value = manifest.colors.searchCapsuleTint,
                 fallback = OpticalContrastPalette.Highlight
             ),
-            searchCapsuleImagePath = activeSkin.assetFilePath(manifest.assets.searchCapsuleBackground),
-            topAtmosphereImagePath = activeSkin.assetFilePath(manifest.assets.topAtmosphere),
-            topTabBackgroundImagePath = activeSkin.assetFilePath(manifest.assets.homeTopTabBackground),
-            sideBackgroundImagePath = activeSkin.assetFilePath(manifest.assets.homeSideBackground),
-            sideBottomTrimImagePath = activeSkin.assetFilePath(manifest.assets.drawerBottomTrim),
-            sideBackgroundTint = manifest.colors.sideBackgroundTint?.let { value ->
-                parseUiSkinColor(value = value, fallback = Color.Transparent)
-            },
-            profileBackgroundImagePath = activeSkin.assetFilePath(manifest.assets.homeProfileBackground),
-            profileSquaredBackgroundImagePath = activeSkin.assetFilePath(
-                manifest.assets.homeProfileSquaredBackground
-            ),
-            profileVideoBackgroundPath = activeSkin.assetFilePath(
-                manifest.assets.homeProfileVideoBackground
-            ),
+            searchCapsuleImagePath = if (hasTopChrome) {
+                activeSkin.assetFilePath(manifest.assets.searchCapsuleBackground)
+            } else null,
+            topAtmosphereImagePath = if (hasTopChrome) {
+                activeSkin.assetFilePath(manifest.assets.topAtmosphere)
+            } else null,
+            topTabBackgroundImagePath = if (hasTopChrome) {
+                activeSkin.assetFilePath(manifest.assets.homeTopTabBackground)
+            } else null,
+            sideBackgroundImagePath = if (hasDrawer) {
+                activeSkin.assetFilePath(manifest.assets.homeSideBackground)
+            } else null,
+            sideBottomTrimImagePath = if (hasDrawer) {
+                activeSkin.assetFilePath(manifest.assets.drawerBottomTrim)
+            } else null,
+            sideBackgroundTint = if (hasDrawer) {
+                manifest.colors.sideBackgroundTint?.let { value ->
+                    parseUiSkinColor(value = value, fallback = Color.Transparent)
+                }
+            } else null,
+            profileBackgroundImagePath = if (hasProfile) {
+                activeSkin.assetFilePath(manifest.assets.homeProfileBackground)
+            } else null,
+            profileSquaredBackgroundImagePath = if (hasProfile) {
+                activeSkin.assetFilePath(manifest.assets.homeProfileSquaredBackground)
+            } else null,
+            profileVideoBackgroundPath = if (hasProfile) {
+                activeSkin.assetFilePath(manifest.assets.homeProfileVideoBackground)
+            } else null,
             profileVideoPlayMode = manifest.motion.profileVideoPlayMode,
+            liquidGlassSurfaceTint = manifest.colors.liquidGlassSurfaceTint?.let {
+                parseUiSkinColor(it, Color.Unspecified).takeUnless { c -> c == Color.Unspecified }
+            },
+            liquidGlassTintOpacity = (manifest.colors.liquidGlassTintOpacity ?: 0.22f)
+                .coerceIn(0.08f, 0.45f),
             colorMode = manifest.colors.colorMode,
         )
     }
@@ -464,57 +556,74 @@ private fun rememberSkinIconScalePolicy(iconPath: String): SkinIconScalePolicy {
 internal fun BottomBarSkinDecorativeTrim(
     decoration: BottomBarUiSkinDecoration?,
     modifier: Modifier = Modifier,
-    clipShape: androidx.compose.ui.graphics.Shape? = null
+    clipShape: androidx.compose.ui.graphics.Shape? = null,
+    isFloating: Boolean = false,
+    liquidGlassEnabled: Boolean = false,
+    blurEnabled: Boolean = false,
 ) {
     if (decoration == null) return
-    // 以前只裁底色层，装饰图按 Fit 完整铺开：导入主题的 bottom_trim 是不透明矩形，
-    // 悬浮胶囊外会露出四个方角。
-    // 现在裁剪上移到合成层，底色和装饰图共用同一轮廓。
+    val isDark = com.android.purebilibili.core.ui.isAppInDarkTheme()
+    val imagePath = decoration.bottomTrimImagePath
+    val hasArtwork = !imagePath.isNullOrBlank()
+    // 显式隔离「沉底 vs 悬浮 × 开启/关闭液态玻璃」四种光学叠加权重：
+    // 1. 沉底 + 关闭玻璃/模糊：100% 还原官方装扮实底与原画；
+    // 2. 悬浮 + 关闭玻璃：胶囊轮廓内饱满着色与贴图裁切，四角不外露；
+    // 3. 开启液态玻璃（悬浮或沉底）：在玻璃折射层之上叠加柔雾护底与高还原 tail_bg 贴图，
+    //    既保留玻璃边缘高光与透镜折射，又防止底层高反差视频封面吞没角色图标与标签文字。
+    val surfaceVeilColor = if (liquidGlassEnabled) {
+        val rawTint = decoration.liquidGlassSurfaceTint ?: decoration.bottomTrimTint
+        val frostBase = if (isDark) Color(0xFF141820) else Color(0xFFF8FAFD)
+        androidx.compose.ui.graphics.lerp(frostBase, rawTint, 0.38f)
+            .copy(alpha = if (hasArtwork) 0.54f else decoration.liquidGlassTintOpacity.coerceIn(0.22f, 0.44f))
+    } else if (blurEnabled) {
+        decoration.bottomTrimTint.copy(alpha = if (isFloating) 0.80f else 0.78f)
+    } else if (isFloating) {
+        decoration.bottomTrimTint.copy(alpha = 0.96f)
+    } else {
+        decoration.bottomTrimTint
+    }
+    val artworkAlpha = when {
+        liquidGlassEnabled && isFloating -> 0.76f
+        liquidGlassEnabled -> 0.82f
+        blurEnabled -> 0.90f
+        isFloating -> 0.96f
+        else -> 1.0f
+    }
+    val accentMultiplier = if (liquidGlassEnabled) 0.42f else 1.0f
+
     Box(
         modifier = modifier
             .then(clipShape?.let { Modifier.clip(it) } ?: Modifier)
             .clearAndSetSemantics {}
             .drawBehind {
-                // Imported trims commonly keep transparent padding around the artwork.
-                // Paint the complete dock first so those pixels never expose the host surface.
-                drawRect(decoration.bottomTrimTint)
-                val trimHeight = size.height * 0.36f
-                val top = size.height - trimHeight
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            decoration.bottomTrimTint.copy(alpha = 0.08f),
-                            decoration.bottomTrimTint.copy(alpha = 0.28f)
+                drawRect(surfaceVeilColor)
+                // 仅在缺失官方 tail_bg 原图时绘制几何氛围云边，避免污染官方原画纹理
+                if (!hasArtwork) {
+                    val trimHeight = size.height * 0.36f
+                    val top = size.height - trimHeight
+                    drawRoundRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                decoration.bottomTrimTint.copy(alpha = 0.08f * accentMultiplier),
+                                decoration.bottomTrimTint.copy(alpha = 0.28f * accentMultiplier)
+                            ),
+                            startY = top,
+                            endY = size.height
                         ),
-                        startY = top,
-                        endY = size.height
-                    ),
-                    topLeft = Offset(0f, top),
-                    size = Size(size.width, trimHeight),
-                    cornerRadius = CornerRadius(trimHeight, trimHeight)
-                )
-
-                val cloudRadius = trimHeight * 0.38f
-                val centers = listOf(0.12f, 0.26f, 0.44f, 0.62f, 0.78f, 0.91f)
-                centers.forEachIndexed { index, fraction ->
-                    val y = top + trimHeight * if (index % 2 == 0) 0.46f else 0.58f
-                    drawCircle(
-                        color = decoration.bottomTrimAccent.copy(alpha = 0.18f),
-                        radius = cloudRadius * if (index % 2 == 0) 1.0f else 0.78f,
-                        center = Offset(size.width * fraction, y)
+                        topLeft = Offset(0f, top),
+                        size = Size(size.width, trimHeight),
+                        cornerRadius = CornerRadius(trimHeight, trimHeight)
                     )
                 }
             }
     ) {
-        val imagePath = decoration.bottomTrimImagePath
-        if (!imagePath.isNullOrBlank()) {
+        if (hasArtwork && imagePath != null) {
             AsyncImage(
                 model = File(imagePath),
                 contentDescription = null,
-                // Preserve the whole asset; transparent/unused space is filled by
-                // the base surface instead of zooming and cropping the artwork.
-                contentScale = ContentScale.Fit,
+                contentScale = ContentScale.Crop,
                 alignment = Alignment.BottomCenter,
+                alpha = artworkAlpha,
                 modifier = Modifier
                     .matchParentSize()
                     .clearAndSetSemantics {}
@@ -595,4 +704,34 @@ private fun resolveBottomBarSkinIconPaths(
     return BottomNavItem.entries.associateWith { item ->
         roleIcons[preferredRole.getValue(item)] ?: fallback
     }
+}
+
+private fun resolveDistinctBottomBarSkinRolePool(
+    activeSkin: com.android.purebilibili.core.plugin.skin.InstalledUiSkinPackage,
+): List<BottomBarSkinIconPaths> {
+    val manifestIcons = activeSkin.manifest.assets.bottomBarIcons
+    val orderedPairs = listOf(
+        "home" to "home_selected",
+        "following" to "following_selected",
+        "channel" to "channel_selected",
+        "member" to "member_selected",
+        "profile" to "profile_selected",
+    )
+    val pool = mutableListOf<BottomBarSkinIconPaths>()
+    val seen = mutableSetOf<String>()
+    orderedPairs.forEach { (unselectedKey, selectedKey) ->
+        val u = activeSkin.assetFilePath(manifestIcons[unselectedKey]) ?: return@forEach
+        val s = activeSkin.assetFilePath(manifestIcons[selectedKey])
+        val sig = "$u|${s.orEmpty()}"
+        if (seen.add(sig)) {
+            pool.add(BottomBarSkinIconPaths(unselected = u, selected = s))
+        }
+    }
+    activeSkin.assetFilePath(activeSkin.manifest.assets.homeChannelIcon)?.let { u ->
+        val s = activeSkin.assetFilePath(activeSkin.manifest.assets.homeChannelSelectedIcon)
+        if (seen.add("$u|${s.orEmpty()}")) {
+            pool.add(BottomBarSkinIconPaths(unselected = u, selected = s))
+        }
+    }
+    return pool
 }

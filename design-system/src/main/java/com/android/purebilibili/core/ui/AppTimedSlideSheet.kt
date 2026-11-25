@@ -105,21 +105,25 @@ internal fun AppTimedSlideSheet(
             }
         }
     }
-    val nestedScroll = object : NestedScrollConnection {
-        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
-            if (source == NestedScrollSource.UserInput && available.y < 0 && dragOffset > 0) {
-                Offset(0f, consumeDrag(available.y))
-            } else Offset.Zero
+    val latestConsumeDrag by rememberUpdatedState(consumeDrag)
+    val latestFinishDrag by rememberUpdatedState(finishDrag)
+    val nestedScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+                if (source == NestedScrollSource.UserInput && available.y < 0 && dragOffset > 0) {
+                    Offset(0f, latestConsumeDrag(available.y))
+                } else Offset.Zero
 
-        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
-            if (source == NestedScrollSource.UserInput && available.y > 0) {
-                Offset(0f, consumeDrag(available.y))
-            } else Offset.Zero
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+                if (source == NestedScrollSource.UserInput && available.y > 0) {
+                    Offset(0f, latestConsumeDrag(available.y))
+                } else Offset.Zero
 
-        override suspend fun onPreFling(available: Velocity): Velocity {
-            if (dragOffset <= 0f) return Velocity.Zero
-            finishDrag(available.y)
-            return available
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (dragOffset <= 0f) return Velocity.Zero
+                latestFinishDrag(available.y)
+                return available
+            }
         }
     }
     val predictiveBackEnabled = dismissOnBackPress && LocalPredictiveBackGestureEnabled.current
@@ -141,7 +145,7 @@ internal fun AppTimedSlideSheet(
         }
         ModalWindowBlurBehindEffect(progress = { (progress.value * (1f - back.progress)).coerceIn(0f, 1f) })
         AppPopupWindowHost(enableWindowMaterial = false) {
-            Box(Modifier.fillMaxSize().windowInsetsPadding(windowInsets)) {
+            Box(Modifier.fillMaxSize()) {
                 Box(
                     Modifier
                         .matchParentSize()
@@ -150,11 +154,16 @@ internal fun AppTimedSlideSheet(
                                 .coerceIn(0f, 1f)
                         }
                         .background(scrimColor)
-                        .clickable(onClick = requestDismiss),
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                            onClick = requestDismiss,
+                        ),
                 )
                 Surface(
                     modifier = modifier
                         .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(windowInsets)
                         .fillMaxWidth()
                         .onSizeChanged { height[0] = it.height.coerceAtLeast(1) }
                         .graphicsLayer {

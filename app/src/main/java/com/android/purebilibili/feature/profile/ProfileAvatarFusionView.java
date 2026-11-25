@@ -68,6 +68,19 @@ public class ProfileAvatarFusionView extends FrameLayout {
     private static float lerp(float from, float to, float start, float end, float value) {
         return lerp(from, to, MathUtils.clamp(ilerp(value, start, end), 0f, 1f));
     }
+
+    /** Grow the cutout bridge as the avatar approaches, then retract it before full absorption. */
+    public static float resolveGooeyBridgeFactor(float pullProgress) {
+        float grow = MathUtils.clamp(ilerp(pullProgress, 0f, 0.5f), 0f, 1f);
+        float retract = 1f - MathUtils.clamp(ilerp(pullProgress, 0.55f, 0.85f), 0f, 1f);
+        return grow * retract;
+    }
+
+    /** Fade the avatar's black silhouette out once it sits inside the cutout. */
+    public static int resolveGooeyLayerAlpha(float pullProgress, boolean rectangularContent) {
+        if (rectangularContent) return 255;
+        return MathUtils.clamp((int) ((1f - ilerp(pullProgress, 0.82f, 0.96f)) * 255f), 0, 255);
+    }
     public void setFrameUpdater(Runnable updater) { frameUpdater = updater; }
     @Override public WindowInsets onApplyWindowInsets(WindowInsets insets) {
         WindowInsets result = super.onApplyWindowInsets(insets);
@@ -283,7 +296,8 @@ public class ProfileAvatarFusionView extends FrameLayout {
             canvas.save();
             canvas.translate(0, -dp(BLACK_KING_BAR));
 
-            if (alpha != 255) {
+            final int gooeyAlpha = resolveGooeyLayerAlpha(pullProgress, rectangularContent);
+            if (alpha != 255 && gooeyAlpha > 0) {
                 bitmap.eraseColor(0);
 
                 bitmapCanvas.save();
@@ -318,11 +332,17 @@ public class ProfileAvatarFusionView extends FrameLayout {
                 // Filter alpha + fade, then draw
                 canvas.save();
                 canvas.translate(optimizedOffsetX, 0);
+                if (gooeyAlpha != 255) {
+                    canvas.saveLayerAlpha(0, 0, bitmapOrigW, bitmapOrigH, gooeyAlpha);
+                }
                 canvas.saveLayer(0, 0, bitmapOrigW, bitmapOrigH, null);
                 canvas.scale((float) bitmapOrigW / bitmap.getWidth(), (float) bitmapOrigH / bitmap.getHeight());
                 canvas.drawBitmap(bitmap, 0, 0, bitmapPaint);
                 canvas.drawBitmap(bitmap, 0, 0, bitmapPaint2);
                 canvas.restore();
+                if (gooeyAlpha != 255) {
+                    canvas.restore();
+                }
                 canvas.restore();
             }
 
@@ -452,82 +472,91 @@ public class ProfileAvatarFusionView extends FrameLayout {
 
             // Blur + filter buffer
             float gooScaleFactor = 2f + factorMult;
-            c = effectNode.beginRecording();
-            c.scale(1f / gooScaleFactor, 1f / gooScaleFactor, 0, 0);
-            if (imageAlpha < 255) {
-                c.saveLayer(wholeOptimized, null);
-                c.drawRenderNode(node);
-                c.drawRect(wholeOptimized, blackNodePaint);
-                c.restore();
-            }
-            final float h = lerp(0, dp(7) * gooScaleFactor, 0, 0.5f, pullProgress);
-            if (getChildCount() > 0) {
-                final View child = getChildAt(0);
-                final float cx = child.getX() + child.getWidth() * child.getScaleX() / 2.0f - left;
-                final float cy = child.getY() + child.getHeight() * child.getScaleY() / 2.0f + dp(BLACK_KING_BAR) - top;
-                final float r = rectangularContent
-                        ? Math.min(child.getWidth() * child.getScaleX(), child.getHeight() * child.getScaleY()) / 2f
-                        : child.getWidth() / 2.0f * child.getScaleX();
-
-                path.rewind();
-                path.moveTo(cx - r, cy - (float) Math.cos(Math.PI / 4) * r);
-                path.lineTo(cx, cy - r - h * 0.25f);
-                path.lineTo(cx + r, cy - (float) Math.cos(Math.PI / 4) * r);
-                path.close();
-                c.drawPath(path, blackPaint);
-            }
-            if (imageAlpha > 0) {
-                if (imageAlpha != 255) {
-                    c.saveLayerAlpha(wholeOptimized, imageAlpha);
-                }
-                c.drawRenderNode(node);
-                if (imageAlpha != 255) {
+            final int gooeyAlpha = resolveGooeyLayerAlpha(pullProgress, rectangularContent);
+            if (gooeyAlpha > 0) {
+                c = effectNode.beginRecording();
+                c.scale(1f / gooScaleFactor, 1f / gooScaleFactor, 0, 0);
+                if (imageAlpha < 255) {
+                    c.saveLayer(wholeOptimized, null);
+                    c.drawRenderNode(node);
+                    c.drawRect(wholeOptimized, blackNodePaint);
                     c.restore();
                 }
-            }
-            effectNode.endRecording();
-
-            c = effectNotchNode.beginRecording();
-            c.scale(1f / gooScaleFactor, 1f / gooScaleFactor, 0, 0);
-            if (notchInfo != null) {
-                c.translate(-left, -top);
-                c.translate(0, dp(BLACK_KING_BAR));
-                if (notchInfo.isLikelyCircle) {
-                    float rad = Math.min(notchInfo.bounds.width(), notchInfo.bounds.height()) / 2f;
-                    final float cy = notchInfo.bounds.bottom - notchInfo.bounds.width() / 2f;
-                    c.drawCircle(notchInfo.bounds.centerX(), cy, rad, blackPaint);
+                final float h = dp(7) * gooScaleFactor * resolveGooeyBridgeFactor(pullProgress);
+                if (getChildCount() > 0) {
+                    final View child = getChildAt(0);
+                    final float cx = child.getX() + child.getWidth() * child.getScaleX() / 2.0f - left;
+                    final float cy = child.getY() + child.getHeight() * child.getScaleY() / 2.0f + dp(BLACK_KING_BAR) - top;
+                    final float r = rectangularContent
+                            ? Math.min(child.getWidth() * child.getScaleX(), child.getHeight() * child.getScaleY()) / 2f
+                            : child.getWidth() / 2.0f * child.getScaleX();
 
                     path.rewind();
-                    path.moveTo(notchInfo.bounds.centerX() - h / 2f, cy);
-                    path.lineTo(notchInfo.bounds.centerX(), cy + rad + h);
-                    path.lineTo(notchInfo.bounds.centerX() + h / 2f, cy);
-                    path.close();
-                    c.drawPath(path, blackPaint);
-                } else if (notchInfo.isAccurate) {
-                    c.drawPath(notchInfo.path, blackPaint);
-                } else {
-                    float rad = Math.max(notchInfo.bounds.width(), notchInfo.bounds.height()) / 2f;
-                    temp.set(notchInfo.bounds);
-                    c.drawRoundRect(temp, rad, rad, blackPaint);
-
-                    path.rewind();
-                    path.moveTo(temp.centerX() - h / 2f, temp.bottom);
-                    path.lineTo(temp.centerX(), temp.bottom + h);
-                    path.lineTo(temp.centerX() + h / 2f, temp.bottom);
+                    path.moveTo(cx - r, cy - (float) Math.cos(Math.PI / 4) * r);
+                    path.lineTo(cx, cy - r - h * 0.25f);
+                    path.lineTo(cx + r, cy - (float) Math.cos(Math.PI / 4) * r);
                     path.close();
                     c.drawPath(path, blackPaint);
                 }
-            } else {
-                c.drawRect(0, 0, width, dp(BLACK_KING_BAR), blackPaint);
+                if (imageAlpha > 0) {
+                    if (imageAlpha != 255) {
+                        c.saveLayerAlpha(wholeOptimized, imageAlpha);
+                    }
+                    c.drawRenderNode(node);
+                    if (imageAlpha != 255) {
+                        c.restore();
+                    }
+                }
+                effectNode.endRecording();
 
-                path.rewind();
-                path.moveTo((width - h) / 2f, dp(BLACK_KING_BAR));
-                path.lineTo((width) / 2f, dp(BLACK_KING_BAR) + h);
-                path.lineTo((width + h) / 2f, dp(BLACK_KING_BAR));
-                path.close();
-                c.drawPath(path, blackPaint);
+                c = effectNotchNode.beginRecording();
+                c.scale(1f / gooScaleFactor, 1f / gooScaleFactor, 0, 0);
+                if (notchInfo != null) {
+                    c.translate(-left, -top);
+                    c.translate(0, dp(BLACK_KING_BAR));
+                    if (notchInfo.isLikelyCircle) {
+                        float rad = Math.min(notchInfo.bounds.width(), notchInfo.bounds.height()) / 2f;
+                        final float cy = notchInfo.bounds.bottom - notchInfo.bounds.width() / 2f;
+                        c.drawCircle(notchInfo.bounds.centerX(), cy, rad, blackPaint);
+
+                        if (h > 0f) {
+                            path.rewind();
+                            path.moveTo(notchInfo.bounds.centerX() - h / 2f, cy);
+                            path.lineTo(notchInfo.bounds.centerX(), cy + rad + h);
+                            path.lineTo(notchInfo.bounds.centerX() + h / 2f, cy);
+                            path.close();
+                            c.drawPath(path, blackPaint);
+                        }
+                    } else if (notchInfo.isAccurate) {
+                        c.drawPath(notchInfo.path, blackPaint);
+                    } else {
+                        float rad = Math.max(notchInfo.bounds.width(), notchInfo.bounds.height()) / 2f;
+                        temp.set(notchInfo.bounds);
+                        c.drawRoundRect(temp, rad, rad, blackPaint);
+
+                        if (h > 0f) {
+                            path.rewind();
+                            path.moveTo(temp.centerX() - h / 2f, temp.bottom);
+                            path.lineTo(temp.centerX(), temp.bottom + h);
+                            path.lineTo(temp.centerX() + h / 2f, temp.bottom);
+                            path.close();
+                            c.drawPath(path, blackPaint);
+                        }
+                    }
+                } else {
+                    c.drawRect(0, 0, width, dp(BLACK_KING_BAR), blackPaint);
+
+                    if (h > 0f) {
+                        path.rewind();
+                        path.moveTo((width - h) / 2f, dp(BLACK_KING_BAR));
+                        path.lineTo((width) / 2f, dp(BLACK_KING_BAR) + h);
+                        path.lineTo((width + h) / 2f, dp(BLACK_KING_BAR));
+                        path.close();
+                        c.drawPath(path, blackPaint);
+                    }
+                }
+                effectNotchNode.endRecording();
             }
-            effectNotchNode.endRecording();
 
             // Offset everything for black bar
             canvas.save();
@@ -538,11 +567,19 @@ public class ProfileAvatarFusionView extends FrameLayout {
             }
 
             // Filter alpha + fade, then draw
-            canvas.saveLayer(wholeOptimized, filter);
-            canvas.scale(gooScaleFactor, gooScaleFactor);
-            canvas.drawRenderNode(effectNotchNode);
-            canvas.drawRenderNode(effectNode);
-            canvas.restore();
+            if (gooeyAlpha > 0) {
+                if (gooeyAlpha != 255) {
+                    canvas.saveLayerAlpha(wholeOptimized, gooeyAlpha);
+                }
+                canvas.saveLayer(wholeOptimized, filter);
+                canvas.scale(gooScaleFactor, gooScaleFactor);
+                canvas.drawRenderNode(effectNotchNode);
+                canvas.drawRenderNode(effectNode);
+                canvas.restore();
+                if (gooeyAlpha != 255) {
+                    canvas.restore();
+                }
+            }
 
             // Fade, draw blurred
             final int blurImageAlpha = MathUtils.clamp(rectangularContent ? imageAlphaNoClamp : imageAlphaNoClamp * 3 / 4, 0, 255);

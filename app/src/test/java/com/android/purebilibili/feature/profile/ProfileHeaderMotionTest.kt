@@ -33,4 +33,17 @@ class ProfileHeaderMotionTest {
         assertEquals(0.5f, resolveProfileHeaderExpandedFraction(125f, 250f))
         assertEquals(0.5f, resolveProfileHeaderExpandedFraction(200f, 400f))
     }
+
+    @Test
+    fun `avatar cutout bridge retracts and silhouette fades before full collapse`() {
+        assertEquals(0f, ProfileAvatarFusionView.resolveGooeyBridgeFactor(0f), 0.001f)
+        assertEquals(1f, ProfileAvatarFusionView.resolveGooeyBridgeFactor(0.5f), 0.001f)
+        assertEquals(0f, ProfileAvatarFusionView.resolveGooeyBridgeFactor(0.85f), 0.001f)
+        assertEquals(0f, ProfileAvatarFusionView.resolveGooeyBridgeFactor(0.99f), 0.001f)
+
+        assertEquals(255, ProfileAvatarFusionView.resolveGooeyLayerAlpha(0.75f, false))
+        assertEquals(0, ProfileAvatarFusionView.resolveGooeyLayerAlpha(0.96f, false))
+        assertEquals(0, ProfileAvatarFusionView.resolveGooeyLayerAlpha(0.998f, false))
+        assertEquals(255, ProfileAvatarFusionView.resolveGooeyLayerAlpha(0.96f, true))
+    }
 }
