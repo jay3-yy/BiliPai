@@ -30,6 +30,8 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.store.SettingsManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -133,6 +135,9 @@ internal fun VideoDetailPhoneSuccessContentLayer(
     contentReveal: androidx.compose.runtime.State<Float>,
     onBodyPlaced: () -> Unit,
 ) {
+    val showDetailRelatedVideos by remember(context) { SettingsManager.getShowDetailRelatedVideos(context) }
+        .collectAsStateWithLifecycle(initialValue = null)
+    val detailRelatedVisibility = resolveDetailRelatedVisibility(showDetailRelatedVideos)
     val engagementSuccess = success.withEngagementUiState(engagementState)
     var pendingVideoShare by remember { mutableStateOf<VideoSharePayload?>(null) }
     val shareAnchorState = remember(success.info.bvid) { com.android.purebilibili.feature.video.share.VideoShareAnchorState() }
@@ -303,6 +308,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                                         bottomContentPadding = videoContentBottomPadding,
                                         commentPullToRefreshEnabled = commentPullToRefreshEnabled,
                                         relatedContentReady = relatedContentReady,
+                                        detailRelatedVisibility = detailRelatedVisibility,
                                     ),
                                     primaryActions = VideoContentPrimaryActions(
                                         onFollowClick = engagementActions.toggleFollow,

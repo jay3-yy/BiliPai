@@ -1492,6 +1492,7 @@ object SettingsManager {
         MONTHLY(30, "每月")
     }
     // 键定义
+    private val KEY_SHOW_DETAIL_RELATED_VIDEOS = booleanPreferencesKey("show_detail_related_videos")
     private val KEY_NEXT_WATCH_HINT_ENABLED = booleanPreferencesKey("next_watch_hint_enabled")
     private val KEY_AUTO_PLAY = booleanPreferencesKey("auto_play")
     private val KEY_PLAYBACK_COMPLETION_BEHAVIOR = intPreferencesKey("playback_completion_behavior")
@@ -2361,6 +2362,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     @Volatile
     private var playbackCompletionBehaviorMemoryCache: Int? = null
+
+    fun getShowDetailRelatedVideos(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_SHOW_DETAIL_RELATED_VIDEOS] ?: true }
+
+    suspend fun setShowDetailRelatedVideos(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_SHOW_DETAIL_RELATED_VIDEOS] = enabled }
+    }
 
     fun getNextWatchHintEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_NEXT_WATCH_HINT_ENABLED] ?: true }
@@ -9670,6 +9678,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             StringShareablePreferenceDefinition(KEY_LIVE_CDN_HOST, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_LIVE_SUPER_CHAT_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_LIVE_AUTO_MINI_PLAYER_ENABLED, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(KEY_SHOW_DETAIL_RELATED_VIDEOS, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_NEXT_WATCH_HINT_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_AUTO_PLAY, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_RESILIENT_VIDEO_BUFFER, SettingsShareSection.PLAYBACK),

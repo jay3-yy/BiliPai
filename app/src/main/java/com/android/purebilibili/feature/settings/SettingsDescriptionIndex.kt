@@ -143,6 +143,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "playback.mini_player_mode" to "请先关闭“离开播放页后停止”；请先开启“后台播放”",
     "playback.mobile_quality" to "关闭“自动最高画质”后生效；仅移动网络环境生效",
     "playback.music_lyrics_ui_style" to "经典全屏歌词；可在听视频右上角更多菜单临时切换；大字歌词，随播放逐字高亮",
+    "playback.show_detail_related_videos" to "仅控制手机视频简介下方的推荐列表，不影响自动连播",
     "playback.next_watch_hint_enabled" to "最后 5 秒提示下一集或相关推荐，关闭不影响自动续播",
     "playback.pause_on_player_collapse_enabled" to "浏览推荐并缩小画面时暂停，展开后恢复；关闭后缩小播放器时仍继续播放",
     "playback.pip_no_danmaku_enabled" to "需先开启后台播放；小窗和画中画中不显示弹幕；小窗和画中画中显示弹幕；选择小窗或画中画模式后生效",
