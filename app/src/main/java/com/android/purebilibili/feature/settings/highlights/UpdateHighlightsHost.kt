@@ -422,63 +422,88 @@ private fun UpdateHighlightPreviewCard(
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         border = BorderStroke(0.5.dp, AppSurfaceTokens.divider().copy(alpha = 0.6f)),
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(iconShape)
-                    .background(accentColor.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                AppIcon(
-                    imageVector = resolveUpdateHighlightIcon(feature.action),
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(20.dp),
-                )
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(iconShape)
+                        .background(accentColor.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIcon(
+                        imageVector = resolveUpdateHighlightIcon(feature.action),
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+
+                feature.badge?.takeIf { it.isNotBlank() }?.let { badgeText ->
+                    Surface(
+                        shape = CircleShape,
+                        color = accentColor.copy(alpha = 0.10f),
+                    ) {
+                        AppText(
+                            text = badgeText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accentColor,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                if (clickable) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        feature.actionLabel?.takeIf { it.isNotBlank() }?.let { label ->
+                            AppText(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = accentColor,
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                        }
+                        AppIcon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
             }
 
             Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    feature.badge?.takeIf { it.isNotBlank() }?.let { badgeText ->
-                        Surface(
-                            shape = CircleShape,
-                            color = accentColor.copy(alpha = 0.10f),
-                        ) {
-                            AppText(
-                                text = badgeText,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = accentColor,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                    AppText(
-                        text = feature.title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = AppContentColors.primaryText(),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                AppText(
+                    text = feature.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = AppContentColors.primaryText(),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 AppText(
                     text = feature.description,
                     style = MaterialTheme.typography.bodySmall,
                     color = AppContentColors.secondaryText(),
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
                 statusHint?.let { hint ->
@@ -486,28 +511,6 @@ private fun UpdateHighlightPreviewCard(
                         text = hint,
                         style = MaterialTheme.typography.labelSmall,
                         color = accentColor,
-                    )
-                }
-            }
-
-            if (clickable) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    feature.actionLabel?.takeIf { it.isNotBlank() }?.let { label ->
-                        AppText(
-                            text = label,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = accentColor,
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                    }
-                    AppIcon(
-                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = accentColor,
-                        modifier = Modifier.size(18.dp),
                     )
                 }
             }

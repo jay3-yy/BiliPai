@@ -75,7 +75,7 @@ internal fun HomeVideoPreviewHost(
                     targetVideoItemState.value = null
                 },
                 onWatchLater = {
-                    viewModel.addToWatchLater(item.bvid, item.aid)
+                    viewModel.addToWatchLater(item.bvid, resolveWatchLaterAid(item))
                     targetVideoItemState.value = null
                 },
                 onDownloadVideo = if (item.supportsFeedDownload()) {
