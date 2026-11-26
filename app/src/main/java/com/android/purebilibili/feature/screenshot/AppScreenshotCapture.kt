@@ -39,20 +39,35 @@ suspend fun captureAndSaveAppScreenshot(
 
 suspend fun captureAndSaveAppScreenshotImage(
     activity: Activity,
-    timestampMs: Long = System.currentTimeMillis()
+    timestampMs: Long = System.currentTimeMillis(),
+    includeBrandWatermark: Boolean = false,
+    isDarkTheme: Boolean = false,
+    watermarkContext: AppScreenshotWatermarkContext? = null,
 ): AppScreenshotSavedImage {
     val bitmap = captureCurrentAppWindow(activity = activity)
         ?: return AppScreenshotSavedImage(AppScreenshotResult.CaptureFailed)
     val fileName = buildAppScreenshotFileName(timestampMs = timestampMs)
+    var watermarkedBitmap: Bitmap? = null
 
     return try {
-        val uri = saveAppScreenshotBitmapToGalleryUri(activity, bitmap, fileName)
+        val bitmapToSave = if (includeBrandWatermark) {
+            composeAppScreenshotWithTopWatermark(
+                context = activity,
+                source = bitmap,
+                isDarkTheme = isDarkTheme,
+                watermarkContext = watermarkContext,
+            ).also { watermarkedBitmap = it }
+        } else {
+            bitmap
+        }
+        val uri = saveAppScreenshotBitmapToGalleryUri(activity, bitmapToSave, fileName)
         if (uri != null) {
             AppScreenshotSavedImage(AppScreenshotResult.Success, uri)
         } else {
             AppScreenshotSavedImage(AppScreenshotResult.SaveFailed)
         }
     } finally {
+        watermarkedBitmap?.recycle()
         bitmap.recycle()
     }
 }

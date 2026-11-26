@@ -552,8 +552,13 @@ internal fun normalizeDanmakuDisplayArea(value: Float): Float {
 internal fun normalizeDanmakuFontScale(value: Float): Float =
     if (value.isFinite()) value.coerceIn(0.5f, 2.5f) else 1f
 
-/** 推荐流兜底条数；实际值由 HomeViewModel 按网格列数换算。 */
-internal const val DEFAULT_HOME_REFRESH_COUNT = 12
+internal const val DEFAULT_HOME_REFRESH_COUNT = 20
+internal const val MIN_HOME_REFRESH_COUNT = 10
+internal const val MAX_HOME_REFRESH_COUNT = 30
+
+internal fun normalizeHomeRefreshCount(count: Int): Int {
+    return count.coerceIn(MIN_HOME_REFRESH_COUNT, MAX_HOME_REFRESH_COUNT)
+}
 
 enum class HomeFeedCardWidthPreset(
     val value: Int,
@@ -744,6 +749,7 @@ data class HomeSettings(
     val homeHeroCarouselEnabled: Boolean = false,
     val homeHeroCarouselAutoplayEnabled: Boolean = false,
     val homeRefreshTipVisible: Boolean = true, // 推荐流刷新后在旧内容分界处显示提示
+    val homeRefreshCount: Int = DEFAULT_HOME_REFRESH_COUNT,
     val refreshLocatorDurationSeconds: Int = 3, // 0 表示不自动收起
     val refreshLocatorPositionX: Float = 1f,
     val refreshLocatorPositionY: Float = 1f,
@@ -852,6 +858,7 @@ data class AppThemeSettings(
         AppScreenshotGestureMode.TOP_RIGHT_TWO_FINGER_LONG_PRESS,
     val appScreenshotCaptureMode: AppScreenshotCaptureMode =
         AppScreenshotCaptureMode.FULL_WINDOW,
+    val appScreenshotWatermarkEnabled: Boolean = false,
     val globalScreenshotShareOverlayEnabled: Boolean = true,
     val appIconStyle: AppIconStyle = AppIconStyle.AUTO,
     val appLineIconColor: Int? = null,
@@ -1964,6 +1971,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey("detailed_comment_time_enabled")
     private val KEY_COMMENT_REPLY_PREVIEW_VISIBLE =
         booleanPreferencesKey("comment_reply_preview_visible")
+    private val KEY_COMMENT_HIDE_SEARCH_KEYWORDS =
+        booleanPreferencesKey("comment_hide_search_keywords")
 
     /** 偏好的调用方作用域之外落盘专用；进程存续期即作用域生命期。 */
     private val commentPreferenceWriteScope =
@@ -2124,6 +2133,9 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             homeHeroCarouselAutoplayEnabled =
                 preferences[KEY_HOME_HERO_CAROUSEL_AUTOPLAY_ENABLED] ?: false,
             homeRefreshTipVisible = preferences[KEY_HOME_REFRESH_TIP_VISIBLE] ?: true,
+            homeRefreshCount = normalizeHomeRefreshCount(
+                preferences[KEY_HOME_REFRESH_COUNT] ?: DEFAULT_HOME_REFRESH_COUNT
+            ),
             refreshLocatorDurationSeconds = preferences[KEY_REFRESH_LOCATOR_DURATION] ?: 3,
             refreshLocatorPositionX = preferences[KEY_REFRESH_LOCATOR_POSITION_X] ?: 1f,
             refreshLocatorPositionY = preferences[KEY_REFRESH_LOCATOR_POSITION_Y] ?: 1f,
@@ -2681,6 +2693,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 preferences[KEY_APP_SCREENSHOT_CAPTURE_MODE]
                     ?: AppScreenshotCaptureMode.FULL_WINDOW.value
             ),
+            appScreenshotWatermarkEnabled =
+                preferences[KEY_APP_SCREENSHOT_WATERMARK_ENABLED] ?: false,
             globalScreenshotShareOverlayEnabled =
                 preferences[KEY_GLOBAL_SCREENSHOT_SHARE_OVERLAY_ENABLED] ?: true,
             singleChoicePresentation = AppSingleChoicePresentation.fromStorageValue(
@@ -6651,6 +6665,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     
     private val KEY_FEED_API_TYPE = intPreferencesKey("feed_api_type")
     private val KEY_INCREMENTAL_TIMELINE_REFRESH = booleanPreferencesKey("incremental_timeline_refresh")
+    private val KEY_HOME_REFRESH_COUNT = intPreferencesKey("home_refresh_count")
     
     /**
      *  推荐流 API 类型
@@ -6697,6 +6712,28 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_INCREMENTAL_TIMELINE_REFRESH] = value
         }
+    }
+
+    fun getHomeRefreshCount(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeHomeRefreshCount(preferences[KEY_HOME_REFRESH_COUNT] ?: DEFAULT_HOME_REFRESH_COUNT)
+        }
+
+    suspend fun setHomeRefreshCount(context: Context, count: Int) {
+        val normalized = normalizeHomeRefreshCount(count)
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HOME_REFRESH_COUNT] = normalized
+        }
+        context.getSharedPreferences("feed_api", Context.MODE_PRIVATE)
+            .edit()
+            .putInt("home_refresh_count", normalized)
+            .apply()
+    }
+
+    fun getHomeRefreshCountSync(context: Context): Int {
+        val value = context.getSharedPreferences("feed_api", Context.MODE_PRIVATE)
+            .getInt("home_refresh_count", DEFAULT_HOME_REFRESH_COUNT)
+        return normalizeHomeRefreshCount(value)
     }
 
     // ==========  实验性功能 ==========
@@ -7276,6 +7313,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         val commentSexEnabled: Boolean = false,
         val detailedCommentTimeEnabled: Boolean = false,
         val commentReplyPreviewVisible: Boolean = true,
+        val commentHideSearchKeywords: Boolean = true,
     )
 
     val DEFAULT_INITIAL_APP_THEME_CONFIG = com.android.purebilibili.core.ui.AppThemeConfig(
@@ -7471,6 +7509,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                     commentSexEnabled = preferences[KEY_COMMENT_SEX_ENABLED] ?: false,
                     detailedCommentTimeEnabled = preferences[KEY_DETAILED_COMMENT_TIME_ENABLED] ?: false,
                     commentReplyPreviewVisible = preferences[KEY_COMMENT_REPLY_PREVIEW_VISIBLE] ?: true,
+                    commentHideSearchKeywords = preferences[KEY_COMMENT_HIDE_SEARCH_KEYWORDS] ?: true,
                 )
             }
             .distinctUntilChanged()
@@ -7505,6 +7544,17 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setCommentSexEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_COMMENT_SEX_ENABLED] = enabled
+        }
+    }
+
+    fun getCommentHideSearchKeywords(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_COMMENT_HIDE_SEARCH_KEYWORDS] ?: true }
+            .distinctUntilChanged()
+
+    suspend fun setCommentHideSearchKeywords(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_COMMENT_HIDE_SEARCH_KEYWORDS] = enabled
         }
     }
 
@@ -8608,6 +8658,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         intPreferencesKey("app_screenshot_gesture_mode")
     private val KEY_APP_SCREENSHOT_CAPTURE_MODE =
         intPreferencesKey("app_screenshot_capture_mode")
+    private val KEY_APP_SCREENSHOT_WATERMARK_ENABLED =
+        booleanPreferencesKey("app_screenshot_watermark_enabled")
     private val KEY_GLOBAL_SCREENSHOT_SHARE_OVERLAY_ENABLED =
         booleanPreferencesKey("global_screenshot_share_overlay_enabled")
     private val KEY_SHOW_FULLSCREEN_BATTERY_LEVEL = booleanPreferencesKey("show_fullscreen_battery_level")
@@ -9010,6 +9062,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setAppScreenshotCaptureMode(context: Context, mode: AppScreenshotCaptureMode) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_APP_SCREENSHOT_CAPTURE_MODE] = mode.value
+        }
+    }
+
+    fun getAppScreenshotWatermarkEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_APP_SCREENSHOT_WATERMARK_ENABLED] ?: false }
+
+    suspend fun setAppScreenshotWatermarkEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_APP_SCREENSHOT_WATERMARK_ENABLED] = enabled
         }
     }
 
@@ -10188,6 +10250,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             ),
             IntShareablePreferenceDefinition(KEY_DYNAMIC_PAGE_LAYOUT_DIRECTION, SettingsShareSection.NAVIGATION),
             IntShareablePreferenceDefinition(KEY_FEED_API_TYPE, SettingsShareSection.NAVIGATION),
+            IntShareablePreferenceDefinition(KEY_HOME_REFRESH_COUNT, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_INCREMENTAL_TIMELINE_REFRESH, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(
                 KEY_DYNAMIC_IMAGE_PREVIEW_TEXT_VISIBLE,

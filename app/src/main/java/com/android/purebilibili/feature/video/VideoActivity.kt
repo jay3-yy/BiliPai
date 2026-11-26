@@ -255,6 +255,7 @@ open class VideoActivity : FragmentActivity() {
             val commentSexEnabled = commentDisplaySettings.commentSexEnabled
             val commentReplyPreviewVisible = commentDisplaySettings.commentReplyPreviewVisible
             val detailedCommentTimeEnabled = commentDisplaySettings.detailedCommentTimeEnabled
+            val commentHideSearchKeywords = commentDisplaySettings.commentHideSearchKeywords
             val liquidGlassEnabled = appThemeConfig.liquidGlassEnabled
             val uiEntranceAnimationEnabled = appThemeConfig.uiEntranceAnimationEnabled
             com.android.purebilibili.core.theme.ThemeSwitchSnapshotHost(
@@ -311,6 +312,7 @@ open class VideoActivity : FragmentActivity() {
                     com.android.purebilibili.core.ui.LocalCommentSexEnabled provides commentSexEnabled,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                     com.android.purebilibili.core.ui.LocalDetailedCommentTimeEnabled provides detailedCommentTimeEnabled,
+                    com.android.purebilibili.core.ui.LocalCommentHideSearchKeywords provides commentHideSearchKeywords,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->
                         startActivity(android.content.Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
                             putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE,

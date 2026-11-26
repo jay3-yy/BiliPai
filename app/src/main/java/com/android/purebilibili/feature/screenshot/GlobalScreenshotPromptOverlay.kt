@@ -47,6 +47,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.core.ui.components.AppButton
@@ -56,7 +59,7 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import kotlinx.coroutines.delay
 
-private const val GLOBAL_SCREENSHOT_PROMPT_TIMEOUT_MS = 5_500L
+private const val GLOBAL_SCREENSHOT_PROMPT_TIMEOUT_MS = 8_000L
 
 @Composable
 fun GlobalScreenshotPromptOverlay(
@@ -69,11 +72,15 @@ fun GlobalScreenshotPromptOverlay(
     modifier: Modifier = Modifier,
 ) {
     val reduceMotion = LocalSystemReduceMotion.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(previewBitmap, busy) {
+    // 仅在应用处于前台 RESUMED 状态时计时，避免系统截屏编辑页抢占期间提前收起浮层。
+    LaunchedEffect(previewBitmap, busy, lifecycleOwner) {
         if (previewBitmap != null && !busy) {
-            delay(GLOBAL_SCREENSHOT_PROMPT_TIMEOUT_MS)
-            onDismiss()
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                delay(GLOBAL_SCREENSHOT_PROMPT_TIMEOUT_MS)
+                onDismiss()
+            }
         }
     }
 

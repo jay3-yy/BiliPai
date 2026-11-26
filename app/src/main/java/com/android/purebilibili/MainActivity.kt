@@ -1473,6 +1473,7 @@ class MainActivity : AppCompatActivity() {
             val appGestureScreenshotEnabled = appThemeSettings.appGestureScreenshotEnabled
             val appScreenshotGestureMode = appThemeSettings.appScreenshotGestureMode
             val appScreenshotCaptureMode = appThemeSettings.appScreenshotCaptureMode
+            val appScreenshotWatermarkEnabled = appThemeSettings.appScreenshotWatermarkEnabled
             val globalScreenshotShareOverlayEnabled = appThemeSettings.globalScreenshotShareOverlayEnabled
             val appThemeConfig by remember(context) {
                 SettingsManager.getAppThemeConfig(context)
@@ -1489,6 +1490,7 @@ class MainActivity : AppCompatActivity() {
             val commentSexEnabled = commentDisplaySettings.commentSexEnabled
             val detailedCommentTimeEnabled = commentDisplaySettings.detailedCommentTimeEnabled
             val commentReplyPreviewVisible = commentDisplaySettings.commentReplyPreviewVisible
+            val commentHideSearchKeywords = commentDisplaySettings.commentHideSearchKeywords
             val liquidGlassEnabled = appThemeConfig.liquidGlassEnabled
             val uiEntranceAnimationEnabled = appThemeConfig.uiEntranceAnimationEnabled
             
@@ -1650,6 +1652,7 @@ class MainActivity : AppCompatActivity() {
                         com.android.purebilibili.core.ui.LocalCommentSexEnabled provides commentSexEnabled,
                         LocalDetailedCommentTimeEnabled provides detailedCommentTimeEnabled,
                         com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
+                        com.android.purebilibili.core.ui.LocalCommentHideSearchKeywords provides commentHideSearchKeywords,
                         LocalWindowSizeClass provides windowSizeClass,
                         LocalAppWindowAdaptiveInfo provides appWindowAdaptiveInfo,
                         com.android.purebilibili.core.ui.adaptive.LocalKeyboardShortcutOverrides provides keyboardShortcutOverrides,
@@ -1689,6 +1692,20 @@ class MainActivity : AppCompatActivity() {
                             globalScreenshotPromptContext = null
                         }
                     }
+                    val resolveActiveScreenshotWatermarkContext: () -> AppScreenshotWatermarkContext? = {
+                        if (
+                            (isInVideoDetail || isInAudioModeRoute) &&
+                                ::miniPlayerManager.isInitialized &&
+                                !miniPlayerManager.isLiveMode
+                        ) {
+                            AppScreenshotWatermarkContext(
+                                title = miniPlayerManager.currentTitle.trim().takeIf { it.isNotEmpty() },
+                                bvid = miniPlayerManager.currentBvid?.trim()?.takeIf { it.isNotEmpty() },
+                            ).takeIf { it.hasVideoInfo }
+                        } else {
+                            null
+                        }
+                    }
                     LaunchedEffect(Unit) {
                         systemScreenCaptureEvents.collect { capturedAtMs ->
                             if (capturedAtMs <= 0L) return@collect
@@ -1703,18 +1720,7 @@ class MainActivity : AppCompatActivity() {
                                 return@collect
                             }
                             lastGlobalScreenshotPromptAtMs = capturedAtMs
-                            val capturedContext = if (
-                                (isInVideoDetail || isInAudioModeRoute) &&
-                                    ::miniPlayerManager.isInitialized &&
-                                    !miniPlayerManager.isLiveMode
-                            ) {
-                                AppScreenshotWatermarkContext(
-                                    title = miniPlayerManager.currentTitle.trim().takeIf { it.isNotEmpty() },
-                                    bvid = miniPlayerManager.currentBvid?.trim()?.takeIf { it.isNotEmpty() },
-                                ).takeIf { it.hasVideoInfo }
-                            } else {
-                                null
-                            }
+                            val capturedContext = resolveActiveScreenshotWatermarkContext()
                             val captured = runCatching {
                                 captureCurrentAppWindow(this@MainActivity)
                             }.getOrElse {
@@ -1783,7 +1789,12 @@ class MainActivity : AppCompatActivity() {
                                                     }
                                                 } else {
                                                     val savedImage = runCatching {
-                                                        captureAndSaveAppScreenshotImage(this@MainActivity)
+                                                        captureAndSaveAppScreenshotImage(
+                                                            activity = this@MainActivity,
+                                                            includeBrandWatermark = appScreenshotWatermarkEnabled,
+                                                            isDarkTheme = useDarkTheme,
+                                                            watermarkContext = resolveActiveScreenshotWatermarkContext(),
+                                                        )
                                                     }.getOrElse {
                                                         Logger.e(TAG, "应用内截图失败", it)
                                                         AppScreenshotSavedImage(AppScreenshotResult.CaptureFailed)
@@ -2137,9 +2148,9 @@ class MainActivity : AppCompatActivity() {
                     if (showFullscreen) {
                         FullscreenPlayerOverlay(
                             miniPlayerManager = miniPlayerManager,
-                            onDismiss = { 
+                            onDismiss = {
                                 showFullscreen = false
-                                miniPlayerManager.enterMiniMode()
+                                miniPlayerManager.enterMiniMode(forced = true)
                             },
                             onNavigateToDetail = {
                                 //  关闭全屏覆盖层并导航到视频详情页
@@ -2424,9 +2435,21 @@ class MainActivity : AppCompatActivity() {
                                         try {
                                             val croppedBitmap = cropAppScreenshotBitmap(bitmap, cropRect)
                                             val savedUri = croppedBitmap?.let { cropped ->
+                                                var watermarked: Bitmap? = null
                                                 try {
-                                                    saveAppScreenshotBitmapToGalleryUri(context, cropped)
+                                                    val bitmapToSave = if (appScreenshotWatermarkEnabled) {
+                                                        composeAppScreenshotWithTopWatermark(
+                                                            context = context,
+                                                            source = cropped,
+                                                            isDarkTheme = useDarkTheme,
+                                                            watermarkContext = resolveActiveScreenshotWatermarkContext(),
+                                                        ).also { watermarked = it }
+                                                    } else {
+                                                        cropped
+                                                    }
+                                                    saveAppScreenshotBitmapToGalleryUri(context, bitmapToSave)
                                                 } finally {
+                                                    watermarked?.recycle()
                                                     cropped.recycle()
                                                 }
                                             }

@@ -618,6 +618,47 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
+    fun `buildRichCommentAnnotatedString hides search keyword links when enabled and preserves normal links`() {
+        val urls = mapOf(
+            "光固化" to ReplyContentUrl(
+                title = "光固化",
+                url = "https://search.bilibili.com/all?keyword=%E5%85%89%E5%9B%BA%E5%8C%96",
+                appUrlSchema = "bilibili://search?keyword=%E5%85%89%E5%9B%BA%E5%8C%96",
+                prefixIcon = "https://i0.hdslb.com/bfs/activity-plat/static/search.png"
+            ),
+            "https://b23.tv/demo" to ReplyContentUrl(
+                title = "参考视频",
+                url = "https://www.bilibili.com/video/BV1xx411c7mD"
+            )
+        )
+        val hiddenAnnotated = buildRichCommentAnnotatedString(
+            text = "光固化比较毒 https://b23.tv/demo",
+            richUrls = urls,
+            hideSearchKeywords = true
+        )
+        val shownAnnotated = buildRichCommentAnnotatedString(
+            text = "光固化比较毒 https://b23.tv/demo",
+            richUrls = urls,
+            hideSearchKeywords = false
+        )
+
+        val hiddenLinks = hiddenAnnotated.getLinkAnnotations(0, hiddenAnnotated.length)
+        assertEquals(1, hiddenLinks.size)
+        assertEquals(
+            RichCommentLinkAction.Url("https://www.bilibili.com/video/BV1xx411c7mD"),
+            resolveRichCommentLinkAction((hiddenLinks.single().item as LinkAnnotation.Clickable).tag)
+        )
+        assertTrue(hiddenAnnotated.text.startsWith("光固化比较毒 参考视频"))
+
+        val shownLinks = shownAnnotated.getLinkAnnotations(0, shownAnnotated.length)
+        assertEquals(2, shownLinks.size)
+        assertEquals(
+            RichCommentLinkAction.Url("https://search.bilibili.com/all?keyword=%E5%85%89%E5%9B%BA%E5%8C%96"),
+            resolveRichCommentLinkAction((shownLinks.first().item as LinkAnnotation.Clickable).tag)
+        )
+    }
+
+    @Test
     fun `buildRichCommentAnnotatedString renders vote token with title`() {
         val annotated = buildRichCommentAnnotatedString(
             text = "参加 {vote:987}",

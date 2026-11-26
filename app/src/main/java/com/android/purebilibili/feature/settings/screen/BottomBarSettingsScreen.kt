@@ -109,7 +109,7 @@ internal fun resolveAllBottomBarTabs(
 ): List<BottomBarTabConfig> = listOf(
     BottomBarTabConfig("HOME", "推荐", resolveBottomBarTabIcon("HOME", iconFamily), isDefault = true),
     BottomBarTabConfig("DYNAMIC", "动态", resolveBottomBarTabIcon("DYNAMIC", iconFamily), isDefault = true),
-    BottomBarTabConfig("STORY", "短视频", resolveBottomBarTabIcon("STORY", iconFamily), isDefault = false),
+    BottomBarTabConfig("STORY", "刷视频", resolveBottomBarTabIcon("STORY", iconFamily), isDefault = false),
     BottomBarTabConfig("HISTORY", "历史", resolveBottomBarTabIcon("HISTORY", iconFamily), isDefault = true),
     BottomBarTabConfig("LISTEN_VIDEO", "听视频", resolveBottomBarTabIcon("LISTEN_VIDEO", iconFamily), isDefault = true),
     BottomBarTabConfig("PROFILE", "我的", resolveBottomBarTabIcon("PROFILE", iconFamily), isDefault = true),

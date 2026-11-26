@@ -108,7 +108,7 @@
     <string name="dynamic_detail_load_failed">動態詳情載入失敗</string>
     <string name="bottom_nav_home">推薦</string>
     <string name="bottom_nav_dynamic">動態</string>
-    <string name="bottom_nav_story">短影片</string>
+    <string name="bottom_nav_story">刷影片</string>
     <string name="bottom_nav_history">歷史</string>
     <string name="bottom_nav_history_desc">歷史記錄</string>
     <string name="bottom_nav_listen_video">聽影片</string>

@@ -806,6 +806,28 @@ internal fun resolveReplyContentUrlPrefixInlineId(rawToken: String): String {
     return "comment_url_prefix_${rawToken.hashCode()}"
 }
 
+internal fun isReplySearchKeywordUrl(
+    rawToken: String,
+    url: ReplyContentUrl
+): Boolean {
+    val candidates = sequenceOf(
+        url.appUrlSchema,
+        url.url,
+        rawToken,
+    ).map { it.trim() }.filter { it.isNotEmpty() }
+    return candidates.any(::isBilibiliSearchTargetUrl)
+}
+
+private fun isBilibiliSearchTargetUrl(candidate: String): Boolean {
+    val normalized = if (candidate.startsWith("//")) "https:$candidate" else candidate
+    if (normalized.startsWith("bilibili://search", ignoreCase = true)) return true
+    val uri = runCatching { java.net.URI(normalized) }.getOrNull() ?: return false
+    val host = uri.host?.lowercase() ?: return false
+    return host == "search.bilibili.com" ||
+        ((host == "www.bilibili.com" || host == "m.bilibili.com") &&
+            uri.path?.startsWith("/search", ignoreCase = true) == true)
+}
+
 internal data class ReplyLeadingRichTextReference(
     val label: String,
     val navigationUrl: String
@@ -868,6 +890,7 @@ internal fun buildRichCommentAnnotatedString(
     prefix: AnnotatedString? = null,
     renderableEmoteKeys: Set<String> = emptySet(),
     richUrls: Map<String, ReplyContentUrl> = emptyMap(),
+    hideSearchKeywords: Boolean = true,
     atNameToMid: Map<String, Long> = emptyMap(),
     topics: Set<String> = emptySet(),
     voteTitle: String? = null,
@@ -963,6 +986,7 @@ internal fun buildRichCommentAnnotatedString(
         }
 
         richUrls.forEach { (token, url) ->
+            if (hideSearchKeywords && isReplySearchKeywordUrl(token, url)) return@forEach
             addExactTokenMatch(
                 token = token,
                 type = "rich_url",
@@ -2760,6 +2784,7 @@ fun RichCommentText(
     showWebLinkPreviews: Boolean = false,
 ) {
     val context = LocalContext.current
+    val hideSearchKeywords = com.android.purebilibili.core.ui.LocalCommentHideSearchKeywords.current
     val timestampColor = AppContentColors.accent()
     val urlColor = AppContentColors.accent()
 
@@ -2799,6 +2824,7 @@ fun RichCommentText(
         suffix,
         renderableEmoteKeys,
         content?.urls,
+        hideSearchKeywords,
         content?.atNameToMid,
         content?.topics,
         content?.vote,
@@ -2816,6 +2842,7 @@ fun RichCommentText(
             prefix = prefix,
             renderableEmoteKeys = renderableEmoteKeys,
             richUrls = content?.urls.orEmpty(),
+            hideSearchKeywords = hideSearchKeywords,
             atNameToMid = content?.atNameToMid.orEmpty(),
             topics = content?.topics.orEmpty().keys,
             voteTitle = content?.vote?.title,
@@ -2843,6 +2870,7 @@ fun RichCommentText(
         renderableEmoteKeys,
         emoteMap,
         content?.urls,
+        hideSearchKeywords,
         context,
         urlColor,
         upBadgeInlineContent,
@@ -2872,6 +2900,7 @@ fun RichCommentText(
                 )
             }
             content?.urls.orEmpty().forEach { (token, richUrl) ->
+                if (hideSearchKeywords && isReplySearchKeywordUrl(token, richUrl)) return@forEach
                 val prefixIcon = richUrl.prefixIcon.takeIf { it.isNotBlank() } ?: return@forEach
                 put(
                     resolveReplyContentUrlPrefixInlineId(token),

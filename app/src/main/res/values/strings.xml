@@ -108,7 +108,7 @@
     <string name="dynamic_detail_load_failed">动态详情加载失败</string>
     <string name="bottom_nav_home">推荐</string>
     <string name="bottom_nav_dynamic">动态</string>
-    <string name="bottom_nav_story">短视频</string>
+    <string name="bottom_nav_story">刷视频</string>
     <string name="bottom_nav_history">历史</string>
     <string name="bottom_nav_history_desc">历史记录</string>
     <string name="bottom_nav_listen_video">听视频</string>

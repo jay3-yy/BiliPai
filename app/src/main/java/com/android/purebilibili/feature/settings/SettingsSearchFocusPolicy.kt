@@ -92,6 +92,7 @@ internal fun resolveSettingsSectionFocusIndex(
             "appearance.home_up_avatars_visible",
             "appearance.home_up_badges_visible" -> HOME_LIST_CARD_ITEMS
             ContentDisplaySetting.KEEP_RECOMMEND,
+            "appearance.home_refresh_count",
             "appearance.home_refresh_tip_visible",
             "appearance.refresh_locator_duration",
             "appearance.home_refresh_undo_visible",

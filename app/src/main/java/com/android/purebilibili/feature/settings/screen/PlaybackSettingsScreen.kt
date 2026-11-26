@@ -1677,6 +1677,8 @@ private fun PlaybackInteractionSettingsSection(
         .collectAsStateWithLifecycle(initialValue = true)
     val commentMemberDecorationsEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getCommentMemberDecorationsEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
+    val commentHideSearchKeywords by remember(context) { SettingsManager.getCommentHideSearchKeywords(context) }
+        .collectAsStateWithLifecycle(initialValue = true)
     val commentIpLocationEnabled by remember(context) { SettingsManager.getCommentIpLocationEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = true)
     val commentSexEnabled by remember(context) { SettingsManager.getCommentSexEnabled(context) }
@@ -2344,6 +2346,25 @@ SettingsItemAnchor("playback.comment_collapsed_reply_preview_limit") {
             )
             }
         AppPreferenceDivider()
+            SettingsItemAnchor("playback.comment_hide_search_keywords") {
+                AppSwitchPreference(
+                    icon = rememberSettingsSemanticIcon(SettingsIconRole.COMMENT_SEARCH_KEYWORDS),
+                    title = playbackSettingTitle("playback.comment_hide_search_keywords"),
+                    subtitle = if (commentHideSearchKeywords) {
+                        "已隐藏评论中的蓝色搜索词与放大镜图标，还原为普通文本"
+                    } else {
+                        "关闭后显示蓝色搜索词，点击可直接跳转到站内搜索"
+                    },
+                    checked = commentHideSearchKeywords,
+                    onCheckedChange = { enabled ->
+                        scope.launch {
+                            SettingsManager.setCommentHideSearchKeywords(context, enabled)
+                        }
+                    },
+                    iconTint = AppContentColors.secondaryText()
+                )
+            }
+        AppPreferenceDivider()
             SettingsItemAnchor("playback.image_preview_long_press_save_enabled") {
                 AppSwitchPreference(
                     icon = rememberSettingsSemanticIcon(SettingsIconRole.IMAGE_LONG_PRESS_ACTION),
@@ -2513,6 +2534,7 @@ internal enum class PlaybackFullscreenGroup(private vararg val settingIds: Strin
         "playback.app_gesture_screenshot_enabled",
         "playback.app_screenshot_gesture_mode",
         "playback.app_screenshot_capture_mode",
+        "playback.app_screenshot_watermark_enabled",
         "playback.global_screenshot_share_overlay_enabled",
     ),
     PLAYBACK_INFO(
@@ -3608,6 +3630,9 @@ SettingsItemAnchor("playback.video_ambient_settings.power_saving") {
             .collectAsStateWithLifecycle(initialValue = AppScreenshotGestureMode.TOP_RIGHT_TWO_FINGER_LONG_PRESS)
         val appScreenshotCaptureMode by remember(context) { SettingsManager.getAppScreenshotCaptureMode(context) }
             .collectAsStateWithLifecycle(initialValue = AppScreenshotCaptureMode.FULL_WINDOW)
+        val appScreenshotWatermarkEnabled by remember(context) {
+            SettingsManager.getAppScreenshotWatermarkEnabled(context)
+        }.collectAsStateWithLifecycle(initialValue = false)
         val globalScreenshotShareOverlayEnabled by remember(context) {
             SettingsManager.getGlobalScreenshotShareOverlayEnabled(context)
         }.collectAsStateWithLifecycle(initialValue = true)
@@ -3715,6 +3740,26 @@ SettingsItemAnchor("playback.app_screenshot_capture_mode") {
             }
         )
 }
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.app_screenshot_watermark_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.APP_SCREENSHOT_WATERMARK),
+                title = playbackSettingTitle("playback.app_screenshot_watermark_enabled"),
+                subtitle = if (appGestureScreenshotEnabled) {
+                    "开启后，应用内手势截图或区域截图保存时将在顶部拼接 BiliPai 品牌水印条"
+                } else {
+                    "开启“应用内截图”后生效"
+                },
+                checked = appScreenshotWatermarkEnabled,
+                enabled = appGestureScreenshotEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch {
+                        SettingsManager.setAppScreenshotWatermarkEnabled(context, enabled)
+                    }
+                },
+                iconTint = AppContentColors.secondaryText()
+            )
+        }
         AppPreferenceDivider()
         SettingsItemAnchor("playback.global_screenshot_share_overlay_enabled") {
             AppSwitchPreference(

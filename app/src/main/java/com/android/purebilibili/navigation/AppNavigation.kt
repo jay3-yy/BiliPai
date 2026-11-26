@@ -6026,6 +6026,7 @@ fun AppNavigation(
                         transitionEnabled = cardTransitionEnabled,
                         isActive = isBottomPagerPageActive,
                         isFeedEntrySelected = isFeedEntrySelected,
+                        isInPipMode = isInPipMode,
                         onBack = { performSystemBackAction() },
                         onOpenVideoDetail = { bvid, cid, coverUrl, positionMs ->
                             pushNavigation3Target(

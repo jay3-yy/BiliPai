@@ -38,6 +38,9 @@ val LocalDetailedCommentTimeEnabled = compositionLocalOf { false }
 /** 评论楼中楼预览开关，由应用根层收集偏好，避免每条评论各自订阅 DataStore。 */
 val LocalCommentReplyPreviewVisible = compositionLocalOf { true }
 
+/** 隐藏评论区搜索关键词链接开关，由应用根层收集偏好，默认开启。 */
+val LocalCommentHideSearchKeywords = compositionLocalOf { true }
+
 /**
  * App-shell Haze state for the bottom bar (wallpaper + page content as source).
  * Must not be used by nodes that live *inside* that source tree (causes prepareTree SO).

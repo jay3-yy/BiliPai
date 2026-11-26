@@ -16,7 +16,11 @@ import coil3.request.crossfade
 import com.android.purebilibili.core.ui.AppIconStyle
 import com.android.purebilibili.core.ui.AppListItemStyle
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppSliderDialogPreference
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.store.MAX_HOME_REFRESH_COUNT
+import com.android.purebilibili.core.store.MIN_HOME_REFRESH_COUNT
+import kotlin.math.roundToInt
 
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 
@@ -2085,6 +2089,23 @@ fun AppearanceSettingsContent(
             item(key = HOME_LIST_REFRESH_ITEMS, contentType = "settings_preference_group") {
                 AppPreferenceGroup(segment = AppPreferenceGroupSegment.LAST) {
                     com.android.purebilibili.feature.settings.RecommendRetentionPreference()
+                    AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                    SettingsItemAnchor("appearance.home_refresh_count") {
+                        AppSliderDialogPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.REFRESH_COUNT),
+                            title = settingItemTitle("appearance.home_refresh_count"),
+                            subtitle = "单次最多请求 ${homeConfiguration.homeRefreshCount} 条推荐内容，实际显示可能更少",
+                            value = homeConfiguration.homeRefreshCount.toFloat(),
+                            onValueChange = { value ->
+                                scope.launch {
+                                    SettingsManager.setHomeRefreshCount(context, value.roundToInt())
+                                }
+                            },
+                            valueRange = MIN_HOME_REFRESH_COUNT.toFloat()..MAX_HOME_REFRESH_COUNT.toFloat(),
+                            steps = (MAX_HOME_REFRESH_COUNT - MIN_HOME_REFRESH_COUNT - 1).coerceAtLeast(0),
+                            valueFormatter = { value -> "${value.roundToInt()} 条" },
+                        )
+                    }
                     AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                     SettingsItemAnchor("appearance.home_refresh_tip_visible") {
                         AppSwitchPreference(
