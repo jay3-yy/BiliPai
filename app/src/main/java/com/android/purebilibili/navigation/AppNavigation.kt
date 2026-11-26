@@ -3241,6 +3241,7 @@ fun AppNavigation(
                         pushNavigation3Key(BiliPaiNavKey.HomeSettings)
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_SETTINGS ->
                         pushNavigation3Key(BiliPaiNavKey.Settings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_DONATE,
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.PREVIEW_CMF -> Unit
                 }
             },

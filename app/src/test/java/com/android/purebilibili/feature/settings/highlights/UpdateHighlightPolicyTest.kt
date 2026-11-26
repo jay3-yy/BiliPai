@@ -68,6 +68,7 @@ class UpdateHighlightPolicyTest {
         val currentHighlights = latestReleaseHighlights(616)
         assertEquals(
             listOf(
+                "donate_qr_refresh_616",
                 "cdn_parallel_chunk_616",
                 "offline_cache_refresh_616",
                 "custom_icon_zero_diff_616",

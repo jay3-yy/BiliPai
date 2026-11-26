@@ -2916,7 +2916,7 @@ internal fun HomeScreen(
             onDismissEditor = { editingQuickFilterTarget = null },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
-        val homeSnackbarBottomPadding = com.android.purebilibili.navigation.LocalBottomBarContentPadding.current
+        val homeSnackbarBottomPadding = com.android.purebilibili.core.ui.LocalBottomBarContentPadding.current
         com.android.purebilibili.core.ui.components.AppSnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier

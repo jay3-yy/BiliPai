@@ -5,10 +5,11 @@ import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.feature.settings.Md3ColorSource
 import com.materialkolor.PaletteStyle
 
-internal const val MAX_RELEASE_HIGHLIGHTS = 8
+internal const val MAX_RELEASE_HIGHLIGHTS = 9
 
 internal enum class UpdateHighlightAction {
     PREVIEW_CMF,
+    OPEN_DONATE,
     OPEN_PLUGINS_SETTINGS,
     OPEN_DOWNLOAD_LIST,
     OPEN_ICON_SETTINGS,
@@ -48,6 +49,15 @@ internal val updateHighlightCatalog = listOf(
         action = UpdateHighlightAction.PREVIEW_CMF,
         badge = "主题配色",
         actionLabel = "预览配色",
+    ),
+    UpdateHighlight(
+        id = "donate_qr_refresh_616",
+        introducedVersionCode = 616,
+        title = "支持与赞赏体验升级",
+        description = "更新微信优先赞赏码，支持平滑切换支付宝收款码，感谢你的每一份支持。",
+        action = UpdateHighlightAction.OPEN_DONATE,
+        badge = "赞赏支持",
+        actionLabel = "打开赞赏",
     ),
     UpdateHighlight(
         id = "cdn_parallel_chunk_616",
@@ -170,6 +180,7 @@ internal fun resolveAutomaticReleaseHighlights(
 
 internal fun canPreviewUpdateHighlight(highlight: UpdateHighlight, settings: AppThemeSettings): Boolean = when (highlight.action) {
     UpdateHighlightAction.PREVIEW_CMF -> settings.uiStyle == AppUiStyle.MATERIAL3 && settings.md3ColorSource == Md3ColorSource.CUSTOM
+    UpdateHighlightAction.OPEN_DONATE,
     UpdateHighlightAction.OPEN_PLUGINS_SETTINGS,
     UpdateHighlightAction.OPEN_DOWNLOAD_LIST,
     UpdateHighlightAction.OPEN_ICON_SETTINGS,
@@ -187,6 +198,7 @@ internal fun canPreviewUpdateHighlight(highlight: UpdateHighlight, settings: App
 internal fun isUpdateHighlightAlreadyEnabled(highlight: UpdateHighlight, settings: AppThemeSettings): Boolean = when (highlight.action) {
     UpdateHighlightAction.PREVIEW_CMF -> canPreviewUpdateHighlight(highlight, settings) &&
         !settings.seedPaletteStyle.enabled && settings.colorStyle is PaletteStyle.Cmf
+    UpdateHighlightAction.OPEN_DONATE,
     UpdateHighlightAction.OPEN_PLUGINS_SETTINGS,
     UpdateHighlightAction.OPEN_DOWNLOAD_LIST,
     UpdateHighlightAction.OPEN_ICON_SETTINGS,

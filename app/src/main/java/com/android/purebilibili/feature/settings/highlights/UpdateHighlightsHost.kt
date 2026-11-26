@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
@@ -67,6 +68,8 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import com.android.purebilibili.feature.settings.DarkThemeStyle
+import com.android.purebilibili.feature.settings.DonateDialog
+import com.android.purebilibili.feature.settings.DonationDialogOrigin
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
 import kotlinx.coroutines.Dispatchers
@@ -115,6 +118,8 @@ internal fun UpdateHighlightsHost(
     var applied by rememberSaveable { mutableStateOf(false) }
     var applying by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var showDonateDialog by rememberSaveable { mutableStateOf(false) }
+    val donationOrigin = remember { DonationDialogOrigin() }
     val glassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
 
     LaunchedEffect(context, manualOpen) {
@@ -185,7 +190,15 @@ internal fun UpdateHighlightsHost(
             }
         }
     }
-    if ((!manualOpen && (!canShowAutomatically || automaticIds.isEmpty())) || currentSettings == null) return
+    DonateDialog(
+        visible = showDonateDialog,
+        origin = donationOrigin,
+        onDismiss = {
+            showDonateDialog = false
+            onManualDismiss()
+        },
+    )
+    if ((!manualOpen && (!canShowAutomatically || automaticIds.isEmpty())) || currentSettings == null || showDonateDialog) return
 
     val snapshot = previewSnapshot
     fun dismiss() {
@@ -351,12 +364,22 @@ internal fun UpdateHighlightsHost(
                             },
                             onClick = {
                                 val action = feature.action ?: return@UpdateHighlightPreviewCard
-                                if (action == UpdateHighlightAction.PREVIEW_CMF) {
-                                    previewSnapshot = currentSettings
-                                    message = null
-                                } else {
-                                    dismiss()
-                                    navigateToHighlight(action)
+                                when (action) {
+                                    UpdateHighlightAction.PREVIEW_CMF -> {
+                                        previewSnapshot = currentSettings
+                                        message = null
+                                    }
+                                    UpdateHighlightAction.OPEN_DONATE -> {
+                                        automaticIds = ""
+                                        previewSnapshot = null
+                                        applied = false
+                                        message = null
+                                        showDonateDialog = true
+                                    }
+                                    else -> {
+                                        dismiss()
+                                        navigateToHighlight(action)
+                                    }
                                 }
                             },
                         )
@@ -519,6 +542,7 @@ private fun UpdateHighlightPreviewCard(
 }
 
 private fun resolveUpdateHighlightIcon(action: UpdateHighlightAction?): ImageVector = when (action) {
+    UpdateHighlightAction.OPEN_DONATE -> Icons.Outlined.FavoriteBorder
     UpdateHighlightAction.OPEN_PLUGINS_SETTINGS -> Icons.Outlined.Speed
     UpdateHighlightAction.OPEN_DOWNLOAD_LIST -> Icons.Outlined.Download
     UpdateHighlightAction.OPEN_ICON_SETTINGS,
