@@ -2040,6 +2040,37 @@ private fun ImagePreviewOverlayContent(
                 }
 
                 if (useCommentPreviewChrome && commentContext != null) {
+                    var commentThumbnailScrubbing by remember(requestToken) { mutableStateOf(false) }
+                    var commentPageTextVisible by remember(requestToken) { mutableStateOf(true) }
+                    LaunchedEffect(pagerState.currentPage, commentThumbnailScrubbing, images.size) {
+                        if (images.size <= 1) {
+                            commentPageTextVisible = false
+                        } else if (commentThumbnailScrubbing) {
+                            commentPageTextVisible = false
+                        } else {
+                            commentPageTextVisible = true
+                            kotlinx.coroutines.delay(1_400L)
+                            commentPageTextVisible = false
+                        }
+                    }
+                    val commentPageTextAlpha by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (commentPageTextVisible) 1f else 0f,
+                        animationSpec = if (reducePreviewMotion) {
+                            androidx.compose.animation.core.snap()
+                        } else {
+                            androidx.compose.animation.core.tween(durationMillis = 220)
+                        },
+                        label = "commentPreviewPageTextAlpha",
+                    )
+                    val commentPanelAlpha by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (commentThumbnailScrubbing) 0.45f else 1f,
+                        animationSpec = if (reducePreviewMotion) {
+                            androidx.compose.animation.core.snap()
+                        } else {
+                            androidx.compose.animation.core.tween(durationMillis = 160)
+                        },
+                        label = "commentPreviewPanelScrubAlpha",
+                    )
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -2050,7 +2081,7 @@ private fun ImagePreviewOverlayContent(
                                 bottom = overlayPadding.bottom + AppSpacingTokens.Medium
                             ),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
                     ) {
                         if (images.size > 1) {
                             ImagePreviewThumbnailScrubber(
@@ -2062,7 +2093,14 @@ private fun ImagePreviewOverlayContent(
                                         scope.launch { pagerState.scrollToPage(targetIndex) }
                                     }
                                 },
+                                onScrubbingChange = { commentThumbnailScrubbing = it },
                                 modifier = Modifier.fillMaxWidth(),
+                            )
+                            AppText(
+                                text = "${pagerState.currentPage + 1}/${images.size}",
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = MaterialTheme.typography.labelMedium.fontSize,
+                                modifier = Modifier.graphicsLayer { alpha = commentPageTextAlpha },
                             )
                         }
                         ImagePreviewCommentPanel(
@@ -2079,6 +2117,7 @@ private fun ImagePreviewOverlayContent(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .graphicsLayer { alpha = commentPanelAlpha }
                                 .then(chromeModifier)
                         )
                     }
