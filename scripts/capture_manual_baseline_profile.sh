@@ -51,12 +51,14 @@ fi
 TMP_FILE="$(mktemp)"
 trap 'rm -f "$TMP_FILE"' EXIT
 
+# 剥离 profman 附带的 inline-cache 尾缀（+]...）并剔除数组描述符行（[L...;），输出标准 HRF。
 adb shell profman \
   --dump-classes-and-methods \
   --profile-file="$PROF_PATH" \
   --apk="$APK_PATH" \
   | tr -d '\r' \
-  | awk 'NF > 0' \
+  | sed -E 's/\+\].*$//' \
+  | awk 'NF > 0 && $0 !~ /^[HSP]*\[/' \
   | sort -u > "$TMP_FILE"
 
 LINE_COUNT="$(wc -l < "$TMP_FILE" | tr -d ' ')"

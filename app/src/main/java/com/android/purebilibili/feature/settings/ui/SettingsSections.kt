@@ -844,7 +844,11 @@ private fun SettingsAboutCategoryContent(
                     onEnhancedDiagnosticLoggingChange = actions.onEnhancedDiagnosticLoggingChange,
                     onExportLogsClick = actions.onExportLogsClick,
                 )
-                SettingsAdaptiveDivider()
+                if (LocalAppUiStyle.current == AppUiStyle.MIUIX) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                } else {
+                    SettingsAdaptiveDivider()
+                }
                 SettingsDetailEntrySection(
                     entries = listOf(
                         SettingsDetailEntry(
