@@ -7,7 +7,10 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.rememberScrollState
 import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -440,7 +443,11 @@ private fun BiliPaiTransferEntry(onOpen: () -> Unit) {
 }
 
 @Composable
-private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> Unit) {
+internal fun BiliPaiTransferDialog(
+    onDismiss: () -> Unit,
+    onContinueLogin: () -> Unit,
+    defaultContentOnly: Boolean = false,
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val session = remember(context) { BiliPaiTransferSession(context) }
@@ -453,6 +460,13 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
     var pendingPayload by remember { mutableStateOf<BiliPaiTransferPayload?>(null) }
     var importReport by remember { mutableStateOf<BiliPaiTransferImportReport?>(null) }
     var chunkProgress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var missingChunks by remember { mutableStateOf<List<Int>>(emptyList()) }
+    var autoPlayChunks by remember { mutableStateOf(true) }
+    var includeSessionOnSend by rememberSaveable(defaultContentOnly) { mutableStateOf(!defaultContentOnly) }
+    var keepCurrentAccountOnReceive by rememberSaveable(defaultContentOnly) {
+        mutableStateOf(defaultContentOnly || (TokenManager.midCache ?: 0L) > 0L)
+    }
+    var lastImportedSession by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("选择接收或发送") }
     var busy by remember { mutableStateOf(false) }
     var approvals by remember { mutableStateOf<List<BiliPaiTransferPluginApproval>>(emptyList()) }
@@ -481,7 +495,7 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
     LaunchedEffect(receiving, restart) {
         busy = true
         requestQr = null; qrChunks = emptyList(); chunkIndex = 0; requestAccepted = false
-        pendingPayload = null; importReport = null; chunkProgress = null
+        pendingPayload = null; importReport = null; chunkProgress = null; missingChunks = emptyList()
         approvals = emptyList(); approvedKeys = emptySet()
         try {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { session.clear() }
@@ -502,6 +516,14 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
         }
     }
 
+    LaunchedEffect(qrChunks, autoPlayChunks) {
+        if (qrChunks.size <= 1 || !autoPlayChunks) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(900L)
+            chunkIndex = (chunkIndex + 1) % qrChunks.size
+        }
+    }
+
     com.android.purebilibili.core.ui.AppAlertDialog(
         onDismissRequest = {
             if (!busy) {
@@ -517,8 +539,15 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppOutlinedButton(onClick = { if (!receiving) { busy = true; receiving = true } }, enabled = !busy && importReport == null) { AppText("接收账号") }
-                    AppOutlinedButton(onClick = { if (receiving) { busy = true; receiving = false } }, enabled = !busy && importReport == null) { AppText("发送账号") }
+                    val receiveLabel = if (defaultContentOnly) "接收备份" else "接收账号"
+                    val sendLabel = if (defaultContentOnly) "发送备份" else "发送账号"
+                    if (receiving) {
+                        AppButton(onClick = {}, enabled = !busy && importReport == null) { AppText(receiveLabel) }
+                        AppOutlinedButton(onClick = { busy = true; receiving = false }, enabled = !busy && importReport == null) { AppText(sendLabel) }
+                    } else {
+                        AppOutlinedButton(onClick = { busy = true; receiving = true }, enabled = !busy && importReport == null) { AppText(receiveLabel) }
+                        AppButton(onClick = {}, enabled = !busy && importReport == null) { AppText(sendLabel) }
+                    }
                 }
                 AppText(if (busy) "正在处理，请稍候…" else message, textAlign = TextAlign.Center)
 
@@ -535,7 +564,17 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
                     }
                     pendingPayload != null -> {
                         val payload = pendingPayload!!
+                        val receiverHasAccount = (TokenManager.midCache ?: 0L) > 0L
+                        val canSkipSession = !payload.contentOnly && (defaultContentOnly || receiverHasAccount)
+                        val willImportSession = !payload.contentOnly && !(canSkipSession && keepCurrentAccountOnReceive)
                         AppText(transferPreviewText(payload), textAlign = TextAlign.Center)
+                        if (canSkipSession) {
+                            TransferCheckRow(
+                                label = "仅导入设置与数据，保留当前账号",
+                                checked = keepCurrentAccountOnReceive,
+                                enabled = !busy,
+                            ) { keepCurrentAccountOnReceive = it }
+                        }
                         if (approvals.isNotEmpty()) {
                             AppText("插件需在本设备重新授权，未勾选的插件将跳过。JS 插件保留原设备启用状态，外部插件包导入后保持停用。",
                                 style = MaterialTheme.typography.bodySmall)
@@ -556,15 +595,22 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
                         AppButton(onClick = {
                             val granted = approvedKeys.toSet()
                             runAction("导入失败") {
-                                if (session.confirmImport(payload, granted)) {
+                                if (session.confirmImport(payload, granted, importSession = willImportSession)) {
+                                    lastImportedSession = willImportSession
                                     importReport = (session.state as? BiliPaiTransferState.Completed)?.importReport
                                         ?: BiliPaiTransferImportReport(emptyList())
-                                    message = "账号已导入，请查看内容结果后继续登录"
+                                    message = if (willImportSession) {
+                                        "账号已导入，请查看内容结果后继续登录"
+                                    } else {
+                                        "备份数据已导入（未更改当前账号）"
+                                    }
                                 } else {
                                     message = "账号会话导入失败，请重试"
                                 }
                             }
-                        }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppText("确认导入 MID ${payload.session.mid}") }
+                        }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                            AppText(if (willImportSession) "确认导入 MID ${payload.session.mid}" else "确认导入备份数据")
+                        }
                     }
                     qrChunks.isNotEmpty() -> {
                         val total = qrChunks.size
@@ -573,17 +619,39 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
                         TransferQrImage(qrChunks[index], "BiliPai 传输二维码", Modifier.size(240.dp))
                         if (total > 1) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                AppOutlinedButton(onClick = { chunkIndex-- }, enabled = index > 0) { AppText("上一张") }
-                                AppOutlinedButton(onClick = { chunkIndex++ }, enabled = index < total - 1) { AppText("下一张") }
+                                AppOutlinedButton(
+                                    onClick = {
+                                        autoPlayChunks = false
+                                        chunkIndex = (index - 1).coerceAtLeast(0)
+                                    },
+                                    enabled = index > 0,
+                                ) { AppText("上一张") }
+                                AppOutlinedButton(
+                                    onClick = { autoPlayChunks = !autoPlayChunks },
+                                ) { AppText(if (autoPlayChunks) "暂停轮播" else "自动轮播") }
+                                AppOutlinedButton(
+                                    onClick = {
+                                        autoPlayChunks = false
+                                        chunkIndex = (index + 1).coerceAtMost(total - 1)
+                                    },
+                                    enabled = index < total - 1,
+                                ) { AppText("下一张") }
                             }
-                            AppText("请让对方扫描全部分块，重复扫描不会增加进度", style = MaterialTheme.typography.labelSmall)
+                            AppText("默认自动轮播，对方对准二维码即可连续接收", style = MaterialTheme.typography.labelSmall)
                         }
                         AppTextButton(onClick = { qrChunks = emptyList(); chunkIndex = 0 }) { AppText("重新选择传输内容") }
                     }
                     !receiving && requestAccepted -> {
+                        val hasLocalSession = (TokenManager.midCache ?: 0L) > 0L && !TokenManager.sessDataCache.isNullOrBlank()
+                        TransferCheckRow(
+                            label = if (hasLocalSession) "同时转移当前登录账号" else "同时转移当前登录账号（当前未登录）",
+                            checked = includeSessionOnSend && hasLocalSession,
+                            enabled = !busy && hasLocalSession,
+                        ) { includeSessionOnSend = it }
                         TransferContentSelectionUi(inventory, selection) { if (!busy) selection = it }
                         AppButton(onClick = {
                             val selected = selection
+                            val sendContentOnly = !includeSessionOnSend || !hasLocalSession
                             val bundle = BiliPaiSessionBundle(
                                 mid = TokenManager.midCache ?: 0L,
                                 sessData = TokenManager.sessDataCache.orEmpty(),
@@ -594,8 +662,10 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
                                 buvid3 = TokenManager.buvid3Cache.orEmpty(), isVip = TokenManager.isVipCache,
                             )
                             runAction("生成二维码失败") {
-                                require(bundle.mid > 0 && bundle.sessData.isNotBlank()) { "当前设备没有可传输的登录会话" }
-                                val chunks = session.createEnvelope(bundle, selected)
+                                if (!sendContentOnly) {
+                                    require(bundle.mid > 0 && bundle.sessData.isNotBlank()) { "当前设备没有可传输的登录会话" }
+                                }
+                                val chunks = session.createEnvelope(bundle, selected, contentOnly = sendContentOnly)
                                 qrChunks = chunks; chunkIndex = 0
                                 message = if (chunks.size == 1) "请让接收设备扫描此加密二维码"
                                     else "内容较多，已分为 ${chunks.size} 张分块二维码"
@@ -603,7 +673,28 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
                         }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { AppText("生成加密二维码") }
                     }
                     receiving -> {
-                        chunkProgress?.let { AppText("已接收 ${it.first}/${it.second} 个分块，请继续扫描") }
+                        chunkProgress?.let { (received, total) ->
+                            val missingText = missingChunks.take(5).joinToString("、") { (it + 1).toString() }
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                androidx.compose.material3.LinearProgressIndicator(
+                                    progress = { received.toFloat() / total.coerceAtLeast(1).toFloat() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                AppText(
+                                    text = if (missingText.isNotEmpty()) {
+                                        "已接收 $received/$total 个分块（还差第 $missingText 张）"
+                                    } else {
+                                        "已接收 $received/$total 个分块，请继续扫描"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
                         requestQr?.let { TransferQrImage(it, "BiliPai 传输请求二维码", Modifier.size(220.dp)) }
                         TransferScannerOrNothing(onError = { message = it }) { raw ->
                             runAction("二维码无效") {
@@ -612,11 +703,12 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
                                 }
                                 if (payload == null) {
                                     chunkProgress = session.chunkBuffer.receivedCount() to session.chunkBuffer.total
+                                    missingChunks = session.chunkBuffer.missingIndices()
                                     message = "分块接收中"
                                 } else {
                                     approvals = BiliPaiTransferContent.pluginApprovals(context, payload)
                                     approvedKeys = emptySet()
-                                    pendingPayload = payload; chunkProgress = null
+                                    pendingPayload = payload; chunkProgress = null; missingChunks = emptyList()
                                     message = "已解密，请确认导入"
                                 }
                             }
@@ -630,7 +722,9 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
                                     BiliPaiTransferContent.inventory(context)
                                 }
                                 selection = BiliPaiTransferContentSelection(
-                                    settings = true, jsonRules = inventory.hasJsonRules,
+                                    settings = true,
+                                    jsonRules = inventory.hasJsonRules,
+                                    keepsakes = inventory.keepsakeCount > 0,
                                     jsPluginIds = inventory.jsPlugins.mapTo(mutableSetOf()) { it.id },
                                     skinIds = inventory.skins.mapTo(mutableSetOf()) { it.id },
                                     kotlinPluginIds = inventory.kotlinPlugins.mapTo(mutableSetOf()) { it.id },
@@ -648,7 +742,9 @@ private fun BiliPaiTransferDialog(onDismiss: () -> Unit, onContinueLogin: () -> 
         },
         confirmButton = {
             if (importReport != null) {
-                AppTextButton(onClick = onContinueLogin) { AppText("继续登录") }
+                AppTextButton(onClick = if (lastImportedSession) onContinueLogin else onDismiss) {
+                    AppText(if (lastImportedSession) "继续登录" else "完成")
+                }
             } else {
                 AppTextButton(onClick = onDismiss, enabled = !busy) { AppText("取消") }
             }
@@ -666,8 +762,19 @@ private fun TransferQrImage(value: String, description: String, modifier: Modifi
         }.onSuccess { bitmap = it }.onFailure { error = it.message ?: "生成失败" }
     }
     when {
-        bitmap != null -> Image(bitmap = bitmap!!.asImageBitmap(), contentDescription = description,
-            modifier = modifier)
+        bitmap != null -> Box(
+            modifier = modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(androidx.compose.ui.graphics.Color.White)
+                .padding(10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                bitmap = bitmap!!.asImageBitmap(),
+                contentDescription = description,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         error != null -> AppText("二维码生成失败：$error，请重新开始或减少所选内容", modifier = modifier, color = AppContentColors.error())
         else -> AppText("正在生成二维码…", modifier = modifier)
     }
@@ -679,10 +786,15 @@ private fun TransferScannerOrNothing(onError: (String) -> Unit, onCode: (String)
 }
 
 private fun transferPreviewText(payload: BiliPaiTransferPayload): String = buildString {
-    append("已解密 MID ${payload.session.mid}，请确认导入")
+    if (payload.contentOnly) {
+        append("已解密备份数据（不更改当前账号），请确认导入")
+    } else {
+        append("已解密 MID ${payload.session.mid}，请确认导入")
+    }
     val extras = mutableListOf<String>()
     payload.settingsJson?.let { extras.add("设置") }
     payload.jsonRules?.let { extras.add("JSON 规则插件") }
+    if (payload.keepsakes.isNotEmpty()) extras.add("完结纪念×${payload.keepsakes.size}")
     if (payload.jsPlugins.isNotEmpty()) extras.add("JS 插件×${payload.jsPlugins.size}")
     if (payload.skins.isNotEmpty()) extras.add("皮肤×${payload.skins.size}")
     if (payload.kotlinPlugins.isNotEmpty()) extras.add("插件包×${payload.kotlinPlugins.size}")
@@ -702,6 +814,11 @@ private fun TransferContentSelectionUi(
         if (inventory.hasJsonRules) {
             TransferCheckRow("JSON 规则插件", selection.jsonRules) { checked ->
                 onChange(selection.copy(jsonRules = checked))
+            }
+        }
+        if (inventory.keepsakeCount > 0) {
+            TransferCheckRow("完结纪念（${inventory.keepsakeCount} 条）", selection.keepsakes) { checked ->
+                onChange(selection.copy(keepsakes = checked))
             }
         }
         TransferGroup("JS 插件", inventory.jsPlugins, selection.jsPluginIds) { ids ->
@@ -742,7 +859,12 @@ private fun TransferGroup(
                     onSelected(if (checked) selected + item.id else selected - item.id)
                 },
             )
-            AppText(item.name, style = MaterialTheme.typography.bodySmall)
+            val sizeHint = if (item.bytes > 0L) {
+                " (${com.android.purebilibili.feature.settings.backup.formatBackupSize(item.bytes)})"
+            } else {
+                ""
+            }
+            AppText("${item.name}$sizeHint", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

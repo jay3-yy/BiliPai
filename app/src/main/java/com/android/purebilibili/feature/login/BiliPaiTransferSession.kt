@@ -66,6 +66,11 @@ class BiliPaiTransferChunkBuffer {
     }
 
     fun receivedCount(): Int = chunks.size
+
+    fun missingIndices(): List<Int> {
+        if (total <= 0) return emptyList()
+        return (0 until total).filter { it !in chunks }
+    }
 }
 
 /** Coordinates the two QR scans; it contains no camera or Compose code. */
@@ -95,9 +100,10 @@ class BiliPaiTransferSession(private val context: Context) {
     suspend fun createEnvelope(
         bundle: BiliPaiSessionBundle,
         selection: BiliPaiTransferContentSelection = BiliPaiTransferContentSelection(),
+        contentOnly: Boolean = false,
     ): List<String> = withContext(Dispatchers.IO) {
         val target = request ?: error("请先扫描接收设备请求")
-        val payload = BiliPaiTransferContent.collect(context, selection, bundle)
+        val payload = BiliPaiTransferContent.collect(context, selection, bundle, contentOnly = contentOnly)
         val envelope = BiliPaiTransferCrypto.encryptPayload(keys, keys.public.fingerprint(), target, payload)
         val chunks = BiliPaiTransferCodec.encodeEnvelopeQrs(envelope)
         state = BiliPaiTransferState.EnvelopeReady(chunks)
@@ -118,7 +124,11 @@ class BiliPaiTransferSession(private val context: Context) {
         } else raw
         val envelope = BiliPaiTransferCodec.decodeEnvelope(envelopeRaw)
         val payload = BiliPaiTransferCrypto.decryptPayload(keys.private, target, envelope)
-        require(payload.session.mid > 0L && payload.session.sessData.isNotBlank()) { "传输账号会话无效" }
+        if (payload.contentOnly) {
+            require(!payload.isContentEmpty()) { "传输备份内容为空" }
+        } else {
+            require(payload.session.mid > 0L && payload.session.sessData.isNotBlank()) { "传输账号会话无效" }
+        }
         require(payload.version == BILIPAI_TRANSFER_PAYLOAD_VERSION) { "传输载荷版本不一致，请升级两端 BiliPai" }
         state = BiliPaiTransferState.AwaitingConfirmation(payload)
         return payload
@@ -127,21 +137,40 @@ class BiliPaiTransferSession(private val context: Context) {
     suspend fun confirmImport(
         payload: BiliPaiTransferPayload,
         approvedPluginKeys: Set<String> = emptySet(),
+        importSession: Boolean = !payload.contentOnly,
     ): Boolean = withContext(Dispatchers.IO) {
         check((state as? BiliPaiTransferState.AwaitingConfirmation)?.payload == payload) {
             "请先接收并确认当前传输内容"
         }
-        val sessionOk = AccountSessionStore.importTransferredSession(context, payload.session)
-        if (!sessionOk) {
-            return@withContext false
+        val shouldImportSession = importSession && !payload.contentOnly
+        if (shouldImportSession) {
+            val sessionOk = AccountSessionStore.importTransferredSession(context, payload.session)
+            if (!sessionOk) {
+                return@withContext false
+            }
+        }
+        val keepsakeMidOverride = if (shouldImportSession) {
+            payload.session.mid.takeIf { it > 0L }
+        } else {
+            com.android.purebilibili.core.store.TokenManager.midCache?.takeIf { it > 0L }
         }
         val report = transferCatching {
-            BiliPaiTransferContent.apply(context, payload, approvedPluginKeys)
+            BiliPaiTransferContent.apply(
+                context = context,
+                payload = payload,
+                approvedPluginKeys = approvedPluginKeys,
+                keepsakeAccountMidOverride = keepsakeMidOverride,
+            )
         }.getOrElse {
             BiliPaiTransferImportReport(items = listOf(
                 BiliPaiTransferImportItemResult("内容导入", false, it.message)))
         }
-        state = BiliPaiTransferState.Completed(payload.session.mid, report)
+        val completedMid = if (shouldImportSession) {
+            payload.session.mid
+        } else {
+            com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
+        }
+        state = BiliPaiTransferState.Completed(completedMid, report)
         true
     }
 

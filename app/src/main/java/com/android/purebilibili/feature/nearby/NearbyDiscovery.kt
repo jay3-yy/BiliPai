@@ -12,6 +12,7 @@ internal class NearbyDiscovery(
     context: Context,
     private val ownPin: String,
     private val name: String,
+    private val deviceType: String,
     private val port: Int,
     private val onPeers: (List<NearbyPeer>) -> Unit,
 ) : Closeable {
@@ -64,6 +65,7 @@ internal class NearbyDiscovery(
             port = this@NearbyDiscovery.port
             setAttribute("pin", ownPin)
             setAttribute("name", name)
+            setAttribute("type", deviceType)
         }
         // NSD 不可用不影响通过配对码连接。
         runCatching { manager.registerService(info, NsdManager.PROTOCOL_DNS_SD, registration); registered = true }
@@ -86,10 +88,20 @@ internal class NearbyDiscovery(
                         val host = resolved.host?.hostAddress?.substringBefore('%').orEmpty()
                         if (pin != ownPin && Regex("[a-f0-9]{64}").matches(pin) &&
                             runCatching { requireLocalAddress(host) }.isSuccess && resolved.port in 1024..65535) {
-                            if (peers.size < 32 || peers.containsKey(resolved.serviceName)) peers[resolved.serviceName] = NearbyPeer(pin.take(32),
-                                resolved.attributes["name"]?.toString(Charsets.UTF_8)?.take(40)
-                                    ?.takeIf { it.isNotBlank() } ?: "BiliPai 设备",
-                                pin, host, resolved.port)
+                            val remoteType = NearbyDeviceFormFactor.fromWire(
+                                resolved.attributes["type"]?.toString(Charsets.UTF_8)
+                            ).wireValue
+                            if (peers.size < 32 || peers.containsKey(resolved.serviceName)) {
+                                peers[resolved.serviceName] = NearbyPeer(
+                                    id = pin.take(32),
+                                    name = resolved.attributes["name"]?.toString(Charsets.UTF_8)?.take(40)
+                                        ?.takeIf { it.isNotBlank() } ?: "BiliPai 设备",
+                                    pin = pin,
+                                    host = host,
+                                    port = resolved.port,
+                                    deviceType = remoteType,
+                                )
+                            }
                             onPeers(peers.values.toList())
                         }
                     }

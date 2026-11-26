@@ -16,15 +16,25 @@ import javax.security.auth.x500.X500Principal
 
 /** 私钥不可导出；每个安装独立生成身份，不包含共享密钥或登录凭据。 */
 internal class NearbyIdentity {
-    private val alias = "bilipai_nearby_identity_v1"
+    // v2 补齐 DIGEST_NONE：Android Conscrypt 在 TLS 1.2/1.3 握手签名时会调用 NONEwithECDSA。
+    private val alias = "bilipai_nearby_identity_v2"
+    private val legacyAlias = "bilipai_nearby_identity_v1"
     private val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     init {
+        if (store.containsAlias(legacyAlias)) {
+            runCatching { store.deleteEntry(legacyAlias) }
+        }
         if (!store.containsAlias(alias)) {
             val end = Calendar.getInstance().apply { add(Calendar.YEAR, 20) }.time
             KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore").apply {
                 initialize(KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY)
                     .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-                    .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA384, KeyProperties.DIGEST_SHA512)
+                    .setDigests(
+                        KeyProperties.DIGEST_NONE,
+                        KeyProperties.DIGEST_SHA256,
+                        KeyProperties.DIGEST_SHA384,
+                        KeyProperties.DIGEST_SHA512,
+                    )
                     .setCertificateSubject(X500Principal("CN=BiliPai Nearby"))
                     .setCertificateNotBefore(Date(0)).setCertificateNotAfter(end).build())
                 generateKeyPair()

@@ -159,6 +159,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
@@ -436,6 +437,7 @@ internal fun MusicPlayerContent(
     onLyricsSearch: (String) -> Unit = {},
     onLyricsCandidateSelected: (Int) -> Unit = {},
     onVideoModeClick: (() -> Unit)? = null,
+    onNearbyHandoffClick: (() -> Unit)? = null,
     onCollectionClick: (() -> Unit)? = null,
     onSleepTimerClick: (() -> Unit)? = null,
     sleepTimerValue: String? = null,
@@ -842,6 +844,7 @@ internal fun MusicPlayerContent(
                                 ),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
+                            val landscapeLivePositionState = LocalMusicPlaybackPositionState.current
                             MusicArtwork(
                                 coverUrl = state.coverUrl,
                                 bitmap = artworkBitmap,
@@ -853,6 +856,12 @@ internal fun MusicPlayerContent(
                                 reduceMotion = effectiveReduceMotion,
                                 isDarkEnvironment = isDarkEnvironment,
                                 onClick = { coverStyle = resolveNextCoverStyle(coverStyle) },
+                                onScrubDeltaMs = { deltaMs ->
+                                    val basePos = landscapeLivePositionState?.value ?: state.positionMs
+                                    val maxDur = state.durationMs.coerceAtLeast(0L)
+                                    val target = (basePos + deltaMs).coerceIn(0L, if (maxDur > 0L) maxDur else Long.MAX_VALUE)
+                                    onSeek(target)
+                                },
                             )
                             if (landscapeLyrics) {
                                 Spacer(Modifier.height(8.dp))
@@ -1582,6 +1591,7 @@ internal fun MusicPlayerContent(
                             add(MusicMoreMenuEntry.QUEUE) { showQueue = true }
                             add(MusicMoreMenuEntry.IMPORT_PLAYLIST) { showImportDialog = true }
                             onVideoModeClick?.let { add(MusicMoreMenuEntry.VIDEO_MODE, action = it) }
+                            onNearbyHandoffClick?.let { add(MusicMoreMenuEntry.NEARBY_HANDOFF, action = it) }
                             onCollectionClick?.let { add(MusicMoreMenuEntry.COLLECTION, action = it) }
                             onSpeedClick?.let { add(MusicMoreMenuEntry.SPEED, currentValue = speedValue, action = it) }
                             add(
@@ -2802,6 +2812,7 @@ private fun PlayerPage(
                 if (state.isLoading && state.coverUrl.isBlank()) {
                     AdaptiveLoadingIndicator(color = MusicContentColor)
                 } else {
+                    val portraitLivePositionState = LocalMusicPlaybackPositionState.current
                     MusicArtwork(
                         coverUrl = state.coverUrl,
                         bitmap = artworkBitmap,
@@ -2820,7 +2831,13 @@ private fun PlayerPage(
                         isPlaying = state.isPlaying,
                         reduceMotion = reduceMotion,
                         isDarkEnvironment = isDarkEnvironment,
-                        onClick = onOpenLyrics ?: onToggleCoverStyle
+                        onClick = onOpenLyrics ?: onToggleCoverStyle,
+                        onScrubDeltaMs = { deltaMs ->
+                            val basePos = portraitLivePositionState?.value ?: state.positionMs
+                            val maxDur = state.durationMs.coerceAtLeast(0L)
+                            val target = (basePos + deltaMs).coerceIn(0L, if (maxDur > 0L) maxDur else Long.MAX_VALUE)
+                            onSeek(target)
+                        },
                     )
                 }
                 if (showLyricsPreview) {
@@ -3119,7 +3136,8 @@ private fun MusicArtwork(
     isPlaying: Boolean = false,
     reduceMotion: Boolean = false,
     isDarkEnvironment: Boolean = true,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    onScrubDeltaMs: ((Long) -> Unit)? = null,
 ) {
     val artworkShadowColor = MusicShadowColor
     val artworkBorderColor = resolveMusicGlassBorderColor(
@@ -3165,54 +3183,227 @@ private fun MusicArtwork(
         }
     } else if (coverStyle == MusicCoverStyle.TURNTABLE) {
         val artworkGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+        val seekHaptics = com.android.purebilibili.core.ui.rememberAppHapticFeedback(
+            com.android.purebilibili.core.ui.AppHapticScene.PLAYER_SEEK
+        )
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        var isScrubbing by remember(coverUrl) { mutableStateOf(false) }
+        var scrubDragDp by remember(coverUrl) { mutableFloatStateOf(0f) }
+        var scrubDeltaMs by remember(coverUrl) { mutableLongStateOf(0L) }
+        var lastScrubStep by remember(coverUrl) { mutableLongStateOf(0L) }
+        val latestOnScrubDeltaMs by rememberUpdatedState(onScrubDeltaMs)
+
         val rotationDegrees = rememberMusicArtworkRotationDegrees(
-            active = rotate && artworkGate.active,
+            active = rotate && artworkGate.active && !isScrubbing,
             contentKey = coverUrl,
             playbackSpeed = playbackSpeed
         )
+        val tonearmAngleState = animateFloatAsState(
+            targetValue = resolveTurntableTonearmAngleDeg(
+                isPlaying = isPlaying,
+                isScrubbing = isScrubbing,
+            ),
+            animationSpec = if (reduceMotion) {
+                snap()
+            } else {
+                spring(
+                    dampingRatio = 0.78f,
+                    stiffness = 260f,
+                )
+            },
+            label = "turntable_tonearm_angle",
+        )
+
         Box(
-            modifier = modifier.then(artworkGate.modifier)
-                .aspectRatio(1f)
-                .shadow(
-                    elevation = if (isPlaying) 18.dp else 10.dp,
-                    shape = CircleShape,
-                    ambientColor = artworkShadowColor.copy(alpha = if (isDarkEnvironment) 0.55f else 0.20f),
-                    spotColor = artworkShadowColor.copy(alpha = if (isDarkEnvironment) 0.65f else 0.25f)
-                )
-                .graphicsLayer { rotationZ = rotationDegrees() }
-                .clip(CircleShape)
-                .border(
-                    width = 1.dp,
-                    color = artworkBorderColor,
-                    shape = CircleShape
-                )
-                .then(if (onClick != null) Modifier.appActionClickable(onClick = onClick) else Modifier),
+            modifier = modifier
+                .then(artworkGate.modifier)
+                .aspectRatio(1f),
             contentAlignment = Alignment.Center
         ) {
-            when {
-                bitmap != null -> androidx.compose.foundation.Image(
-                    bitmap = bitmap,
-                    contentDescription = "专辑封面",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+            Box(
+                modifier = Modifier
+                    .fillMaxSize(0.92f)
+                    .shadow(
+                        elevation = if (isPlaying) 18.dp else 10.dp,
+                        shape = CircleShape,
+                        ambientColor = artworkShadowColor.copy(alpha = if (isDarkEnvironment) 0.55f else 0.20f),
+                        spotColor = artworkShadowColor.copy(alpha = if (isDarkEnvironment) 0.65f else 0.25f)
+                    )
+                    .graphicsLayer {
+                        val manualSpin = if (isScrubbing && !reduceMotion) scrubDragDp * 0.45f else 0f
+                        rotationZ = rotationDegrees() + manualSpin
+                    }
+                    .clip(CircleShape)
+                    .border(
+                        width = 1.dp,
+                        color = artworkBorderColor,
+                        shape = CircleShape
+                    )
+                    .then(
+                        if (onScrubDeltaMs != null) {
+                            Modifier.pointerInput(coverUrl, density) {
+                                detectHorizontalDragGestures(
+                                    onDragStart = {
+                                        isScrubbing = true
+                                        scrubDragDp = 0f
+                                        scrubDeltaMs = 0L
+                                        lastScrubStep = 0L
+                                    },
+                                    onHorizontalDrag = { _, dragAmount ->
+                                        val deltaDp = with(density) { dragAmount.toDp().value }
+                                        scrubDragDp += deltaDp
+                                        val nextDeltaMs = resolveTurntableScrubDeltaMs(scrubDragDp)
+                                        scrubDeltaMs = nextDeltaMs
+                                        resolveTurntableScrubTickStep(nextDeltaMs, lastScrubStep)?.let { step ->
+                                            lastScrubStep = step
+                                            seekHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        val committed = scrubDeltaMs
+                                        isScrubbing = false
+                                        scrubDragDp = 0f
+                                        scrubDeltaMs = 0L
+                                        lastScrubStep = 0L
+                                        if (kotlin.math.abs(committed) >= 1_000L) {
+                                            latestOnScrubDeltaMs?.invoke(committed)
+                                        }
+                                    },
+                                    onDragCancel = {
+                                        isScrubbing = false
+                                        scrubDragDp = 0f
+                                        scrubDeltaMs = 0L
+                                        lastScrubStep = 0L
+                                    },
+                                )
+                            }
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .then(if (onClick != null) Modifier.appActionClickable(onClick = onClick) else Modifier),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    bitmap != null -> androidx.compose.foundation.Image(
+                        bitmap = bitmap,
+                        contentDescription = "专辑封面",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    coverUrl.isNotBlank() -> AsyncImage(
+                        model = coverUrl,
+                        contentDescription = "专辑封面",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    else -> Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppIcon(
+                            Icons.Outlined.MusicNote,
+                            contentDescription = null,
+                            tint = MusicContentColor.copy(alpha = 0.78f),
+                            modifier = Modifier.size(64.dp)
+                        )
+                    }
+                }
+                // 黑胶细微沟槽纹理与中心金属轴点
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                    val radius = size.minDimension / 2f
+                    val grooveColor = Color.White.copy(alpha = if (isDarkEnvironment) 0.08f else 0.12f)
+                    listOf(0.92f, 0.84f, 0.76f).forEach { ratio ->
+                        drawCircle(
+                            color = grooveColor,
+                            radius = radius * ratio,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
+                        )
+                    }
+                    drawCircle(
+                        color = Color.Black.copy(alpha = 0.42f),
+                        radius = radius * 0.11f,
+                    )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.65f),
+                        radius = radius * 0.045f,
+                    )
+                }
+            }
+
+            // 拟真唱针：播放时轻落唱片，暂停或轻搓唱片时柔和抬起
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.86f, 0.12f)
+                        rotationZ = tonearmAngleState.value
+                    }
+            ) {
+                val pivot = androidx.compose.ui.geometry.Offset(size.width * 0.86f, size.height * 0.12f)
+                val elbow = androidx.compose.ui.geometry.Offset(size.width * 0.78f, size.height * 0.44f)
+                val stylus = androidx.compose.ui.geometry.Offset(size.width * 0.68f, size.height * 0.56f)
+                val armColor = if (isDarkEnvironment) Color(0xFFE2E5EC) else Color(0xFF3E4452)
+                drawLine(
+                    color = Color.Black.copy(alpha = 0.25f),
+                    start = pivot.copy(y = pivot.y + 3.dp.toPx()),
+                    end = elbow.copy(y = elbow.y + 3.dp.toPx()),
+                    strokeWidth = 4.dp.toPx(),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
                 )
-                coverUrl.isNotBlank() -> AsyncImage(
-                    model = coverUrl,
-                    contentDescription = "专辑封面",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                drawLine(
+                    color = armColor,
+                    start = pivot,
+                    end = elbow,
+                    strokeWidth = 3.2.dp.toPx(),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
                 )
-                else -> Box(
+                drawLine(
+                    color = armColor,
+                    start = elbow,
+                    end = stylus,
+                    strokeWidth = 2.6.dp.toPx(),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                )
+                // 唱头
+                drawCircle(
+                    color = armColor,
+                    radius = 4.5.dp.toPx(),
+                    center = stylus,
+                )
+                // 顶部转轴底座
+                drawCircle(
+                    color = Color.Black.copy(alpha = 0.28f),
+                    radius = 10.dp.toPx(),
+                    center = pivot,
+                )
+                drawCircle(
+                    color = armColor,
+                    radius = 7.dp.toPx(),
+                    center = pivot,
+                )
+                drawCircle(
+                    color = Color.Black.copy(alpha = 0.45f),
+                    radius = 2.5.dp.toPx(),
+                    center = pivot,
+                )
+            }
+
+            if (isScrubbing && kotlin.math.abs(scrubDeltaMs) >= 500L) {
+                AppSurface(
+                    shape = AppShapes.container(ContainerLevel.Chip),
+                    color = Color.Black.copy(alpha = 0.68f),
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
+                        .align(Alignment.TopCenter)
+                        .padding(top = 8.dp),
                 ) {
-                    AppIcon(
-                        Icons.Outlined.MusicNote,
-                        contentDescription = null,
-                        tint = MusicContentColor.copy(alpha = 0.78f),
-                        modifier = Modifier.size(64.dp)
+                    AppText(
+                        text = formatTurntableScrubBadge(scrubDeltaMs),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                     )
                 }
             }

@@ -130,6 +130,7 @@ internal fun ListenVideoRoute(
     var showPlayHistory by rememberSaveable { mutableStateOf(false) }
     var showSleepTimerDialog by rememberSaveable { mutableStateOf(false) }
     val localSleepTimer by miniPlayerManager.sleepTimer.collectAsStateWithLifecycle()
+    val sleepTimerFinishedEvent by miniPlayerManager.sleepTimerFinishedEvent.collectAsStateWithLifecycle()
     val activeSleepTimer = localSleepTimer?.takeIf { it.player === miniPlayerManager.player }?.timer
     val sleepTimerMinutes = (activeSleepTimer as? PlaybackSleepTimer.Countdown)?.minutes
     val sleepAfterCurrent = activeSleepTimer is PlaybackSleepTimer.AfterCurrent
@@ -154,43 +155,57 @@ internal fun ListenVideoRoute(
         viewModel.pauseBackgroundLoading()
     }
 
-    ListenVideoScreen(
-        state = state,
-        nowPlaying = nowPlaying,
-        sleepTimerActive = activeSleepTimer != null,
-        onNowPlayingClick = onNowPlayingClick,
-        onRefresh = viewModel::refresh,
-        onOpenHistory = { showPlayHistory = true },
-        onOpenSleepTimer = { showSleepTimerDialog = true },
-        onSectionSelected = viewModel::selectSection,
-        onPlaylistSelected = viewModel::openPlaylist,
-        onPlaylistQuickPlay = { playlist ->
-            viewModel.pauseBackgroundLoading()
-            onPlayCollection(playlist.mediaId, 0L, playlist.title)
-        },
-        onAlbumSelected = viewModel::openAlbum,
-        onAlbumQuickPlay = { album ->
-            viewModel.pauseBackgroundLoading()
-            onPlayCollection(0L, album.seasonId, album.title)
-        },
-        onArtistSelected = viewModel::openArtist,
-        onArtistQuickPlay = { artist ->
-            artist.tracks.firstOrNull()?.let { first ->
+    Box(modifier = modifier.fillMaxSize()) {
+        ListenVideoScreen(
+            state = state,
+            nowPlaying = nowPlaying,
+            sleepTimerActive = activeSleepTimer != null,
+            onNowPlayingClick = onNowPlayingClick,
+            onRefresh = viewModel::refresh,
+            onOpenHistory = { showPlayHistory = true },
+            onOpenSleepTimer = { showSleepTimerDialog = true },
+            onSectionSelected = viewModel::selectSection,
+            onPlaylistSelected = viewModel::openPlaylist,
+            onPlaylistQuickPlay = { playlist ->
                 viewModel.pauseBackgroundLoading()
-                onPlayTracks(artist.tracks, first.bvid)
-            }
-        },
-        onCloseDetail = viewModel::closeDetail,
-        onRetryDetail = viewModel::retryDetail,
-        onRetryIndex = viewModel::retryFailedIndex,
-        onTrackSelected = { tracks, bvid ->
-            viewModel.closeDetail()
-            viewModel.pauseBackgroundLoading()
-            onPlayTracks(tracks, bvid)
-        },
-        onLogin = onLogin,
-        modifier = modifier
-    )
+                onPlayCollection(playlist.mediaId, 0L, playlist.title)
+            },
+            onAlbumSelected = viewModel::openAlbum,
+            onAlbumQuickPlay = { album ->
+                viewModel.pauseBackgroundLoading()
+                onPlayCollection(0L, album.seasonId, album.title)
+            },
+            onArtistSelected = viewModel::openArtist,
+            onArtistQuickPlay = { artist ->
+                artist.tracks.firstOrNull()?.let { first ->
+                    viewModel.pauseBackgroundLoading()
+                    onPlayTracks(artist.tracks, first.bvid)
+                }
+            },
+            onCloseDetail = viewModel::closeDetail,
+            onRetryDetail = viewModel::retryDetail,
+            onRetryIndex = viewModel::retryFailedIndex,
+            onTrackSelected = { tracks, bvid ->
+                viewModel.closeDetail()
+                viewModel.pauseBackgroundLoading()
+                onPlayTracks(tracks, bvid)
+            },
+            onLogin = onLogin,
+            modifier = Modifier.fillMaxSize()
+        )
+        com.android.purebilibili.feature.video.ui.components.SleepTimerGoodnightOverlay(
+            event = sleepTimerFinishedEvent,
+            onExtend15Minutes = { miniPlayerManager.extendAfterSleepTimer() },
+            onDismiss = {
+                sleepTimerFinishedEvent?.let { miniPlayerManager.consumeSleepTimerFinishedEvent(it.id) }
+            },
+            extendLabel = "再听 15 分钟",
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp),
+        )
+    }
 
     if (showPlayHistory) {
         PlayHistorySheet(
@@ -289,6 +304,9 @@ internal fun ListenVideoScreen(
     modifier: Modifier = Modifier
 ) {
     val sectionLabels = remember { listOf("播放列表", "专辑", "歌手") }
+    LaunchedEffect(Unit) {
+        com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("ListenVideoScreen")
+    }
     val pagerState = rememberPagerState(
         initialPage = state.section.ordinal,
         pageCount = { ListenVideoSection.entries.size }

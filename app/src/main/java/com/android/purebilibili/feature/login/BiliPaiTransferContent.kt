@@ -17,6 +17,7 @@ import com.android.purebilibili.core.plugin.evaluateExternalPluginInstall
 import com.android.purebilibili.core.plugin.kotlinpkg.ExternalKotlinPluginPackagePreview
 import com.android.purebilibili.plugin.sdk.PluginCapability
 import com.android.purebilibili.core.plugin.json.JsonPluginManager
+import com.android.purebilibili.feature.personal.CompletionKeepsakeStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -24,11 +25,12 @@ import kotlinx.coroutines.withContext
 data class BiliPaiTransferContentSelection(
     val settings: Boolean = false,
     val jsonRules: Boolean = false,
+    val keepsakes: Boolean = false,
     val jsPluginIds: Set<String> = emptySet(),
     val skinIds: Set<String> = emptySet(),
     val kotlinPluginIds: Set<String> = emptySet(),
 ) {
-    fun isNothingSelected(): Boolean = !settings && !jsonRules && jsPluginIds.isEmpty() &&
+    fun isNothingSelected(): Boolean = !settings && !jsonRules && !keepsakes && jsPluginIds.isEmpty() &&
         skinIds.isEmpty() && kotlinPluginIds.isEmpty()
 }
 
@@ -40,6 +42,7 @@ data class BiliPaiTransferContentInventory(
     val skins: List<BiliPaiTransferContentItem>,
     val kotlinPlugins: List<BiliPaiTransferContentItem>,
     val hasJsonRules: Boolean,
+    val keepsakeCount: Int = 0,
 )
 
 data class BiliPaiTransferImportItemResult(val name: String, val success: Boolean, val message: String? = null)
@@ -61,10 +64,11 @@ data class BiliPaiTransferPluginApproval(
  */
 object BiliPaiTransferContent {
 
-    fun inventory(context: Context): BiliPaiTransferContentInventory {
+    suspend fun inventory(context: Context): BiliPaiTransferContentInventory {
         val jsStore = BiliPaiJsPluginInstallStore.createDefault(context)
         val skinStore = UiSkinInstallStore.createDefault(context)
         val kotlinStore = ExternalKotlinPluginInstallStore.createDefault(context)
+        val keepsakeCount = CompletionKeepsakeStore.loadRecords(context).size
         return BiliPaiTransferContentInventory(
             settingCount = SettingsManager.getShareableSettingsEntryDefinitions().size,
             jsPlugins = jsStore.listInstalledPlugins().map {
@@ -79,6 +83,7 @@ object BiliPaiTransferContent {
                     it.manifest.pluginId, it.manifest.displayName, fileBytes(File(it.packagePath)))
             },
             hasJsonRules = jsonRuleFiles(context).isNotEmpty() || jsonRulePrefsXml(context) != null,
+            keepsakeCount = keepsakeCount,
         )
     }
 
@@ -86,8 +91,12 @@ object BiliPaiTransferContent {
         context: Context,
         selection: BiliPaiTransferContentSelection,
         session: BiliPaiSessionBundle,
+        contentOnly: Boolean = false,
     ): BiliPaiTransferPayload = withContext(Dispatchers.IO) {
-        if (selection.isNothingSelected()) return@withContext BiliPaiTransferPayload(session = session)
+        if (selection.isNothingSelected()) {
+            require(!contentOnly) { "仅转移备份时请至少勾选一项设置或数据" }
+            return@withContext BiliPaiTransferPayload(session = session, contentOnly = false)
+        }
         val js = BiliPaiJsPluginInstallStore.createDefault(context)
         val skins = UiSkinInstallStore.createDefault(context)
         val kotlin = ExternalKotlinPluginInstallStore.createDefault(context)
@@ -96,7 +105,8 @@ object BiliPaiTransferContent {
         val skinsById = skins.listInstalledPackages().associateBy { it.skinId }
         val kotlinById = kotlin.listInstalledPackages().associateBy { it.manifest.pluginId }
         BiliPaiTransferPayload(
-            session = session,
+            session = if (contentOnly) BiliPaiSessionBundle(mid = 0L, sessData = "") else session,
+            contentOnly = contentOnly,
             settingsJson = if (selection.settings) transferCatching {
                 transferSettingsBridge(context).exportJson()
             }.getOrElse { throw IllegalStateException("设置导出失败：${it.message}", it) } else null,
@@ -119,6 +129,11 @@ object BiliPaiTransferContent {
                 val installed = kotlinById[id] ?: error("所选插件包已不存在：$id，请重新选择")
                 BiliPaiTransferredPackage(installed.manifest.displayName,
                     encode64(readPackage(File(installed.packagePath), installed.manifest.displayName)))
+            },
+            keepsakes = if (selection.keepsakes) {
+                CompletionKeepsakeStore.loadRecords(context, accountMid = session.mid.takeIf { it > 0L })
+            } else {
+                emptyList()
             },
         )
     }
@@ -145,6 +160,7 @@ object BiliPaiTransferContent {
         context: Context,
         payload: BiliPaiTransferPayload,
         approvedPluginKeys: Set<String> = emptySet(),
+        keepsakeAccountMidOverride: Long? = null,
     ): BiliPaiTransferImportReport = withContext(Dispatchers.IO) {
         val results = mutableListOf<BiliPaiTransferImportItemResult>()
         payload.settingsJson?.let { json ->
@@ -200,6 +216,17 @@ object BiliPaiTransferContent {
             }.fold(
                 onSuccess = { BiliPaiTransferImportItemResult("插件包：${plugin.name}", true) },
                 onFailure = { BiliPaiTransferImportItemResult("插件包：${plugin.name}", false, it.message) },
+            )
+        }
+        if (payload.keepsakes.isNotEmpty()) {
+            results += transferCatching {
+                val targetMid = keepsakeAccountMidOverride ?: payload.session.mid.takeIf { it > 0L }
+                payload.keepsakes.asReversed().forEach { record ->
+                    CompletionKeepsakeStore.saveRecord(context, record, accountMid = targetMid)
+                }
+            }.fold(
+                onSuccess = { BiliPaiTransferImportItemResult("完结纪念（${payload.keepsakes.size} 条）", true) },
+                onFailure = { BiliPaiTransferImportItemResult("完结纪念", false, it.message) },
             )
         }
         BiliPaiTransferImportReport(items = results)

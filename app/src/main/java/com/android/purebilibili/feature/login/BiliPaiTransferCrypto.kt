@@ -1,12 +1,16 @@
 package com.android.purebilibili.feature.login
 
 import android.util.Base64
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.security.KeyPair
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.security.SecureRandom
 import java.security.Signature
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.spec.GCMParameterSpec
@@ -56,7 +60,8 @@ object BiliPaiTransferCrypto {
         now: Long,
     ): BiliPaiTransferEnvelope {
         require(request.expiresAt > now) { "传输请求已过期" }
-        val plaintext = json.encodeToString(serializer, value).toByteArray(StandardCharsets.UTF_8)
+        val rawPlaintext = json.encodeToString(serializer, value).toByteArray(StandardCharsets.UTF_8)
+        val plaintext = compressIfSmaller(rawPlaintext)
         require(plaintext.size <= MAX_PAYLOAD_BYTES) { "传输内容过大，请减少所选内容后重试" }
         val aes = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
         val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
@@ -97,11 +102,38 @@ object BiliPaiTransferCrypto {
         val aes = Cipher.getInstance(RSA).run {
             init(Cipher.DECRYPT_MODE, receiverPrivate); doFinal(unb64(envelope.wrappedKey))
         }
-        val plaintext = Cipher.getInstance(AES).run {
+        val decrypted = Cipher.getInstance(AES).run {
             init(Cipher.DECRYPT_MODE, SecretKeySpec(aes, "AES"), GCMParameterSpec(128, unb64(envelope.iv)))
             doFinal(unb64(envelope.ciphertext))
         }
+        val plaintext = decompressIfGzipped(decrypted)
         return json.decodeFromString(serializer, String(plaintext, StandardCharsets.UTF_8))
+    }
+
+    private fun compressIfSmaller(raw: ByteArray): ByteArray {
+        if (raw.size < GZIP_MIN_BYTES) return raw
+        val out = ByteArrayOutputStream(raw.size / 2)
+        GZIPOutputStream(out).use { it.write(raw) }
+        val compressed = out.toByteArray()
+        return if (compressed.size < raw.size) compressed else raw
+    }
+
+    private fun decompressIfGzipped(bytes: ByteArray): ByteArray {
+        val isGzip = bytes.size >= 2 && bytes[0] == 0x1F.toByte() && bytes[1] == 0x8B.toByte()
+        if (!isGzip) return bytes
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        var total = 0
+        GZIPInputStream(ByteArrayInputStream(bytes)).use { gzip ->
+            while (true) {
+                val read = gzip.read(buffer)
+                if (read <= 0) break
+                total += read
+                require(total <= MAX_UNCOMPRESSED_BYTES) { "解压后的传输内容过大" }
+                out.write(buffer, 0, read)
+            }
+        }
+        return out.toByteArray()
     }
 
     private fun publicKey(value: String): PublicKey = java.security.KeyFactory.getInstance("RSA")
@@ -115,4 +147,6 @@ object BiliPaiTransferCrypto {
     private const val MAX_CIPHERTEXT_FIELD_LENGTH = 200_000
     // Leave room for AES/RSA fields and both envelope base64 layers inside 128 chunks.
     private const val MAX_PAYLOAD_BYTES = 79_000
+    private const val GZIP_MIN_BYTES = 512
+    private const val MAX_UNCOMPRESSED_BYTES = 512_000
 }

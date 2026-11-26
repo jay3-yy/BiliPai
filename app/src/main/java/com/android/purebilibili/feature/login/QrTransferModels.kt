@@ -65,14 +65,16 @@ data class BiliPaiTransferredFile(val name: String, val content: String)
 data class BiliPaiTransferPayload(
     val version: Int = BILIPAI_TRANSFER_PAYLOAD_VERSION,
     val session: BiliPaiSessionBundle,
+    val contentOnly: Boolean = false,
     val settingsJson: String? = null,
     val jsonRules: BiliPaiTransferredJsonRules? = null,
     val jsPlugins: List<BiliPaiTransferredJsPlugin> = emptyList(),
     val skins: List<BiliPaiTransferredPackage> = emptyList(),
     val kotlinPlugins: List<BiliPaiTransferredPackage> = emptyList(),
+    val keepsakes: List<com.android.purebilibili.feature.personal.CompletionKeepsakeRecord> = emptyList(),
 ) {
     fun isContentEmpty(): Boolean = settingsJson == null && jsonRules == null &&
-        jsPlugins.isEmpty() && skins.isEmpty() && kotlinPlugins.isEmpty()
+        jsPlugins.isEmpty() && skins.isEmpty() && kotlinPlugins.isEmpty() && keepsakes.isEmpty()
 }
 
 object BiliPaiTransferCodec {
@@ -125,8 +127,8 @@ object BiliPaiTransferCodec {
 
     private const val MAX_QR_CHARS = 100_000
 
-    /** Single-QR envelope cap; larger envelopes go through [BiliPaiTransferChunks]. */
-    internal const val SINGLE_QR_MAX_CHARS = 1_800
+    /** Single-QR envelope cap; larger envelopes go through [BiliPaiTransferChunks] for easier scanning. */
+    internal const val SINGLE_QR_MAX_CHARS = 1_100
 
     /** 128 x 1,500 base64 chunk characters decode to at most 144,000 envelope bytes. */
     private const val CHUNKED_ENVELOPE_MAX_CHARS = 144_000

@@ -46,6 +46,8 @@ internal data class BackgroundAudioSnapshot(
     val backgroundPlaybackOverride: Boolean? = null,
     val backgroundOverrideBvid: String? = null,
     val sleepTimer: PlaybackSleepTimer? = null,
+    val sleepTimerFadeEnabled: Boolean = true,
+    val sleepTimerFadeDurationSec: Int = SLEEP_TIMER_FADE_DURATION_DEFAULT_SEC,
 ) {
     val current: PlaylistItem? get() = queue.getOrNull(index)
 }

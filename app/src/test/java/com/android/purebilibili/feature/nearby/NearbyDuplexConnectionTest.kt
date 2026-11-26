@@ -96,4 +96,71 @@ class NearbyDuplexConnectionTest {
             } finally { link.close(); result.cancel() }
         }
     }
+
+    @Test fun receiverCanPullPlaybackAndSourcePausesOnlyAfterCommit() = runTest {
+        withContext(Dispatchers.IO) {
+            val aInput = PipedInputStream(32_768)
+            val bOutput = PipedOutputStream(aInput)
+            val bInput = PipedInputStream(32_768)
+            val aOutput = PipedOutputStream(bInput)
+            val aResource = Closeable { aInput.close(); aOutput.close() }
+            val bResource = Closeable { bInput.close(); bOutput.close() }
+            val aId = "a".repeat(32)
+            val bId = "b".repeat(32)
+            val aPeer = NearbyPeer(aId, "手机", "a".repeat(64), "192.168.1.2", NEARBY_PORT, NEARBY_DEVICE_PHONE)
+            val bPeer = NearbyPeer(bId, "平板", "b".repeat(64), "192.168.1.3", NEARBY_PORT, NEARBY_DEVICE_TABLET)
+            var position = 12_000L
+            var sourcePaused = false
+            val source = NearbyDuplexConnection(bPeer, aResource, aInput, aOutput, aId) { _, request ->
+                when (request.kind) {
+                    "pull" -> NearbyMessage(
+                        kind = "pull_ready",
+                        id = aId,
+                        transferId = request.transferId,
+                        video = NearbyVideo("BV1xx411c7mD", 99, position, 1.25f, "接力视频", ""),
+                        accepted = true,
+                    )
+                    "snapshot" -> NearbyMessage(
+                        kind = "snapshot",
+                        id = aId,
+                        transferId = request.transferId,
+                        video = NearbyVideo("BV1xx411c7mD", 99, position, 1.25f, "接力视频", ""),
+                        accepted = true,
+                    )
+                    "pull_commit" -> {
+                        if (request.accepted) sourcePaused = true
+                        NearbyMessage(kind = "pull_committed", id = aId, transferId = request.transferId, accepted = request.accepted)
+                    }
+                    else -> error("unexpected ${request.kind}")
+                }
+            }
+            val puller = NearbyDuplexConnection(aPeer, bResource, bInput, bOutput, bId) { _, _ ->
+                error("puller does not handle requests in this test")
+            }
+            val sourceReader = launch(Dispatchers.IO) { try { source.run() } catch (_: IOException) {} }
+            val pullerReader = launch(Dispatchers.IO) { try { puller.run() } catch (_: IOException) {} }
+            try {
+                withTimeout(5_000) {
+                    val transferId = nearbyToken()
+                    val ready = puller.request(NearbyMessage(kind = "pull", id = bId, transferId = transferId))
+                    assertEquals("pull_ready", ready.kind)
+                    assertEquals(12_000L, ready.video?.positionMs)
+                    assertEquals(false, sourcePaused)
+                    position = 18_500L
+                    val latest = puller.request(NearbyMessage(kind = "snapshot", id = bId, transferId = transferId))
+                    assertEquals(18_500L, latest.video?.positionMs)
+                    assertEquals(false, sourcePaused)
+                    val commit = puller.request(
+                        NearbyMessage(kind = "pull_commit", id = bId, transferId = transferId, accepted = true)
+                    )
+                    assertEquals("pull_committed", commit.kind)
+                    assertEquals(true, commit.accepted)
+                    assertEquals(true, sourcePaused)
+                }
+            } finally {
+                source.close(); puller.close()
+                sourceReader.cancel(); pullerReader.cancel()
+            }
+        }
+    }
 }

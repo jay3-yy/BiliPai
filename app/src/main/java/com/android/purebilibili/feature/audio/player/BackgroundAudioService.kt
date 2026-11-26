@@ -76,6 +76,7 @@ class BackgroundAudioService : MediaLibraryService() {
     private var retriedMediaId: String? = null
     private var pauseRelease: Job? = null
     private var sleepTimerJob: Job? = null
+    private val sleepVolumeFadeController = PlayerVolumeFadeController()
     private var generation = 0L
     private var libraryRequestGeneration = 0L
     private var playedMs = 0L
@@ -436,6 +437,7 @@ class BackgroundAudioService : MediaLibraryService() {
         nextLoad?.cancel()
         errorRecovery?.cancel()
         sleepTimerJob?.cancel()
+        sleepVolumeFadeController.cancelAndRestore(player)
         snapshot = request
         committed = resume
         val item = request.current ?: error("Missing audio entry")
@@ -462,17 +464,36 @@ class BackgroundAudioService : MediaLibraryService() {
 
     private fun scheduleSleepCountdown() {
         sleepTimerJob?.cancel()
-        val timer = snapshot?.sleepTimer as? PlaybackSleepTimer.Countdown
+        sleepVolumeFadeController.cancelAndRestore(player)
+        val currentSnapshot = snapshot
+        val timer = currentSnapshot?.sleepTimer as? PlaybackSleepTimer.Countdown
         sleepTimerJob = if (committed && timer != null) scope.launch {
-            delay((timer.deadlineMs - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(0L))
-            expireSleepCountdown()
+            val remainingBeforeFade = (timer.deadlineMs - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+            val configuredFadeMs = normalizeSleepTimerFadeDurationSec(currentSnapshot.sleepTimerFadeDurationSec) * 1_000L
+            val fadeWindowMs = resolveSleepTimerFadeWindowMs(
+                remainingMs = remainingBeforeFade,
+                fadeEnabled = currentSnapshot.sleepTimerFadeEnabled,
+                configuredFadeMs = configuredFadeMs,
+            )
+            val waitMs = (remainingBeforeFade - fadeWindowMs).coerceAtLeast(0L)
+            if (waitMs > 0L) delay(waitMs)
+            val activeState = snapshot
+            if (activeState?.sleepTimer != timer) return@launch
+            val actualFadeMs = resolveSleepTimerFadeWindowMs(
+                remainingMs = (timer.deadlineMs - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(0L),
+                fadeEnabled = activeState.sleepTimerFadeEnabled,
+                configuredFadeMs = normalizeSleepTimerFadeDurationSec(activeState.sleepTimerFadeDurationSec) * 1_000L,
+            )
+            sleepVolumeFadeController.fadeOutAndFinish(player, actualFadeMs) {
+                expireSleepCountdown(toleranceMs = 500L)
+            }
         } else null
     }
 
-    private fun expireSleepCountdown(): Boolean {
+    private fun expireSleepCountdown(toleranceMs: Long = 0L): Boolean {
         val state = snapshot ?: return false
         val timer = state.sleepTimer as? PlaybackSleepTimer.Countdown ?: return false
-        if (timer.deadlineMs > android.os.SystemClock.elapsedRealtime()) return false
+        if (timer.deadlineMs - android.os.SystemClock.elapsedRealtime() > toleranceMs) return false
         snapshot = state.copy(sleepTimer = null)
         player.pause()
         return true
@@ -761,6 +782,7 @@ class BackgroundAudioService : MediaLibraryService() {
             errorRecovery?.cancel()
             pauseRelease?.cancel()
             sleepTimerJob?.cancel()
+            sleepVolumeFadeController.cancelAndRestore(player)
             snapshot = null
             player.pause()
             player.stop()

@@ -142,4 +142,62 @@ class BiliPaiTransferRegressionTest {
             transferCatching<Unit> { throw CancellationException("closed") }
         }
     }
+
+    @Test
+    fun chunkBufferReportsMissingIndicesAndCompressesLargeJsonSettings() {
+        val qrs = BiliPaiTransferChunks.split("t1", "a".repeat(2_600))
+        assertTrue(qrs.size >= 3)
+        val buffer = BiliPaiTransferChunkBuffer()
+        assertNull(buffer.offer(qrs[0]).getOrThrow())
+        assertNull(buffer.offer(qrs[2]).getOrThrow())
+        assertTrue(1 in buffer.missingIndices())
+        assertFalse(0 in buffer.missingIndices())
+        assertFalse(2 in buffer.missingIndices())
+
+        // Large pretty-printed JSON payload compresses well below the 79KB ciphertext cap
+        val sender = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+        val receiver = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+        val base64 = Base64.getUrlEncoder()
+        val request = BiliPaiTransferRequest(
+            transferId = UUID.randomUUID().toString(),
+            receiverDeviceId = base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(receiver.public.encoded)),
+            receiverPublicKey = base64.encodeToString(receiver.public.encoded),
+            expiresAt = System.currentTimeMillis() + 600_000,
+        )
+        val bigSettings = (1..350).joinToString(",", "{", "}") { "\"setting_key_$it\": \"value_text_$it\"" }
+        val payload = BiliPaiTransferPayload(
+            session = BiliPaiSessionBundle(42L, "session"),
+            settingsJson = bigSettings,
+        )
+        val envelope = BiliPaiTransferCrypto.encryptPayload(sender, "sender", request, payload)
+        val encodedQrs = BiliPaiTransferCodec.encodeEnvelopeQrs(envelope)
+        assertTrue("Expected GZIP compression to keep chunk count compact, got ${encodedQrs.size}", encodedQrs.size <= 8)
+        val decrypted = BiliPaiTransferCrypto.decryptPayload(receiver.private, request, envelope)
+        assertEquals(payload, decrypted)
+    }
+
+    @Test
+    fun contentOnlyTransfer_stripsSessionCredentialsAndRejectsEmptySelection() = runTest {
+        val context = RuntimeEnvironment.getApplication() as Context
+        val emptyError = transferCatching {
+            BiliPaiTransferContent.collect(
+                context = context,
+                selection = BiliPaiTransferContentSelection(),
+                session = BiliPaiSessionBundle(mid = 99L, sessData = "secret-cookie"),
+                contentOnly = true,
+            )
+        }.exceptionOrNull()
+        assertNotNull(emptyError)
+
+        val payload = BiliPaiTransferContent.collect(
+            context = context,
+            selection = BiliPaiTransferContentSelection(settings = true),
+            session = BiliPaiSessionBundle(mid = 99L, sessData = "secret-cookie"),
+            contentOnly = true,
+        )
+        assertTrue(payload.contentOnly)
+        assertEquals(0L, payload.session.mid)
+        assertEquals("", payload.session.sessData)
+        assertNotNull(payload.settingsJson)
+    }
 }

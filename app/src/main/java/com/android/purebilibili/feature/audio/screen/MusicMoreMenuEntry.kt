@@ -19,6 +19,7 @@ internal enum class MusicMoreMenuEntry(
     QUEUE("queue", "3D 唱片架 / 播放队列"),
     IMPORT_PLAYLIST("import_playlist", "导入歌单"),
     VIDEO_MODE("video_mode", "返回视频"),
+    NEARBY_HANDOFF("nearby_handoff", "设备接力"),
     COLLECTION("collection", "选集 / 合集"),
     SPEED("speed", "播放倍速"),
     AB_LOOP("ab_loop", "A-B 区间循环"),
