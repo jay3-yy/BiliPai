@@ -159,15 +159,6 @@ internal val updateHighlightCatalog = listOf(
         actionLabel = "首页设置",
     ),
     UpdateHighlight(
-        id = "screenshot_watermark_619",
-        introducedVersionCode = 619,
-        title = "应用内截图支持附带品牌标识",
-        description = "新增应用内截图附带 BiliPai 顶部品牌水印开关（整窗与区域截图均支持），系统截屏浮层改为仅前台倒计时。",
-        action = UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS,
-        badge = "截图水印",
-        actionLabel = "手势截图",
-    ),
-    UpdateHighlight(
         id = "danmaku_comment_reply_619",
         introducedVersionCode = 619,
         title = "横屏弹幕点击对齐与评论隐藏搜索词",
