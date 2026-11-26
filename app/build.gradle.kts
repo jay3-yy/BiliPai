@@ -144,8 +144,8 @@ android {
         targetSdk = 37
         // 版本名按发行计划确定；versionCode 每次发布单调 +1
         // 规范：docs/wiki/VERSIONING.md · 更新日志：CHANGELOG.md
-        versionCode = 615
-        versionName = "0.10.3"
+        versionCode = 616
+        versionName = "0.10.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -589,10 +589,11 @@ dependencies {
     // --- 10. ProfileInstaller (启动优化) ---
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     
-    // --- 11. Firebase (崩溃追踪和分析) ---
+    // --- 11. Firebase (崩溃追踪、分析与可选 FCM 自建推送通道) ---
     implementation(platform("com.google.firebase:firebase-bom:34.12.0"))
     implementation("com.google.firebase:firebase-crashlytics")
     implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-messaging")
 
     // --- 11. Debug (调试工具) ---
     debugImplementation("androidx.compose.ui:ui-test-manifest")
