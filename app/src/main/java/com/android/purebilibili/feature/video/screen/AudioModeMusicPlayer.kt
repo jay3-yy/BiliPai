@@ -5,6 +5,9 @@ package com.android.purebilibili.feature.video.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.android.purebilibili.core.ui.AppModalBottomSheet
@@ -55,6 +58,7 @@ import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
 import com.android.purebilibili.feature.video.ui.components.formatPlayerMenuTimerValue
 import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuDialog
 import com.android.purebilibili.feature.video.ui.components.VideoCommentSheetHost
+import com.android.purebilibili.feature.video.ui.components.commentThreadNavigationBlur
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import com.android.purebilibili.feature.video.viewmodel.VideoEngagementViewModel
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
@@ -164,9 +168,58 @@ internal fun AudioModeMusicPlayer(
     var showPageSelector by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showComments by remember { mutableStateOf(false) }
+    var commentSheetBlurProgress by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     var showSpeedMenu by remember { mutableStateOf(false) }
     var showShare by remember { mutableStateOf(false) }
     val engagementState by engagementViewModel.uiState.collectAsStateWithLifecycle()
+    val sleepTimerMiniManager = remember(context) { MiniPlayerManager.getInstance(context) }
+    val sleepTimerFinishedEvent by sleepTimerMiniManager.sleepTimerFinishedEvent.collectAsStateWithLifecycle()
+    val nearbyHandoff = com.android.purebilibili.feature.nearby.LocalNearbyHandoff.current
+    val nearbyAudioQualityId = successState.selectedAudioQuality.takeIf { it > 0 } ?: 0
+    val nearbyAudioQualityLabel = remember(
+        successState.selectedAudioQuality,
+        successState.availableAudioQualities,
+    ) {
+        successState.availableAudioQualities
+            .firstOrNull { it.preferenceId == successState.selectedAudioQuality }
+            ?.label
+            .orEmpty()
+    }
+    val nearbyAvailableAudioQualities = remember(successState.availableAudioQualities) {
+        successState.availableAudioQualities
+            .map { it.preferenceId }
+            .filter { it > 0 }
+    }
+    DisposableEffect(
+        player,
+        info.bvid,
+        info.cid,
+        displayTitle,
+        info.pic,
+        nearbyAudioQualityId,
+        nearbyAudioQualityLabel,
+        nearbyAvailableAudioQualities,
+    ) {
+        val activePlayer = player
+        if (activePlayer != null && info.bvid.isNotBlank() && info.cid > 0L) {
+            com.android.purebilibili.feature.nearby.NearbyPlaybackBridge.bindAudioMode(
+                bvid = info.bvid,
+                cid = info.cid,
+                title = displayTitle,
+                cover = info.pic,
+                player = activePlayer,
+                audioQualityId = nearbyAudioQualityId,
+                audioQualityLabel = nearbyAudioQualityLabel,
+                availableAudioQualityIds = nearbyAvailableAudioQualities,
+                onChangeAudioQuality = viewModel::setAudioQuality,
+            )
+        }
+        onDispose {
+            if (activePlayer != null) {
+                com.android.purebilibili.feature.nearby.NearbyPlaybackBridge.unbindAudioMode(activePlayer)
+            }
+        }
+    }
 
     // ---- 播放历史记录与冷启动续播 ----
     val historyScope = rememberCoroutineScope()
@@ -436,7 +489,12 @@ internal fun AudioModeMusicPlayer(
         }
     }
 
-    MusicPlayerContent(
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .commentThreadNavigationBlur { if (showComments) commentSheetBlurProgress else 0f },
+    ) {
+        MusicPlayerContent(
         sourceState = MusicPlayerUiState(
             title = displayTitle,
             artist = info.owner.name,
@@ -558,6 +616,9 @@ internal fun AudioModeMusicPlayer(
             AudioNowPlayingSession.dismiss()
             onVideoModeClick(info.bvid, info.cid)
         },
+        onNearbyHandoffClick = nearbyHandoff
+            ?.takeIf { com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED }
+            ?.openDevices,
         onCollectionClick = when {
             info.pages.size > 1 -> ({ showPageSelector = true })
             info.ugc_season != null -> ({ showCollectionSheet = true })
@@ -613,6 +674,7 @@ internal fun AudioModeMusicPlayer(
         isInPipMode = isInPipMode,
         liquidGlassEffectsEnabled = liquidGlassEffectsEnabled
     )
+    }
 
     if (showPageSelector && info.pages.size > 1) {
         PlayerEpisodeMenu(
@@ -674,7 +736,11 @@ internal fun AudioModeMusicPlayer(
         ) {
             VideoCommentSheetHost(
                 mainSheetVisible = true,
-                onDismiss = { showComments = false },
+                onDismiss = {
+                    commentSheetBlurProgress = 0f
+                    showComments = false
+                },
+                onMainSheetVisibilityProgressChange = { commentSheetBlurProgress = it },
                 commentViewModel = commentViewModel,
                 aid = info.aid,
                 upMid = info.owner.mid,
@@ -734,6 +800,23 @@ internal fun AudioModeMusicPlayer(
                 viewModel.setSleepTimer(minutes)
                 showSleepTimerDialog = false
             }
+        )
+    }
+
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = androidx.compose.ui.Alignment.BottomCenter,
+    ) {
+        com.android.purebilibili.feature.video.ui.components.SleepTimerGoodnightOverlay(
+            event = sleepTimerFinishedEvent,
+            onExtend15Minutes = { sleepTimerMiniManager.extendAfterSleepTimer() },
+            onDismiss = {
+                sleepTimerFinishedEvent?.let { sleepTimerMiniManager.consumeSleepTimerFinishedEvent(it.id) }
+            },
+            extendLabel = "再听 15 分钟",
+            modifier = Modifier
+                .navigationBarsPadding()
+                .padding(bottom = 20.dp),
         )
     }
 }

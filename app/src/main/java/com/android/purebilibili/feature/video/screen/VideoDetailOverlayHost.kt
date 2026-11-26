@@ -362,6 +362,16 @@ internal fun VideoDetailPlaybackEndedDialog(
     val showPlaybackEndedDialog by viewModel.showPlaybackEndedDialog.collectAsStateWithLifecycle(
         context = kotlin.coroutines.EmptyCoroutineContext
     )
+    val completionKeepsakePrompt by viewModel.completionKeepsakePrompt.collectAsStateWithLifecycle(
+        context = kotlin.coroutines.EmptyCoroutineContext
+    )
+    completionKeepsakePrompt?.let { keepsakePrompt ->
+        com.android.purebilibili.feature.personal.CompletionKeepsakeSheet(
+            prompt = keepsakePrompt,
+            onSave = viewModel::saveCompletionKeepsake,
+            onDismiss = viewModel::dismissCompletionKeepsake,
+        )
+    }
     if (!showPlaybackEndedDialog) return
 
     AppAlertDialog(

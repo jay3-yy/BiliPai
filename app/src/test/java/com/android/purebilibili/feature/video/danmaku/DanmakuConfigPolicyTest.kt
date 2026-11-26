@@ -253,4 +253,28 @@ class DanmakuConfigPolicyTest {
             resolveDanmakuRenderLayerType(type = 6, staticDanmakuToScroll = false)
         )
     }
+
+    @Test
+    fun `fillDisplayArea viewport uses full band height without re-applying displayAreaRatio`() {
+        assertEquals(
+            1f,
+            resolveEffectiveDanmakuDisplayAreaRatio(displayAreaRatio = 0.25f, fillDisplayArea = true),
+            0f,
+        )
+        assertEquals(
+            1f,
+            resolveEffectiveDanmakuDisplayAreaRatio(displayAreaRatio = 0.5f, fillDisplayArea = true),
+            0f,
+        )
+        assertEquals(
+            0.5f,
+            resolveEffectiveDanmakuDisplayAreaRatio(displayAreaRatio = 0.5f, fillDisplayArea = false),
+            0f,
+        )
+        assertEquals(
+            0.1f,
+            resolveEffectiveDanmakuDisplayAreaRatio(displayAreaRatio = 0.01f, fillDisplayArea = false),
+            0f,
+        )
+    }
 }

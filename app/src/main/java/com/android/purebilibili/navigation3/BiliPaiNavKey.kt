@@ -126,6 +126,11 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data object CustomPushSettings : BiliPaiNavKey {
+        override val routeBase: String = "custom_push_settings"
+    }
+
+    @Serializable
     data class PluginsSettings(
         val importUrl: String? = null
     ) : BiliPaiNavKey {
@@ -224,6 +229,11 @@ internal sealed interface BiliPaiNavKey : NavKey {
     @Serializable
     data object History : BiliPaiNavKey {
         override val routeBase: String = "history"
+    }
+
+    @Serializable
+    data object PersonalRecap : BiliPaiNavKey {
+        override val routeBase: String = "personal_recap"
     }
 
     @Serializable

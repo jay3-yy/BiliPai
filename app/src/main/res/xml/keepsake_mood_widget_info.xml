@@ -1,0 +1,13 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="240dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="100dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="7200000"
+    android:resizeMode="horizontal|vertical"
+    android:initialLayout="@layout/widget_keepsake_mood"
+    android:previewLayout="@layout/widget_keepsake_mood"
+    android:description="@string/keepsake_widget_description"
+    android:widgetCategory="home_screen" />

@@ -23,6 +23,7 @@ internal enum class BiliPaiNavEntryContentRole {
     SPACE_PRIVACY_SETTINGS,
     LOGIN_ACTIVITY_SETTINGS,
     MESSAGE_NOTIFICATION_SETTINGS,
+    CUSTOM_PUSH_SETTINGS,
     PLUGINS_SETTINGS,
     PLUGIN_CENTER_DETAIL,
     CONTENT_FILTER_HISTORY,
@@ -39,6 +40,7 @@ internal enum class BiliPaiNavEntryContentRole {
     VIDEO_DETAIL,
     AICU_QUERY,
     HISTORY,
+    PERSONAL_RECAP,
     PERSONAL_RECAP_UPS,
     FAVORITE,
     LIKED_VIDEOS,
@@ -110,6 +112,7 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         BiliPaiNavKey.SpacePrivacySettings -> BiliPaiNavEntryContentRole.SPACE_PRIVACY_SETTINGS
         BiliPaiNavKey.LoginActivitySettings -> BiliPaiNavEntryContentRole.LOGIN_ACTIVITY_SETTINGS
         BiliPaiNavKey.MessageNotificationSettings -> BiliPaiNavEntryContentRole.MESSAGE_NOTIFICATION_SETTINGS
+        BiliPaiNavKey.CustomPushSettings -> BiliPaiNavEntryContentRole.CUSTOM_PUSH_SETTINGS
         is BiliPaiNavKey.PluginsSettings -> BiliPaiNavEntryContentRole.PLUGINS_SETTINGS
         is BiliPaiNavKey.BuiltinPluginSettings,
         is BiliPaiNavKey.JsonPluginEditor,
@@ -128,6 +131,7 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         is BiliPaiNavKey.AccountLedger -> BiliPaiNavEntryContentRole.ACCOUNT_LEDGER
         is BiliPaiNavKey.VideoDetail -> BiliPaiNavEntryContentRole.VIDEO_DETAIL
         is BiliPaiNavKey.AicuQuery -> BiliPaiNavEntryContentRole.AICU_QUERY
+        BiliPaiNavKey.PersonalRecap -> BiliPaiNavEntryContentRole.PERSONAL_RECAP
         is BiliPaiNavKey.PersonalRecapUps -> BiliPaiNavEntryContentRole.PERSONAL_RECAP_UPS
         BiliPaiNavKey.History -> BiliPaiNavEntryContentRole.HISTORY
         is BiliPaiNavKey.HistorySearch -> BiliPaiNavEntryContentRole.HISTORY

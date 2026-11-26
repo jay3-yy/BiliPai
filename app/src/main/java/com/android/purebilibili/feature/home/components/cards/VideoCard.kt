@@ -1761,7 +1761,8 @@ internal fun ElegantVideoCard(
                 }
             }
 
-            if (scrollLitePolicy.showCompactStatsOnCover) {
+            val hideStatsForFocusViewing = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.focusViewingHideStatsEnabled
+            if (scrollLitePolicy.showCompactStatsOnCover && !hideStatsForFocusViewing) {
                 val compactStatsLayout = remember(
                     compactStatsAvailableWidthDp,
                     primaryStatText,
@@ -2287,7 +2288,7 @@ internal fun ElegantVideoCard(
             modifier = resolveVideoCardMetadataRowModifier()
         )
 
-        if (scrollLitePolicy.showSecondaryStatsRow) {
+        if (scrollLitePolicy.showSecondaryStatsRow && !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.focusViewingHideStatsEnabled) {
             Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro))
             Column(
                 modifier = Modifier.fillMaxWidth(),

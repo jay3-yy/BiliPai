@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
@@ -235,6 +236,7 @@ private fun UserAgreementTelemetryPreferences(
     onAnalyticsChange: (Boolean) -> Unit,
     enabled: Boolean,
 ) {
+    var showDisclosureDialog by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -265,6 +267,51 @@ private fun UserAgreementTelemetryPreferences(
             checked = analyticsEnabled,
             enabled = enabled,
             onCheckedChange = onAnalyticsChange,
+        )
+        AppTextButton(
+            onClick = { showDisclosureDialog = true },
+            enabled = enabled,
+        ) {
+            AppText("查看收集的信息说明（可随时在设置中关闭）")
+        }
+    }
+    if (showDisclosureDialog) {
+        val scrollState = rememberScrollState()
+        com.android.purebilibili.core.ui.AppAlertDialog(
+            onDismissRequest = { showDisclosureDialog = false },
+            title = { AppText("遥测与数据收集说明", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    com.android.purebilibili.feature.settings.TELEMETRY_DISCLOSURE_SECTIONS.forEach { section ->
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            AppText(
+                                text = section.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AppContentColors.primaryText(),
+                            )
+                            section.items.forEach { line ->
+                                AppText(
+                                    text = "• $line",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AppContentColors.secondaryText(),
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                AppDialogAction(onClick = { showDisclosureDialog = false }) {
+                    AppText("知道了")
+                }
+            },
         )
     }
 }

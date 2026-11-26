@@ -43,6 +43,7 @@ internal fun HorizontalVideoStatRow(
     textStyle: TextStyle = feedContentTypography().statistic,
     singleLine: Boolean = false,
 ) {
+    if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.focusViewingHideStatsEnabled) return
     val textMeasurer = rememberTextMeasurer(cacheSize = 1)
     val spacing = with(LocalDensity.current) {
         textMeasurer.measure(" ", style = textStyle, maxLines = 1).size.width.toDp()

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_keepsake_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/widget_playback_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/widget_keepsake_greeting"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="@string/keepsake_widget_default_greeting"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="@color/widget_playback_accent" />
+
+        <ImageButton
+            android:id="@+id/widget_keepsake_shuffle"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ms_refresh_24"
+            android:background="@android:color/transparent"
+            android:padding="6dp"
+            android:tint="@color/widget_playback_accent"
+            android:contentDescription="@string/keepsake_widget_shuffle" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_keepsake_body"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:lineSpacingExtra="2dp"
+        android:text="@string/keepsake_widget_default_body"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="@color/widget_playback_text" />
+
+    <TextView
+        android:id="@+id/widget_keepsake_footer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:alpha="0.72"
+        android:text="@string/keepsake_widget_default_footer"
+        android:textSize="11sp"
+        android:textColor="@color/widget_playback_text" />
+</LinearLayout>

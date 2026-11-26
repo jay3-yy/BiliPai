@@ -880,6 +880,12 @@ private fun PortraitDanmakuDisplayAreaModeSelector(
                 color = colors.titleColor,
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
             )
+            Spacer(modifier = Modifier.height(4.dp))
+            AppText(
+                text = currentMode.description,
+                color = colors.supportingColor,
+                style = MaterialTheme.typography.bodySmall
+            )
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),

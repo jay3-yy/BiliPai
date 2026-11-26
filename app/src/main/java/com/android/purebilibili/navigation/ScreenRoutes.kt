@@ -31,6 +31,7 @@ sealed class ScreenRoutes(val route: String) {
             "aicu?uid=${uid?.takeIf { it > 0 } ?: 0}&category=${URLEncoder.encode(category, StandardCharsets.UTF_8.name())}"
     }
     object History : ScreenRoutes("history")
+    object PersonalRecap : ScreenRoutes("personal_recap")
     object Favorite : ScreenRoutes("favorite")
     object LikedVideos : ScreenRoutes("liked_videos") {
         fun createRoute(
@@ -141,6 +142,7 @@ sealed class ScreenRoutes(val route: String) {
     object LoginActivitySettings : ScreenRoutes("login_activity_settings")
     object PermissionSettings : ScreenRoutes("permission_settings")  //  权限管理
     object MessageNotificationSettings : ScreenRoutes("message_notification_settings")
+    object CustomPushSettings : ScreenRoutes("custom_push_settings")
     object PluginsSettings : ScreenRoutes("plugins_settings?importUrl={importUrl}") {  //  插件中心
         fun createRoute(importUrl: String? = null): String {
             if (importUrl.isNullOrBlank()) return "plugins_settings"
@@ -213,9 +215,10 @@ sealed class ScreenRoutes(val route: String) {
     
     //  [新增] 音频模式页面
     object AudioMode : ScreenRoutes("audio_mode") {
-        fun createRoute(bvid: String = "", cid: Long = 0L): String {
+        fun createRoute(bvid: String = "", cid: Long = 0L, resumePositionMs: Long = 0L): String {
             if (bvid.isBlank()) return route
-            return "audio_mode?bvid=$bvid&cid=$cid"
+            val resumeQuery = if (resumePositionMs > 0L) "&resumePositionMs=$resumePositionMs" else ""
+            return "audio_mode?bvid=$bvid&cid=$cid$resumeQuery"
         }
     }
     

@@ -871,6 +871,7 @@ private fun LargeScreenPlayerHost(
                 actions = VideoPlayerSectionActions(
                     resolveNextWatch = playbackActions.resolveNextWatch,
                     playNextWatch = playbackActions.playNextWatch,
+                    onSavePostcardToNote = playbackActions.openVideoNoteWithPostcard,
                     onToggleFullscreen = onToggleFullscreen,
                     onQualityChange = playbackActions.changeQuality,
                     onBack = onBack,

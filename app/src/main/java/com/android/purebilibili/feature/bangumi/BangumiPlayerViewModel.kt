@@ -195,6 +195,8 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
     val coinDialogVisible = _coinDialogVisible.asStateFlow()
     private val _favoriteFolders = MutableStateFlow<BangumiFavoriteFoldersState?>(null)
     val favoriteFolders = _favoriteFolders.asStateFlow()
+    private val _completionKeepsakePrompt = MutableStateFlow<com.android.purebilibili.feature.personal.CompletionKeepsakePrompt?>(null)
+    val completionKeepsakePrompt = _completionKeepsakePrompt.asStateFlow()
     private var favoriteRequestGeneration = 0L
 
     private val _userCoinBalance = MutableStateFlow<Double?>(null)
@@ -307,9 +309,57 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             switchEpisode(nextEpisode)
         } else {
             // 已经是最后一集
+            val keepsakePrompt = com.android.purebilibili.feature.personal.resolveBangumiCompletionKeepsake(
+                seasonId = currentState.seasonDetail.seasonId,
+                title = currentState.seasonDetail.title,
+                coverUrl = currentState.seasonDetail.cover,
+                episodeCount = episodes.size,
+                currentEpisodeIndex = currentIndex,
+            )
             viewModelScope.launch {
-                _toastEvent.send("已是最后一集")
+                val context = NetworkModule.appContext
+                if (context != null && keepsakePrompt != null &&
+                    com.android.purebilibili.feature.personal.CompletionKeepsakeStore.shouldPrompt(context, keepsakePrompt.id)
+                ) {
+                    _completionKeepsakePrompt.value = keepsakePrompt
+                } else {
+                    _toastEvent.send("已是最后一集")
+                }
             }
+        }
+    }
+
+    fun dismissCompletionKeepsake() {
+        val prompt = _completionKeepsakePrompt.value ?: return
+        _completionKeepsakePrompt.value = null
+        val context = NetworkModule.appContext ?: return
+        viewModelScope.launch {
+            com.android.purebilibili.feature.personal.CompletionKeepsakeStore.markDismissed(
+                context,
+                prompt.id,
+            )
+        }
+    }
+
+    fun saveCompletionKeepsake(reflection: String) {
+        val prompt = _completionKeepsakePrompt.value ?: return
+        _completionKeepsakePrompt.value = null
+        val context = NetworkModule.appContext ?: return
+        viewModelScope.launch {
+            com.android.purebilibili.feature.personal.CompletionKeepsakeStore.saveRecord(
+                context = context,
+                record = com.android.purebilibili.feature.personal.CompletionKeepsakeRecord(
+                    id = prompt.id,
+                    kind = prompt.kind,
+                    title = prompt.title,
+                    episodeCount = prompt.episodeCount,
+                    coverUrl = prompt.coverUrl,
+                    reflection = reflection,
+                    completedAtMs = System.currentTimeMillis(),
+                    seasonId = prompt.seasonId,
+                ),
+            )
+            _toastEvent.send("已收进完结纪念")
         }
     }
 

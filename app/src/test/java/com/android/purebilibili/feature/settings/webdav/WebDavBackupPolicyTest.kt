@@ -134,4 +134,18 @@ class WebDavBackupPolicyTest {
         assertTrue(resolveWebDavDirectoryProbeError(403, "https://dav.example.com/x").contains("无权限"))
         assertTrue(resolveWebDavDirectoryProbeError(500, "https://dav.example.com/x").contains("HTTP 500"))
     }
+
+    @Test
+    fun `retention pruning keeps newest snapshots and drops oldest beyond limit`() {
+        val entries = listOf(
+            WebDavBackupEntry("a.zip", "/a.zip", 100, 1000L),
+            WebDavBackupEntry("b.zip", "/b.zip", 100, 3000L),
+            WebDavBackupEntry("c.zip", "/c.zip", 100, 2000L),
+            WebDavBackupEntry("d.zip", "/d.zip", 100, 4000L),
+        )
+        val pruned = selectWebDavBackupsToPrune(entries, maxRetained = 2)
+        assertEquals(listOf("c.zip", "a.zip"), pruned.map { it.fileName })
+        assertTrue(selectWebDavBackupsToPrune(entries, maxRetained = 0).isEmpty())
+        assertTrue(selectWebDavBackupsToPrune(entries, maxRetained = 5).isEmpty())
+    }
 }

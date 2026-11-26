@@ -158,6 +158,7 @@ fun BangumiPlayerScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val coinDialogVisible by viewModel.coinDialogVisible.collectAsStateWithLifecycle()
     val favoriteFolders by viewModel.favoriteFolders.collectAsStateWithLifecycle()
+    val completionKeepsakePrompt by viewModel.completionKeepsakePrompt.collectAsStateWithLifecycle()
     val userCoinBalance by viewModel.userCoinBalance.collectAsStateWithLifecycle()
     val successState = uiState as? BangumiPlayerState.Success
     val currentEpisodeIdForDebug = successState?.currentEpisode?.id ?: epId
@@ -668,14 +669,83 @@ fun BangumiPlayerScreen(
         onDispose { danmakuManager.detachPlayer(exoPlayer) }
     }
 
-    DisposableEffect(exoPlayer, seasonId, currentEpisodeIdForDebug) {
+    val nearbyBangumiTitle = successState?.let { state ->
+        listOf(
+            state.seasonDetail.title,
+            state.currentEpisode.longTitle.ifBlank { state.currentEpisode.title },
+        ).filter { it.isNotBlank() }.joinToString(" · ")
+    }.orEmpty()
+    val nearbyBangumiCover = successState?.let { state ->
+        state.currentEpisode.cover.ifBlank { state.seasonDetail.cover }
+    }.orEmpty()
+    val nearbyBangumiBvid = successState?.currentEpisode?.bvid.orEmpty()
+    val nearbyBangumiQualityId = successState?.quality ?: 0
+    val nearbyBangumiQualityLabel = remember(
+        successState?.quality,
+        successState?.acceptQuality,
+        successState?.acceptDescription,
+    ) {
+        val state = successState ?: return@remember ""
+        val idx = state.acceptQuality.indexOf(state.quality)
+        state.acceptDescription.getOrNull(idx).orEmpty()
+    }
+    val nearbyBangumiAvailableQualities = successState?.acceptQuality.orEmpty()
+    val nearbyBangumiAudioQualityId = successState?.selectedAudioQuality?.takeIf { it > 0 } ?: 0
+    val nearbyBangumiAudioQualityLabel = remember(
+        successState?.selectedAudioQuality,
+        successState?.availableAudioQualities,
+    ) {
+        val state = successState ?: return@remember ""
+        state.availableAudioQualities.firstOrNull { it.preferenceId == state.selectedAudioQuality }?.label.orEmpty()
+    }
+    val nearbyBangumiAvailableAudioQualities = remember(successState?.availableAudioQualities) {
+        successState?.availableAudioQualities
+            ?.map { it.preferenceId }
+            ?.filter { it > 0 }
+            .orEmpty()
+    }
+    DisposableEffect(
+        exoPlayer,
+        seasonId,
+        currentEpisodeIdForDebug,
+        currentCid,
+        nearbyBangumiTitle,
+        nearbyBangumiCover,
+        nearbyBangumiBvid,
+        nearbyBangumiQualityId,
+        nearbyBangumiQualityLabel,
+        danmakuEnabled,
+        nearbyBangumiAudioQualityId,
+        nearbyBangumiAudioQualityLabel,
+        nearbyBangumiAvailableQualities,
+        nearbyBangumiAvailableAudioQualities,
+    ) {
         PlaybackHandoffRegistry.publishBangumi(
             seasonId = seasonId,
             epId = currentEpisodeIdForDebug,
             positionProvider = { exoPlayer.currentPosition }
         )
+        com.android.purebilibili.feature.nearby.NearbyPlaybackBridge.bindBangumi(
+            seasonId = seasonId,
+            epId = currentEpisodeIdForDebug,
+            bvid = nearbyBangumiBvid,
+            cid = currentCid,
+            title = nearbyBangumiTitle,
+            cover = nearbyBangumiCover,
+            player = exoPlayer,
+            qualityId = nearbyBangumiQualityId,
+            qualityLabel = nearbyBangumiQualityLabel,
+            danmakuEnabled = danmakuEnabled,
+            audioQualityId = nearbyBangumiAudioQualityId,
+            audioQualityLabel = nearbyBangumiAudioQualityLabel,
+            availableQualityIds = nearbyBangumiAvailableQualities,
+            availableAudioQualityIds = nearbyBangumiAvailableAudioQualities,
+            onChangeQuality = { viewModel.changeQuality(it) },
+            onChangeAudioQuality = viewModel::changeAudioQuality,
+        )
         onDispose {
             PlaybackHandoffRegistry.clearBangumi(seasonId, currentEpisodeIdForDebug)
+            com.android.purebilibili.feature.nearby.NearbyPlaybackBridge.unbindBangumi(exoPlayer)
         }
     }
 
@@ -1624,6 +1694,13 @@ fun BangumiPlayerScreen(
                 onCreateFolder = viewModel::createFavoriteFolder,
             )
         }
+    }
+    completionKeepsakePrompt?.let { keepsakePrompt ->
+        com.android.purebilibili.feature.personal.CompletionKeepsakeSheet(
+            prompt = keepsakePrompt,
+            onSave = viewModel::saveCompletionKeepsake,
+            onDismiss = viewModel::dismissCompletionKeepsake,
+        )
     }
     CoinDialog(
         visible = coinDialogVisible,

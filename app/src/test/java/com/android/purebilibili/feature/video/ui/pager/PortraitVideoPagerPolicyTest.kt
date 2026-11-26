@@ -348,6 +348,24 @@ class PortraitVideoPagerPolicyTest {
     }
 
     @Test
+    fun portraitDanmakuSurface_usesFullScreenRegardlessOfUpperRegionAvailability() {
+        assertEquals(
+            PortraitDanmakuSurfaceMode.FullScreen,
+            resolvePortraitDanmakuSurfaceMode(
+                upperRegionAvailable = true,
+                displayAreaMode = PortraitDanmakuDisplayAreaMode.FULL_SCREEN,
+            )
+        )
+        assertEquals(
+            PortraitDanmakuSurfaceMode.FullScreen,
+            resolvePortraitDanmakuSurfaceMode(
+                upperRegionAvailable = false,
+                displayAreaMode = PortraitDanmakuDisplayAreaMode.FULL_SCREEN,
+            )
+        )
+    }
+
+    @Test
     fun portraitDanmakuTopInset_keepsHiddenBarsAndCutoutSafeArea() {
         assertEquals(
             84,

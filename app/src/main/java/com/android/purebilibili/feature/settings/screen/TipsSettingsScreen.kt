@@ -11,6 +11,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Lightbulb
+import com.android.purebilibili.core.ui.components.AppPreferenceGroup
+import com.android.purebilibili.core.ui.components.AppSwitchPreference
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +66,11 @@ internal fun TipsSettingsScreen(
     )
 
     val glyphs = currentSettingsIconGlyphs()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val recipeGuidesEnabled by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getSettingsRecipeGuidesEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
     val rememberedSecondaryTextColor = AppContentColors.secondaryText()
     val basicTips = remember(rememberedSecondaryTextColor, glyphs, onNavigate) {
         listOf(
@@ -216,6 +227,25 @@ internal fun TipsSettingsScreen(
             backContentDescription = backLabel,
             bottomContentPadding = contentBottomPadding,
             lazyListContent = {
+            item(key = "recipe_guides_toggle") {
+                Column(modifier = Modifier.entrance()) {
+                    AppPreferenceSectionTitle("设置引导")
+                    AppPreferenceGroup {
+                        AppSwitchPreference(
+                            icon = Icons.Outlined.Lightbulb,
+                            title = "显示配方与玩法引导",
+                            subtitle = "在外观设置、播放设置与设置搜索中展示快捷配方与隐藏手感推荐",
+                            checked = recipeGuidesEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    com.android.purebilibili.core.store.SettingsManager
+                                        .setSettingsRecipeGuidesEnabled(context, enabled)
+                                }
+                            },
+                        )
+                    }
+                }
+            }
             item {
                 Box(modifier = Modifier.entrance()) {
                     AppPreferenceSectionTitle(stringResource(R.string.tips_section_basics))

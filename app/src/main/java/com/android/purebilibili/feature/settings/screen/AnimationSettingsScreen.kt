@@ -231,8 +231,6 @@ fun AnimationSettingsContent(
     val maidLottieAnimationEnabled by remember(context) { SettingsManager.getMaidLottieAnimationEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val skeletonBreathingEnabled = com.android.purebilibili.core.ui.skeleton.rememberSkeletonBreathingEnabled()
-    val globalTextTapCopyEnabled by remember(context) { SettingsManager.getGlobalTextTapCopyEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = themeConfiguration.globalTextTapCopyEnabled)
     val appNavigationSettings = rememberSettingsNavigationConfiguration()
     val transitionWindowConfiguration = LocalConfiguration.current
     val transitionMethod = homeConfiguration.cardTransitionMethod
@@ -423,6 +421,7 @@ fun AnimationSettingsContent(
                             title = stringResource(R.string.animation_indicator_dynamic_length_title),
                             subtitle = stringResource(R.string.animation_indicator_dynamic_length_summary),
                             checked = appNavigationSettings.liquidIndicatorDynamicLengthEnabled,
+                            enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
                             onCheckedChange = { enabled ->
                                 scope.launch { SettingsManager.setLiquidIndicatorDynamicLengthEnabled(context, enabled) }
                             },
@@ -436,6 +435,7 @@ fun AnimationSettingsContent(
                             title = stringResource(R.string.animation_indicator_wobble_title),
                             subtitle = stringResource(R.string.animation_indicator_wobble_summary),
                             checked = appNavigationSettings.liquidIndicatorWobbleEnabled,
+                            enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
                             onCheckedChange = { enabled ->
                                 scope.launch { SettingsManager.setLiquidIndicatorWobbleEnabled(context, enabled) }
                             },
@@ -588,11 +588,15 @@ fun AnimationSettingsContent(
                             SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.PROGRESSIVE_BLUR_RENDERER),
                                 title = settingItemTitle(PROGRESSIVE_BLUR_RENDERER_SETTING_ID, context),
-                                subtitle = stringResource(
-                                    if (com.android.purebilibili.feature.home.components.isOfficialProgressiveBlurSupported())
-                                        R.string.animation_progressive_renderer_summary
-                                    else R.string.animation_progressive_renderer_fallback_summary,
-                                ),
+                                subtitle = if (!state.progressiveTopBlurEnabled) {
+                                    "开启顶栏渐进模糊后生效"
+                                } else {
+                                    stringResource(
+                                        if (com.android.purebilibili.feature.home.components.isOfficialProgressiveBlurSupported())
+                                            R.string.animation_progressive_renderer_summary
+                                        else R.string.animation_progressive_renderer_fallback_summary,
+                                    )
+                                },
                                 options = listOf(
                                     AppSegmentOption(
                                         com.android.purebilibili.core.store.home.ProgressiveBlurRenderer.MIUIX,
@@ -606,6 +610,7 @@ fun AnimationSettingsContent(
                                     ),
                                 ),
                                 selectedValue = progressiveBlurRenderer,
+                                enabled = state.progressiveTopBlurEnabled,
                                 onSelectionChange = { renderer ->
                                     scope.launch {
                                         com.android.purebilibili.core.store.home.LiquidGlassSettingsStore
@@ -994,21 +999,7 @@ fun AnimationSettingsContent(
                             AppPreferenceDivider()
                             HapticScenePreference(enabled = true)
                         }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("animation.global_text_tap_copy_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.COPY_TEXT),
-                                title = localizedAnimationSettingTitle("animation.global_text_tap_copy_enabled"),
-                                subtitle = stringResource(R.string.animation_tap_copy_summary),
-                                checked = globalTextTapCopyEnabled,
-                                onCheckedChange = { enabled ->
-                                    scope.launch {
-                                        SettingsManager.setGlobalTextTapCopyEnabled(context, enabled)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText(),
-                            )
-                        }
+                        // 「点按文字复制」唯一入口位于「界面外观 -> 文字与显示大小」。
                         // 加载占位动画不是玻璃/模糊效果,归入页面动效分组。
                         AppPreferenceDivider()
                         SettingsItemAnchor("animation.skeleton_breathing_enabled") {

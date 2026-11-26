@@ -598,4 +598,160 @@ class TodayWatchPolicyTest {
         assertTrue(plan.scoreByBvid.values.all { it in 0.0..1.0 })
         assertTrue(plan.confidenceByBvid.values.all { it in 0f..1f })
     }
+
+    @Test
+    fun `v3 suppresses clickbait in favor of high coin-favorite gem content`() {
+        val candidates = listOf(
+            VideoItem(
+                bvid = "bait",
+                owner = Owner(mid = 10, name = "标题党UP"),
+                title = "震惊！全网炸锅太离谱了不看后悔",
+                duration = 500,
+                stat = Stat(view = 120_000, like = 500, coin = 10, favorite = 15, danmaku = 100)
+            ),
+            VideoItem(
+                bvid = "gem",
+                owner = Owner(mid = 11, name = "宝藏UP"),
+                title = "手工木艺修复记录",
+                duration = 520,
+                stat = Stat(view = 30_000, like = 4_200, coin = 2_800, favorite = 2_500, share = 400, danmaku = 40)
+            )
+        )
+
+        val plan = buildTodayWatchPlan(
+            historyVideos = emptyList(),
+            candidateVideos = candidates,
+            mode = TodayWatchMode.RELAX,
+            eyeCareNightActive = false,
+            queueLimit = 2
+        )
+
+        assertEquals("gem", plan.videoQueue.first().bvid)
+    }
+
+    @Test
+    fun `v3 spreads near-duplicate hot-topic titles across different creators`() {
+        val candidates = listOf(
+            VideoItem(
+                bvid = "hot_1",
+                owner = Owner(mid = 1, name = "UP-1"),
+                title = "新一代芯片架构发布深度评测体验",
+                duration = 600,
+                stat = Stat(view = 50_000, like = 2_000, coin = 600, favorite = 500)
+            ),
+            VideoItem(
+                bvid = "hot_2",
+                owner = Owner(mid = 2, name = "UP-2"),
+                title = "新一代芯片架构发布深度评测对比",
+                duration = 600,
+                stat = Stat(view = 48_000, like = 1_950, coin = 580, favorite = 480)
+            ),
+            VideoItem(
+                bvid = "fresh_topic",
+                owner = Owner(mid = 3, name = "UP-3"),
+                title = "深夜街头拉面小馆美食探店",
+                duration = 600,
+                stat = Stat(view = 46_000, like = 1_900, coin = 560, favorite = 460)
+            )
+        )
+
+        val plan = buildTodayWatchPlan(
+            historyVideos = emptyList(),
+            candidateVideos = candidates,
+            mode = TodayWatchMode.RELAX,
+            eyeCareNightActive = false,
+            queueLimit = 3
+        )
+
+        assertEquals("hot_1", plan.videoQueue[0].bvid)
+        assertEquals("fresh_topic", plan.videoQueue[1].bvid)
+    }
+
+    @Test
+    fun `duration filter and queue minute estimate match time budget buckets`() {
+        val queue = listOf(
+            VideoItem(bvid = "short", duration = 360),
+            VideoItem(bvid = "meal", duration = 900),
+            VideoItem(bvid = "deep", duration = 2100),
+        )
+
+        assertEquals(listOf("short"), filterTodayWatchQueueByDuration(queue, TodayWatchDurationFilter.QUICK).map { it.bvid })
+        assertEquals(listOf("meal"), filterTodayWatchQueueByDuration(queue, TodayWatchDurationFilter.MEALTIME).map { it.bvid })
+        assertEquals(listOf("deep"), filterTodayWatchQueueByDuration(queue, TodayWatchDurationFilter.DEEP).map { it.bvid })
+        assertEquals(56, estimateTodayWatchQueueMinutes(queue))
+        assertTrue(resolveTodayWatchContextHeadline(TodayWatchMode.RELAX, false, 12).contains("午间"))
+        assertTrue(resolveTodayWatchContextHeadline(TodayWatchMode.RELAX, true, 15).contains("夜"))
+    }
+
+    @Test
+    fun `switching between relax and learn modes produces distinct top rankings on mixed feed`() {
+        val candidates = listOf(
+            VideoItem(
+                bvid = "short_game_1",
+                owner = Owner(mid = 1, name = "游戏UP1"),
+                title = "对抗路迎来大变，段位越高越缺乏打亚连经验",
+                duration = 257,
+                stat = Stat(view = 965_000, like = 42_000, coin = 8_000, favorite = 6_000, danmaku = 800),
+            ),
+            VideoItem(
+                bvid = "short_dub_2",
+                owner = Owner(mid = 2, name = "配音UP2"),
+                title = "第一名：枪一响我就开始跑了 搞笑配音",
+                duration = 89,
+                stat = Stat(view = 2_070_000, like = 95_000, coin = 12_000, favorite = 10_000, danmaku = 1_200),
+            ),
+            VideoItem(
+                bvid = "deep_tech_1",
+                owner = Owner(mid = 3, name = "技术UP3"),
+                title = "深入拆解现代编译器架构原理与性能优化",
+                tname = "科技",
+                duration = 1_320,
+                stat = Stat(view = 180_000, like = 16_000, coin = 9_000, favorite = 12_000, danmaku = 320),
+            ),
+            VideoItem(
+                bvid = "deep_history_2",
+                owner = Owner(mid = 4, name = "人文UP4"),
+                title = "两小时纪录片精讲：工业革命背后的经济与历史逻辑",
+                tname = "人文历史",
+                duration = 1_860,
+                stat = Stat(view = 240_000, like = 19_000, coin = 11_000, favorite = 15_000, danmaku = 410),
+            ),
+        )
+
+        val relaxTop = buildTodayWatchPlan(
+            historyVideos = emptyList(),
+            candidateVideos = candidates,
+            mode = TodayWatchMode.RELAX,
+            eyeCareNightActive = false,
+            queueLimit = 2,
+        ).videoQueue.map { it.bvid }
+
+        val learnTop = buildTodayWatchPlan(
+            historyVideos = emptyList(),
+            candidateVideos = candidates,
+            mode = TodayWatchMode.LEARN,
+            eyeCareNightActive = false,
+            queueLimit = 2,
+        ).videoQueue.map { it.bvid }
+
+        assertTrue(relaxTop.any { it.startsWith("short_") })
+        assertTrue(learnTop.all { it.startsWith("deep_") })
+        assertTrue(relaxTop != learnTop)
+    }
+
+    @Test
+    fun `buildTodayWatchPlaylistItems deduplicates preserves order and skips blank bvid`() {
+        val items = buildTodayWatchPlaylistItems(
+            listOf(
+                VideoItem(bvid = "", title = "无效"),
+                VideoItem(bvid = "BV1a", cid = 11L, title = "第一支", pic = "https://i0.hdslb.com/1.jpg", owner = Owner(mid = 1, name = "UP1"), duration = 300),
+                VideoItem(bvid = "BV1a", cid = 11L, title = "重复项"),
+                VideoItem(bvid = "BV1b", cid = 22L, title = "第二支", pic = "https://i0.hdslb.com/2.jpg", owner = Owner(mid = 2, name = "UP2"), duration = 600),
+            )
+        )
+        assertEquals(listOf("BV1a", "BV1b"), items.map { it.bvid })
+        assertEquals(listOf(11L, 22L), items.map { it.cid })
+        assertEquals(listOf("UP1", "UP2"), items.map { it.owner })
+        assertEquals(listOf(300L, 600L), items.map { it.duration })
+    }
 }

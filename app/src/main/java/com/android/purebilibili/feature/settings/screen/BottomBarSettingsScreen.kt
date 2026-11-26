@@ -195,7 +195,7 @@ fun BottomBarSettingsContent(
     SettingsSectionFocusEffect(
         listState = listState,
         target = SettingsSearchTarget.BOTTOM_BAR,
-        sectionKeys = listOf("navigation_intro") + listOf("navigation_behavior", "navigation_display", "navigation_top_tabs", "navigation_partition", "navigation_search_tabs", "navigation_tablet", "navigation_current", "navigation_available").flatMap { listOf(it + "_title", it) } + listOf("navigation_restore", "navigation_hint"),
+        sectionKeys = listOf("navigation_intro") + listOf("navigation_behavior", "navigation_display", "navigation_top_tabs", "navigation_partition", "navigation_search_tabs", "navigation_search_display", "navigation_tablet", "navigation_current", "navigation_available").flatMap { listOf(it + "_title", it) } + listOf("navigation_restore", "navigation_hint"),
         legacyKeys = mapOf(
             SettingsSearchFocusIds.BOTTOM_BAR_START to "navigation_intro",
             SettingsSearchFocusIds.BOTTOM_BAR_BEHAVIOR to "navigation_behavior_title",
@@ -849,6 +849,19 @@ fun BottomBarSettingsContent(
                             }
                         }
                     }
+                }
+            }
+
+            // 搜索页展示
+            item(key = "navigation_search_display_title") {
+                Box(modifier = Modifier.entrance()) {
+                    AppPreferenceSectionTitle("搜索页展示")
+                }
+            }
+
+            item(key = "navigation_search_display") {
+                Box(modifier = Modifier.entrance()) {
+                    SearchLandingPreferencesSection()
                 }
             }
 

@@ -347,6 +347,7 @@ internal fun PortraitInlineVideoPlayerHost(
                 moreMenuSource = moreMenuSource,
                     resolveNextWatch = playbackActions.resolveNextWatch,
                     playNextWatch = playbackActions.playNextWatch,
+                    onSavePostcardToNote = playbackActions.openVideoNoteWithPostcard,
                 onToggleFullscreen = onToggleFullscreen,
                 onQualityChange = { qid -> playbackActions.changeQuality(qid) },
                 onBack = onBack,

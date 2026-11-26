@@ -96,7 +96,10 @@ class DanmakuConfig {
             scrollFixedVelocity = scrollFixedVelocity,
             viewportWidthPx = viewWidth
         )
-        val areaRatio = displayAreaRatio.coerceIn(0.1f, 1f)
+        val areaRatio = resolveEffectiveDanmakuDisplayAreaRatio(
+            displayAreaRatio = displayAreaRatio,
+            fillDisplayArea = viewport.fillDisplayArea,
+        )
         val hotBarSpace = resolveDanmakuHotBarReservedHeightPx(
             hotBarReservedHeightPx, viewHeight
         )
@@ -152,6 +155,11 @@ class DanmakuConfig {
         }
     }
 }
+
+internal fun resolveEffectiveDanmakuDisplayAreaRatio(
+    displayAreaRatio: Float,
+    fillDisplayArea: Boolean,
+): Float = if (fillDisplayArea) 1f else displayAreaRatio.coerceIn(0.1f, 1f)
 
 internal fun resolveDanmakuTypeface(fontWeight: Int): Typeface {
     val normalizedWeight = fontWeight.coerceIn(1, 9) * 100

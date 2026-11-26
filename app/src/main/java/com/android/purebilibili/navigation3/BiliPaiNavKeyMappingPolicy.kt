@@ -65,6 +65,7 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         BiliPaiNavKey.SpacePrivacySettings -> ScreenRoutes.SpacePrivacySettings.route
         BiliPaiNavKey.LoginActivitySettings -> ScreenRoutes.LoginActivitySettings.route
         BiliPaiNavKey.MessageNotificationSettings -> ScreenRoutes.MessageNotificationSettings.route
+        BiliPaiNavKey.CustomPushSettings -> ScreenRoutes.CustomPushSettings.route
         is BiliPaiNavKey.PluginsSettings -> ScreenRoutes.PluginsSettings.createRoute(importUrl)
         is BiliPaiNavKey.BuiltinPluginSettings -> "${routeBase}/${encodeRouteValue(pluginId)}"
         is BiliPaiNavKey.JsonPluginEditor -> pluginId?.let { "${routeBase}/${encodeRouteValue(it)}" } ?: routeBase
@@ -84,6 +85,7 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         is BiliPaiNavKey.AccountLedger -> ScreenRoutes.AccountLedger.createRoute(kind)
         is BiliPaiNavKey.AicuQuery -> ScreenRoutes.AicuQuery.createRoute(uid, category)
         // 统计快照由类型化导航键持有，不通过字符串路由重建。
+        BiliPaiNavKey.PersonalRecap -> "personal_recap"
         is BiliPaiNavKey.PersonalRecapUps -> "personal_recap_ups?window=${window.name}"
         BiliPaiNavKey.History -> ScreenRoutes.History.route
         is BiliPaiNavKey.HistorySearch -> "history_search?query=${encodeRouteValue(query)}"
@@ -221,6 +223,7 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         normalized == ScreenRoutes.SpacePrivacySettings.route -> BiliPaiNavKey.SpacePrivacySettings
         normalized == ScreenRoutes.LoginActivitySettings.route -> BiliPaiNavKey.LoginActivitySettings
         normalized == ScreenRoutes.MessageNotificationSettings.route -> BiliPaiNavKey.MessageNotificationSettings
+        normalized == ScreenRoutes.CustomPushSettings.route -> BiliPaiNavKey.CustomPushSettings
         routeBase == "plugins_settings" -> BiliPaiNavKey.PluginsSettings(importUrl = query["importUrl"])
         segments.firstOrNull() == "builtin_plugin_settings" && segments.size >= 2 ->
             BiliPaiNavKey.BuiltinPluginSettings(decodeRouteValue(segments[1]))
@@ -252,6 +255,7 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
             category = com.android.purebilibili.data.model.response.AicuCategory.fromRoute(query["category"]).name,
         )
         normalized == ScreenRoutes.History.route -> BiliPaiNavKey.History
+        normalized == ScreenRoutes.PersonalRecap.route -> BiliPaiNavKey.PersonalRecap
         routeBase == "history_search" -> BiliPaiNavKey.HistorySearch(query["query"].orEmpty())
         normalized == ScreenRoutes.Favorite.route -> BiliPaiNavKey.Favorite
         routeBase == ScreenRoutes.Favorite.route && query["pgc"] == "bangumi" ->
@@ -342,6 +346,7 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         routeBase == "audio_mode" -> BiliPaiNavKey.AudioMode(
             sourceBvid = decodeRouteValue(query["bvid"].orEmpty()),
             sourceCid = query["cid"]?.toLongOrNull() ?: 0L,
+            sourceResumePositionMs = query["resumePositionMs"]?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L,
             collectionMediaId = query["mediaId"]?.toLongOrNull() ?: 0L,
             collectionSeasonId = query["seasonId"]?.toLongOrNull() ?: 0L,
             collectionTitle = query["title"].orEmpty(),

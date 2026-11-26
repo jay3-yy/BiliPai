@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,6 +49,7 @@ import com.android.purebilibili.data.model.response.MATCH_CONTEST_STATUS_LIVING
 import com.android.purebilibili.data.model.response.MATCH_CONTEST_STATUS_NOT_STARTED
 import com.android.purebilibili.data.model.response.resolveMatchContestLogoUrl
 import com.android.purebilibili.feature.video.ui.components.VideoCommentSheetHost
+import com.android.purebilibili.feature.video.ui.components.commentThreadNavigationBlur
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import java.time.Instant
 import java.time.ZoneId
@@ -71,6 +73,7 @@ fun MatchInfoScreen(
 
     val commentViewModel: VideoCommentViewModel = viewModel()
     var showComments by rememberSaveable { mutableStateOf(false) }
+    var commentSheetBlurProgress by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     LaunchedEffect(cid, showComments) {
         if (showComments && cid > 0L) {
             commentViewModel.init(aid = cid, commentType = MATCH_COMMENT_TYPE)
@@ -86,7 +89,11 @@ fun MatchInfoScreen(
         ) {
             VideoCommentSheetHost(
                 mainSheetVisible = true,
-                onDismiss = { showComments = false },
+                onDismiss = {
+                    commentSheetBlurProgress = 0f
+                    showComments = false
+                },
+                onMainSheetVisibilityProgressChange = { commentSheetBlurProgress = it },
                 commentViewModel = commentViewModel,
                 aid = cid,
                 commentType = MATCH_COMMENT_TYPE,
@@ -97,7 +104,9 @@ fun MatchInfoScreen(
     }
 
     ImmersiveAppScaffold(
-        modifier = modifier,
+        modifier = modifier.commentThreadNavigationBlur {
+            if (showComments) commentSheetBlurProgress else 0f
+        },
         blurContentReady = !state.loading,
         topBar = {
             AppTopBar(

@@ -19,6 +19,21 @@ private val RFC_1123_FORMATTER: DateTimeFormatter = DateTimeFormatter.RFC_1123_D
 private val FILE_TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.US)
 
 internal const val DEFAULT_WEBDAV_REMOTE_DIR = "/BiliPai/backups"
+internal const val DEFAULT_WEBDAV_MAX_REMOTE_BACKUPS = 7
+internal val WEBDAV_RETENTION_PRESETS = listOf(5, 7, 15, 30, 0)
+
+internal fun selectWebDavBackupsToPrune(
+    entries: List<WebDavBackupEntry>,
+    maxRetained: Int,
+): List<WebDavBackupEntry> {
+    if (maxRetained <= 0 || entries.size <= maxRetained) return emptyList()
+    return entries
+        .sortedWith(
+            compareByDescending<WebDavBackupEntry> { it.lastModifiedEpochMs }
+                .thenByDescending { it.fileName }
+        )
+        .drop(maxRetained)
+}
 
 data class WebDavBackupEntry(
     val fileName: String,

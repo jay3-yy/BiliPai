@@ -50,7 +50,10 @@ import com.android.purebilibili.navigation3.rememberSystemWindowNavigationContro
 import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.filled.UnfoldMore
+import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.QrCodeScanner
@@ -377,6 +380,7 @@ internal fun ProfileScreen(
     onCommentSourceClick: (String) -> Unit = {},
     onSearchClick: () -> Unit = {},
     onHistoryClick: () -> Unit,
+    onPersonalRecapClick: (() -> Unit)? = null,
     showHistoryService: Boolean = true,
     onFavoriteClick: () -> Unit,
     onSubscriptionClick: () -> Unit = {},
@@ -424,6 +428,7 @@ internal fun ProfileScreen(
             onSettingsClick = onSettingsClick,
             onSearchClick = onSearchClick,
             onHistoryClick = onHistoryClick,
+            onPersonalRecapClick = onPersonalRecapClick,
             showHistoryService = showHistoryService,
             onFavoriteClick = onFavoriteClick,
             onSubscriptionClick = onSubscriptionClick,
@@ -461,6 +466,7 @@ private fun ProfileScreenContent(
     onSettingsClick: () -> Unit,
     onSearchClick: () -> Unit = {},
     onHistoryClick: () -> Unit,
+    onPersonalRecapClick: (() -> Unit)? = null,
     showHistoryService: Boolean = true,
     onFavoriteClick: () -> Unit,
     onSubscriptionClick: () -> Unit = {},
@@ -989,6 +995,7 @@ private fun ProfileScreenContent(
                             },
                             onAccountManageClick = { showAccountSwitchDialog = true },
                             onHistoryClick = onHistoryClick,
+                            onPersonalRecapClick = onPersonalRecapClick,
                             showHistoryService = showHistoryService,
                             onFavoriteClick = onFavoriteClick,
                             onSubscriptionClick = onSubscriptionClick,
@@ -1265,6 +1272,7 @@ private fun ProfileSpaceContent(
     onLogout: () -> Unit,
     onAccountManageClick: () -> Unit,
     onHistoryClick: () -> Unit,
+    onPersonalRecapClick: (() -> Unit)? = null,
     showHistoryService: Boolean,
     onFavoriteClick: () -> Unit,
     onSubscriptionClick: () -> Unit,
@@ -1685,6 +1693,7 @@ private fun ProfileSpaceContent(
                         favoriteFolderShortcuts = favoriteFolderShortcuts,
                         onDownloadClick = onDownloadClick,
                         onHistoryClick = onHistoryClick,
+                        onPersonalRecapClick = onPersonalRecapClick,
                         onSubscriptionClick = onSubscriptionClick,
                         onWatchLaterClick = onWatchLaterClick,
                         onFavoriteClick = onFavoriteClick,
@@ -1800,6 +1809,7 @@ private fun ProfileSpaceContent(
                                     favoriteFolderShortcuts = favoriteFolderShortcuts,
                                     onDownloadClick = onDownloadClick,
                                     onHistoryClick = onHistoryClick,
+                                    onPersonalRecapClick = onPersonalRecapClick,
                                     onSubscriptionClick = onSubscriptionClick,
                                     onWatchLaterClick = onWatchLaterClick,
                                     onFavoriteClick = onFavoriteClick,
@@ -2006,7 +2016,18 @@ private fun ProfilePinnedSpaceTopBar(
         if (showQrAuthorization) {
             OfficialQrAuthorizationDialog(onDismiss = { showQrAuthorization = false })
         }
-        AppIconButton(onClick = onBack) {
+        val haloAlpha = ((1f - topChromeScrim.value) * (1f - photoFractionProvider())).coerceIn(0f, 1f)
+        val iconHaloColor = if (heroTextColor == Color.White) {
+            Color.Black.copy(alpha = 0.28f * haloAlpha)
+        } else {
+            Color.Transparent
+        }
+        AppIconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(iconHaloColor),
+        ) {
             ProfilePhotoToolbarIcon(
                 rememberAppBackIcon(),
                 stringResource(R.string.common_back),
@@ -2015,6 +2036,11 @@ private fun ProfilePinnedSpaceTopBar(
             )
         }
         Spacer(modifier = Modifier.weight(1f))
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .background(iconHaloColor),
+        ) {
         AppWindowActionMenu(
             onActionSource = LocalProfileAccountPopupSource.current,
             groups = listOf(
@@ -2044,6 +2070,7 @@ private fun ProfilePinnedSpaceTopBar(
             ),
         ) {
             ProfilePhotoToolbarIcon(Icons.Rounded.MoreVert, "更多", topBarIconColor, photoFractionProvider)
+        }
         }
     }
 }
@@ -2249,6 +2276,7 @@ private fun ProfileQuickAccessDashboard(
     favoriteFolderShortcuts: List<ProfileFavoriteFolderShortcut>,
     onDownloadClick: () -> Unit,
     onHistoryClick: () -> Unit,
+    onPersonalRecapClick: (() -> Unit)? = null,
     onSubscriptionClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
     onFavoriteClick: () -> Unit,
@@ -2274,20 +2302,87 @@ private fun ProfileQuickAccessDashboard(
                 val control = rememberSystemWindowNavigationControl(target, shape, action)
                 AppSurface(
                     onClick = control.onClick,
-                    modifier = Modifier.weight(1f).heightIn(min = 72.dp).then(control.modifier),
+                    modifier = Modifier.weight(1f).heightIn(min = 74.dp).then(control.modifier),
                     shape = shape,
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.88f),
+                    border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)),
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp, horizontal = 4.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        AppIcon(icon, contentDescription = null, tint = AppContentColors.accent())
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(AppContentColors.accent().copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            AppIcon(
+                                icon,
+                                contentDescription = null,
+                                tint = AppContentColors.accent(),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
                         AppText(
                             label,
                             style = MaterialTheme.typography.labelMedium,
                             color = contentColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+        if (onPersonalRecapClick != null) {
+            val recapShape = AppShapes.container(ContainerLevel.Card)
+            val recapControl = rememberSystemWindowNavigationControl(
+                BiliPaiNavKey.PersonalRecap,
+                recapShape,
+                onPersonalRecapClick,
+            )
+            AppSurface(
+                onClick = recapControl.onClick,
+                modifier = Modifier.fillMaxWidth().then(recapControl.modifier),
+                shape = recapShape,
+                color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.88f),
+                border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(AppContentColors.accent().copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.BarChart,
+                            contentDescription = null,
+                            tint = AppContentColors.accent(),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        AppText(
+                            text = "观看与阅读统计",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = contentColor,
+                        )
+                        AppText(
+                            text = "时长趋势、常看 UP 主、往日拾遗与完结纪念",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = contentColor.copy(alpha = 0.72f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -2363,6 +2458,23 @@ private fun ProfileSpaceHeroHeader(
                 clipRect(top = topClipProvider().coerceIn(0f, size.height)) {
                     if (!showIdentity) {
                         val top = identityReserve.toPx().coerceIn(0f, size.height)
+                        // 头图底缘与正文底色之间做 96dp 柔和羽化过渡，既消除生硬硬切线，也为昵称与 UID 提供可读护底。
+                        val fadeHeight = 96.dp.toPx().coerceAtMost(top)
+                        if (fadeHeight > 0f) {
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0f to Color.Transparent,
+                                        0.52f to statisticsBackground.copy(alpha = 0.58f),
+                                        1f to statisticsBackground,
+                                    ),
+                                    startY = top - fadeHeight,
+                                    endY = top,
+                                ),
+                                topLeft = androidx.compose.ui.geometry.Offset(0f, top - fadeHeight),
+                                size = androidx.compose.ui.geometry.Size(size.width, fadeHeight),
+                            )
+                        }
                         drawRect(
                             color = statisticsBackground,
                             topLeft = androidx.compose.ui.geometry.Offset(0f, top),
@@ -2507,37 +2619,6 @@ private fun ProfileSpaceHeader(
                 AppText("UID ${user.mid}", color = secondaryColor, style = MaterialTheme.typography.bodySmall)
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ProfileSpaceStat("动态", user.dynamic, surfaceTextColor, onClick = onDynamicsClick)
-            val statShape = AppShapes.container(ContainerLevel.Card)
-            val following = rememberSystemWindowNavigationControl(BiliPaiNavKey.Following(user.mid), statShape, onFollowingClick)
-            val fans = rememberSystemWindowNavigationControl(BiliPaiNavKey.Following(user.mid, fans = true), statShape, onFansClick)
-            ProfileSpaceStat("关注", user.following, surfaceTextColor, onClick = following.onClick, modifier = following.modifier)
-            ProfileSpaceStat("粉丝", user.follower, surfaceTextColor, onClick = fans.onClick, modifier = fans.modifier)
-            val identityMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
-                !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
-            val identityArrowRotation = androidx.compose.animation.core.animateFloatAsState(
-                targetValue = if (identityExpanded) 180f else 0f,
-                animationSpec = if (identityMotionEnabled) androidx.compose.animation.core.spring(
-                    dampingRatio = 1f, stiffness = 700f,
-                ) else androidx.compose.animation.core.snap(),
-                label = "profileIdentityArrow",
-            )
-            AppIconButton(onClick = { identityExpanded = !identityExpanded }) {
-                AppIcon(
-                    imageVector = rememberAppChevronDownIcon(),
-                    contentDescription = if (identityExpanded) "收起个人资料" else "展开个人资料",
-                    tint = secondaryColor,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .graphicsLayer { rotationZ = identityArrowRotation.value },
-                )
-            }
-        }
         val levelProgress = remember(
             user.currentLevelMinExp,
             user.currentLevelExp,
@@ -2549,41 +2630,163 @@ private fun ProfileSpaceHeader(
                 nextExp = user.nextLevelExp,
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+        val overviewCardShape = AppShapes.container(ContainerLevel.Card)
+        AppSurface(
+            shape = overviewCardShape,
+            color = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.88f),
+            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                val coinsControl = rememberSystemWindowNavigationControl(
-                    target = if (openLedger != null) BiliPaiNavKey.AccountLedger(AccountLedgerKind.COINS) else null,
-                    shape = AppShapes.container(ContainerLevel.Pill),
-                    onClick = { openLedger?.invoke(AccountLedgerKind.COINS) },
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ProfileSpaceStat(
+                        label = "动态",
+                        value = user.dynamic,
+                        color = surfaceTextColor,
+                        onClick = onDynamicsClick,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(0.6.dp)
+                            .height(20.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    )
+                    val statShape = AppShapes.container(ContainerLevel.Card)
+                    val following = rememberSystemWindowNavigationControl(BiliPaiNavKey.Following(user.mid), statShape, onFollowingClick)
+                    val fans = rememberSystemWindowNavigationControl(BiliPaiNavKey.Following(user.mid, fans = true), statShape, onFansClick)
+                    ProfileSpaceStat(
+                        label = "关注",
+                        value = user.following,
+                        color = surfaceTextColor,
+                        onClick = following.onClick,
+                        modifier = Modifier.weight(1f).then(following.modifier),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(0.6.dp)
+                            .height(20.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+                    )
+                    ProfileSpaceStat(
+                        label = "粉丝",
+                        value = user.follower,
+                        color = surfaceTextColor,
+                        onClick = fans.onClick,
+                        modifier = Modifier.weight(1f).then(fans.modifier),
+                    )
+                    val identityMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
+                        !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
+                    val identityArrowRotation = androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (identityExpanded) 180f else 0f,
+                        animationSpec = if (identityMotionEnabled) androidx.compose.animation.core.spring(
+                            dampingRatio = 1f, stiffness = 700f,
+                        ) else androidx.compose.animation.core.snap(),
+                        label = "profileIdentityArrow",
+                    )
+                    AppIconButton(
+                        onClick = { identityExpanded = !identityExpanded },
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        AppIcon(
+                            imageVector = rememberAppChevronDownIcon(),
+                            contentDescription = if (identityExpanded) "收起个人资料" else "展开个人资料",
+                            tint = secondaryColor,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .graphicsLayer { rotationZ = identityArrowRotation.value },
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.6.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f)),
                 )
-                val expControl = rememberSystemWindowNavigationControl(
-                    target = if (openLedger != null) BiliPaiNavKey.AccountLedger(AccountLedgerKind.EXPERIENCE) else null,
-                    shape = AppShapes.container(ContainerLevel.Pill),
-                    onClick = { openLedger?.invoke(AccountLedgerKind.EXPERIENCE) },
-                )
-                AppText(
-                    text = "硬币 ${FormatUtils.formatStat(user.coin.toLong())}",
-                    modifier = if (openLedger != null) coinsControl.modifier.clickable(onClick = coinsControl.onClick) else Modifier,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = secondaryColor,
-                )
-                AppText(
-                    text = "经验 ${levelProgress.currentExp}/${levelProgress.nextExp}",
-                    modifier = if (openLedger != null) expControl.modifier.clickable(onClick = expControl.onClick) else Modifier,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = secondaryColor,
-                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val coinsControl = rememberSystemWindowNavigationControl(
+                                target = if (openLedger != null) BiliPaiNavKey.AccountLedger(AccountLedgerKind.COINS) else null,
+                                shape = AppShapes.container(ContainerLevel.Pill),
+                                onClick = { openLedger?.invoke(AccountLedgerKind.COINS) },
+                            )
+                            val expControl = rememberSystemWindowNavigationControl(
+                                target = if (openLedger != null) BiliPaiNavKey.AccountLedger(AccountLedgerKind.EXPERIENCE) else null,
+                                shape = AppShapes.container(ContainerLevel.Pill),
+                                onClick = { openLedger?.invoke(AccountLedgerKind.EXPERIENCE) },
+                            )
+                            AppText(
+                                text = "硬币 ${FormatUtils.formatStat(user.coin.toLong())}",
+                                modifier = if (openLedger != null) coinsControl.modifier.clickable(onClick = coinsControl.onClick) else Modifier,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = surfaceTextColor.copy(alpha = 0.86f),
+                            )
+                            AppText(
+                                text = "经验 ${levelProgress.currentExp}/${levelProgress.nextExp}",
+                                modifier = if (openLedger != null) expControl.modifier.clickable(onClick = expControl.onClick) else Modifier,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = secondaryColor,
+                            )
+                        }
+                        AppLinearProgressIndicator(
+                            progress = { levelProgress.progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(CircleShape),
+                            color = AppContentColors.accent(),
+                            trackColor = secondaryColor.copy(alpha = 0.18f),
+                        )
+                    }
+
+                    if (showEditProfileButton) {
+                        AppSurface(
+                            onClick = onEditClick,
+                            shape = AppShapes.container(ContainerLevel.Chip),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f),
+                        ) {
+                            AppText(
+                                text = "编辑资料",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            )
+                        }
+                    }
+                    if (showWallpaperAction) {
+                        ProfileWallpaperMenuButton(
+                            contentColor = surfaceChrome.actionButtonContentColor,
+                            borderColor = surfaceChrome.actionButtonContentColor.copy(alpha = surfaceChrome.actionButtonBorderAlpha),
+                            onClick = onWallpaperActionClick,
+                        )
+                    }
+                }
             }
-            AppLinearProgressIndicator(
-                progress = { levelProgress.progress },
-                modifier = Modifier.fillMaxWidth().height(4.dp),
-                color = AppContentColors.accent(),
-                trackColor = secondaryColor.copy(alpha = 0.22f),
-            )
         }
         ProfileIdentityDrawer(
             meta = meta,
@@ -2594,35 +2797,6 @@ private fun ProfileSpaceHeader(
             borderColor = metaChipBorder,
             onEditClick = onEditClick,
         )
-        if (showEditProfileButton || showWallpaperAction) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (showEditProfileButton) {
-                    AppOutlinedButton(
-                        onClick = onEditClick,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = surfaceChrome.actionButtonContentColor),
-                        border = BorderStroke(1.dp, surfaceChrome.actionButtonContentColor.copy(alpha = surfaceChrome.actionButtonBorderAlpha)),
-                        shape = AppShapes.container(ContainerLevel.Card)
-                    ) {
-                        AppText("编辑资料")
-                    }
-                }
-                if (showWallpaperAction) {
-                    ProfileWallpaperMenuButton(
-                        contentColor = surfaceChrome.actionButtonContentColor,
-                        borderColor = surfaceChrome.actionButtonContentColor.copy(alpha = surfaceChrome.actionButtonBorderAlpha),
-                        onClick = onWallpaperActionClick,
-                        modifier = if (!showEditProfileButton) Modifier.weight(1f) else Modifier
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -5755,24 +5929,33 @@ private fun ProfileFavoriteFolderShortcutChip(
     )
     Row(
         modifier = modifier
-            .heightIn(min = if (compact) 42.dp else 48.dp)
+            .heightIn(min = if (compact) 48.dp else 52.dp)
             .then(control.modifier)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (compact) 0.22f else 0.28f))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.88f))
+            .border(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f), shape)
             .appGentleActionClickable(
                 shape = shape,
                 onClick = control.onClick,
             )
-            .padding(horizontal = if (compact) 9.dp else 10.dp, vertical = if (compact) 7.dp else 8.dp),
+            .padding(horizontal = if (compact) 10.dp else 11.dp, vertical = if (compact) 8.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AppIcon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.tertiary,
-            modifier = Modifier.size(if (compact) 18.dp else 20.dp)
-        )
-        Spacer(modifier = Modifier.width(if (compact) 7.dp else 8.dp))
+        Box(
+            modifier = Modifier
+                .size(if (compact) 28.dp else 30.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            AppIcon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.size(if (compact) 16.dp else 18.dp),
+            )
+        }
+        Spacer(modifier = Modifier.width(if (compact) 8.dp else 9.dp))
         Column(modifier = Modifier.weight(1f)) {
             AppText(
                 text = shortcut.title,
@@ -5841,20 +6024,20 @@ internal fun AccountSwitchDialog(
 ) {
     val useGlassPurposeControls = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
         android.os.Build.VERSION.SDK_INT >= 33 && com.android.purebilibili.core.ui.components.appGlassMenuAvailable()
+    val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.CONTROLS)
+    val hapticEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.hapticFeedbackEnabled
     val activeAccount = accounts.firstOrNull { it.mid == activeAccountMid }
     val playbackAccount = accounts.firstOrNull { it.mid == playbackAccountMid }
     val activeIsVip = activeAccount?.isVip == true
     val hasVipCandidate = accounts.any { it.isVip && it.mid != activeAccountMid }
     val showPlaybackGuide = !activeIsVip && hasVipCandidate && playbackAccountMid == null
-    val playbackAccountColors = resolveAccessibleContainerColors(
-        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        backgroundColor = MaterialTheme.colorScheme.surface,
-        fallbackContentColors = listOf(
-            AppContentColors.primaryText(),
-            MaterialTheme.colorScheme.onBackground,
-        ),
-    )
+    var pendingRemoveMid by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(pendingRemoveMid) {
+        if (pendingRemoveMid != null) {
+            kotlinx.coroutines.delay(3_000L)
+            pendingRemoveMid = null
+        }
+    }
     val playbackGuideColors = resolveAccessibleContainerColors(
         containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f),
         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -5865,6 +6048,31 @@ internal fun AccountSwitchDialog(
         ),
     )
 
+    val purposeRows = remember {
+        listOf(
+            Triple(
+                com.android.purebilibili.core.store.AccountPurpose.RECOMMENDATION,
+                "推荐与搜索",
+                "推荐流、热门、相关视频与搜索",
+            ),
+            Triple(
+                com.android.purebilibili.core.store.AccountPurpose.WATCH_HISTORY,
+                "记录观看",
+                "仅改变视频与专栏播放进度上报",
+            ),
+            Triple(
+                com.android.purebilibili.core.store.AccountPurpose.PLAYBACK,
+                "视频取流",
+                "画质与大会员流媒体获取",
+            ),
+        )
+    }
+    val hasAnyCustomPurpose = purposeAccountMids != null && (
+        playbackAccountMid != null ||
+            purposeAccountMids[com.android.purebilibili.core.store.AccountPurpose.RECOMMENDATION] != null ||
+            purposeAccountMids[com.android.purebilibili.core.store.AccountPurpose.WATCH_HISTORY] != null
+        )
+
     AccountPurposeDialogSurface(
         source = source,
         onDismissRequest = onDismiss,
@@ -5874,81 +6082,171 @@ internal fun AccountSwitchDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 420.dp)
+                    .heightIn(max = 480.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                AppText(
-                    text = "主账号用于点赞、收藏、评论和个人数据；可分别指定推荐、记录观看和视频取流账号。未指定时跟随主账号，指定账号失效时请重新登录。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppContentColors.secondaryText()
-                )
-
                 if (onSetPurpose != null && purposeAccountMids == null) {
-                    AppText("正在读取账号用途…", style = MaterialTheme.typography.bodySmall)
+                    AppText(
+                        text = "正在读取账号用途…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppContentColors.secondaryText(),
+                    )
                 }
                 if (onSetPurpose != null && purposeAccountMids != null) {
-                    listOf(
-                        com.android.purebilibili.core.store.AccountPurpose.RECOMMENDATION to "推荐与搜索",
-                        com.android.purebilibili.core.store.AccountPurpose.WATCH_HISTORY to "记录观看",
-                        com.android.purebilibili.core.store.AccountPurpose.PLAYBACK to "视频取流",
-                    ).forEach { (purpose, title) ->
-                        val selectedMid = if (purpose == com.android.purebilibili.core.store.AccountPurpose.PLAYBACK) playbackAccountMid else purposeAccountMids[purpose]
-                        val selected = accounts.firstOrNull { it.mid == selectedMid }
-                        val label = if (selectedMid == null) "跟随主账号" else selected?.name?.ifBlank { "UID $selectedMid" } ?: "账号不可用"
-                        val actions = listOf(AppWindowAction(label = "跟随主账号", selected = useGlassPurposeControls && selectedMid == null, onClick = { onSetPurpose(purpose, null) })) +
-                            accounts.filter { it.sessData.isNotBlank() }.map { account ->
-                                AppWindowAction(label = account.name.ifBlank { "UID ${account.mid}" }, selected = useGlassPurposeControls && selectedMid == account.mid, onClick = { onSetPurpose(purpose, account.mid) })
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            AppText(
+                                text = "用途分配",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AppContentColors.secondaryText(),
+                            )
+                            if (hasAnyCustomPurpose) {
+                                AppTextButton(
+                                    onClick = {
+                                        if (hapticEnabled) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                        purposeRows.forEach { (purpose, _, _) -> onSetPurpose(purpose, null) }
+                                    },
+                                ) {
+                                    AppText(
+                                        text = "全部跟随主账号",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = AppContentColors.accent(),
+                                    )
+                                }
                             }
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            AppText(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                            if (useGlassPurposeControls) {
-                                AccountPurposeGlassAnchor(label, actions)
-                            } else {
-                                AppWindowActionMenu(groups = listOf(actions)) {
-                                    AppText(label, modifier = Modifier.widthIn(max = 180.dp).padding(12.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+
+                        AppSurface(
+                            shape = AppShapes.container(ContainerLevel.Card),
+                            color = AppSurfaceTokens.surfaceContainerHigh().copy(
+                                alpha = if (useGlassPurposeControls) 0.42f else 0.72f
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                purposeRows.forEachIndexed { index, (purpose, title, subtitle) ->
+                                    val selectedMid = if (purpose == com.android.purebilibili.core.store.AccountPurpose.PLAYBACK) {
+                                        playbackAccountMid
+                                    } else {
+                                        purposeAccountMids[purpose]
+                                    }
+                                    val selected = accounts.firstOrNull { it.mid == selectedMid }
+                                    val isCustom = selectedMid != null && selected != null
+                                    val isUnavailable = selectedMid != null && selected == null
+                                    val label = when {
+                                        selectedMid == null -> "跟随主账号"
+                                        selected != null -> selected.name.ifBlank { "UID $selectedMid" }
+                                        else -> "账号不可用"
+                                    }
+                                    val actions = listOf(
+                                        AppWindowAction(
+                                            label = "跟随主账号",
+                                            selected = selectedMid == null,
+                                            onClick = {
+                                                if (hapticEnabled) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                                onSetPurpose(purpose, null)
+                                            },
+                                        )
+                                    ) + accounts.filter { it.sessData.isNotBlank() }.map { account ->
+                                        val displayName = buildString {
+                                            append(account.name.ifBlank { "UID ${account.mid}" })
+                                            if (account.isVip && purpose == com.android.purebilibili.core.store.AccountPurpose.PLAYBACK) {
+                                                append("（大会员）")
+                                            }
+                                        }
+                                        AppWindowAction(
+                                            label = displayName,
+                                            selected = selectedMid == account.mid,
+                                            onClick = {
+                                                if (hapticEnabled) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                                onSetPurpose(purpose, account.mid)
+                                            },
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(1.dp),
+                                        ) {
+                                            AppText(
+                                                text = title,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Medium,
+                                                color = AppContentColors.primaryText(),
+                                            )
+                                            AppText(
+                                                text = subtitle,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = AppContentColors.secondaryText(),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        if (useGlassPurposeControls) {
+                                            AccountPurposeGlassAnchor(
+                                                label = label,
+                                                actions = actions,
+                                                isCustom = isCustom,
+                                                isUnavailable = isUnavailable,
+                                            )
+                                        } else {
+                                            val valueColor = when {
+                                                isUnavailable -> AppContentColors.error()
+                                                isCustom -> AppContentColors.accent()
+                                                else -> AppContentColors.secondaryText()
+                                            }
+                                            AppWindowActionMenu(groups = listOf(actions)) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .widthIn(max = 160.dp)
+                                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                                ) {
+                                                    AppText(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        fontWeight = if (isCustom || isUnavailable) FontWeight.Medium else FontWeight.Normal,
+                                                        color = valueColor,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                        modifier = Modifier.weight(1f, fill = false),
+                                                    )
+                                                    AppIcon(
+                                                        imageVector = Icons.Default.UnfoldMore,
+                                                        contentDescription = null,
+                                                        tint = valueColor,
+                                                        modifier = Modifier.size(16.dp),
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (index < purposeRows.lastIndex) {
+                                        AppHorizontalDivider(
+                                            modifier = Modifier.padding(horizontal = 12.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.28f),
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                    AppText("推荐与搜索覆盖推荐流、热门、相关视频及网页搜索；记录观看只改变视频/专栏上报，不改变历史列表、互动账号和隐私模式。", style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
                 }
 
-                if (playbackAccount != null) {
-                    AppSurface(
-                        shape = AppShapes.container(ContainerLevel.Card),
-                        color = playbackAccountColors.containerColor,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            AppText("🎬", style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.width(AppSpacingTokens.Small))
-                            AppText(
-                                text = "正在用「${playbackAccount.name.ifBlank { "UID ${playbackAccount.mid}" }}」${if (playbackAccount.isVip) "的大会员" else "的账号"}播放",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = playbackAccountColors.contentColor,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(Modifier.width(AppSpacingTokens.Small))
-                            AppTextButton(
-                                onClick = { onSetPlayback(null) }
-                            ) {
-                                AppText(
-                                    text = "取消",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = playbackAccountColors.contentColor
-                                )
-                            }
-                        }
-                    }
-                } else if (showPlaybackGuide) {
+                if (showPlaybackGuide) {
                     val guideAccount = accounts.firstOrNull { it.isVip && it.mid != activeAccountMid }
                     AppSurface(
                         shape = AppShapes.container(ContainerLevel.Card),
@@ -5958,181 +6256,263 @@ internal fun AccountSwitchDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            AppText("💎", style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.width(AppSpacingTokens.Small))
+                            AppIcon(
+                                imageVector = Icons.Outlined.PlayCircle,
+                                contentDescription = null,
+                                tint = playbackGuideColors.contentColor,
+                                modifier = Modifier.size(18.dp),
+                            )
                             AppText(
                                 text = guideAccount?.let {
-                                    "「${it.name.ifBlank { "UID ${it.mid}" }}」是大会员，设为播放账号即可观看大会员视频"
-                                } ?: "可将大会员账号设为播放账号",
-                                style = MaterialTheme.typography.bodyMedium,
+                                    "可将「${it.name.ifBlank { "UID ${it.mid}" }}」设为视频取流，享大会员画质"
+                                } ?: "可将大会员账号设为视频取流账号",
+                                style = MaterialTheme.typography.bodySmall,
                                 color = playbackGuideColors.contentColor,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
                             )
+                            if (guideAccount != null) {
+                                AppTextButton(
+                                    onClick = {
+                                        if (hapticEnabled) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
+                                        if (onSetPurpose != null) {
+                                            onSetPurpose(com.android.purebilibili.core.store.AccountPurpose.PLAYBACK, guideAccount.mid)
+                                        } else {
+                                            onSetPlayback(guideAccount.mid)
+                                        }
+                                    }
+                                ) {
+                                    AppText(
+                                        text = "一键启用",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = playbackGuideColors.contentColor,
+                                    )
+                                }
+                            }
                         }
                     }
                 }
 
-                if (accounts.isEmpty()) {
-                    AppText(
-                        text = "暂无已保存账号，先添加一个账号后即可快速切换。",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = AppContentColors.secondaryText()
-                    )
-                } else {
-                    accounts.forEach { account ->
-                        val isActive = account.mid == activeAccountMid
-                        val isPlayback = account.mid == playbackAccountMid
-                        AppSurface(
-                            shape = AppShapes.container(ContainerLevel.Card),
-                            color = if (isPlayback) {
-                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f)
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        AppText(
+                            text = if (accounts.isNotEmpty()) "已保存账号（${accounts.size}）" else "已保存账号",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AppContentColors.secondaryText(),
+                        )
+                        AppText(
+                            text = "点账号可切换主账号",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppContentColors.secondaryText().copy(alpha = 0.72f),
+                        )
+                    }
+
+                    if (accounts.isEmpty()) {
+                        AppText(
+                            text = "暂无已保存账号，点击下方「添加账号」即可快速切换与分配用途。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppContentColors.secondaryText(),
+                        )
+                    } else {
+                        accounts.forEach { account ->
+                            val isActive = account.mid == activeAccountMid
+                            val isPlayback = account.mid == playbackAccountMid
+                            val isRecommend = purposeAccountMids?.get(com.android.purebilibili.core.store.AccountPurpose.RECOMMENDATION) == account.mid
+                            val isHistory = purposeAccountMids?.get(com.android.purebilibili.core.store.AccountPurpose.WATCH_HISTORY) == account.mid
+                            val assignedRoleLabels = buildList {
+                                if (isRecommend) add("推荐")
+                                if (isHistory) add("记录")
+                                if (isPlayback) add("取流")
+                            }
+                            val hasActionRow = !isActive || onSetPurpose == null
+                            val cardShape = AppShapes.container(ContainerLevel.Card)
+                            val confirmingRemove = pendingRemoveMid == account.mid
+
+                            AppSurface(
+                                shape = cardShape,
+                                color = when {
+                                    isActive -> AppContentColors.accent().copy(alpha = if (useGlassPurposeControls) 0.14f else 0.10f)
+                                    assignedRoleLabels.isNotEmpty() -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.24f)
+                                    else -> AppSurfaceTokens.surfaceContainerHigh().copy(alpha = if (useGlassPurposeControls) 0.36f else 0.65f)
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(enabled = !isActive) {
-                                        onSwitch(account.mid)
-                                    }
-                                    .padding(horizontal = 14.dp, vertical = 12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    AsyncImage(
-                                        model = account.face,
-                                        contentDescription = account.name,
-                                        modifier = Modifier
-                                            .size(42.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surface)
+                                    .border(
+                                        width = if (isActive) 1.dp else 0.5.dp,
+                                        color = if (isActive) {
+                                            AppContentColors.accent().copy(alpha = 0.42f)
+                                        } else {
+                                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
+                                        },
+                                        shape = cardShape,
                                     )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            AppText(
-                                                text = account.name.ifBlank { "UID ${account.mid}" },
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f, fill = false)
-                                            )
-                                            if (isActive) {
-                                                AppSurface(
-                                                    shape = AppShapes.container(ContainerLevel.Tag),
-                                                    color = AppContentColors.accent().copy(alpha = 0.14f)
-                                                ) {
-                                                    AppText(
-                                                        text = "当前",
-                                                        color = AppContentColors.accent(),
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    )
-                                                }
-                                            }
-                                            if (isPlayback) {
-                                                AppSurface(
-                                                    shape = AppShapes.container(ContainerLevel.Tag),
-                                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f)
-                                                ) {
-                                                    AppText(
-                                                        text = "🎬 播放中",
-                                                        color = MaterialTheme.colorScheme.tertiary,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                        AppText(
-                                            text = buildString {
-                                                append("UID ${account.mid}")
-                                                if (account.isVip) {
-                                                    append(" · ")
-                                                    append(account.vipLabel.ifBlank { "大会员" })
-                                                }
-                                            },
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (account.isVip) {
-                                                AppContentColors.accent()
-                                            } else {
-                                                AppContentColors.secondaryText()
-                                            },
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-
-                                Row(
+                                    .clip(cardShape),
+                            ) {
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(top = 6.dp),
-                                    horizontalArrangement = Arrangement.End,
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .clickable(enabled = !isActive) {
+                                            if (hapticEnabled) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
+                                            onSwitch(account.mid)
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
-                                    if (onSetPurpose == null) {
-                                        if (isPlayback) {
-                                            AppTextButton(
-                                                onClick = { onSetPlayback(null) }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        AsyncImage(
+                                            model = account.face,
+                                            contentDescription = account.name,
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surface)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(5.dp),
                                             ) {
                                                 AppText(
-                                                    text = "取消播放账号",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = AppContentColors.secondaryText()
+                                                    text = account.name.ifBlank { "UID ${account.mid}" },
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f, fill = false),
                                                 )
-                                            }
-                                        } else {
-                                            AppTextButton(
-                                                onClick = { onSetPlayback(account.mid) }
-                                            ) {
-                                                AppText(
-                                                    text = if (account.isVip) "设为播放(大会员)" else "设为播放",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = if (account.isVip) {
-                                                        AppContentColors.accent()
-                                                    } else {
-                                                        AppContentColors.secondaryText()
+                                                if (isActive) {
+                                                    AppSurface(
+                                                        shape = AppShapes.container(ContainerLevel.Tag),
+                                                        color = AppContentColors.accent().copy(alpha = 0.16f),
+                                                    ) {
+                                                        AppText(
+                                                            text = "主账号",
+                                                            color = AppContentColors.accent(),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.SemiBold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                                        )
                                                     }
+                                                }
+                                                if (account.isVip) {
+                                                    AppSurface(
+                                                        shape = AppShapes.container(ContainerLevel.Tag),
+                                                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f),
+                                                    ) {
+                                                        AppText(
+                                                            text = account.vipLabel.ifBlank { "大会员" },
+                                                            color = MaterialTheme.colorScheme.tertiary,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Medium,
+                                                            maxLines = 1,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            ) {
+                                                AppText(
+                                                    text = "UID ${account.mid}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = AppContentColors.secondaryText(),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f, fill = false),
                                                 )
+                                                assignedRoleLabels.forEach { role ->
+                                                    AppSurface(
+                                                        shape = AppShapes.container(ContainerLevel.Tag),
+                                                        color = AppContentColors.accent().copy(alpha = 0.12f),
+                                                    ) {
+                                                        AppText(
+                                                            text = role,
+                                                            color = AppContentColors.accent(),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontWeight = FontWeight.Medium,
+                                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }
-                                    if (!isActive) {
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        AppTextButton(
-                                            onClick = { onSwitch(account.mid) }
+
+                                    if (hasActionRow) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically,
                                         ) {
-                                            AppText(
-                                                text = "切换",
-                                                style = MaterialTheme.typography.labelMedium
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        AppTextButton(
-                                            onClick = { onRemove(account.mid) }
-                                        ) {
-                                            AppText(
-                                                text = "移除",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = AppContentColors.error()
-                                            )
+                                            if (onSetPurpose == null) {
+                                                if (isPlayback) {
+                                                    AppTextButton(onClick = { onSetPlayback(null) }) {
+                                                        AppText(
+                                                            text = "取消播放账号",
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            color = AppContentColors.secondaryText(),
+                                                        )
+                                                    }
+                                                } else {
+                                                    AppTextButton(onClick = { onSetPlayback(account.mid) }) {
+                                                        AppText(
+                                                            text = if (account.isVip) "设为播放(大会员)" else "设为播放",
+                                                            style = MaterialTheme.typography.labelMedium,
+                                                            color = if (account.isVip) AppContentColors.accent() else AppContentColors.secondaryText(),
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            if (!isActive) {
+                                                AppTextButton(
+                                                    onClick = {
+                                                        if (hapticEnabled) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.Confirm)
+                                                        onSwitch(account.mid)
+                                                    }
+                                                ) {
+                                                    AppText(
+                                                        text = "设为主账号",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(2.dp))
+                                                AppTextButton(
+                                                    onClick = {
+                                                        if (confirmingRemove) {
+                                                            pendingRemoveMid = null
+                                                            onRemove(account.mid)
+                                                        } else {
+                                                            if (hapticEnabled) haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                                            pendingRemoveMid = account.mid
+                                                        }
+                                                    }
+                                                ) {
+                                                    AppText(
+                                                        text = if (confirmingRemove) "确认移除" else "移除",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = if (confirmingRemove) FontWeight.SemiBold else FontWeight.Normal,
+                                                        color = AppContentColors.error(),
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }

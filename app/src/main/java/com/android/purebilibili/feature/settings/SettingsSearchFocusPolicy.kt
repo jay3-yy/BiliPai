@@ -296,6 +296,7 @@ internal fun resolveSettingsSceneDetailFocus(
     SettingsSearchTarget.DATA_BACKUP,
     SettingsSearchTarget.PRIVACY_PERMISSION,
     SettingsSearchTarget.MESSAGE_NOTIFICATION,
+    SettingsSearchTarget.CUSTOM_PUSH,
     SettingsSearchTarget.ABOUT_SUPPORT,
     SettingsSearchTarget.APPEARANCE,
     SettingsSearchTarget.ANIMATION,
@@ -311,7 +312,7 @@ internal fun resolveSettingsSceneDetailFocus(
     SettingsSearchTarget.IMAGE_SAVE_PATH,
     SettingsSearchTarget.CLEAR_CACHE,
     SettingsSearchTarget.PLUGINS,
-    // 设备接力未开发完成：入口隐藏后与其他隐藏目标一样映射空焦点，恢复开关时随组生效。
+    // 设备接力从设置搜索点击时直接弹出设备面板，无需滚动焦点。
     SettingsSearchTarget.NEARBY_HANDOFF,
     SettingsSearchTarget.EXPORT_LOGS,
     SettingsSearchTarget.OPEN_SOURCE_LICENSES,

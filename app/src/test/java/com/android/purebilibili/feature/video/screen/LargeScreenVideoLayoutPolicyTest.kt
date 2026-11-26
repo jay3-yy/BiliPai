@@ -285,6 +285,34 @@ class LargeScreenVideoLayoutPolicyTest {
     }
 
     @Test
+    fun wideningCompanionSplitPaneInAlmostSquareScalesPlayerHeightWithSixteenByNineWidth() {
+        val narrowSplit = resolveLargeScreenVideoMetrics(
+            windowWidthDp = 640f,
+            windowHeightDp = 800f,
+            isVerticalVideo = false,
+        )
+        val mediumSplit = resolveLargeScreenVideoMetrics(
+            windowWidthDp = 768f,
+            windowHeightDp = 800f,
+            isVerticalVideo = false,
+        )
+        val wideSplit = resolveLargeScreenVideoMetrics(
+            windowWidthDp = 935f,
+            windowHeightDp = 800f,
+            isVerticalVideo = false,
+        )
+
+        assertEquals(LargeScreenVideoLayoutMode.AlmostSquare, narrowSplit.mode)
+        assertEquals(LargeScreenVideoLayoutMode.AlmostSquare, mediumSplit.mode)
+        assertEquals(LargeScreenVideoLayoutMode.AlmostSquare, wideSplit.mode)
+        assertEquals(640f / LARGE_SCREEN_VIDEO_ASPECT_16_9, narrowSplit.playerHeightDp, 0.5f)
+        assertEquals(768f / LARGE_SCREEN_VIDEO_ASPECT_16_9, mediumSplit.playerHeightDp, 0.5f)
+        assertEquals(800f * LARGE_SCREEN_VIDEO_SQUARE_MAX_PLAYER_HEIGHT_FRACTION, wideSplit.playerHeightDp, 0.5f)
+        assertTrue(mediumSplit.playerHeightDp > narrowSplit.playerHeightDp)
+        assertTrue(wideSplit.playerHeightDp > mediumSplit.playerHeightDp)
+    }
+
+    @Test
     fun landscapeTheaterIsAvailableOnlyForStageLayouts() {
         assertTrue(
             resolveLargeScreenTheaterAvailable(

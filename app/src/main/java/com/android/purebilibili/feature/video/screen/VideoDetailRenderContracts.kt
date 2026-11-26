@@ -50,6 +50,7 @@ internal data class VideoDetailPlaybackActions(
     val createFavoriteFolder: (String, String, Boolean) -> Unit,
     val retryAiSummary: () -> Unit,
     val createVideoNoteDraftFromAiSummary: () -> Unit,
+    val openVideoNoteWithPostcard: (quote: String, moodNote: String, positionMs: Long) -> Unit = { _, _, _ -> },
     val openVideoNoteEditor: () -> Unit,
     val closeVideoNoteEditor: () -> Unit,
     val updateVideoNoteEditorDocument: (VideoNoteEditorDocument) -> Unit,

@@ -15,6 +15,7 @@ internal const val LARGE_SCREEN_VIDEO_MAX_SIDE_PANE_DP = 425f
 internal const val LARGE_SCREEN_VIDEO_SIDE_PANE_BREAKPOINT_DP = 560f
 internal const val LARGE_SCREEN_VIDEO_SQUARE_MIN_HEIGHT_FRACTION = 0.39f
 internal const val LARGE_SCREEN_VIDEO_SQUARE_PLAYER_HEIGHT_FRACTION = 0.4f
+internal const val LARGE_SCREEN_VIDEO_SQUARE_MAX_PLAYER_HEIGHT_FRACTION = 0.58f
 internal const val FOLDABLE_COVER_COMPACT_PLAYER_HEIGHT_FRACTION = 0.5f
 internal const val FOLDABLE_COVER_COLLAPSED_PLAYER_HEIGHT_FRACTION = 0.25f
 internal const val FOLDABLE_COVER_COMPACT_HEIGHT_MAX_DP = 480f
@@ -202,7 +203,15 @@ internal fun resolveLargeScreenVideoMetrics(
             introBelowPlayer = true,
         )
     }
-    val squareHeight = windowHeightDp * LARGE_SCREEN_VIDEO_SQUARE_PLAYER_HEIGHT_FRACTION
+    // 近方形/大屏伴随分栏右侧拉宽时，播放器高度应随 16:9 满宽高度同步增长，
+    // 避免高度固定在 0.4H 导致左右出现大块黑边；同时上限 0.58H 保证下方简介与评论可读。
+    val squareMinHeight = windowHeightDp * LARGE_SCREEN_VIDEO_SQUARE_PLAYER_HEIGHT_FRACTION
+    val squareMaxHeight = windowHeightDp * LARGE_SCREEN_VIDEO_SQUARE_MAX_PLAYER_HEIGHT_FRACTION
+    val squareHeight = if (isVerticalVideo) {
+        squareMinHeight
+    } else {
+        fullWidthPlayerHeight.coerceIn(squareMinHeight, squareMaxHeight)
+    }
     return LargeScreenVideoMetrics(
         mode = LargeScreenVideoLayoutMode.AlmostSquare,
         playerWidthDp = windowWidthDp,

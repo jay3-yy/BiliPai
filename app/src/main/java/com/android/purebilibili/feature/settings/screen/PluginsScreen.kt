@@ -189,6 +189,9 @@ internal fun PluginsScreen(
     initialImportUrl: String? = null,
 ) {
     val plugins by PluginManager.pluginsFlow.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) {
+        com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("PluginsScreen")
+    }
     val jsonPlugins by com.android.purebilibili.core.plugin.json.JsonPluginManager.plugins.collectAsStateWithLifecycle()
     val screenTitle = stringResource(R.string.plugins_center_title)
     val backLabel = stringResource(R.string.common_back)
@@ -737,8 +740,8 @@ fun PluginsContent(
                     AppPreferenceDivider()
                     AppPreference(
                         icon = rememberSettingsVector(R.drawable.ph_link_24, R.drawable.ms_link_24),
-                        title = "管理自定义订阅源 (registry.json)",
-                        subtitle = "已订阅 ${com.android.purebilibili.core.plugin.bpx.BpxRegistryManager.getSubscribedUrls(context).size} 个静态扩展源",
+                        title = "管理自定义扩展源",
+                        subtitle = "已订阅 ${com.android.purebilibili.core.plugin.bpx.BpxRegistryManager.getSubscribedUrls(context).size} 个自定义扩展源",
                         onClick = {
                             customRegistryError = null
                             showBpxRegistrySourceDialog = true
@@ -1808,8 +1811,8 @@ fun PluginsContent(
                     uiSkinPreviewAssetFiles = emptyMap()
                 }
             },
-            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_paint_brush_24, R.drawable.ms_brush_fill_24), title = "界面皮肤包预览") },
-            title = { AppText("界面皮肤包预览") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_paint_brush_24, R.drawable.ms_brush_fill_24), title = "装扮包预览") },
+            title = { AppText("装扮包预览") },
             text = {
                 Column(
                     modifier = Modifier
@@ -1960,8 +1963,8 @@ fun PluginsContent(
         val previewMaxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.62f
         AppAlertDialog(
             onDismissRequest = { uiSkinInstalledPreview = null },
-            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_eye_24, R.drawable.ms_visibility_24), title = "皮肤与部件管理") },
-            title = { AppText("皮肤预览与部件管理") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_eye_24, R.drawable.ms_visibility_24), title = "装扮与部件管理") },
+            title = { AppText("装扮预览与部件管理") },
             text = {
                 Column(
                     modifier = Modifier
@@ -2142,9 +2145,9 @@ fun PluginsContent(
     uiSkinPendingDelete?.let { skin ->
         AppAlertDialog(
             onDismissRequest = { uiSkinPendingDelete = null },
-            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_trash_24, R.drawable.ms_delete_24), title = "删除皮肤") },
-            title = { AppText("删除皮肤") },
-            text = { AppText("确定要删除皮肤 \"${skin.displayName}\" 吗？删除后会清理本地包和已解压资源。") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_trash_24, R.drawable.ms_delete_24), title = "删除装扮") },
+            title = { AppText("删除装扮") },
+            text = { AppText("确定要删除装扮 \"${skin.displayName}\" 吗？删除后会清理本地包和已解压资源。") },
             confirmButton = {
                 AppTextButton(
                     onClick = {

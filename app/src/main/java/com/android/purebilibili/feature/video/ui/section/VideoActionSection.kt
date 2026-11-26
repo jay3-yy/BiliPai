@@ -187,9 +187,10 @@ fun ActionButtonsRow(
                 // 点赞状态未确认时不再渲染空图标占位：直接按“未点赞”的默认样式渲染，
                 // 图标/文案使用主题未激活色，状态回填后由 Crossfade 平滑切换。
                 // 这样首帧就是一个完整可读的按钮，避免空白→图标 pop-in 造成的闪烁。
+                val hideActionNumbers = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.focusViewingHideStatsEnabled
                 TripleProgressActionButton(
                     icon = if (isLiked) Icons.Rounded.ThumbUp else Icons.Outlined.ThumbUp,
-                    text = FormatUtils.formatStat(info.stat.like.toLong()),
+                    text = if (hideActionNumbers) "点赞" else FormatUtils.formatStat(info.stat.like.toLong()),
                     isActive = isLiked,
                     activeColor = activeColors.primaryAction,
                     progress = tripleProgress,
@@ -255,9 +256,10 @@ fun ActionButtonsRow(
                     .heightIn(min = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val hideCoinNumber = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.focusViewingHideStatsEnabled
                 TripleProgressActionButton(
                     icon = ImageVector.vectorResource(R.drawable.ic_video_detail_coin_outline_24),
-                    text = FormatUtils.formatStat(info.stat.coin.toLong()),
+                    text = if (hideCoinNumber) "投币" else FormatUtils.formatStat(info.stat.coin.toLong()),
                     isActive = coinCount > 0,
                     activeColor = activeColors.primaryAction,
                     progress = tripleProgress,
@@ -280,9 +282,10 @@ fun ActionButtonsRow(
                         .heightIn(min = 48.dp),
                     contentAlignment = Alignment.Center
                 ) {
+                    val hideCommentNumber = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.focusViewingHideStatsEnabled
                     BiliActionButton(
                         icon = rememberAppCommentIcon(),
-                        text = "评论 ${FormatUtils.formatStat(info.stat.reply.toLong())}",
+                        text = if (hideCommentNumber) "评论" else "评论 ${FormatUtils.formatStat(info.stat.reply.toLong())}",
                         isActive = false,
                         activeColor = activeColors.primaryAction,
                         onClick = onCommentClick,
@@ -298,9 +301,10 @@ fun ActionButtonsRow(
                     .heightIn(min = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val hideFavNumber = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.focusViewingHideStatsEnabled
                 TripleProgressActionButton(
                     icon = if (isFavorited) Icons.Rounded.Star else Icons.Outlined.StarBorder,
-                    text = FormatUtils.formatStat(info.stat.favorite.toLong()),
+                    text = if (hideFavNumber) "收藏" else FormatUtils.formatStat(info.stat.favorite.toLong()),
                     isActive = isFavorited,
                     activeColor = activeColors.primaryAction,
                     progress = tripleProgress,
@@ -387,11 +391,6 @@ fun ActionButtonsRow(
                 }
             }
 
-        }
-        if (com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED) {
-            com.android.purebilibili.feature.nearby.NearbyDevicesButton(
-                modifier = Modifier.align(Alignment.End).padding(horizontal = 8.dp),
-            )
         }
     }
 }

@@ -21,6 +21,7 @@ enum class SettingsSearchTarget {
     SPACE_PRIVACY,
     LOGIN_ACTIVITY,
     MESSAGE_NOTIFICATION,
+    CUSTOM_PUSH,
     BLOCKED_LIST,
     SETTINGS_SHARE,
     WEBDAV_BACKUP,
@@ -82,6 +83,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
             "文字粗细", "参与随机的壁纸", "图标", "皮肤", "动态取色", "自定义颜色", "主题色",
             "动态颜色", "语言", "应用字体", "本地字体", "导入字体", "自定义字体", "ttf", "otf",
             "界面缩放", "自定义壁纸", "相册壁纸", "material", "android", "安卓", "原生",
+            "透明底栏", "磨砂玻璃", "毛玻璃", "液态玻璃", "改图标颜色", "夜间纯黑", "护眼黑", "改字体", "风格配方",
         ),
     ),
     SettingsSearchEntry(
@@ -90,7 +92,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = "首页与推荐",
         subtitle = "首页卡片、推荐内容、动态和更新时间表",
         section = "设置",
-        aliases = listOf("番剧影视更新时间表", "列表顶栏显示", "首页与推荐", "列表页顶栏折叠", "搜索顶栏", "收藏顶栏", "历史记录顶部栏", "稍后再看顶部栏", "列表顶部栏", "仅回顶显示", "上滑时显示", "首页", "推荐", "推荐流", "首页展示", "首页壁纸", "壁纸效果", "刷新数量", "动态栏位", "动态顶栏", "追番时间表", "影视时间表", "电影时间线", "展示番剧影视时间表", "首页顶栏收起", "动态图片", "动态详情图片", "缩略图", "展开大图", "展开图片", "图文动态", "图片展示")
+        aliases = listOf("番剧影视更新时间表", "列表顶栏显示", "首页与推荐", "列表页顶栏折叠", "搜索顶栏", "收藏顶栏", "历史记录顶部栏", "稍后再看顶部栏", "列表顶部栏", "仅回顶显示", "上滑时显示", "首页", "推荐", "推荐流", "首页展示", "首页壁纸", "壁纸效果", "刷新数量", "动态栏位", "动态顶栏", "追番时间表", "影视时间表", "电影时间线", "展示番剧影视时间表", "首页顶栏收起", "动态图片", "动态详情图片", "缩略图", "展开大图", "展开图片", "图文动态", "图片展示", "专注观赏", "无数字焦虑", "隐藏播放量", "隐藏点赞数", "纯净观赏")
     ),
     SettingsSearchEntry(
         settingId = "legacy.003",
@@ -98,7 +100,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = settingsDestinationCopy(SettingsSearchTarget.NAVIGATION).title,
         subtitle = settingsDestinationCopy(SettingsSearchTarget.NAVIGATION).summary,
         section = "设置",
-        aliases = listOf("导航与标签", "导航布局", "导航", "底栏", "底部栏", "顶部标签", "顶部标签页", "首页搜索框", "全局顶栏显示", "首页顶栏显示", "仅回顶显示", "仅收起标签", "全部收起", "始终显示", "首页顶栏收起", "顶栏收起", "标签排序", "平板侧边栏", "侧边导航栏", "底栏顺序", "底栏项目", "底栏搜索入口", "搜索入口", "悬浮搜索", "搜索分类", "搜索分类顺序")
+        aliases = listOf("导航与标签", "导航布局", "导航", "底栏", "底部栏", "顶部标签", "顶部标签页", "首页搜索框", "全局顶栏显示", "首页顶栏显示", "仅回顶显示", "仅收起标签", "全部收起", "始终显示", "首页顶栏收起", "顶栏收起", "标签排序", "平板侧边栏", "侧边导航栏", "底栏顺序", "底栏项目", "底栏搜索入口", "搜索入口", "悬浮搜索", "搜索分类", "搜索分类顺序", "搜索页展示", "大家都在搜", "搜索发现", "搜索框推荐词", "搜索框默认词", "个性化搜索推荐", "搜索推荐词", "搜索联想词", "搜索建议")
     ),
     SettingsSearchEntry(
         settingId = "legacy.004",
@@ -106,7 +108,12 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK_QUALITY).title,
         subtitle = settingsDestinationCopy(SettingsSearchTarget.PLAYBACK_QUALITY).summary,
         section = "设置",
-        aliases = listOf("播放与画质", "播放设置", "播放", "解码", "画质", "音质", "默认画质", "默认音质", "Hi-Res", "杜比", "最高画质", "自动最高画质", "省流量", "定向流量", "字幕", "倍速", "自动连播", "动态环境光", "环境光", "光晕", "ambient", "ambilight")
+        aliases = listOf(
+            "播放与画质", "播放设置", "播放", "解码", "画质", "音质", "默认画质", "默认音质",
+            "Hi-Res", "杜比", "最高画质", "自动最高画质", "省流量", "定向流量", "字幕", "倍速",
+            "自动连播", "动态环境光", "环境光", "光晕", "ambient", "ambilight",
+            "声音忽大忽小", "音量均衡", "响度均衡", "定时淡出", "渐弱淡出", "白噪音", "助眠", "黑胶", "播放配方",
+        )
     ),
     SettingsSearchEntry(
         settingId = "legacy.005",
@@ -114,7 +121,11 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = "全屏与手势",
         subtitle = "全屏方向、截图、锁定按钮、亮度、音量与进度手势",
         section = "设置",
-        aliases = listOf("全屏", "全屏方向", "自动横竖屏", "锁定按钮", "截图", "截图按钮", "应用内截图", "应用内干净截图", "手选区域", "区域截图", "三指截图", "亮度", "音量", "进度手势", "手势")
+        aliases = listOf(
+            "全屏", "全屏方向", "自动横竖屏", "锁定按钮", "截图", "截图按钮", "应用内截图",
+            "应用内干净截图", "手选区域", "区域截图", "三指截图", "亮度", "音量", "进度手势", "手势",
+            "长按锁倍速", "双指倍速", "双指调速", "台词明信片",
+        )
     ),
     SettingsSearchEntry(
         settingId = "legacy.006",
@@ -165,7 +176,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = settingsDestinationCopy(SettingsSearchTarget.PRIVACY_PERMISSION).title,
         subtitle = settingsDestinationCopy(SettingsSearchTarget.PRIVACY_PERMISSION).summary,
         section = "设置",
-        aliases = listOf("隐私与权限", "阅读与观看统计", "阅读统计", "观看统计", "我的回顾", "回顾", "搜索框默认词", "搜索框推荐词", "默认搜索词", "一小时前搜索", "搜索提示", "个性化搜索推荐", "搜索推荐词", "推荐词", "搜索联想词", "搜索建议", "联想开关", "隐私", "无痕", "权限", "权限管理", "黑名单", "屏蔽", "拉黑")
+        aliases = listOf("隐私与权限", "阅读与观看统计", "阅读统计", "观看统计", "我的回顾", "回顾", "隐私", "无痕", "权限", "权限管理", "黑名单", "屏蔽", "拉黑", "网络代理", "代理", "代理地址", "http代理", "proxy", "遥测", "数据收集", "崩溃报告", "使用统计", "收集信息", "关闭遥测", "Firebase")
     ),
     SettingsSearchEntry(
         settingId = "legacy.011",
@@ -428,6 +439,14 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         aliases = listOf("保持后台运行", "消息通知", "后台通知", "私信通知", "私信", "回复我的", "@我", "收到的赞", "系统通知", "开播提醒", "关注更新", "新消息提醒", "常驻后台", "后台消息", "通知")
     ),
     SettingsSearchEntry(
+        settingId = "custom_push.settings",
+        target = SettingsSearchTarget.CUSTOM_PUSH,
+        title = settingsDestinationCopy(SettingsSearchTarget.CUSTOM_PUSH).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.CUSTOM_PUSH).summary,
+        section = settingsDestinationCopy(SettingsSearchTarget.MESSAGE_NOTIFICATION).title,
+        aliases = listOf("自建推送", "远程推送", "服务器推送", "UnifiedPush", "ntfy", "Sunup", "FCM", "无状态中转", "推送加密", "AES", "推送密钥", "Endpoint", "Apple Push", "APNs", "Worker"),
+    ),
+    SettingsSearchEntry(
         settingId = "legacy.018",
         target = SettingsSearchTarget.BLOCKED_LIST,
         title = settingsDestinationCopy(SettingsSearchTarget.BLOCKED_LIST).title,
@@ -551,7 +570,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = settingsDestinationCopy(SettingsSearchTarget.VIEW_RELEASE_NOTES).title,
         subtitle = settingsDestinationCopy(SettingsSearchTarget.VIEW_RELEASE_NOTES).summary,
         section = "应用信息",
-        aliases = listOf("更新日志", "changelog", "版本说明")
+        aliases = listOf("更新日志", "changelog", "版本说明", "本次更新", "更新预览", "更新要点")
     ),
     SettingsSearchEntry(
         settingId = "legacy.030",
@@ -567,7 +586,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = settingsDestinationCopy(SettingsSearchTarget.TIPS).title,
         subtitle = settingsDestinationCopy(SettingsSearchTarget.TIPS).summary,
         section = "帮助与工具",
-        aliases = listOf("贴士", "技巧", "帮助", "隐藏操作", "摸鱼模式", "空降助手", "自动连播", "自动横竖屏")
+        aliases = listOf("贴士", "技巧", "帮助", "隐藏操作", "摸鱼模式", "空降助手", "自动连播", "自动横竖屏", "配方引导", "玩法引导", "快速配方", "隐藏手感", "关闭配方")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.KEYBOARD_SHORTCUTS,
@@ -670,10 +689,10 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     ),
     SettingsSearchEntry(
         settingId = "legacy.039",
-        target = SettingsSearchTarget.APPEARANCE,
+        target = SettingsSearchTarget.ANIMATION,
         title = "液态玻璃",
         subtitle = "液态玻璃总开关，可在液态玻璃场景中分别控制各处效果",
-        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
+        section = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
         aliases = listOf(
             "安卓液态玻璃",
             "安卓原生液态玻璃",
@@ -687,16 +706,16 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
             "底部导航栏液态玻璃",
             "底栏液态玻璃",
         ),
-        focusId = SettingsSearchFocusIds.APPEARANCE_THEME
+        focusId = SettingsSearchFocusIds.ANIMATION_VISUAL_EFFECTS
     ),
     SettingsSearchEntry(
         settingId = "legacy.040",
-        target = SettingsSearchTarget.HOME_FEED,
+        target = SettingsSearchTarget.ANIMATION,
         title = "卡片背景模糊",
         subtitle = "独立控制视频卡片信息区的壁纸模糊",
-        section = settingsDestinationCopy(SettingsSearchTarget.HOME_FEED).title,
+        section = settingsDestinationCopy(SettingsSearchTarget.ANIMATION).title,
         aliases = listOf("卡片毛玻璃", "卡片模糊", "磨砂卡片", "视频卡片毛玻璃"),
-        focusId = SettingsSearchFocusIds.HOME_OVERVIEW,
+        focusId = SettingsSearchFocusIds.ANIMATION_VISUAL_EFFECTS,
     ),
     SettingsSearchEntry(
         settingId = "legacy.041",

@@ -852,6 +852,7 @@ data class AppThemeSettings(
         AppScreenshotGestureMode.TOP_RIGHT_TWO_FINGER_LONG_PRESS,
     val appScreenshotCaptureMode: AppScreenshotCaptureMode =
         AppScreenshotCaptureMode.FULL_WINDOW,
+    val globalScreenshotShareOverlayEnabled: Boolean = true,
     val appIconStyle: AppIconStyle = AppIconStyle.AUTO,
     val appLineIconColor: Int? = null,
     val appListItemStyle: AppListItemStyle = AppListItemStyle.AUTO,
@@ -1048,9 +1049,14 @@ enum class DanmakuPanelWidthMode(val value: Int, val label: String, val widthFra
     }
 }
 
-enum class PortraitDanmakuDisplayAreaMode(val value: Int, val label: String) {
-    VIDEO_VIEWPORT(0, "视频画面"),
-    SCREEN_TOP(1, "视频上方");
+enum class PortraitDanmakuDisplayAreaMode(
+    val value: Int,
+    val label: String,
+    val description: String,
+) {
+    VIDEO_VIEWPORT(0, "视频画面", "仅在视频画面内显示，按显示区域比例排布"),
+    SCREEN_TOP(1, "视频上方", "横屏视频优先铺满上方留白区，不受显示区域比例压缩"),
+    FULL_SCREEN(2, "全屏", "覆盖整个竖屏区域，按显示区域比例排布");
 
     companion object {
         fun fromValue(value: Int): PortraitDanmakuDisplayAreaMode =
@@ -1694,6 +1700,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_DYNAMIC_TAB_VISIBLE_TABS = stringPreferencesKey("dynamic_tab_visible_tabs")
     private val KEY_DYNAMIC_TAB_ORDER = stringPreferencesKey("dynamic_tab_order")
     private val KEY_LOUDNESS_NORMALIZATION_ENABLED = booleanPreferencesKey("loudness_normalization_enabled")
+    private val KEY_SLEEP_TIMER_FADE_OUT_ENABLED = booleanPreferencesKey("sleep_timer_fade_out_enabled")
+    private val KEY_SLEEP_TIMER_FADE_DURATION_SEC = intPreferencesKey("sleep_timer_fade_duration_sec")
+    private val KEY_SETTINGS_RECIPE_GUIDES_ENABLED = booleanPreferencesKey("settings_recipe_guides_enabled")
+    private val KEY_FOCUS_VIEWING_HIDE_STATS_ENABLED = booleanPreferencesKey("focus_viewing_hide_stats_enabled")
     private val KEY_AUDIO_SPECTRUM_ENABLED = booleanPreferencesKey("audio_spectrum_enabled")
     private val KEY_STARTUP_AUTO_PLAY_ENABLED = booleanPreferencesKey("startup_auto_play_enabled")
     private val KEY_DYNAMIC_IMAGE_PREVIEW_TEXT_VISIBLE =
@@ -1983,6 +1993,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_VIDEO_INFO_DEFAULT_EXPANDED = booleanPreferencesKey("video_info_default_expanded")
     private val KEY_VIDEO_ARGUE_MSG_SHOWN = booleanPreferencesKey("video_argue_msg_shown")
     private val KEY_VIDEO_TAG_SIZE_PRESET = intPreferencesKey("video_tag_size_preset")
+    private val KEY_VIDEO_DETAIL_BGM_VISIBLE = booleanPreferencesKey("video_detail_bgm_visible")
     private val KEY_VIDEO_DETAIL_CHROME_SCROLL_HIDE_ENABLED =
         booleanPreferencesKey("video_detail_chrome_scroll_hide_enabled")
     private const val VIDEO_NOTE_CACHE_PREFS = "video_note_settings"
@@ -2670,6 +2681,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 preferences[KEY_APP_SCREENSHOT_CAPTURE_MODE]
                     ?: AppScreenshotCaptureMode.FULL_WINDOW.value
             ),
+            globalScreenshotShareOverlayEnabled =
+                preferences[KEY_GLOBAL_SCREENSHOT_SHARE_OVERLAY_ENABLED] ?: true,
             singleChoicePresentation = AppSingleChoicePresentation.fromStorageValue(
                 preferences[KEY_SINGLE_CHOICE_PRESENTATION]
             ),
@@ -7341,6 +7354,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                     ),
                     liquidControlsUseThemeColor = preferences[KEY_LIQUID_CONTROLS_USE_THEME_COLOR] ?: false,
                     liquidSwitchThumbMode = thumbMode,
+                    focusViewingHideStatsEnabled = preferences[KEY_FOCUS_VIEWING_HIDE_STATS_ENABLED] ?: false,
                 ).also { lastAppThemeConfig = it }
             }
             .distinctUntilChanged()
@@ -7957,6 +7971,75 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             .getBoolean("loudness_normalization_enabled", false)
     }
 
+    /** 定时关闭结束前平滑渐弱淡出音量（默认开启）。 */
+    fun getSleepTimerFadeOutEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_SLEEP_TIMER_FADE_OUT_ENABLED] ?: true
+        }
+
+    suspend fun setSleepTimerFadeOutEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SLEEP_TIMER_FADE_OUT_ENABLED] = value
+        }
+        context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .edit().putBoolean("sleep_timer_fade_out_enabled", value).apply()
+    }
+
+    fun getSleepTimerFadeOutEnabledSync(context: Context): Boolean {
+        return context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .getBoolean("sleep_timer_fade_out_enabled", true)
+    }
+
+    /** 定时关闭渐弱淡出时长（秒），范围 3..120，默认 12 秒。 */
+    fun getSleepTimerFadeDurationSec(context: Context): Flow<Int> =
+        context.settingsDataStore.data.map { preferences ->
+            val raw = preferences[KEY_SLEEP_TIMER_FADE_DURATION_SEC]
+                ?: com.android.purebilibili.feature.audio.player.SLEEP_TIMER_FADE_DURATION_DEFAULT_SEC
+            com.android.purebilibili.feature.audio.player.normalizeSleepTimerFadeDurationSec(raw)
+        }
+
+    suspend fun setSleepTimerFadeDurationSec(context: Context, seconds: Int) {
+        val safe = com.android.purebilibili.feature.audio.player.normalizeSleepTimerFadeDurationSec(seconds)
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SLEEP_TIMER_FADE_DURATION_SEC] = safe
+        }
+        context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .edit().putInt("sleep_timer_fade_duration_sec", safe).apply()
+    }
+
+    fun getSleepTimerFadeDurationSecSync(context: Context): Int {
+        val raw = context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
+            .getInt(
+                "sleep_timer_fade_duration_sec",
+                com.android.purebilibili.feature.audio.player.SLEEP_TIMER_FADE_DURATION_DEFAULT_SEC,
+            )
+        return com.android.purebilibili.feature.audio.player.normalizeSleepTimerFadeDurationSec(raw)
+    }
+
+    /** 设置页场景配方与隐藏手感引导卡片总开关（默认开启）。 */
+    fun getSettingsRecipeGuidesEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_SETTINGS_RECIPE_GUIDES_ENABLED] ?: true
+        }
+
+    suspend fun setSettingsRecipeGuidesEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SETTINGS_RECIPE_GUIDES_ENABLED] = enabled
+        }
+    }
+
+    /** 专注观赏模式：隐藏播放量、弹幕数与互动数字（默认关闭）。 */
+    fun getFocusViewingHideStatsEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_FOCUS_VIEWING_HIDE_STATS_ENABLED] ?: false
+        }
+
+    suspend fun setFocusViewingHideStatsEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_FOCUS_VIEWING_HIDE_STATS_ENABLED] = enabled
+        }
+    }
+
     /**
      * 「听视频」封面律动。数据取自音频输出链路的 PCM（无录音权限），
      * 默认关闭；公共 AudioSink 按缓冲读取开关，已有 PCM 播放会话内即可生效。
@@ -8122,6 +8205,15 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
+    fun getVideoDetailBgmVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_VIDEO_DETAIL_BGM_VISIBLE] ?: true }
+
+    suspend fun setVideoDetailBgmVisible(context: Context, visible: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_VIDEO_DETAIL_BGM_VISIBLE] = visible
+        }
+    }
+
     fun getVideoNoteEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_VIDEO_NOTE_ENABLED] ?: true }
 
@@ -8236,6 +8328,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_DOWNLOAD_PATH = stringPreferencesKey("download_path")
     private val KEY_DOWNLOAD_EXPORT_TREE_URI = stringPreferencesKey("download_export_tree_uri")
     private val KEY_DOWNLOAD_LIST_SORT_ORDER = stringPreferencesKey("download_list_sort_order")
+    private val KEY_DOWNLOAD_LIST_GROUP_MULTIPART = booleanPreferencesKey("download_list_group_multipart")
     private val KEY_IMAGE_SAVE_TREE_URI = stringPreferencesKey("image_save_tree_uri")
     
     /**
@@ -8274,6 +8367,17 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setDownloadListSortOrder(context: Context, sortOrderKey: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_DOWNLOAD_LIST_SORT_ORDER] = sortOrderKey
+        }
+    }
+
+    fun getDownloadListGroupMultiPart(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[KEY_DOWNLOAD_LIST_GROUP_MULTIPART] ?: true
+        }
+
+    suspend fun setDownloadListGroupMultiPart(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DOWNLOAD_LIST_GROUP_MULTIPART] = enabled
         }
     }
 
@@ -8504,6 +8608,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         intPreferencesKey("app_screenshot_gesture_mode")
     private val KEY_APP_SCREENSHOT_CAPTURE_MODE =
         intPreferencesKey("app_screenshot_capture_mode")
+    private val KEY_GLOBAL_SCREENSHOT_SHARE_OVERLAY_ENABLED =
+        booleanPreferencesKey("global_screenshot_share_overlay_enabled")
     private val KEY_SHOW_FULLSCREEN_BATTERY_LEVEL = booleanPreferencesKey("show_fullscreen_battery_level")
     private val KEY_SHOW_FULLSCREEN_TIME = booleanPreferencesKey("show_fullscreen_time")
     private val KEY_SHOW_FULLSCREEN_ACTION_ITEMS = booleanPreferencesKey("show_fullscreen_action_items")
@@ -8904,6 +9010,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setAppScreenshotCaptureMode(context: Context, mode: AppScreenshotCaptureMode) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_APP_SCREENSHOT_CAPTURE_MODE] = mode.value
+        }
+    }
+
+    fun getGlobalScreenshotShareOverlayEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_GLOBAL_SCREENSHOT_SHARE_OVERLAY_ENABLED] ?: true }
+
+    suspend fun setGlobalScreenshotShareOverlayEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_GLOBAL_SCREENSHOT_SHARE_OVERLAY_ENABLED] = enabled
         }
     }
 

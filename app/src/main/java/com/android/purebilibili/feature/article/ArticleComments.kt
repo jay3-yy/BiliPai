@@ -92,7 +92,13 @@ internal fun rememberArticleCommentContent(
 }
 
 @Composable
-internal fun ArticleCommentOverlays(viewModel: DynamicViewModel, article: ArticleDetailUiModel, onUserClick: (Long) -> Unit, onLinkClick: ((String) -> Unit)?) {
+internal fun ArticleCommentOverlays(
+    viewModel: DynamicViewModel,
+    article: ArticleDetailUiModel,
+    onUserClick: (Long) -> Unit,
+    onLinkClick: ((String) -> Unit)?,
+    onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
+) {
     val context = LocalContext.current
     val commentUiState by viewModel.commentUiState.collectAsStateWithLifecycle()
     val subReplies by viewModel.subReplyState.collectAsStateWithLifecycle()
@@ -121,6 +127,7 @@ internal fun ArticleCommentOverlays(viewModel: DynamicViewModel, article: Articl
             onDeleteComment = { viewModel.deleteDynamicComment(it) { _, message -> notify(message) } },
             pinnedReplyIds = if (commentUiState.dynamicId == commentId) commentUiState.pinnedReplyIds else emptySet(),
             menuCallbacks = menuCallbacks,
+            onCoveredBlurProgressChange = onCoveredBlurProgressChange,
         )
     }
     DynamicCommentInputHost(draftKeyPrefix = "article:${article.articleId}", viewModel = viewModel) { message, images, done ->

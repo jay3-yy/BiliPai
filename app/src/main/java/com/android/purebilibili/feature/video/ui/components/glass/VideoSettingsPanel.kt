@@ -472,6 +472,7 @@ fun VideoSettingsPanel(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        val nearbyHandoff = com.android.purebilibili.feature.nearby.LocalNearbyHandoff.current
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -488,6 +489,20 @@ fun VideoSettingsPanel(
             )
         ) {
             val groups = VideoControlCenterGroups(this, controlCenterMotion)
+            if (nearbyHandoff != null && com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED) {
+                groups.item {
+                    SettingsItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.NEARBY_HANDOFF),
+                        title = "设备接力",
+                        subtitle = "与附近手机或平板接力续播",
+                        onClick = {
+                            onDismiss()
+                            nearbyHandoff.openDevices()
+                        },
+                    )
+                    SettingsDivider()
+                }
+            }
             onPlayerDiagnosticsChange?.let { change ->
                 groups.item {
                     VideoSettingsSwitchRow(

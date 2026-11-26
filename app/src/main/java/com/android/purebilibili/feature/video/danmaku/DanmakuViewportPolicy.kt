@@ -1,15 +1,19 @@
 package com.android.purebilibili.feature.video.danmaku
 
 /**
- * Geometry shared by every video-danmaku layer; independent of the display-area setting.
+ * Geometry shared by every video-danmaku layer.
  *
  * Density is the system display density, not the app's Compose UI-scale override.
  * The measured box controls row capacity, not the portrait/fullscreen font baseline.
+ * When [fillDisplayArea] is true (e.g. the dedicated portrait letterbox band above a landscape
+ * video), the band already represents the reserved danmaku area and should not be shrunk again
+ * by the general display-area ratio.
  */
 data class DanmakuViewport(
     val widthPx: Int,
     val heightPx: Int,
-    val density: Float
+    val density: Float,
+    val fillDisplayArea: Boolean = false,
 ) {
     init {
         require(widthPx > 0 && heightPx > 0)
@@ -20,13 +24,15 @@ data class DanmakuViewport(
 fun resolveDanmakuViewport(
     widthPx: Int,
     heightPx: Int,
-    density: Float
+    density: Float,
+    fillDisplayArea: Boolean = false,
 ): DanmakuViewport? {
     if (widthPx <= 0 || heightPx <= 0 || !density.isFinite() || density <= 0f) return null
     return DanmakuViewport(
         widthPx = widthPx,
         heightPx = heightPx,
-        density = density
+        density = density,
+        fillDisplayArea = fillDisplayArea,
     )
 }
 

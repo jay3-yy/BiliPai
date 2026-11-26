@@ -162,6 +162,7 @@ fun GamepadControlSettingsBody(
     var editingSlot by remember { mutableStateOf<GamepadActionSlot?>(null) }
 
     LaunchedEffect(Unit) {
+        com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("GamepadControlSettingsScreen")
         GamepadControlPlugin.loadPersistedConfig(context)
     }
 
@@ -207,9 +208,17 @@ fun GamepadControlSettingsBody(
                     AppSwitchPreference(
                         icon = gamepadIcon,
                         title = "启用手柄全局控制",
-                        subtitle = "连接 Xbox、PlayStation、Switch 或通用手柄后全局操控浏览与视频播放",
+                        subtitle = if (pluginEnabled) {
+                            "连接 Xbox、PlayStation、Switch 或通用手柄后全局操控浏览与视频播放"
+                        } else {
+                            "已关闭；下方配置会保留，重新开启后立即生效"
+                        },
                         checked = pluginEnabled,
                         onCheckedChange = { enabled ->
+                            com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange(
+                                "gamepad_control",
+                                enabled.toString(),
+                            )
                             scope.launch {
                                 PluginManager.setEnabled(BuiltinPluginIds.GAMEPAD_CONTROL, enabled)
                             }
@@ -275,10 +284,11 @@ fun GamepadControlSettingsBody(
                     title = "互换确认与返回键",
                     subtitle = when (effectiveProfile) {
                         GamepadControllerProfile.PLAYSTATION -> "开启后 ○ 确认、✕ 返回（适配日版/亚洲 PlayStation 习惯）"
-                        GamepadControllerProfile.SWITCH -> "手动强制互换确认与返回按键映射"
+                        GamepadControllerProfile.SWITCH -> "手动强制互换确认与返回按键映射（优先于下方自动适配）"
                         else -> "开启后 B 确认、A 返回，贴合个人操作习惯"
                     },
                     checked = uiConfig.swapConfirmBack,
+                    enabled = pluginEnabled,
                     onCheckedChange = { update(uiConfig.copy(swapConfirmBack = it)) },
                 )
             }
@@ -289,6 +299,7 @@ fun GamepadControlSettingsBody(
                     title = "Nintendo Switch 手柄自动适配 A/B",
                     subtitle = "识别到 Switch Pro / Joy-Con 时自动以右侧 A 键确认、下方 B 键返回",
                     checked = uiConfig.autoSwapSwitchConfirmBack,
+                    enabled = pluginEnabled,
                     onCheckedChange = { update(uiConfig.copy(autoSwapSwitchConfirmBack = it)) },
                 )
             }
@@ -308,6 +319,7 @@ fun GamepadControlSettingsBody(
                         "开启后隐藏屏幕底部的手柄键位提示栏，使用中也可按提示栏快捷键随时切换"
                     },
                     checked = !uiConfig.showLegendHud,
+                    enabled = pluginEnabled,
                     onCheckedChange = { hide -> update(uiConfig.copy(showLegendHud = !hide)) },
                 )
             }
@@ -384,6 +396,7 @@ fun GamepadControlSettingsBody(
                     title = "光标悬停卡片高亮",
                     subtitle = "移动光标经过视频卡片时触发悬浮抬升反馈",
                     checked = uiConfig.hoverHighlightEnabled,
+                    enabled = pluginEnabled,
                     onCheckedChange = { update(uiConfig.copy(hoverHighlightEnabled = it)) },
                 )
             }
@@ -394,6 +407,7 @@ fun GamepadControlSettingsBody(
                     title = "触屏与静止自动隐藏光标",
                     subtitle = "手指触屏或 4.5 秒无摇杆操作时淡出光标，不遮挡观看",
                     checked = uiConfig.autoHideCursor,
+                    enabled = pluginEnabled,
                     onCheckedChange = {
                         update(uiConfig.copy(autoHideCursor = it, hideCursorOnTouch = it))
                     },

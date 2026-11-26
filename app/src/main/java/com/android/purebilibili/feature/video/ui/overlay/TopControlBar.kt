@@ -282,6 +282,22 @@ fun TopControlBar(
                         ) {
                             HeaderIcon(Icons.Outlined.Cast, "投屏", onCastClick)
                         }
+                        val nearbyHandoff = if (com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED) {
+                            com.android.purebilibili.feature.nearby.LocalNearbyHandoff.current
+                        } else null
+                        if (nearbyHandoff != null &&
+                            showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.NEARBY_HANDOFF)
+                        ) {
+                            HeaderButton(
+                                description = com.android.purebilibili.feature.nearby.NEARBY_TITLE,
+                                onClick = nearbyHandoff.openDevices,
+                            ) {
+                                com.android.purebilibili.feature.nearby.NearbyTopBarIconContent(
+                                    tint = Color.White,
+                                    iconSize = 20.dp,
+                                )
+                            }
+                        }
                         if (!simplifiedPortrait && !isFileSource && showSponsorSubmitButton && onSponsorSubmitClick != null &&
                             showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.SPONSOR)
                         ) {

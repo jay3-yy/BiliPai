@@ -69,12 +69,12 @@ internal fun AccountPurposeDialogSurface(
                 AppGlassPopupHost(glassAvailable = true, tuning = tuning) {
                     // 面板按内容自适应收合；正文超出时在剩余空间内滚动，按钮紧随其后，
                     // 不再用 fillMaxSize 恒定撑满最大高度留下大段空面板。
-                    Column(Modifier.fillMaxWidth().padding(24.dp)) {
-                        AppText(title, style = MaterialTheme.typography.headlineSmall,
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp)) {
+                        AppText(title, style = MaterialTheme.typography.titleLarge,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(12.dp))
                         Box(Modifier.weight(1f, fill = false).fillMaxWidth()) { text() }
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(12.dp))
                         Row(
                             Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End,
@@ -102,38 +102,50 @@ internal fun AccountPurposeDialogSurface(
 
 /** 玻璃用途入口与设置单选行尾同款锚点（值文本 + 展开箭头，无底色），菜单沿真实锚点展开并收回。 */
 @Composable
-internal fun AccountPurposeGlassAnchor(label: String, actions: List<AppWindowAction>) {
+internal fun AccountPurposeGlassAnchor(
+    label: String,
+    actions: List<AppWindowAction>,
+    isCustom: Boolean = false,
+    isUnavailable: Boolean = false,
+) {
     var expanded by remember { mutableStateOf(false) }
     val source = rememberAppGlassMenuSource()
     val elastic = rememberAppElasticPressState(feedbackStrength = 0.5f)
     val motionAllowed = LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current &&
         rememberVisualWorkActive()
+    val valueColor = when {
+        isUnavailable -> AppContentColors.error()
+        isCustom -> AppContentColors.accent()
+        else -> AppContentColors.secondaryText()
+    }
     val open = { expanded = true }
     Box {
         Row(
             Modifier
-                .widthIn(min = 80.dp, max = 160.dp)
+                .widthIn(min = 72.dp, max = 160.dp)
                 .heightIn(min = 32.dp)
                 .appElasticPress(enabled = motionAllowed, state = elastic, transformInBackdrop = true)
                 .appGlassMenuSource(source, onOpen = open)
                 .clickable(role = Role.Button, onClick = open)
                 .padding(start = 10.dp, top = 6.dp, end = 2.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
         ) {
             AppText(
                 label,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium,
-                color = AppContentColors.secondaryText(),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = if (isCustom || isUnavailable) androidx.compose.ui.text.font.FontWeight.Medium else androidx.compose.ui.text.font.FontWeight.Normal,
+                color = valueColor,
                 tapToCopyEnabled = false,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(4.dp))
             AppIcon(
                 imageVector = Icons.Default.UnfoldMore,
                 contentDescription = null,
-                tint = AppContentColors.secondaryText(),
+                tint = valueColor,
                 modifier = Modifier.size(16.dp),
             )
         }

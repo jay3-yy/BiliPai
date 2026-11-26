@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import com.android.purebilibili.core.ui.wallpaper.sharedGlobalWallpaperBackground
+import com.android.purebilibili.feature.video.ui.components.commentThreadNavigationBlur
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -152,6 +153,7 @@ fun ArticleDetailScreen(
     val comments: com.android.purebilibili.feature.dynamic.DynamicViewModel =
         androidx.lifecycle.viewmodel.compose.viewModel(key = "article-comments:$articleId")
     val articleSubReplyState by comments.subReplyState.collectAsStateWithLifecycle()
+    var subReplyCoveredBlurProgress by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val showArticleInteractionBar = bottomBarVisible && !articleSubReplyState.visible
     var commentJumpToken by rememberSaveable(articleId, openCommentRootRpid, openCommentTargetRpid) {
         mutableIntStateOf(if (openCommentRootRpid > 0L || openCommentTargetRpid > 0L) 1 else 0)
@@ -220,7 +222,9 @@ fun ArticleDetailScreen(
             ),
     ) {
     AppScaffold(
-        modifier = modifier,
+        modifier = modifier.commentThreadNavigationBlur {
+            if (articleSubReplyState.visible) subReplyCoveredBlurProgress else 0f
+        },
         blurContentReady = uiState !is ArticleDetailUiState.Loading,
         bottomBar = {
             (uiState as? ArticleDetailUiState.Success)?.article?.let { article ->
@@ -228,6 +232,7 @@ fun ArticleDetailScreen(
                     article = article, comments = comments,
                     onLinkClick = onLinkClick,
                     onCommentClick = { commentJumpToken++ }, onUserClick = onUserClick,
+                    onCoveredBlurProgressChange = { subReplyCoveredBlurProgress = it },
                     openCommentRootRpid = openCommentRootRpid,
                     openCommentTargetRpid = openCommentTargetRpid,
                     visible = showArticleInteractionBar,

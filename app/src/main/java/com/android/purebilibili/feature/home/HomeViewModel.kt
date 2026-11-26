@@ -22,6 +22,9 @@ import com.android.purebilibili.core.store.TodayWatchDislikedVideoSnapshot
 import com.android.purebilibili.core.store.TodayWatchFeedbackStore
 import com.android.purebilibili.core.store.TodayWatchProfileStore
 import com.android.purebilibili.core.store.withDislikedVideoFeedback
+import com.android.purebilibili.core.store.withoutDislikedCreator
+import com.android.purebilibili.core.store.withoutDislikedKeyword
+import com.android.purebilibili.core.store.withoutDislikedVideo
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.response.LiveRoom
 import com.android.purebilibili.data.model.response.RecommendationFeedbackLocalAction
@@ -196,6 +199,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val feedbackEvents = _feedbackEvents.receiveAsFlow()
     private var todayWatchPluginObserverJob: Job? = null
     private var observedTodayWatchPlugin: TodayWatchControls? = null
+    private var lastObservedTodayWatchConfig: TodayWatchPluginConfig? = null
     private var backgroundCategoryTrimJob: Job? = null
     private val backgroundCategoryTrimListener =
         object : com.android.purebilibili.core.lifecycle.BackgroundManager.BackgroundStateListener {
@@ -302,9 +306,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 if (plugin !== observedTodayWatchPlugin) {
                     todayWatchPluginObserverJob?.cancel()
                     observedTodayWatchPlugin = plugin
+                    lastObservedTodayWatchConfig = plugin?.configState?.value
                     if (plugin != null) {
                         todayWatchPluginObserverJob = viewModelScope.launch {
-                            plugin.configState.collect {
+                            plugin.configState.collect { config ->
+                                if (config == lastObservedTodayWatchConfig) return@collect
+                                lastObservedTodayWatchConfig = config
                                 val runtime = syncTodayWatchPluginState(clearWhenDisabled = true)
                                 if (shouldAutoRebuildTodayWatchPlan(
                                         currentCategory = _uiState.value.currentCategory,
@@ -412,7 +419,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             showReasonHint = runtime.showReasonHint,
             queuePreviewLimit = runtime.queuePreviewLimit,
             enableWaterfallAnimation = runtime.enableWaterfallAnimation,
-            waterfallExponent = runtime.waterfallExponent
+            waterfallExponent = runtime.waterfallExponent,
+            strategy = runtime.recommendationStrategy,
         )
         if (!runtime.enabled && clearWhenDisabled) {
             cancelTodayWatchPlanRebuild(clearExpandedCache = true)
@@ -442,13 +450,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         val plugin = PluginManager.getPlugin(TodayWatchControls::class)
         plugin?.setCurrentMode(mode.toPluginMode())
+        // 同步记录本次主动写入的配置快照，避免 configState 监听回声二次触发并取消正在进行的重建。
+        lastObservedTodayWatchConfig = plugin?.configState?.value
         _uiState.update { it.copy(todayWatchMode = mode) }
+        rebuildTodayWatchPlan()
+    }
+
+    fun switchTodayWatchStrategy(strategy: RecommendationStrategy) {
+        if (!PluginManager.isEnabled(BuiltinPluginIds.TODAY_WATCH)) return
+
+        val plugin = PluginManager.getPlugin(TodayWatchControls::class)
+        plugin?.setRecommendationStrategy(strategy)
+        lastObservedTodayWatchConfig = plugin?.configState?.value
+        _uiState.update { current ->
+            current.copy(todayWatchCardConfig = current.todayWatchCardConfig.copy(strategy = strategy))
+        }
         rebuildTodayWatchPlan()
     }
 
     fun setTodayWatchCollapsed(collapsed: Boolean) {
         val plugin = PluginManager.getPlugin(TodayWatchControls::class)
         plugin?.setCollapsed(collapsed)
+        lastObservedTodayWatchConfig = plugin?.configState?.value
 
         var changed = false
         _uiState.update { current ->
@@ -538,14 +561,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             ensureCurrent = { ensureAccountCurrent(identity) },
         )
         val historySample = history.videos
-        if (history.unavailable) {
-            _uiState.update {
-                it.copy(
-                    todayWatchLoading = false,
-                    todayWatchError = "历史记录不可用，已按当前推荐生成",
-                )
-            }
-        }
         ensureAccountCurrent(identity)
         if (!shouldApplyTodayWatchBuildResult(generation, todayWatchBuildGeneration)) return
         val creatorSignals = TodayWatchProfileStore.getCreatorSignals(
@@ -899,6 +914,143 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (shouldRebuild) {
             rebuildTodayWatchPlan()
+        }
+    }
+
+    fun dismissTodayWatchVideo(video: VideoItem, blockCreator: Boolean = false) {
+        val bvid = video.bvid.takeIf { it.isNotBlank() } ?: return
+        val creatorMid = video.owner.mid
+        todayConsumedBvids += bvid
+        todayDislikedBvids += bvid
+        if (blockCreator && creatorMid > 0L) {
+            todayDislikedCreatorMids += creatorMid
+        }
+
+        var shouldRebuild = false
+        _uiState.update { currentState ->
+            val currentPlan = currentState.todayWatchPlan
+            if (currentPlan == null) {
+                shouldRebuild = false
+                currentState
+            } else if (blockCreator && creatorMid > 0L) {
+                val filteredQueue = currentPlan.videoQueue.filterNot {
+                    it.bvid == bvid || it.owner.mid == creatorMid
+                }
+                val filteredRanks = currentPlan.upRanks.filterNot { it.mid == creatorMid }
+                val remainingBvids = filteredQueue.mapTo(hashSetOf()) { it.bvid }
+                val updatedPlan = currentPlan.copy(
+                    upRanks = filteredRanks.toImmutableList(),
+                    videoQueue = filteredQueue.toImmutableList(),
+                    explanationByBvid = currentPlan.explanationByBvid.filterKeys { it in remainingBvids }.toImmutableMap(),
+                    scoreByBvid = currentPlan.scoreByBvid.filterKeys { it in remainingBvids }.toImmutableMap(),
+                    confidenceByBvid = currentPlan.confidenceByBvid.filterKeys { it in remainingBvids }.toImmutableMap(),
+                )
+                shouldRebuild = filteredQueue.size < currentState.todayWatchCardConfig.queuePreviewLimit &&
+                    currentState.currentCategory == HomeCategory.RECOMMEND
+                currentState.copy(todayWatchPlan = updatedPlan)
+            } else {
+                val consumeUpdate = consumeVideoFromTodayWatchPlan(
+                    plan = currentPlan,
+                    consumedBvid = bvid,
+                    queuePreviewLimit = currentState.todayWatchCardConfig.queuePreviewLimit,
+                )
+                shouldRebuild = consumeUpdate.consumedApplied &&
+                    consumeUpdate.shouldRefill &&
+                    currentState.currentCategory == HomeCategory.RECOMMEND
+                if (consumeUpdate.consumedApplied) {
+                    currentState.copy(todayWatchPlan = consumeUpdate.updatedPlan)
+                } else {
+                    currentState
+                }
+            }
+        }
+
+        val dislikedAtMillis = System.currentTimeMillis()
+        val appContext = getApplication<Application>()
+        if (blockCreator && creatorMid > 0L) {
+            val creatorLabel = video.owner.name.ifBlank { "该 UP 主" }
+            android.widget.Toast.makeText(
+                appContext,
+                "已减少「$creatorLabel」的今日推荐",
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        }
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val updated = TodayWatchFeedbackStore.getSnapshot(appContext).withDislikedVideoFeedback(
+                    video = TodayWatchDislikedVideoSnapshot(
+                        bvid = video.bvid,
+                        title = video.title,
+                        creatorName = video.owner.name,
+                        creatorMid = video.owner.mid,
+                        dislikedAtMillis = dislikedAtMillis,
+                    ),
+                    keywords = emptySet(),
+                    includeCreatorSignal = blockCreator && creatorMid > 0L,
+                )
+                TodayWatchFeedbackStore.saveSnapshot(appContext, updated)
+            }
+        }
+        if (shouldRebuild) {
+            rebuildTodayWatchPlan()
+        }
+    }
+
+    fun undoTodayWatchDislikedCreator(creatorMid: Long) {
+        if (creatorMid <= 0L) return
+        todayDislikedCreatorMids.remove(creatorMid)
+        val appContext = getApplication<Application>()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val updated = TodayWatchFeedbackStore.getSnapshot(appContext)
+                    .withoutDislikedCreator(creatorMid)
+                TodayWatchFeedbackStore.saveSnapshot(appContext, updated)
+            }
+            rebuildTodayWatchPlan(forceReloadHistory = false)
+        }
+    }
+
+    fun undoTodayWatchDislikedVideo(bvid: String) {
+        val normalized = bvid.trim()
+        if (normalized.isBlank()) return
+        todayDislikedBvids.remove(normalized)
+        todayConsumedBvids.remove(normalized)
+        val appContext = getApplication<Application>()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val updated = TodayWatchFeedbackStore.getSnapshot(appContext)
+                    .withoutDislikedVideo(normalized)
+                TodayWatchFeedbackStore.saveSnapshot(appContext, updated)
+            }
+            rebuildTodayWatchPlan(forceReloadHistory = false)
+        }
+    }
+
+    fun undoTodayWatchDislikedKeyword(keyword: String) {
+        val normalized = keyword.trim().lowercase()
+        if (normalized.isBlank()) return
+        todayDislikedKeywords.remove(normalized)
+        val appContext = getApplication<Application>()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val updated = TodayWatchFeedbackStore.getSnapshot(appContext)
+                    .withoutDislikedKeyword(normalized)
+                TodayWatchFeedbackStore.saveSnapshot(appContext, updated)
+            }
+            rebuildTodayWatchPlan(forceReloadHistory = false)
+        }
+    }
+
+    fun clearTodayWatchNegativeFeedback() {
+        todayDislikedBvids.clear()
+        todayDislikedCreatorMids.clear()
+        todayDislikedKeywords.clear()
+        val appContext = getApplication<Application>()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                TodayWatchFeedbackStore.clear(appContext)
+            }
+            rebuildTodayWatchPlan(forceReloadHistory = false)
         }
     }
     

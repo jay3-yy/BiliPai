@@ -1,6 +1,8 @@
 package com.android.purebilibili
 
 import com.android.purebilibili.navigation.ScreenRoutes
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.legacyRouteToBiliPaiNavKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -14,6 +16,12 @@ class ShortcutDeepLinkRouteTest {
         assertEquals(ScreenRoutes.PlaybackSettings.route, resolveShortcutRoute("playback"))
         assertEquals(ScreenRoutes.PluginsSettings.createRoute(), resolveShortcutRoute("plugins"))
         assertEquals(ScreenRoutes.WatchLater.route, resolveShortcutRoute("watch_later"))
+        assertEquals(ScreenRoutes.History.route, resolveShortcutRoute("history"))
+        assertEquals(ScreenRoutes.PersonalRecap.route, resolveShortcutRoute("personal_recap"))
+        assertEquals(ScreenRoutes.PersonalRecap.route, resolveShortcutRoute("recap"))
+        assertEquals(ScreenRoutes.PersonalRecap.route, resolveShortcutRoute("keepsake"))
+        assertEquals(BiliPaiNavKey.PersonalRecap, legacyRouteToBiliPaiNavKey(ScreenRoutes.PersonalRecap.route))
+        assertEquals(BiliPaiNavKey.History, legacyRouteToBiliPaiNavKey(ScreenRoutes.History.route))
     }
 
     @Test

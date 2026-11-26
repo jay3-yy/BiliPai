@@ -79,6 +79,7 @@ internal fun resolveSystemWindowCardIdentity(target: BiliPaiNavKey?): String? = 
     BiliPaiNavKey.LiveArea -> "live_area"
     BiliPaiNavKey.LiveFollowing -> "live_following"
     BiliPaiNavKey.History -> "history"
+    BiliPaiNavKey.PersonalRecap -> "personal_recap"
     is BiliPaiNavKey.PersonalRecapUps -> "personal_recap_ups_${target.window.name}"
     is BiliPaiNavKey.HistorySearch -> "history_search"
     BiliPaiNavKey.Favorite -> "favorite"

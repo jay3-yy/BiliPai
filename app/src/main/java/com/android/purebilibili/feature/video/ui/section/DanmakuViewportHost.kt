@@ -25,16 +25,18 @@ internal val LocalUseTabletDanmakuStyle = staticCompositionLocalOf { false }
 @Composable
 internal fun DanmakuViewportHost(
     modifier: Modifier,
+    fillDisplayArea: Boolean = false,
     content: @Composable BoxScope.(DanmakuViewport) -> Unit
 ) {
     val density = LocalDensity.current
     val systemDensity = LocalContext.current.resources.displayMetrics.density
     BoxWithConstraints(modifier.clipToBounds(), contentAlignment = Alignment.Center) {
-        val viewport = remember(constraints.maxWidth, constraints.maxHeight, systemDensity) {
+        val viewport = remember(constraints.maxWidth, constraints.maxHeight, systemDensity, fillDisplayArea) {
             resolveDanmakuViewport(
                 constraints.maxWidth,
                 constraints.maxHeight,
-                systemDensity
+                systemDensity,
+                fillDisplayArea = fillDisplayArea,
             )
         }
         if (viewport != null) {

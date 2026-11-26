@@ -133,7 +133,9 @@ data class TodayWatchCardUiConfig(
     val showReasonHint: Boolean = true,
     val queuePreviewLimit: Int = 6,
     val enableWaterfallAnimation: Boolean = true,
-    val waterfallExponent: Float = 1.38f
+    val waterfallExponent: Float = 1.38f,
+    val strategy: com.android.purebilibili.plugin.sdk.RecommendationStrategy =
+        com.android.purebilibili.plugin.sdk.RecommendationStrategy.BALANCED,
 )
 
 /**

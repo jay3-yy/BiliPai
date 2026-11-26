@@ -16,9 +16,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.feature.audio.player.isCurrentlyLateNightForSleepSuggestion
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun PlayerSleepTimerSettings(
@@ -30,9 +35,25 @@ internal fun PlayerSleepTimerSettings(
     onExitAppChange: ((Boolean) -> Unit)?,
     onPresetSelected: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val fadeOutEnabled by remember(context) { SettingsManager.getSleepTimerFadeOutEnabled(context) }
+        .collectAsStateWithLifecycle(initialValue = SettingsManager.getSleepTimerFadeOutEnabledSync(context))
+    val fadeDurationSec by remember(context) { SettingsManager.getSleepTimerFadeDurationSec(context) }
+        .collectAsStateWithLifecycle(initialValue = SettingsManager.getSleepTimerFadeDurationSecSync(context))
+    val isLateNight = remember { isCurrentlyLateNightForSleepSuggestion() }
     var custom by remember { mutableStateOf(false) }
     val presets = remember(minutes) { resolvePlayerSleepTimerPresets(minutes) }
     Text("定时关闭", Modifier.fillMaxWidth().padding(16.dp), fontSize = 14.sp)
+    if (isLateNight && onWaitForCurrentVideoEndChange != null && !waitForCurrentVideoEnd) {
+        LateNightSleepSuggestionCard(
+            onEnableAfterCurrent = {
+                onWaitForCurrentVideoEndChange(true)
+                onPresetSelected()
+            },
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        )
+    }
     presets.forEach { value ->
         ListItem(
             headlineContent = { Text(if (value == 0) "禁用" else "$value 分钟", fontSize = 14.sp) },
@@ -50,6 +71,17 @@ internal fun PlayerSleepTimerSettings(
             trailingContent = { Switch(waitForCurrentVideoEnd, change) },
         )
     }
+    SleepTimerFadePreferenceRow(
+        fadeEnabled = fadeOutEnabled,
+        onFadeEnabledChange = { enabled ->
+            scope.launch { SettingsManager.setSleepTimerFadeOutEnabled(context, enabled) }
+        },
+        fadeDurationSec = fadeDurationSec,
+        onFadeDurationSecChange = { seconds ->
+            scope.launch { SettingsManager.setSleepTimerFadeDurationSec(context, seconds) }
+        },
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
     onExitAppChange?.let { change ->
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp),

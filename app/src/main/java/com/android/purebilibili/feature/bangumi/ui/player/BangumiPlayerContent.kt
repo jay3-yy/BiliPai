@@ -272,6 +272,7 @@ fun BangumiPlayerContent(
             danmakuEnabled = false,
             onDanmakuToggle = {},
             showDanmakuActions = false,
+            showNearbyAction = true,
             modifier = tabModifier,
             miuixBackdrop = if (liquidGlassEnabled) selectionBackdrop else null,
             indicatorPositionProvider = indicatorPositionProvider,

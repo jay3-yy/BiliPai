@@ -611,6 +611,28 @@ fun TopControlBar(
                         )
                     }
 
+                    val nearbyHandoff = if (com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED) {
+                        com.android.purebilibili.feature.nearby.LocalNearbyHandoff.current
+                    } else null
+                    if (nearbyHandoff != null &&
+                        showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.NEARBY_HANDOFF)
+                    ) {
+                        PlayerControlGlassDock(
+                            enabled = isFullscreen || glassControls,
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                        ) {
+                            AppIconButton(
+                                onClick = nearbyHandoff.openDevices,
+                                modifier = Modifier.size(layoutPolicy.buttonSizeDp.dp),
+                            ) {
+                                com.android.purebilibili.feature.nearby.NearbyTopBarIconContent(
+                                    tint = Color.White,
+                                    iconSize = layoutPolicy.iconSizeDp.dp,
+                                )
+                            }
+                        }
+                    }
+
                     if (onCommentClick != null && showTopItem(com.android.purebilibili.core.store.FullscreenTopBarItem.COMMENT)) {
                         ActionIcon(
                             glassEnabled = isFullscreen || glassControls,

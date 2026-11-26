@@ -47,6 +47,9 @@ import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
 import com.android.purebilibili.core.ui.components.AppSingleChoicePreference
 import com.android.purebilibili.core.ui.components.AppSwitchPreference as SettingSwitchItem
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.push.CustomPushConfig
+import com.android.purebilibili.core.push.PushChannelMode
+import com.android.purebilibili.core.push.PushConfigStore
 import com.android.purebilibili.feature.message.notification.MessageNotificationMode
 import com.android.purebilibili.feature.message.notification.MessageNotificationNotifier
 import com.android.purebilibili.feature.message.notification.MessageNotificationSettings
@@ -63,12 +66,18 @@ private enum class NotificationPermissionRequest {
 }
 
 @Composable
-fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
+fun MessageNotificationSettingsScreen(
+    onBack: () -> Unit,
+    onCustomPushClick: () -> Unit = {},
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val settingsFlow = remember(context) { MessageNotificationSettingsStore.getSettings(context) }
     val settings by settingsFlow.collectAsStateWithLifecycle(initialValue = MessageNotificationSettings())
+    val customPushFlow = remember(context) { PushConfigStore.observeConfig(context) }
+    val customPushConfig by customPushFlow.collectAsStateWithLifecycle(initialValue = CustomPushConfig())
+    val customPushCopy = remember { settingsDestinationCopy(SettingsSearchTarget.CUSTOM_PUSH) }
     val bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     var notificationPermissionGranted by remember(context) {
@@ -188,6 +197,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
     }
 
     LaunchedEffect(context) {
+        com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("MessageNotificationSettingsScreen")
         refreshNotificationStatus()
     }
 
@@ -284,8 +294,13 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                     AppSingleChoicePreference(
                         icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_DELIVERY_MODE),
                         title = context.getString(R.string.notify_item_mode),
-                        subtitle = context.getString(R.string.notify_mode_subtitle),
+                        subtitle = if (!settings.enabled) {
+                            context.getString(R.string.notify_enable_master_first)
+                        } else {
+                            context.getString(R.string.notify_mode_subtitle)
+                        },
                         selectedValue = settings.mode,
+                        enabled = settings.enabled,
                         options = listOf(
                             AppChoiceOption(
                                 value = MessageNotificationMode.POWER_SAVING,
@@ -299,6 +314,10 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                             ),
                         ),
                         onValueChange = { mode ->
+                            com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange(
+                                "message_notification_mode",
+                                mode.name.lowercase(),
+                            )
                             scope.launch {
                                 persistAndSync {
                                     MessageNotificationSettingsStore.setMode(context, mode)
@@ -318,6 +337,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                         title = context.getString(R.string.notify_item_private_messages),
                         subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_private_messages),
                         checked = settings.notifyPrivateMessages,
+                        enabled = settings.enabled,
                         onCheckedChange = { enabled ->
                             scope.launch {
                                 persistAndSync {
@@ -335,6 +355,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                         title = context.getString(R.string.notify_item_replies),
                         subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_replies),
                         checked = settings.notifyReplies,
+                        enabled = settings.enabled,
                         onCheckedChange = { enabled ->
                             scope.launch {
                                 persistAndSync {
@@ -352,6 +373,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                         title = context.getString(R.string.notify_item_at_me),
                         subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_at_me),
                         checked = settings.notifyAtMe,
+                        enabled = settings.enabled,
                         onCheckedChange = { enabled ->
                             scope.launch {
                                 persistAndSync {
@@ -369,6 +391,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                         title = context.getString(R.string.notify_item_likes),
                         subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_likes),
                         checked = settings.notifyLikes,
+                        enabled = settings.enabled,
                         onCheckedChange = { enabled ->
                             scope.launch {
                                 persistAndSync {
@@ -386,6 +409,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                         title = context.getString(R.string.notify_item_system),
                         subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_system),
                         checked = settings.notifySystemNotices,
+                        enabled = settings.enabled,
                         onCheckedChange = { enabled ->
                             scope.launch {
                                 persistAndSync {
@@ -403,6 +427,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                         title = context.getString(R.string.notify_item_dynamic),
                         subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_dynamic),
                         checked = settings.notifyDynamicUpdates,
+                        enabled = settings.enabled,
                         onCheckedChange = { enabled ->
                             scope.launch {
                                 persistAndSync {
@@ -420,6 +445,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                         title = context.getString(R.string.notify_item_live),
                         subtitle = if (!settings.enabled) context.getString(R.string.notify_enable_master_first) else context.getString(R.string.notify_live),
                         checked = settings.notifyLiveAlerts,
+                        enabled = settings.enabled,
                         onCheckedChange = { enabled ->
                             scope.launch {
                                 persistAndSync {
@@ -444,6 +470,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                             context.getString(R.string.notify_resident_requires_desc)
                         },
                         checked = settings.residentEnabled,
+                        enabled = settings.enabled,
                         onCheckedChange = { enabled ->
                             if (!enabled) {
                                 scope.launch {
@@ -476,6 +503,24 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                     )
                 }
 
+            }
+
+            AppPreferenceSectionTitle("远程推送")
+            SettingsCardGroup {
+                SettingsItemAnchor("notification.custom_push") {
+                    SettingClickableItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.CUSTOM_PUSH),
+                        title = customPushCopy.title,
+                        subtitle = customPushCopy.summary,
+                        value = when (customPushConfig.mode) {
+                            PushChannelMode.DISABLED -> "关闭"
+                            PushChannelMode.UNIFIED_PUSH -> "UnifiedPush"
+                            PushChannelMode.FCM_RELAY -> "FCM 中转"
+                        },
+                        onClick = onCustomPushClick,
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
             }
 
             AppPreferenceSectionTitle(context.getString(R.string.notify_section_send))

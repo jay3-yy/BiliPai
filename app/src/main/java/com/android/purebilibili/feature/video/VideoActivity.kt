@@ -351,11 +351,22 @@ open class VideoActivity : FragmentActivity() {
                 com.android.purebilibili.feature.nearby.NearbyHandoffHost(
                     miniPlayer = MiniPlayerManager.getInstance(this@VideoActivity),
                     onOpenVideo = { nearby ->
-                        lifecycleScope.launch {
-                            VideoActivityLauncher.open(
-                                this@VideoActivity,
-                                VideoOpenRequest(nearby.bvid, nearby.cid, nearby.cover, resumePositionMs = nearby.positionMs),
-                            )
+                        if (nearby.isVideo && !nearby.audioOnly) {
+                            lifecycleScope.launch {
+                                VideoActivityLauncher.open(
+                                    this@VideoActivity,
+                                    VideoOpenRequest(nearby.bvid, nearby.cid, nearby.cover, resumePositionMs = nearby.positionMs),
+                                )
+                            }
+                        } else {
+                            startActivity(Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                putExtra(
+                                    com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE,
+                                    com.android.purebilibili.feature.nearby.NearbyPlaybackBridge.toNavigationRoute(nearby),
+                                )
+                            })
+                            finish()
                         }
                     },
                 ) {

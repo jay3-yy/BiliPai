@@ -875,6 +875,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setThemePresentation(selection: AppUiStyle, liquidGlassEnabled: Boolean) {
         viewModelScope.launch {
             SettingsManager.setThemePresentation(context, selection, liquidGlassEnabled)
+            com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange("ui_style", selection.name.lowercase())
         }
     }
 
@@ -890,11 +891,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun setThemeMode(mode: AppThemeMode) { 
         viewModelScope.launch { 
             SettingsManager.setThemeMode(context, mode)
+            com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange("theme_mode", mode.name.lowercase())
         } 
     }
     fun setDarkThemeStyle(style: DarkThemeStyle) {
         viewModelScope.launch {
             SettingsManager.setDarkThemeStyle(context, style)
+            com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange("dark_theme_style", style.name.lowercase())
         }
     }
     fun setAppLanguage(appLanguage: AppLanguage) {
@@ -1159,6 +1162,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleAndroidNativeLiquidGlass(enabled: Boolean) {
         viewModelScope.launch {
             SettingsManager.setAndroidNativeLiquidGlassEnabled(context, enabled)
+            com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange("liquid_glass", enabled.toString())
         }
     }
 

@@ -94,6 +94,7 @@ import com.android.purebilibili.feature.audio.player.PlaybackSleepTimer
 import com.android.purebilibili.feature.video.viewmodel.shouldStopAfterCurrentPlayback
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 
 private const val TAG = "MiniPlayerManager"
@@ -848,19 +849,64 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     private val _sleepTimer = MutableStateFlow<LocalSleepTimer?>(null)
     internal val sleepTimer = _sleepTimer.asStateFlow()
+    private val _sleepTimerFinishedEvent = MutableStateFlow<com.android.purebilibili.feature.audio.player.SleepTimerFinishedEvent?>(null)
+    val sleepTimerFinishedEvent = _sleepTimerFinishedEvent.asStateFlow()
+    private var sleepTimerFinishedSeq = 0L
+    private val sleepVolumeFadeController = com.android.purebilibili.feature.audio.player.PlayerVolumeFadeController()
     private var sleepTimerJob: Job? = null
 
     internal fun sleepTimerFor(target: ExoPlayer): PlaybackSleepTimer? =
         _sleepTimer.value?.takeIf { it.player === target }?.timer
 
+    fun consumeSleepTimerFinishedEvent(id: Long) {
+        _sleepTimerFinishedEvent.update { current -> if (current?.id == id) null else current }
+    }
+
+    fun extendAfterSleepTimer(minutes: Int = com.android.purebilibili.feature.audio.player.SLEEP_TIMER_QUICK_EXTEND_MINUTES) {
+        val activePlayer = player ?: return
+        val safeMinutes = minutes.coerceAtLeast(1)
+        _sleepTimerFinishedEvent.value = null
+        setSleepTimer(
+            activePlayer,
+            PlaybackSleepTimer.Countdown(safeMinutes, SystemClock.elapsedRealtime() + safeMinutes * 60_000L),
+        )
+        if (!activePlayer.isPlaying) {
+            if (activePlayer.playbackState == Player.STATE_ENDED) {
+                activePlayer.seekTo(0L)
+            }
+            activePlayer.play()
+        }
+    }
+
     internal fun setSleepTimer(target: ExoPlayer, timer: PlaybackSleepTimer?) {
-        if (timer == null && sleepTimerFor(target) == null) return
+        if (timer == null && sleepTimerFor(target) == null) {
+            sleepVolumeFadeController.cancelAndRestore(target)
+            return
+        }
         sleepTimerJob?.cancel()
+        sleepVolumeFadeController.cancelAndRestore(target)
         _sleepTimer.value = timer?.let { LocalSleepTimer(target, it) }
         sleepTimerJob = when (timer) {
             is PlaybackSleepTimer.Countdown -> scope.launch {
-                delay((timer.deadlineMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
-                expireSleepCountdown(target)
+                val remainingBeforeFade = (timer.deadlineMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+                val fadeEnabled = SettingsManager.getSleepTimerFadeOutEnabledSync(context)
+                val configuredFadeMs = SettingsManager.getSleepTimerFadeDurationSecSync(context) * 1_000L
+                val fadeWindowMs = com.android.purebilibili.feature.audio.player.resolveSleepTimerFadeWindowMs(
+                    remainingMs = remainingBeforeFade,
+                    fadeEnabled = fadeEnabled,
+                    configuredFadeMs = configuredFadeMs,
+                )
+                val waitMs = (remainingBeforeFade - fadeWindowMs).coerceAtLeast(0L)
+                if (waitMs > 0L) delay(waitMs)
+                if (sleepTimerFor(target) != timer) return@launch
+                val actualFadeMs = com.android.purebilibili.feature.audio.player.resolveSleepTimerFadeWindowMs(
+                    remainingMs = (timer.deadlineMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L),
+                    fadeEnabled = SettingsManager.getSleepTimerFadeOutEnabledSync(context),
+                    configuredFadeMs = SettingsManager.getSleepTimerFadeDurationSecSync(context) * 1_000L,
+                )
+                sleepVolumeFadeController.fadeOutAndFinish(target, actualFadeMs) {
+                    expireSleepCountdown(target)
+                }
             }
             is PlaybackSleepTimer.AfterCurrent -> {
                 target.repeatMode = Player.REPEAT_MODE_OFF
@@ -872,15 +918,31 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     private fun expireSleepCountdown(target: ExoPlayer) {
         val timer = sleepTimerFor(target) as? PlaybackSleepTimer.Countdown ?: return
-        if (timer.deadlineMs > SystemClock.elapsedRealtime()) return
+        if (timer.deadlineMs - SystemClock.elapsedRealtime() > 500L) return
         setSleepTimer(target, null)
-        pauseForSleepTimer(target)
+        pauseForSleepTimer(target, wasAfterCurrent = false)
     }
 
-    private fun pauseForSleepTimer(target: ExoPlayer) {
+    private fun pauseForSleepTimer(target: ExoPlayer, wasAfterCurrent: Boolean) {
         if (backgroundOptimizationPlayer === target) foregroundResumeIntent = false
+        com.android.purebilibili.feature.audio.ambient.AmbientNoiseMixer.stop()
         PlayerBackgroundPlaybackSessions.pauseForSleepTimer(target)
-        android.widget.Toast.makeText(context, "定时结束，已暂停播放", android.widget.Toast.LENGTH_SHORT).show()
+        val isLateNight = com.android.purebilibili.feature.audio.player.isCurrentlyLateNightForSleepSuggestion()
+        val message = com.android.purebilibili.feature.audio.player.resolveSleepTimerWindDownMessage(
+            wasAfterCurrent = wasAfterCurrent,
+            isLateNight = isLateNight,
+        )
+        if (!BackgroundManager.isInBackground) {
+            val nextId = ++sleepTimerFinishedSeq
+            _sleepTimerFinishedEvent.value = com.android.purebilibili.feature.audio.player.SleepTimerFinishedEvent(
+                id = nextId,
+                message = message,
+                wasAfterCurrent = wasAfterCurrent,
+                isLateNight = isLateNight,
+            )
+        } else {
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     internal fun cancelSleepAfterCurrentForSwitch(target: ExoPlayer, bvid: String, cid: Long) {
@@ -892,7 +954,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         val timer = sleepTimerFor(target) as? PlaybackSleepTimer.AfterCurrent ?: return false
         if (bvid == null || !shouldStopAfterCurrentPlayback(timer.bvid to timer.cid, bvid, cid)) return false
         setSleepTimer(target, null)
-        pauseForSleepTimer(target)
+        pauseForSleepTimer(target, wasAfterCurrent = true)
         return true
     }
 
@@ -940,13 +1002,15 @@ class MiniPlayerManager private constructor(private val context: Context) :
             playMode = PlaylistManager.playMode.value, shuffle = PlaylistManager.shuffleEnabled.value,
             quality = state.currentQuality, audioQuality = state.selectedAudioQuality,
             audioUrl = state.audioUrl.orEmpty(), audioLanguage = state.currentAudioLang,
-            volume = local.volume, handleAudioFocus = SettingsManager.getAudioFocusEnabledSync(context),
+            volume = sleepVolumeFadeController.originalVolumeFor(local) ?: local.volume, handleAudioFocus = SettingsManager.getAudioFocusEnabledSync(context),
             reportHistory = !SettingsManager.isPrivacyModeEnabledSync(context),
             savedPlayMode = PlaylistManager.savedTransport.value.playMode,
             savedShuffle = PlaylistManager.savedTransport.value.shuffleEnabled,
             backgroundPlaybackOverride = PlayerBackgroundPlaybackSessions.selection(local, "video:$currentBvid"),
             backgroundOverrideBvid = currentBvid,
             sleepTimer = sleepTimerFor(local),
+            sleepTimerFadeEnabled = SettingsManager.getSleepTimerFadeOutEnabledSync(context),
+            sleepTimerFadeDurationSec = SettingsManager.getSleepTimerFadeDurationSecSync(context),
         )
         if (!com.android.purebilibili.feature.audio.player.canTransferBackgroundAudio(
                 listening = AudioNowPlayingSession.active.value,
@@ -3077,6 +3141,14 @@ class MiniPlayerManager private constructor(private val context: Context) :
         performMediaControl(MediaControlType.PLAY_PAUSE)
         return true
     }
+
+    /** 是否正在由独立后台音频进程接管播放（纯听模式后台播放）。 */
+    internal val isRemoteAudioActive: Boolean
+        get() = remoteAudio.active
+
+    /** 当前活跃的 Media3 Player 句柄：优先返回后台纯听进程的远程控制器，否则返回本进程 ExoPlayer。 */
+    internal val activeMediaPlayer: Player?
+        get() = if (remoteAudio.active) remoteAudio.controller else player
 
     /** Explicit pause also clears playback intent while the player is buffering. */
     fun pausePlayback(): Boolean {

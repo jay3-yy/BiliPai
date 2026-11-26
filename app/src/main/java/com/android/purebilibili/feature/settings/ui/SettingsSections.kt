@@ -232,11 +232,70 @@ internal fun SettingsRootCategoryListSection(
     onCategoryClick: (SettingsRootCategory) -> Unit,
     onDonateClick: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val themeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+    val uiStyle = com.android.purebilibili.core.theme.LocalAppUiStyle.current
+    val sleepFadeEnabled by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getSleepTimerFadeOutEnabled(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.SettingsManager.getSleepTimerFadeOutEnabledSync(context)
+    )
+    val sleepFadeDurationSec by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getSleepTimerFadeDurationSec(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.SettingsManager.getSleepTimerFadeDurationSecSync(context)
+    )
+    val loudnessEnabled by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getLoudnessNormalizationEnabled(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.SettingsManager.getLoudnessNormalizationEnabledSync(context)
+    )
+    val autoPlayEnabled by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getAutoPlay(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.SettingsManager.getAutoPlaySync(context)
+    )
+    val dynamicColorEnabled by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getDynamicColor(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val darkThemeStyle by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getDarkThemeStyle(context)
+    }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.feature.settings.DarkThemeStyle.DEFAULT)
+    val recipeGuidesEnabled by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getSettingsRecipeGuidesEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
     val siblingTints = rememberSettingsSiblingIconTints(categories.size + 1)
     val donateVisual = rememberSettingsEntryVisual(SettingsSearchTarget.DONATE)
     SettingsCardGroup {
         categories.forEachIndexed { index, category ->
             val visual = rememberSettingsEntryVisual(category.searchTarget)
+            val defaultSubtitle = stringResource(category.subtitleResource())
+            val dynamicSubtitle = if (!recipeGuidesEnabled) {
+                defaultSubtitle
+            } else {
+                when (category) {
+                    SettingsRootCategory.APPEARANCE_THEME -> resolveAppearanceCategoryHighlightSubtitle(
+                        uiStyleLabel = if (uiStyle == com.android.purebilibili.core.theme.AppUiStyle.MIUIX) "Miuix" else "Material 3",
+                        liquidGlassEnabled = themeConfig.liquidGlassEnabled,
+                        dynamicColorEnabled = dynamicColorEnabled,
+                        amoledDarkEnabled = darkThemeStyle == com.android.purebilibili.feature.settings.DarkThemeStyle.AMOLED,
+                    )
+                    SettingsRootCategory.ANIMATION_HAPTICS -> resolveAnimationCategoryHighlightSubtitle(
+                        hapticEnabled = themeConfig.hapticFeedbackEnabled,
+                        enabledSceneCount = com.android.purebilibili.core.ui.AppHapticScene.entries.count(themeConfig.hapticSettings::isEnabled),
+                        totalSceneCount = com.android.purebilibili.core.ui.AppHapticScene.entries.size,
+                        fallbackSubtitle = defaultSubtitle,
+                    )
+                    SettingsRootCategory.PLAYBACK_QUALITY -> resolvePlaybackCategoryHighlightSubtitle(
+                        sleepFadeEnabled = sleepFadeEnabled,
+                        sleepFadeDurationSec = sleepFadeDurationSec,
+                        loudnessEnabled = loudnessEnabled,
+                        autoPlayEnabled = autoPlayEnabled,
+                        fallbackSubtitle = defaultSubtitle,
+                    )
+                    else -> defaultSubtitle
+                }
+            }
             SettingsCategoryContainerOrigin(
                 category = category,
                 first = index == 0,
@@ -244,7 +303,7 @@ internal fun SettingsRootCategoryListSection(
             ) { contentModifier, open ->
                 SettingsRootCategoryRow(
                     title = stringResource(category.titleResource()),
-                    subtitle = stringResource(category.subtitleResource()),
+                    subtitle = dynamicSubtitle,
                     iconColorKey = category.title,
                     icon = visual.icon,
                     iconPainter = visual.iconResId?.let { painterResource(id = it) },
@@ -419,7 +478,6 @@ internal fun SettingsRootCategoryContent(
     onAboutHeaderAppearanceClick: () -> Unit = {},
     onAboutHeroHeightChanged: (Int) -> Unit = {},
 ) {
-    val nearbyHandoff = com.android.purebilibili.feature.nearby.LocalNearbyHandoff.current
     val resolvedCategory = canonicalSettingsRootCategory(category)
     Column {
         when (resolvedCategory) {
@@ -464,21 +522,7 @@ internal fun SettingsRootCategoryContent(
                 }
             }
             SettingsRootCategory.PLAYBACK_QUALITY -> {
-                // 分类入口直跳播放器与画质页；此页仅保留搜索叶子结果落地的分组。
-                if (com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED) {
-                    SettingsRootCategoryEntranceSection {
-                        SettingsDetailGroup(title = "跨设备播放") {
-                            SettingsDetailEntrySection(entries = listOf(
-                                SettingsDetailEntry(
-                                    target = SettingsSearchTarget.NEARBY_HANDOFF,
-                                    title = settingsDestinationCopy(SettingsSearchTarget.NEARBY_HANDOFF).title,
-                                    value = settingsDestinationCopy(SettingsSearchTarget.NEARBY_HANDOFF).summary,
-                                    onClick = { nearbyHandoff?.openDevices?.invoke() },
-                                ),
-                            ))
-                        }
-                    }
-                }
+                // 分类入口直跳播放器与画质页，跨设备播放（设备接力）唯一入口位于 PlaybackSettingsScreen。
             }
             SettingsRootCategory.HOME_RECOMMENDATION -> {
                 // 推荐流与动态条目统一在「首页与推荐」页的「推荐与动态」分组渲染,
@@ -524,23 +568,24 @@ internal fun SettingsRootCategoryContent(
             }
             SettingsRootCategory.PRIVACY_PERMISSION -> {
                 SettingsRootCategoryEntranceSection {
-                    // 分组名描述内容范围,不复读分类名,避免"隐私与权限里还有隐私与权限"。
-                    SettingsDetailGroup(title = "历史记录与权限") {
-                        PrivacySection(
-                            privacyModeEnabled = state.privacyModeEnabled,
-                            searchSuggestionsEnabled = state.searchSuggestionsEnabled,
-                            privacyContentAuthenticationEnabled = state.privacyContentAuthenticationEnabled,
-                            onPrivacyModeChange = actions.onPrivacyModeChange,
-                            onSearchSuggestionsChange = actions.onSearchSuggestionsChange,
-                            onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
-                            onPermissionClick = actions.onPermissionClick,
-                            onSpacePrivacyClick = actions.onSpacePrivacyClick,
-                            onLoginActivityClick = actions.onLoginActivityClick,
-                            onMessageNotificationClick = actions.onMessageNotificationClick,
-                            onBlockedListClick = actions.onBlockedListClick,
-                            onCommentFraudHistoryClick = actions.onCommentFraudHistoryClick // [New]
-                        )
-                    }
+                    PrivacySection(
+                        privacyModeEnabled = state.privacyModeEnabled,
+                        searchSuggestionsEnabled = state.searchSuggestionsEnabled,
+                        privacyContentAuthenticationEnabled = state.privacyContentAuthenticationEnabled,
+                        crashTrackingEnabled = state.crashTrackingEnabled,
+                        analyticsEnabled = state.analyticsEnabled,
+                        onPrivacyModeChange = actions.onPrivacyModeChange,
+                        onSearchSuggestionsChange = actions.onSearchSuggestionsChange,
+                        onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
+                        onCrashTrackingChange = actions.onCrashTrackingChange,
+                        onAnalyticsChange = actions.onAnalyticsChange,
+                        onPermissionClick = actions.onPermissionClick,
+                        onSpacePrivacyClick = actions.onSpacePrivacyClick,
+                        onLoginActivityClick = actions.onLoginActivityClick,
+                        onMessageNotificationClick = actions.onMessageNotificationClick,
+                        onBlockedListClick = actions.onBlockedListClick,
+                        onCommentFraudHistoryClick = actions.onCommentFraudHistoryClick
+                    )
                 }
             }
             SettingsRootCategory.STORAGE_BACKUP -> {
@@ -730,22 +775,24 @@ internal fun SettingsRootCategoryContent(
                     }
                 }
                 SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "隐私与安全") {
-                        PrivacySection(
-                            privacyModeEnabled = state.privacyModeEnabled,
-                            searchSuggestionsEnabled = state.searchSuggestionsEnabled,
-                            privacyContentAuthenticationEnabled = state.privacyContentAuthenticationEnabled,
-                            onPrivacyModeChange = actions.onPrivacyModeChange,
-                            onSearchSuggestionsChange = actions.onSearchSuggestionsChange,
-                            onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
-                            onPermissionClick = actions.onPermissionClick,
-                            onSpacePrivacyClick = actions.onSpacePrivacyClick,
-                            onLoginActivityClick = actions.onLoginActivityClick,
-                            onMessageNotificationClick = actions.onMessageNotificationClick,
-                            onBlockedListClick = actions.onBlockedListClick,
-                            onCommentFraudHistoryClick = actions.onCommentFraudHistoryClick // [New]
-                        )
-                    }
+                    PrivacySection(
+                        privacyModeEnabled = state.privacyModeEnabled,
+                        searchSuggestionsEnabled = state.searchSuggestionsEnabled,
+                        privacyContentAuthenticationEnabled = state.privacyContentAuthenticationEnabled,
+                        crashTrackingEnabled = state.crashTrackingEnabled,
+                        analyticsEnabled = state.analyticsEnabled,
+                        onPrivacyModeChange = actions.onPrivacyModeChange,
+                        onSearchSuggestionsChange = actions.onSearchSuggestionsChange,
+                        onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
+                        onCrashTrackingChange = actions.onCrashTrackingChange,
+                        onAnalyticsChange = actions.onAnalyticsChange,
+                        onPermissionClick = actions.onPermissionClick,
+                        onSpacePrivacyClick = actions.onSpacePrivacyClick,
+                        onLoginActivityClick = actions.onLoginActivityClick,
+                        onMessageNotificationClick = actions.onMessageNotificationClick,
+                        onBlockedListClick = actions.onBlockedListClick,
+                        onCommentFraudHistoryClick = actions.onCommentFraudHistoryClick
+                    )
                 }
             }
             SettingsRootCategory.SYSTEM_ABOUT -> {
@@ -899,14 +946,6 @@ private fun SettingsAboutCategoryContent(
                     subtitle = if (LocalAppUiStyle.current == AppUiStyle.MIUIX) "调整关于页渐变与柔光" else "调整关于页卡片的四角形状",
                     onClick = onHeaderAppearanceClick,
                 )
-                if (LocalAppUiStyle.current != AppUiStyle.MIUIX) {
-                    SettingsAdaptiveDivider()
-                    SettingClickableItem(
-                        icon = rememberSettingsSemanticIcon(SettingsIconRole.APPEARANCE),
-                        title = "主题与配色",
-                        onClick = actions.onAppearanceClick,
-                    )
-                }
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -1320,48 +1359,19 @@ private fun FeedDynamicTabVisibilityItem(
 
 
 @Composable
-fun PrivacySection(
-    privacyModeEnabled: Boolean,
-    searchSuggestionsEnabled: Boolean,
-    privacyContentAuthenticationEnabled: Boolean,
-    onPrivacyModeChange: (Boolean) -> Unit,
-    onSearchSuggestionsChange: (Boolean) -> Unit,
-    onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
-    onPermissionClick: () -> Unit,
-    onSpacePrivacyClick: () -> Unit,
-    onLoginActivityClick: () -> Unit,
-    onMessageNotificationClick: () -> Unit,
-    onBlockedListClick: () -> Unit, // [New]
-    onCommentFraudHistoryClick: () -> Unit // [New]
-) {
+internal fun SearchLandingPreferencesSection() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val searchHintEnabled by remember(context) {
         com.android.purebilibili.core.store.SearchHintSettingsStore.isEnabled(context)
     }.collectAsStateWithLifecycle(initialValue = true)
-    val linkPreviewEnabled by remember(context) {
-        SettingsManager.getLinkPreviewEnabled(context)
+    val searchSuggestionsEnabled by remember(context) {
+        SettingsManager.getSearchSuggestionsEnabled(context)
     }.collectAsStateWithLifecycle(initialValue = true)
-    val personalRecapEnabled by remember(context) {
-        SettingsManager.getSubscriptionRecapEnabled(context)
-    }.collectAsStateWithLifecycle(initialValue = false)
-    val siblingTints = rememberSettingsSiblingIconTints(4, paletteOffset = 4)
-    val permissionVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PERMISSION)
-    val spacePrivacyVisual = rememberSettingsEntryVisual(SettingsSearchTarget.SPACE_PRIVACY)
-    val loginActivityVisual = rememberSettingsEntryVisual(SettingsSearchTarget.LOGIN_ACTIVITY)
-    val messageNotificationVisual =
-        rememberSettingsEntryVisual(SettingsSearchTarget.MESSAGE_NOTIFICATION)
-    val blockedListVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BLOCKED_LIST)
-    val historyIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_HISTORY)
-    val searchRecommendationIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_SEARCH_RECOMMENDATION)
-    val personalRecapIcon = rememberSettingsSemanticIcon(SettingsIconRole.PERSONAL_RECAP)
-    val contentAuthenticationIcon = rememberSettingsSemanticIcon(
-        SettingsIconRole.PRIVACY_CONTENT_AUTHENTICATION,
-    )
-
     val showHotControl by SettingsManager.getSearchLandingSectionVisible(context, 0).collectAsStateWithLifecycle(initialValue = true)
     val showHistoryControl by SettingsManager.getSearchLandingSectionVisible(context, 1).collectAsStateWithLifecycle(initialValue = true)
     val showDiscoverControl by SettingsManager.getSearchLandingSectionVisible(context, 2).collectAsStateWithLifecycle(initialValue = true)
+    val searchRecommendationIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_SEARCH_RECOMMENDATION)
 
     SettingsCardGroup {
         listOf(
@@ -1396,109 +1406,354 @@ fun PrivacySection(
                     com.android.purebilibili.core.store.SearchHintSettingsStore.setEnabled(context, enabled)
                 }
             },
-            iconTint = siblingTints[0],
+            iconTint = AppContentColors.secondaryText(),
         )
         SettingsAdaptiveDivider()
-
         SettingsItemAnchor("privacy.search_suggestions_enabled") {
             SettingSwitchItem(
                 icon = searchRecommendationIcon,
                 title = settingItemTitle("privacy.search_suggestions_enabled"),
                 subtitle = "开启时使用官方搜索推荐；关闭后改用公开热搜词",
                 checked = searchSuggestionsEnabled,
-                onCheckedChange = onSearchSuggestionsChange,
-                iconTint = siblingTints[0],
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setSearchSuggestionsEnabled(context, enabled) }
+                },
+                iconTint = AppContentColors.secondaryText(),
             )
         }
+    }
+}
+
+@Composable
+internal fun NetworkProxySection() {
+    val context = LocalContext.current
+    val siblingTints = rememberSettingsSiblingIconTints(2, paletteOffset = 2)
+    val proxySettings by NetworkProxyStore.settings.collectAsStateWithLifecycle(
+        initialValue = NetworkProxyStore.getSync(context)
+    )
+    var showProxyDialog by remember { mutableStateOf(false) }
+
+    SettingsCardGroup {
+        SettingSwitchItem(
+            icon = rememberSettingsVector(R.drawable.ph_tree_structure_24, R.drawable.ms_lan_24),
+            title = "网络代理",
+            subtitle = formatAppHttpProxySummary(proxySettings) +
+                "（作用于应用内网络请求；视频播放始终直连）",
+            checked = proxySettings.enabled,
+            onCheckedChange = { enabled ->
+                if (enabled && !isAppHttpProxyConfigured(proxySettings)) {
+                    showProxyDialog = true
+                } else {
+                    NetworkProxyStore.save(context, proxySettings.copy(enabled = enabled))
+                }
+            },
+            iconTint = siblingTints[0],
+        )
         SettingsAdaptiveDivider()
-        SettingsItemAnchor("privacy.link_preview_enabled") {
+        SettingClickableItem(
+            icon = rememberSettingsVector(R.drawable.ph_graph_24, R.drawable.ms_hub_24),
+            title = "代理地址",
+            value = formatAppHttpProxyEndpoint(proxySettings),
+            subtitle = "配置代理主机与端口，例如 127.0.0.1 和 7890",
+            onClick = { showProxyDialog = true },
+            iconTint = siblingTints[1],
+        )
+    }
+
+    if (showProxyDialog) {
+        NetworkProxyEditDialog(
+            initial = proxySettings,
+            onDismiss = { showProxyDialog = false },
+            onConfirm = { next ->
+                NetworkProxyStore.save(context, next)
+                showProxyDialog = false
+            },
+        )
+    }
+}
+
+@Composable
+internal fun TelemetryConsentSection(
+    crashTrackingEnabled: Boolean,
+    analyticsEnabled: Boolean,
+    onCrashTrackingChange: (Boolean) -> Unit,
+    onAnalyticsChange: (Boolean) -> Unit,
+) {
+    val siblingTints = rememberSettingsSiblingIconTints(4, paletteOffset = 5)
+    val globalTelemetryEnabled = resolveGlobalTelemetryEnabled(
+        crashTrackingEnabled = crashTrackingEnabled,
+        analyticsEnabled = analyticsEnabled,
+    )
+    var showDisclosureDialog by remember { mutableStateOf(false) }
+
+    SettingsCardGroup {
+        SettingsItemAnchor(TELEMETRY_GLOBAL_SETTING_ID) {
             SettingSwitchItem(
-                icon = rememberSettingsSemanticIcon(SettingsIconRole.OPEN_LINKS),
-                title = settingItemTitle("privacy.link_preview_enabled"),
-                subtitle = settingSearchDescription("privacy.link_preview_enabled"),
-                checked = linkPreviewEnabled,
+                icon = rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_24),
+                title = "遥测与数据收集",
+                subtitle = resolveGlobalTelemetrySubtitle(
+                    crashTrackingEnabled = crashTrackingEnabled,
+                    analyticsEnabled = analyticsEnabled,
+                ),
+                checked = globalTelemetryEnabled,
                 onCheckedChange = { enabled ->
-                    scope.launch { SettingsManager.setLinkPreviewEnabled(context, enabled) }
+                    onCrashTrackingChange(enabled)
+                    onAnalyticsChange(enabled)
                 },
                 iconTint = siblingTints[0],
             )
         }
         SettingsAdaptiveDivider()
-        SettingsItemAnchor("privacy.privacy_mode_enabled") {
+        SettingsItemAnchor("diagnostics.crash_tracking_enabled") {
             SettingSwitchItem(
-                icon = historyIcon,
-                title = settingItemTitle("privacy.privacy_mode_enabled"),
-                subtitle = "开启后不再新增播放和搜索历史，已有记录不会被删除",
-                checked = privacyModeEnabled,
-                onCheckedChange = onPrivacyModeChange,
-                iconTint = siblingTints[0]
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.CRASH_TRACKING),
+                title = settingItemTitle("diagnostics.crash_tracking_enabled"),
+                subtitle = "收集设备型号、系统版本与崩溃堆栈，用于定位闪退问题；可随时关闭",
+                checked = crashTrackingEnabled,
+                onCheckedChange = onCrashTrackingChange,
+                iconTint = siblingTints[1],
             )
         }
         SettingsAdaptiveDivider()
-        SettingSwitchItem(
-            icon = personalRecapIcon,
-            title = stringResource(R.string.history_activity_stats),
-            subtitle = "在历史页显示阅读与观看统计、趋势图和最近爱看的 UP 主",
-            checked = personalRecapEnabled,
-            onCheckedChange = { enabled ->
-                scope.launch { SettingsManager.setSubscriptionRecapEnabled(context, enabled) }
+        SettingsItemAnchor("diagnostics.analytics_enabled") {
+            SettingSwitchItem(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.ANALYTICS),
+                title = settingItemTitle("diagnostics.analytics_enabled"),
+                subtitle = "收集匿名日活、页面类型与基础功能次数，不含账号或观看内容；可随时关闭",
+                checked = analyticsEnabled,
+                onCheckedChange = onAnalyticsChange,
+                iconTint = siblingTints[2],
+            )
+        }
+        SettingsAdaptiveDivider()
+        SettingClickableItem(
+            icon = rememberSettingsVector(R.drawable.ph_info_24, R.drawable.ms_info_24),
+            title = "收集的信息说明",
+            subtitle = "查看具体收集哪些信息、绝不收集的内容以及关闭方式",
+            onClick = { showDisclosureDialog = true },
+            iconTint = siblingTints[3],
+        )
+    }
+
+    if (showDisclosureDialog) {
+        val scrollState = rememberScrollState()
+        AppAlertDialog(
+            onDismissRequest = { showDisclosureDialog = false },
+            title = { AppText("遥测与数据收集说明", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    TELEMETRY_DISCLOSURE_SECTIONS.forEach { section ->
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            AppText(
+                                text = section.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AppContentColors.primaryText(),
+                            )
+                            section.items.forEach { line ->
+                                AppText(
+                                    text = "• $line",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AppContentColors.secondaryText(),
+                                )
+                            }
+                        }
+                    }
+                }
             },
-            iconTint = siblingTints[0],
+            confirmButton = {
+                AppDialogAction(onClick = { showDisclosureDialog = false }) {
+                    AppText("知道了")
+                }
+            },
+            dismissButton = if (globalTelemetryEnabled) {
+                {
+                    AppDialogAction(
+                        onClick = {
+                            onCrashTrackingChange(false)
+                            onAnalyticsChange(false)
+                            showDisclosureDialog = false
+                        },
+                    ) {
+                        AppText("关闭全部遥测")
+                    }
+                }
+            } else {
+                null
+            },
         )
-        SettingsAdaptiveDivider()
-        SettingsItemAnchor("privacy.privacy_content_authentication_enabled") {
+    }
+}
+
+@Composable
+fun PrivacySection(
+    privacyModeEnabled: Boolean,
+    searchSuggestionsEnabled: Boolean,
+    privacyContentAuthenticationEnabled: Boolean,
+    crashTrackingEnabled: Boolean = false,
+    analyticsEnabled: Boolean = false,
+    onPrivacyModeChange: (Boolean) -> Unit,
+    onSearchSuggestionsChange: (Boolean) -> Unit,
+    onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
+    onCrashTrackingChange: (Boolean) -> Unit = {},
+    onAnalyticsChange: (Boolean) -> Unit = {},
+    onPermissionClick: () -> Unit,
+    onSpacePrivacyClick: () -> Unit,
+    onLoginActivityClick: () -> Unit,
+    onMessageNotificationClick: () -> Unit,
+    onBlockedListClick: () -> Unit,
+    onCommentFraudHistoryClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val linkPreviewEnabled by remember(context) {
+        SettingsManager.getLinkPreviewEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val personalRecapEnabled by remember(context) {
+        SettingsManager.getSubscriptionRecapEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = false)
+    val siblingTints = rememberSettingsSiblingIconTints(4, paletteOffset = 4)
+    val permissionVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PERMISSION)
+    val spacePrivacyVisual = rememberSettingsEntryVisual(SettingsSearchTarget.SPACE_PRIVACY)
+    val loginActivityVisual = rememberSettingsEntryVisual(SettingsSearchTarget.LOGIN_ACTIVITY)
+    val messageNotificationVisual =
+        rememberSettingsEntryVisual(SettingsSearchTarget.MESSAGE_NOTIFICATION)
+    val blockedListVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BLOCKED_LIST)
+    val historyIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_HISTORY)
+    val personalRecapIcon = rememberSettingsSemanticIcon(SettingsIconRole.PERSONAL_RECAP)
+    val contentAuthenticationIcon = rememberSettingsSemanticIcon(
+        SettingsIconRole.PRIVACY_CONTENT_AUTHENTICATION,
+    )
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        SettingsDetailGroup(title = "历史与隐私") {
+        SettingsCardGroup {
+            SettingsItemAnchor("privacy.privacy_mode_enabled") {
+                SettingSwitchItem(
+                    icon = historyIcon,
+                    title = settingItemTitle("privacy.privacy_mode_enabled"),
+                    subtitle = "开启后不再新增播放和搜索历史，已有记录不会被删除",
+                    checked = privacyModeEnabled,
+                    onCheckedChange = onPrivacyModeChange,
+                    iconTint = siblingTints[0]
+                )
+            }
+            SettingsAdaptiveDivider()
+            SettingsItemAnchor("privacy.privacy_content_authentication_enabled") {
+                SettingSwitchItem(
+                    icon = contentAuthenticationIcon,
+                    title = settingItemTitle("privacy.privacy_content_authentication_enabled"),
+                    subtitle = "进入收藏、历史等页面前使用指纹、人脸或锁屏密码确认身份",
+                    checked = privacyContentAuthenticationEnabled,
+                    onCheckedChange = onPrivacyContentAuthenticationChange,
+                    iconTint = siblingTints[1]
+                )
+            }
+            SettingsAdaptiveDivider()
             SettingSwitchItem(
-                icon = contentAuthenticationIcon,
-                title = settingItemTitle("privacy.privacy_content_authentication_enabled"),
-                subtitle = "进入收藏、历史等页面前使用指纹、人脸或锁屏密码确认身份",
-                checked = privacyContentAuthenticationEnabled,
-                onCheckedChange = onPrivacyContentAuthenticationChange,
-                iconTint = siblingTints[1]
+                icon = personalRecapIcon,
+                title = stringResource(R.string.history_activity_stats),
+                subtitle = "在历史页显示阅读与观看统计、趋势图和最近爱看的 UP 主",
+                checked = personalRecapEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setSubscriptionRecapEnabled(context, enabled) }
+                },
+                iconTint = siblingTints[0],
+            )
+            SettingsAdaptiveDivider()
+            SettingsItemAnchor("privacy.link_preview_enabled") {
+                SettingSwitchItem(
+                    icon = rememberSettingsSemanticIcon(SettingsIconRole.OPEN_LINKS),
+                    title = settingItemTitle("privacy.link_preview_enabled"),
+                    subtitle = settingSearchDescription("privacy.link_preview_enabled"),
+                    checked = linkPreviewEnabled,
+                    onCheckedChange = { enabled ->
+                        scope.launch { SettingsManager.setLinkPreviewEnabled(context, enabled) }
+                    },
+                    iconTint = siblingTints[0],
+                )
+            }
+        }
+    }
+
+    SettingsDetailGroup(title = "账号与通知") {
+        SettingsCardGroup {
+            SettingClickableItem(
+                icon = messageNotificationVisual.icon,
+                iconPainter = messageNotificationVisual.iconResId?.let { painterResource(id = it) },
+                title = settingsDestinationCopy(SettingsSearchTarget.MESSAGE_NOTIFICATION).title,
+                subtitle = settingsDestinationCopy(SettingsSearchTarget.MESSAGE_NOTIFICATION).summary,
+                onClick = onMessageNotificationClick,
+                iconTint = messageNotificationVisual.iconTint,
+            )
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = spacePrivacyVisual.icon,
+                iconPainter = spacePrivacyVisual.iconResId?.let { painterResource(id = it) },
+                title = settingsDestinationCopy(SettingsSearchTarget.SPACE_PRIVACY).title,
+                subtitle = settingsDestinationCopy(SettingsSearchTarget.SPACE_PRIVACY).summary,
+                onClick = onSpacePrivacyClick,
+                iconTint = spacePrivacyVisual.iconTint,
+            )
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = loginActivityVisual.icon,
+                iconPainter = loginActivityVisual.iconResId?.let { painterResource(id = it) },
+                title = settingsDestinationCopy(SettingsSearchTarget.LOGIN_ACTIVITY).title,
+                subtitle = settingsDestinationCopy(SettingsSearchTarget.LOGIN_ACTIVITY).summary,
+                onClick = onLoginActivityClick,
+                iconTint = loginActivityVisual.iconTint,
             )
         }
-        SettingsAdaptiveDivider()
-        SettingClickableItem(
-            icon = spacePrivacyVisual.icon,
-            iconPainter = spacePrivacyVisual.iconResId?.let { painterResource(id = it) },
-            title = settingsDestinationCopy(SettingsSearchTarget.SPACE_PRIVACY).title,
-            subtitle = settingsDestinationCopy(SettingsSearchTarget.SPACE_PRIVACY).summary,
-            onClick = onSpacePrivacyClick,
-            iconTint = spacePrivacyVisual.iconTint,
+    }
+
+    SettingsDetailGroup(title = "权限与屏蔽") {
+        SettingsCardGroup {
+            SettingClickableItem(
+                icon = permissionVisual.icon,
+                iconPainter = permissionVisual.iconResId?.let { painterResource(id = it) },
+                title = settingsDestinationCopy(SettingsSearchTarget.PERMISSION).title,
+                onClick = onPermissionClick,
+                iconTint = siblingTints[2]
+            )
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = blockedListVisual.icon,
+                iconPainter = blockedListVisual.iconResId?.let { painterResource(id = it) },
+                title = settingsDestinationCopy(SettingsSearchTarget.BLOCKED_LIST).title,
+                value = settingsDestinationCopy(SettingsSearchTarget.BLOCKED_LIST).summary,
+                onClick = onBlockedListClick,
+                iconTint = siblingTints[3]
+            )
+            SettingsAdaptiveDivider()
+            SettingClickableItem(
+                icon = rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_24),
+                title = "评论检查记录",
+                value = "查看已发评论及其显示状态",
+                onClick = onCommentFraudHistoryClick,
+                iconTint = AppContentColors.secondaryText()
+            )
+        }
+    }
+
+    SettingsDetailGroup(title = "遥测与数据收集") {
+        TelemetryConsentSection(
+            crashTrackingEnabled = crashTrackingEnabled,
+            analyticsEnabled = analyticsEnabled,
+            onCrashTrackingChange = onCrashTrackingChange,
+            onAnalyticsChange = onAnalyticsChange,
         )
-        SettingsAdaptiveDivider()
-        SettingClickableItem(
-            icon = loginActivityVisual.icon,
-            iconPainter = loginActivityVisual.iconResId?.let { painterResource(id = it) },
-            title = settingsDestinationCopy(SettingsSearchTarget.LOGIN_ACTIVITY).title,
-            subtitle = settingsDestinationCopy(SettingsSearchTarget.LOGIN_ACTIVITY).summary,
-            onClick = onLoginActivityClick,
-            iconTint = loginActivityVisual.iconTint,
-        )
-        SettingsAdaptiveDivider()
-        SettingClickableItem(
-            icon = permissionVisual.icon,
-            iconPainter = permissionVisual.iconResId?.let { painterResource(id = it) },
-            title = settingsDestinationCopy(SettingsSearchTarget.PERMISSION).title,
-            onClick = onPermissionClick,
-            iconTint = siblingTints[2]
-        )
-        SettingsAdaptiveDivider()
-        SettingClickableItem(
-            icon = blockedListVisual.icon,
-            iconPainter = blockedListVisual.iconResId?.let { painterResource(id = it) },
-            title = settingsDestinationCopy(SettingsSearchTarget.BLOCKED_LIST).title,
-            value = settingsDestinationCopy(SettingsSearchTarget.BLOCKED_LIST).summary,
-            onClick = onBlockedListClick,
-            iconTint = siblingTints[3]
-        )
-        SettingsAdaptiveDivider()
-        SettingClickableItem(
-            icon = rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_24),
-            title = "评论检查记录",
-            value = "查看已发评论及其显示状态",
-            onClick = onCommentFraudHistoryClick,
-            iconTint = AppContentColors.secondaryText()
-        )
+    }
+
+        SettingsDetailGroup(title = "网络代理") {
+            NetworkProxySection()
+        }
     }
 }
 
@@ -1562,7 +1817,7 @@ fun DataStorageSection(
             icon = imageSavePathVisual.icon,
             iconPainter = imageSavePathVisual.iconResId?.let { painterResource(id = it) },
             title = settingsDestinationCopy(SettingsSearchTarget.IMAGE_SAVE_PATH).title,
-            value = if (customImageSavePath != null) "已选择目录" else "默认",
+            value = if (customImageSavePath != null) "自定义" else "默认",
             onClick = onImageSavePathClick,
             iconTint = siblingTints[3],
             showChevron = showExplicitActionChevron
@@ -1635,82 +1890,30 @@ private fun DiagnosticsSection(
     onEnhancedDiagnosticLoggingChange: (Boolean) -> Unit,
     onExportLogsClick: () -> Unit,
 ) {
-    val context = LocalContext.current
-    val siblingTints = rememberSettingsSiblingIconTints(6, paletteOffset = 5)
+    val siblingTints = rememberSettingsSiblingIconTints(2, paletteOffset = 5)
     val exportLogsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.EXPORT_LOGS)
     val useMd3ExportLogsDescription = LocalAppUiStyle.current == AppUiStyle.MATERIAL3
     val exportLogsDescription = "默认导出崩溃摘要，详细错误记录需另选"
-    val proxySettings by NetworkProxyStore.settings.collectAsStateWithLifecycle(
-        initialValue = NetworkProxyStore.getSync(context)
-    )
-    var showProxyDialog by remember { mutableStateOf(false) }
     var showEnhancedDiagnosticConsent by remember { mutableStateOf(false) }
 
     SettingsCardGroup {
-        SettingsItemAnchor("diagnostics.crash_tracking_enabled") {
-            SettingSwitchItem(
-                icon = rememberSettingsSemanticIcon(SettingsIconRole.CRASH_TRACKING),
-                title = settingItemTitle("diagnostics.crash_tracking_enabled"),
-                subtitle = "记录崩溃和严重故障信息，帮助定位问题；默认开启",
-                checked = crashTrackingEnabled,
-                onCheckedChange = onCrashTrackingChange,
-                iconTint = siblingTints[0],
-            )
-        }
-        SettingsAdaptiveDivider()
-        SettingsItemAnchor("diagnostics.analytics_enabled") {
-            SettingSwitchItem(
-                icon = rememberSettingsSemanticIcon(SettingsIconRole.ANALYTICS),
-                title = settingItemTitle("diagnostics.analytics_enabled"),
-                subtitle = "匿名统计每日活跃和基础功能使用情况，不包含账号内容；默认开启",
-                checked = analyticsEnabled,
-                onCheckedChange = onAnalyticsChange,
-                iconTint = siblingTints[1],
-            )
-        }
-        SettingsAdaptiveDivider()
         SettingsItemAnchor("diagnostics.enhanced_diagnostic_logging_enabled") {
             SettingSwitchItem(
                 icon = rememberSettingsVector(R.drawable.ph_bug_beetle_24, R.drawable.ms_pest_control_24),
                 title = settingItemTitle("diagnostics.enhanced_diagnostic_logging_enabled"),
                 subtitle = if (enhancedDiagnosticLoggingEnabled) {
-                    "记录详细运行信息；关闭后清除，基础错误日志保留"
+                    "仅保存在本地，记录详细运行信息；关闭后清除，基础错误日志保留"
                 } else {
-                    "记录更多排查信息，隐藏账号凭据与观看内容"
+                    "仅保存在本地，记录更多排查信息，隐藏账号凭据与观看内容"
                 },
                 checked = enhancedDiagnosticLoggingEnabled,
                 onCheckedChange = { enabled ->
                     if (enabled) showEnhancedDiagnosticConsent = true
                     else onEnhancedDiagnosticLoggingChange(false)
                 },
-                iconTint = siblingTints[2],
+                iconTint = siblingTints[0],
             )
         }
-        SettingsAdaptiveDivider()
-        SettingSwitchItem(
-            icon = rememberSettingsVector(R.drawable.ph_tree_structure_24, R.drawable.ms_lan_24),
-            title = "网络代理",
-            subtitle = formatAppHttpProxySummary(proxySettings) +
-                "（作用于应用内网络请求；视频播放始终直连）",
-            checked = proxySettings.enabled,
-            onCheckedChange = { enabled ->
-                if (enabled && !isAppHttpProxyConfigured(proxySettings)) {
-                    showProxyDialog = true
-                } else {
-                    NetworkProxyStore.save(context, proxySettings.copy(enabled = enabled))
-                }
-            },
-            iconTint = siblingTints[3],
-        )
-        SettingsAdaptiveDivider()
-        SettingClickableItem(
-            icon = rememberSettingsVector(R.drawable.ph_graph_24, R.drawable.ms_hub_24),
-            title = "代理地址",
-            value = formatAppHttpProxyEndpoint(proxySettings),
-            subtitle = "填写“主机:端口”，例如 127.0.0.1:7890",
-            onClick = { showProxyDialog = true },
-            iconTint = siblingTints[4],
-        )
         SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = exportLogsVisual.icon,
@@ -1719,18 +1922,7 @@ private fun DiagnosticsSection(
             subtitle = exportLogsDescription.takeIf { useMd3ExportLogsDescription },
             value = exportLogsDescription.takeUnless { useMd3ExportLogsDescription },
             onClick = onExportLogsClick,
-            iconTint = siblingTints[5],
-        )
-    }
-
-    if (showProxyDialog) {
-        NetworkProxyEditDialog(
-            initial = proxySettings,
-            onDismiss = { showProxyDialog = false },
-            onConfirm = { next ->
-                NetworkProxyStore.save(context, next)
-                showProxyDialog = false
-            },
+            iconTint = siblingTints[1],
         )
     }
 
@@ -2139,7 +2331,8 @@ fun AboutSection(
         SettingClickableItem(
             icon = sparklesIcon,
             title = "本次更新",
-            subtitle = "了解新功能，先预览再决定是否体验",
+            subtitle = "随时重复查看当前版本更新要点，一键前往对应区域",
+            value = "v$versionName",
             onClick = { showUpdateHighlights = true },
             iconTint = AppContentColors.accent(),
         )

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -53,6 +54,10 @@ import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.store.TodayWatchFeedbackSnapshot
 import com.android.purebilibili.core.store.TodayWatchFeedbackStore
 import com.android.purebilibili.core.store.TodayWatchProfileStore
+import com.android.purebilibili.core.store.resolveDislikedCreatorName
+import com.android.purebilibili.core.store.withoutDislikedCreator
+import com.android.purebilibili.core.store.withoutDislikedKeyword
+import com.android.purebilibili.core.store.withoutDislikedVideo
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.components.AppSwitchPreference
 import com.android.purebilibili.core.util.Logger
@@ -163,6 +168,10 @@ class TodayWatchPlugin : BuiltinPlugin, RecommendationPluginApi<VideoItem>, Toda
         updateConfig { it.copy(collapsed = collapsed) }
     }
 
+    override fun setRecommendationStrategy(strategy: RecommendationStrategy) {
+        updateConfig { it.copy(recommendationStrategy = strategy) }
+    }
+
     override fun buildRecommendations(request: RecommendationRequest<VideoItem>): RecommendationResult<VideoItem> {
         val plan = buildTodayWatchPlan(
             historyVideos = request.historyVideos,
@@ -232,6 +241,36 @@ class TodayWatchPlugin : BuiltinPlugin, RecommendationPluginApi<VideoItem>, Toda
                 Logger.d(TAG, "已清空今日推荐画像与反馈缓存")
             } catch (e: Exception) {
                 Logger.e(TAG, "清空画像失败", e)
+            }
+        }
+    }
+
+    fun undoDislikedCreator(creatorMid: Long) {
+        if (creatorMid <= 0L) return
+        mutateFeedback { it.withoutDislikedCreator(creatorMid) }
+    }
+
+    fun undoDislikedVideo(bvid: String) {
+        if (bvid.isBlank()) return
+        mutateFeedback { it.withoutDislikedVideo(bvid) }
+    }
+
+    fun undoDislikedKeyword(keyword: String) {
+        if (keyword.isBlank()) return
+        mutateFeedback { it.withoutDislikedKeyword(keyword) }
+    }
+
+    private fun mutateFeedback(transform: (TodayWatchFeedbackSnapshot) -> TodayWatchFeedbackSnapshot) {
+        ioScope.launch {
+            try {
+                val context = PluginManager.getContext()
+                val updated = transform(TodayWatchFeedbackStore.getSnapshot(context))
+                TodayWatchFeedbackStore.saveSnapshot(context, updated)
+                updateConfig { current ->
+                    current.copy(refreshTriggerToken = System.currentTimeMillis())
+                }
+            } catch (e: Exception) {
+                Logger.e(TAG, "更新负反馈失败", e)
             }
         }
     }
@@ -504,7 +543,22 @@ class TodayWatchPlugin : BuiltinPlugin, RecommendationPluginApi<VideoItem>, Toda
             }
 
             AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            TodayWatchTasteInsightSection(insightState)
+            TodayWatchTasteInsightSection(
+                state = insightState,
+                feedbackSnapshot = feedbackSnapshot,
+                onUndoCreator = { mid ->
+                    feedbackSnapshot = feedbackSnapshot.withoutDislikedCreator(mid)
+                    undoDislikedCreator(mid)
+                },
+                onUndoVideo = { bvid ->
+                    feedbackSnapshot = feedbackSnapshot.withoutDislikedVideo(bvid)
+                    undoDislikedVideo(bvid)
+                },
+                onUndoKeyword = { keyword ->
+                    feedbackSnapshot = feedbackSnapshot.withoutDislikedKeyword(keyword)
+                    undoDislikedKeyword(keyword)
+                },
+            )
 
             AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
             AppText(
@@ -606,9 +660,14 @@ private fun TodayWatchPluginModeSegmentedControl(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TodayWatchTasteInsightSection(
-    state: TodayWatchTasteInsightState
+    state: TodayWatchTasteInsightState,
+    feedbackSnapshot: TodayWatchFeedbackSnapshot,
+    onUndoCreator: (Long) -> Unit,
+    onUndoVideo: (String) -> Unit,
+    onUndoKeyword: (String) -> Unit,
 ) {
     AppText(
         text = "推荐依据",
@@ -635,7 +694,12 @@ private fun TodayWatchTasteInsightSection(
     }
 
     AppText("最近不感兴趣", style = MaterialTheme.typography.labelLarge)
-    if (state.recentDislikedVideos.isEmpty()) {
+    val recentVideos = remember(feedbackSnapshot.recentDislikedVideos) {
+        feedbackSnapshot.recentDislikedVideos
+            .sortedByDescending { it.dislikedAtMillis }
+            .take(8)
+    }
+    if (recentVideos.isEmpty()) {
         AppText(
             text = "还没有本地负反馈。点视频菜单里的“不感兴趣”后，会在这里显示近期样本。",
             style = MaterialTheme.typography.bodySmall,
@@ -643,34 +707,59 @@ private fun TodayWatchTasteInsightSection(
         )
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            state.recentDislikedVideos.forEach { item ->
-                Column(
+            recentVideos.forEach { item ->
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    AppText(
-                        text = item.title,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.primaryText()
-                    )
-                    AppText(
-                        text = item.subtitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AppContentColors.secondaryText()
-                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        AppText(
+                            text = item.title.ifBlank { item.bvid },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppContentColors.primaryText(),
+                        )
+                        AppText(
+                            text = item.creatorName.ifBlank {
+                                if (item.creatorMid > 0L) "UP主${item.creatorMid}" else "未知 UP"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppContentColors.secondaryText(),
+                        )
+                    }
+                    AppTextButton(onClick = { onUndoVideo(item.bvid) }) {
+                        AppText("撤销")
+                    }
                 }
             }
         }
     }
 
-    if (state.negativeSignals.isNotEmpty()) {
-        AppText("已降权信号", style = MaterialTheme.typography.labelLarge)
+    if (feedbackSnapshot.dislikedCreatorMids.isNotEmpty()) {
+        AppText("已减少推荐的 UP（点击恢复）", style = MaterialTheme.typography.labelLarge)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            state.negativeSignals.forEach { signal ->
+            feedbackSnapshot.dislikedCreatorMids.forEach { mid ->
+                val name = feedbackSnapshot.resolveDislikedCreatorName(mid)
                 AppFilterChip(
                     selected = false,
-                    onClick = {},
-                    label = { AppText("${signal.label} · ${signal.value}") }
+                    onClick = { onUndoCreator(mid) },
+                    label = { AppText("$name · 恢复") },
+                )
+            }
+        }
+    }
+
+    if (feedbackSnapshot.dislikedKeywords.isNotEmpty()) {
+        AppText("已降权关键词（点击移除）", style = MaterialTheme.typography.labelLarge)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            feedbackSnapshot.dislikedKeywords.forEach { keyword ->
+                AppFilterChip(
+                    selected = false,
+                    onClick = { onUndoKeyword(keyword) },
+                    label = { AppText("$keyword · 移除") },
                 )
             }
         }

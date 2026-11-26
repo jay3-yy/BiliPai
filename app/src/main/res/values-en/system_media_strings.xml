@@ -7,6 +7,12 @@
     <string name="playback_widget_previous">Previous</string>
     <string name="playback_widget_next">Next</string>
     <string name="playback_widget_error">Unable to control playback. Open BiliPai.</string>
+    <string name="keepsake_widget_name">Daily Keepsake</string>
+    <string name="keepsake_widget_description">Shows a calm greeting and your local completion reflections</string>
+    <string name="keepsake_widget_default_greeting">Good evening · Daily note</string>
+    <string name="keepsake_widget_default_body">Take your time with the stories you love.</string>
+    <string name="keepsake_widget_default_footer">BiliPai · Finish a series to save a keepsake</string>
+    <string name="keepsake_widget_shuffle">Next keepsake</string>
     <string name="audio_library_title">Listen to videos</string>
     <string name="audio_library_queue">Recent queue</string>
     <string name="audio_library_more">More Watch later</string>

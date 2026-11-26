@@ -183,7 +183,10 @@ internal fun PlayerAdjustmentPersistencePreference(modifier: Modifier = Modifier
 }
 
 @Composable
-internal fun PlayerRotationSensitivityPreference(modifier: Modifier = Modifier) {
+internal fun PlayerRotationSensitivityPreference(
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sensitivity by remember(context) { ContentDisplayPreferences.rotationSensitivity(context) }
@@ -192,8 +195,13 @@ internal fun PlayerRotationSensitivityPreference(modifier: Modifier = Modifier) 
         SettingsSingleChoicePreference(
             title = ContentDisplaySetting.title(ContentDisplaySetting.ROTATION_SENSITIVITY),
             icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYER_ROTATION_SENSITIVITY),
-            subtitle = "自动横竖屏开启时生效；稳重需转得更正，灵敏更早响应，标准沿用原有判断",
+            subtitle = if (enabled) {
+                "稳重需转得更正，灵敏更早响应，标准沿用默认判断"
+            } else {
+                "开启“自动横竖屏切换”后生效"
+            },
             selectedValue = sensitivity,
+            enabled = enabled,
             options = com.android.purebilibili.core.util.PlayerRotationSensitivity.entries.map { AppSegmentOption(it, it.label) },
             onSelectionChange = { scope.savePreference(context) { ContentDisplayPreferences.setRotationSensitivity(context, it) } },
         )

@@ -88,6 +88,10 @@ internal fun settingsDestinationCopy(target: SettingsSearchTarget): SettingsDest
         title = "消息通知",
         summary = "后台消息、关注更新与开播提醒",
     )
+    SettingsSearchTarget.CUSTOM_PUSH -> SettingsDestinationCopy(
+        title = "自建推送",
+        summary = "通过 UnifiedPush 或 FCM 接收自建服务器的端到端加密通知",
+    )
     SettingsSearchTarget.BLOCKED_LIST -> SettingsDestinationCopy(
         title = "黑名单管理",
         summary = "管理已屏蔽的 UP 主",
@@ -98,7 +102,7 @@ internal fun settingsDestinationCopy(target: SettingsSearchTarget): SettingsDest
     )
     SettingsSearchTarget.WEBDAV_BACKUP -> SettingsDestinationCopy(
         title = "WebDAV 云备份",
-        summary = "备份与恢复设置和插件",
+        summary = "本地 ZIP、面对面扫码传输与 WebDAV 云端备份",
     )
     SettingsSearchTarget.DOWNLOAD_PATH -> SettingsDestinationCopy(
         title = "下载位置",
@@ -174,6 +178,6 @@ internal fun settingsDestinationCopy(target: SettingsSearchTarget): SettingsDest
     )
     SettingsSearchTarget.NEARBY_HANDOFF -> SettingsDestinationCopy(
         title = com.android.purebilibili.feature.nearby.NEARBY_TITLE,
-        summary = "局域网配对、加密接力与已信任设备",
+        summary = "手机与平板局域网加密配对、双向接力续播",
     )
 }

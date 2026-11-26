@@ -304,6 +304,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardNavigation
 import com.android.purebilibili.feature.dynamic.components.DynamicCardPresentation
 import com.android.purebilibili.feature.dynamic.components.RichTextContent
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentOverlayHost
+import com.android.purebilibili.feature.video.ui.components.commentThreadNavigationBlur
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceHidden
 import com.android.purebilibili.feature.dynamic.components.imagePreviewSourceBounds
@@ -965,6 +966,7 @@ fun SpaceScreen(
                             resolveSpaceDynamicCardItems(filteredDynamics)
                         }
 
+                        var spaceCommentBlurProgress by remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -974,7 +976,8 @@ fun SpaceScreen(
                                         com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
                                     ) Modifier.hazeSourceCompat(state = hazeState) else Modifier
                                 )
-                                .globalWallpaperAwareBackground(MaterialTheme.colorScheme.surface),
+                                .globalWallpaperAwareBackground(MaterialTheme.colorScheme.surface)
+                                .commentThreadNavigationBlur { spaceCommentBlurProgress },
                         ) {
                         SpaceContent(
                             state = state,
@@ -1095,6 +1098,7 @@ fun SpaceScreen(
                             toastContext = context,
                             onUserClick = onUserClick,
                             onUrlClick = onCommentLinkClick,
+                            onCoveredBlurProgressChange = { spaceCommentBlurProgress = it },
                         )
                     }
                 }

@@ -7,6 +7,12 @@
     <string name="playback_widget_previous">上一首</string>
     <string name="playback_widget_next">下一首</string>
     <string name="playback_widget_error">暫時無法控制播放，請開啟 BiliPai</string>
+    <string name="keepsake_widget_name">每日紀念</string>
+    <string name="keepsake_widget_description">展示時段問候與你的完結短評紀念，輕點可換一條或直接回到 BiliPai</string>
+    <string name="keepsake_widget_default_greeting">晚上好 · 每日一句</string>
+    <string name="keepsake_widget_default_body">慢慢看，喜歡的作品值得留一點安靜的時間。</string>
+    <string name="keepsake_widget_default_footer">BiliPai · 追完合集或番劇即可留下完結紀念</string>
+    <string name="keepsake_widget_shuffle">換一條紀念</string>
     <string name="audio_library_title">聽影片</string>
     <string name="audio_library_queue">最近播放佇列</string>
     <string name="audio_library_more">更多稍後再看</string>

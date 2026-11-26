@@ -21,6 +21,7 @@ enum class FullscreenTopBarItem(
     STATUS("电量与时间", FullscreenTopBarItemGroup.PRIMARY, "show_fs_top_status"),
     AUDIO("听音频", FullscreenTopBarItemGroup.PRIMARY, "show_fs_top_audio"),
     CAST("投屏", FullscreenTopBarItemGroup.PRIMARY, "show_fs_top_cast"),
+    NEARBY_HANDOFF("设备接力", FullscreenTopBarItemGroup.PRIMARY, "show_fs_top_nearby_handoff"),
     SPONSOR("空降助手", FullscreenTopBarItemGroup.PRIMARY, "show_fs_top_sponsor"),
     SEND_DANMAKU("发弹幕", FullscreenTopBarItemGroup.PRIMARY, "show_fs_top_send_danmaku"),
     DANMAKU_TOGGLE("弹幕开关", FullscreenTopBarItemGroup.PRIMARY, "show_fs_top_danmaku_toggle"),

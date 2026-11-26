@@ -175,6 +175,10 @@ class DanmakuSettingsMappingPolicyTest {
             intPreferencesKey("danmaku_portrait_display_area_mode") to
                 PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT.value
         )
+        val fullScreenPrefs = mutablePreferencesOf(
+            intPreferencesKey("danmaku_portrait_display_area_mode") to
+                PortraitDanmakuDisplayAreaMode.FULL_SCREEN.value
+        )
 
         for (profile in DanmakuSettingsScope.entries) {
             assertEquals(
@@ -184,6 +188,10 @@ class DanmakuSettingsMappingPolicyTest {
             assertEquals(
                 PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT,
                 mapDanmakuSettingsFromPreferences(videoViewportPrefs, profile).portraitDisplayAreaMode
+            )
+            assertEquals(
+                PortraitDanmakuDisplayAreaMode.FULL_SCREEN,
+                mapDanmakuSettingsFromPreferences(fullScreenPrefs, profile).portraitDisplayAreaMode
             )
         }
     }

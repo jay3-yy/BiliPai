@@ -173,13 +173,18 @@ import com.android.purebilibili.feature.screenshot.AppScreenshotGestureBlockStat
 import com.android.purebilibili.feature.screenshot.AppScreenshotResult
 import com.android.purebilibili.feature.screenshot.AppScreenshotSavedImage
 import com.android.purebilibili.feature.screenshot.AppScreenshotRegionOverlay
+import com.android.purebilibili.feature.screenshot.AppScreenshotWatermarkContext
+import com.android.purebilibili.feature.screenshot.GlobalScreenshotPromptOverlay
 import com.android.purebilibili.feature.screenshot.appScreenshotGestureDetector
+import com.android.purebilibili.feature.screenshot.cacheWatermarkedScreenshotForShare
 import com.android.purebilibili.feature.screenshot.captureAndSaveAppScreenshotImage
 import com.android.purebilibili.feature.screenshot.captureCurrentAppWindow
+import com.android.purebilibili.feature.screenshot.composeAppScreenshotWithTopWatermark
 import com.android.purebilibili.feature.screenshot.cropAppScreenshotBitmap
 import com.android.purebilibili.feature.screenshot.saveAppScreenshotBitmapToGalleryUri
 import com.android.purebilibili.feature.screenshot.shareAppScreenshot
 import com.android.purebilibili.feature.screenshot.shouldOfferAppScreenshotShare
+import com.android.purebilibili.feature.screenshot.shouldTriggerGlobalScreenshotPrompt
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.core.player.PlaybackProgressManager
 import com.android.purebilibili.feature.video.handoff.PlaybackHandoffCodec
@@ -207,9 +212,11 @@ import com.android.purebilibili.navigation3.toLegacyRoute
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
+import com.android.purebilibili.core.util.AnalyticsHelper
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -246,6 +253,7 @@ internal fun resolveShortcutRoute(host: String): String? {
         "dynamic" -> ScreenRoutes.Dynamic.route
         "favorite" -> ScreenRoutes.Favorite.route
         "history" -> ScreenRoutes.History.route
+        "personal_recap", "recap", "keepsake" -> ScreenRoutes.PersonalRecap.route
         "watch_later" -> ScreenRoutes.WatchLater.route
         "login" -> ScreenRoutes.Login.route
         "settings" -> ScreenRoutes.Settings.route
@@ -1000,6 +1008,17 @@ class MainActivity : AppCompatActivity() {
     private var runtimeJankStats: JankStats? = null
     private val runtimeVisualGuardSession = Any()
     private var android17HandoffEnabled = false
+    private val systemScreenCaptureEvents = MutableStateFlow(0L)
+    private var screenCaptureCallbackRegistered = false
+    private val android14ScreenCaptureCallback: Any? by lazy(LazyThreadSafetyMode.NONE) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            android.app.Activity.ScreenCaptureCallback {
+                systemScreenCaptureEvents.value = SystemClock.uptimeMillis()
+            }
+        } else {
+            null
+        }
+    }
 
     var currentWindowMetrics: WindowMetrics? by mutableStateOf(null)
     var maximumWindowMetrics: WindowMetrics? by mutableStateOf(null)
@@ -1454,6 +1473,7 @@ class MainActivity : AppCompatActivity() {
             val appGestureScreenshotEnabled = appThemeSettings.appGestureScreenshotEnabled
             val appScreenshotGestureMode = appThemeSettings.appScreenshotGestureMode
             val appScreenshotCaptureMode = appThemeSettings.appScreenshotCaptureMode
+            val globalScreenshotShareOverlayEnabled = appThemeSettings.globalScreenshotShareOverlayEnabled
             val appThemeConfig by remember(context) {
                 SettingsManager.getAppThemeConfig(context)
             }.collectAsStateWithLifecycle(initialValue = SettingsManager.DEFAULT_INITIAL_APP_THEME_CONFIG)
@@ -1650,6 +1670,63 @@ class MainActivity : AppCompatActivity() {
                     var isAppScreenshotBlockedBySplash by remember { mutableStateOf(false) }
                     var isAppScreenshotSaving by remember { mutableStateOf(false) }
                     var appScreenshotRegionBitmap by remember { mutableStateOf<Bitmap?>(null) }
+                    var globalScreenshotPromptBitmap by remember { mutableStateOf<Bitmap?>(null) }
+                    var globalScreenshotPromptContext by remember { mutableStateOf<AppScreenshotWatermarkContext?>(null) }
+                    var isGlobalScreenshotPromptBusy by remember { mutableStateOf(false) }
+                    var lastGlobalScreenshotPromptAtMs by remember { mutableStateOf(0L) }
+                    val latestGlobalScreenshotOverlayEnabled by rememberUpdatedState(globalScreenshotShareOverlayEnabled)
+                    val latestGlobalScreenshotOverlayBlocked by rememberUpdatedState(
+                        isPipRenderingActive ||
+                            isAppScreenshotBlockedBySplash ||
+                            isAppScreenshotSaving ||
+                            appScreenshotRegionBitmap != null ||
+                            isGlobalScreenshotPromptBusy
+                    )
+                    DisposableEffect(Unit) {
+                        onDispose {
+                            globalScreenshotPromptBitmap?.recycle()
+                            globalScreenshotPromptBitmap = null
+                            globalScreenshotPromptContext = null
+                        }
+                    }
+                    LaunchedEffect(Unit) {
+                        systemScreenCaptureEvents.collect { capturedAtMs ->
+                            if (capturedAtMs <= 0L) return@collect
+                            if (
+                                !shouldTriggerGlobalScreenshotPrompt(
+                                    enabled = latestGlobalScreenshotOverlayEnabled,
+                                    blocked = latestGlobalScreenshotOverlayBlocked,
+                                    nowMs = capturedAtMs,
+                                    lastTriggerMs = lastGlobalScreenshotPromptAtMs,
+                                )
+                            ) {
+                                return@collect
+                            }
+                            lastGlobalScreenshotPromptAtMs = capturedAtMs
+                            val capturedContext = if (
+                                (isInVideoDetail || isInAudioModeRoute) &&
+                                    ::miniPlayerManager.isInitialized &&
+                                    !miniPlayerManager.isLiveMode
+                            ) {
+                                AppScreenshotWatermarkContext(
+                                    title = miniPlayerManager.currentTitle.trim().takeIf { it.isNotEmpty() },
+                                    bvid = miniPlayerManager.currentBvid?.trim()?.takeIf { it.isNotEmpty() },
+                                ).takeIf { it.hasVideoInfo }
+                            } else {
+                                null
+                            }
+                            val captured = runCatching {
+                                captureCurrentAppWindow(this@MainActivity)
+                            }.getOrElse {
+                                Logger.w(TAG, "系统截屏浮层捕获窗口失败", it)
+                                null
+                            } ?: return@collect
+                            globalScreenshotPromptBitmap?.recycle()
+                            globalScreenshotPromptBitmap = captured
+                            globalScreenshotPromptContext = capturedContext
+                            AnalyticsHelper.logFeatureAction("screenshot_watermark", "prompt_shown")
+                        }
+                    }
                     var brandFeedbackBottomInset by remember { mutableStateOf(0.dp) }
                     val appScreenshotSnackbarHostState = remember { SnackbarHostState() }
                     val isLandscapeAppScreenshot =
@@ -1851,12 +1928,8 @@ class MainActivity : AppCompatActivity() {
                                 ) {
                                 com.android.purebilibili.feature.nearby.NearbyHandoffHost(
                                     miniPlayer = miniPlayerManager,
-                                    onOpenVideo = { video ->
-                                        pendingNavigationRoute = PlaybackHandoffCodec.toRoute(
-                                            com.android.purebilibili.feature.video.handoff.PlaybackHandoffPayload.V1.Video(
-                                                bvid = video.bvid, cid = video.cid, resumePositionMs = video.positionMs,
-                                            )
-                                        )
+                                    onOpenVideo = { media ->
+                                        pendingNavigationRoute = com.android.purebilibili.feature.nearby.NearbyPlaybackBridge.toNavigationRoute(media)
                                     },
                                 ) {
                                 AppNavigation(
@@ -2376,6 +2449,83 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
 
+                    GlobalScreenshotPromptOverlay(
+                        previewBitmap = globalScreenshotPromptBitmap,
+                        watermarkContext = globalScreenshotPromptContext,
+                        busy = isGlobalScreenshotPromptBusy,
+                        onShare = {
+                            val sourceBitmap = globalScreenshotPromptBitmap ?: return@GlobalScreenshotPromptOverlay
+                            val activeWatermarkContext = globalScreenshotPromptContext
+                            if (isGlobalScreenshotPromptBusy) return@GlobalScreenshotPromptOverlay
+                            scope.launch {
+                                isGlobalScreenshotPromptBusy = true
+                                try {
+                                    val watermarked = composeAppScreenshotWithTopWatermark(
+                                        context = context,
+                                        source = sourceBitmap,
+                                        isDarkTheme = useDarkTheme,
+                                        watermarkContext = activeWatermarkContext,
+                                    )
+                                    val shareUri = try {
+                                        cacheWatermarkedScreenshotForShare(context, watermarked)
+                                    } finally {
+                                        watermarked.recycle()
+                                    }
+                                    if (shareUri != null) {
+                                        AnalyticsHelper.logFeatureAction("screenshot_watermark", "share")
+                                        globalScreenshotPromptBitmap?.recycle()
+                                        globalScreenshotPromptBitmap = null
+                                        globalScreenshotPromptContext = null
+                                        shareAppScreenshot(context, shareUri)
+                                    } else {
+                                        Toast.makeText(context, "生成水印截图失败，请稍后重试", Toast.LENGTH_SHORT).show()
+                                    }
+                                } finally {
+                                    isGlobalScreenshotPromptBusy = false
+                                }
+                            }
+                        },
+                        onSave = {
+                            val sourceBitmap = globalScreenshotPromptBitmap ?: return@GlobalScreenshotPromptOverlay
+                            val activeWatermarkContext = globalScreenshotPromptContext
+                            if (isGlobalScreenshotPromptBusy) return@GlobalScreenshotPromptOverlay
+                            scope.launch {
+                                isGlobalScreenshotPromptBusy = true
+                                try {
+                                    val watermarked = composeAppScreenshotWithTopWatermark(
+                                        context = context,
+                                        source = sourceBitmap,
+                                        isDarkTheme = useDarkTheme,
+                                        watermarkContext = activeWatermarkContext,
+                                    )
+                                    val savedUri = try {
+                                        saveAppScreenshotBitmapToGalleryUri(context, watermarked)
+                                    } finally {
+                                        watermarked.recycle()
+                                    }
+                                    if (savedUri != null) {
+                                        AnalyticsHelper.logFeatureAction("screenshot_watermark", "save")
+                                        globalScreenshotPromptBitmap?.recycle()
+                                        globalScreenshotPromptBitmap = null
+                                        globalScreenshotPromptContext = null
+                                        Toast.makeText(context, "已保存带 BiliPai 水印的截图", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "保存失败，请稍后重试", Toast.LENGTH_SHORT).show()
+                                    }
+                                } finally {
+                                    isGlobalScreenshotPromptBusy = false
+                                }
+                            }
+                        },
+                        onDismiss = {
+                            if (!isGlobalScreenshotPromptBusy) {
+                                globalScreenshotPromptBitmap?.recycle()
+                                globalScreenshotPromptBitmap = null
+                                globalScreenshotPromptContext = null
+                            }
+                        },
+                    )
+
                     AppSnackbarHost(
                         hostState = appScreenshotSnackbarHostState,
                         modifier = Modifier
@@ -2709,6 +2859,17 @@ class MainActivity : AppCompatActivity() {
                 Logger.w(TAG, "无法启动页面转场性能采样", throwable)
             }.getOrNull()
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !screenCaptureCallbackRegistered) {
+            val callback = android14ScreenCaptureCallback as? android.app.Activity.ScreenCaptureCallback
+            if (callback != null) {
+                runCatching {
+                    registerScreenCaptureCallback(mainExecutor, callback)
+                    screenCaptureCallbackRegistered = true
+                }.onFailure { throwable ->
+                    Logger.w(TAG, "注册系统截屏回调失败", throwable)
+                }
+            }
+        }
         if (shouldLogWarmResume(hasCompletedInitialResume, isChangingConfigurations)) {
             Logger.d(
                 TAG,
@@ -2721,6 +2882,17 @@ class MainActivity : AppCompatActivity() {
         if (startupRecoveryRedirected) {
             super.onStop()
             return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && screenCaptureCallbackRegistered) {
+            val callback = android14ScreenCaptureCallback as? android.app.Activity.ScreenCaptureCallback
+            if (callback != null) {
+                runCatching {
+                    unregisterScreenCaptureCallback(callback)
+                }.onFailure { throwable ->
+                    Logger.w(TAG, "注销系统截屏回调失败", throwable)
+                }
+            }
+            screenCaptureCallbackRegistered = false
         }
         StartupRecovery.onMainStopped(this)
         AppRuntimeVisualGuardTracker.discardActiveWindow(runtimeVisualGuardSession)

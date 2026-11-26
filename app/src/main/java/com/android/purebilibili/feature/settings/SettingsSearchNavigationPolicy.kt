@@ -33,6 +33,7 @@ internal fun resolveSettingsSearchNavigation(result: SettingsSearchResult): Bili
         SettingsSearchTarget.SPACE_PRIVACY -> BiliPaiNavKey.SpacePrivacySettings
         SettingsSearchTarget.LOGIN_ACTIVITY -> BiliPaiNavKey.LoginActivitySettings
         SettingsSearchTarget.MESSAGE_NOTIFICATION -> BiliPaiNavKey.MessageNotificationSettings
+        SettingsSearchTarget.CUSTOM_PUSH -> BiliPaiNavKey.CustomPushSettings
         SettingsSearchTarget.PLUGINS -> BiliPaiNavKey.PluginsSettings()
         SettingsSearchTarget.SETTINGS_SHARE -> BiliPaiNavKey.SettingsShare
         SettingsSearchTarget.WEBDAV_BACKUP -> BiliPaiNavKey.WebDavBackup

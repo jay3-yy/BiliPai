@@ -891,7 +891,14 @@ private fun VideoPlayerSectionContent(
     val onSubtitleTrackSelected = actions.onSubtitleTrackSelected
     val onRecallDanmaku = actions.onRecallDanmaku
     val context = LocalContext.current
-    val captureScreenshot = rememberVideoScreenshotAction()
+    val miniPlayerManagerForOverlay = remember(context) { MiniPlayerManager.getInstance(context) }
+    val sleepTimerFinishedEvent by miniPlayerManagerForOverlay.sleepTimerFinishedEvent.collectAsStateWithLifecycle()
+    var pendingPostcardHintDraft by remember(bvid) {
+        mutableStateOf<com.android.purebilibili.feature.video.postcard.VideoPostcardDraft?>(null)
+    }
+    var activePostcardSheetDraft by remember(bvid) {
+        mutableStateOf<com.android.purebilibili.feature.video.postcard.VideoPostcardDraft?>(null)
+    }
     val localDensity = LocalDensity.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
@@ -1896,6 +1903,38 @@ private fun VideoPlayerSectionContent(
     val lockHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.PLAYER_GESTURES)
     //  共享弹幕管理器（用于所有 seek 路径的一致同步）
     val danmakuManager = rememberDanmakuManager(bvid)
+    val captureScreenshot = rememberVideoScreenshotAction(
+        onScreenshotSaved = { savedUri ->
+            val capturedPosMs = (playerState.player?.currentPosition ?: 0L).coerceAtLeast(0L)
+            val subtitleSuccess = uiState as? VideoPlaybackUiState.Success
+            val primarySub = subtitleSuccess?.let {
+                resolveSubtitleDisplayTextAt(it.subtitlePrimaryCues, capturedPosMs)
+            }
+            val secondarySub = subtitleSuccess?.let {
+                resolveSubtitleDisplayTextAt(it.subtitleSecondaryCues, capturedPosMs)
+            }
+            val nearbyDanmaku = com.android.purebilibili.feature.video.postcard.selectNearbyPostcardDanmaku(
+                candidates = danmakuManager.getLoadedDanmakuList().mapNotNull { item ->
+                    val raw = item.mergedOriginalText?.takeIf { it.isNotBlank() } ?: item.text
+                    raw?.let { item.showAtTime to it }
+                },
+                positionMs = capturedPosMs,
+            )
+            val initialQuote = com.android.purebilibili.feature.video.postcard.resolvePostcardInitialQuote(
+                primarySubtitle = primarySub,
+                secondarySubtitle = secondarySub,
+                nearbyDanmaku = nearbyDanmaku,
+            )
+            pendingPostcardHintDraft = com.android.purebilibili.feature.video.postcard.VideoPostcardDraft(
+                imageUri = savedUri,
+                videoTitle = subtitleSuccess?.info?.title.orEmpty(),
+                upName = subtitleSuccess?.info?.owner?.name.orEmpty(),
+                positionMs = capturedPosMs,
+                initialQuote = initialQuote,
+                danmakuCandidates = nearbyDanmaku,
+            )
+        }
+    )
     val abLoopController = com.android.purebilibili.feature.video.playback.policy.rememberPlayerAbLoopController(
         player = playerState.player,
         identityKey = bvid to currentSeekSessionCid,
@@ -6442,6 +6481,52 @@ private fun VideoPlayerSectionContent(
                 onSubmit = onSponsorContributionSubmit,
                 onCancel = onSponsorContributionCancel,
             )
+
+            com.android.purebilibili.feature.video.postcard.PostcardCaptureHintPill(
+                draft = pendingPostcardHintDraft,
+                onOpenPostcard = { draft ->
+                    pendingPostcardHintDraft = null
+                    activePostcardSheetDraft = draft
+                },
+                onShareRawImage = { uri ->
+                    pendingPostcardHintDraft = null
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                            clipData = android.content.ClipData.newRawUri("视频截图", uri)
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(intent, "分享视频截图"))
+                    } catch (_: Exception) {
+                        Toast.makeText(context, "无法打开分享，请稍后重试", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onDismiss = { pendingPostcardHintDraft = null },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(bottom = 58.dp, start = 14.dp),
+            )
+
+            com.android.purebilibili.feature.video.ui.components.SleepTimerGoodnightOverlay(
+                event = sleepTimerFinishedEvent,
+                onExtend15Minutes = { miniPlayerManagerForOverlay.extendAfterSleepTimer() },
+                onDismiss = {
+                    sleepTimerFinishedEvent?.let { miniPlayerManagerForOverlay.consumeSleepTimerFinishedEvent(it.id) }
+                },
+                extendLabel = "再看 15 分钟",
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 14.dp),
+            )
+
+            activePostcardSheetDraft?.let { postcardDraft ->
+                com.android.purebilibili.feature.video.postcard.VideoPostcardSheet(
+                    draft = postcardDraft,
+                    onDismiss = { activePostcardSheetDraft = null },
+                    onSaveToPrivateNote = actions.onSavePostcardToNote,
+                )
+            }
 
             if (showDanmakuPoolSheet) {
                 VideoPlayerDanmakuPoolHost(

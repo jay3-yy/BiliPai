@@ -157,7 +157,10 @@ import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.CardGiftcard
 import androidx.compose.material.icons.rounded.Close
+import com.android.purebilibili.feature.personal.MealtimeGachaSheet
+import com.android.purebilibili.feature.personal.toMealtimeGachaCandidate
 import com.android.purebilibili.core.util.FormatUtils
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.animation.gl.isThanosEffectSupported
@@ -1005,6 +1008,11 @@ fun WatchLaterScreen(
         viewModel.setPageActive(isCurrentPage)
         onDispose { viewModel.setPageActive(false) }
     }
+    LaunchedEffect(isCurrentPage) {
+        if (isCurrentPage) {
+            com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("WatchLaterScreen")
+        }
+    }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val accountIdentity by TokenManager.accountIdentity.collectAsStateWithLifecycle()
     val initialAccountIdentity = remember { accountIdentity }
@@ -1079,6 +1087,7 @@ fun WatchLaterScreen(
     var isBatchMode by rememberSaveable(accountIdentity) { mutableStateOf(false) }
     var selectedBvids by rememberSaveable(accountIdentity) { mutableStateOf(setOf<String>()) }
     var showBatchDeleteConfirm by rememberSaveable(accountIdentity) { mutableStateOf(false) }
+    var showMealtimeGacha by rememberSaveable(accountIdentity) { mutableStateOf(false) }
     var pendingTransferCopy by rememberSaveable(accountIdentity) { mutableStateOf<Boolean?>(null) }
     var selectedTransferFolderId by rememberSaveable(accountIdentity) { mutableStateOf<Long?>(null) }
     var pendingManagementAction by rememberSaveable(accountIdentity) { mutableStateOf<WatchLaterManagementAction?>(null) }
@@ -1397,6 +1406,15 @@ fun WatchLaterScreen(
                     },
                     actions = {
                         if (state.items.isNotEmpty() && !isBatchMode) {
+                            AppIconButton(
+                                enabled = !state.isManaging,
+                                onClick = { showMealtimeGacha = true },
+                            ) {
+                                AppIcon(
+                                    imageVector = Icons.Outlined.CardGiftcard,
+                                    contentDescription = "下饭盲盒",
+                                )
+                            }
                             AppWindowActionMenu(
                                 enabled = !state.isManaging,
                                 groups = listOf(
@@ -1842,6 +1860,20 @@ fun WatchLaterScreen(
             }
 
         }
+    }
+
+    if (showMealtimeGacha && state.items.isNotEmpty()) {
+        val gachaCandidates = remember(state.items) {
+            state.items.mapNotNull { it.toMealtimeGachaCandidate() }
+        }
+        MealtimeGachaSheet(
+            candidates = gachaCandidates,
+            sourceLabel = "稍后再看",
+            onPlay = { picked ->
+                onVideoClick(picked.bvid, picked.cid, 0L)
+            },
+            onDismiss = { showMealtimeGacha = false },
+        )
     }
 
     if (showBatchDeleteConfirm) {

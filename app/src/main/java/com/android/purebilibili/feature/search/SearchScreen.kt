@@ -764,9 +764,10 @@ fun SearchScreen(
     val showHotSection by remember(context) { SettingsManager.getSearchLandingSectionVisible(context, 0) }.collectAsStateWithLifecycle(initialValue = true)
     val showHistorySection by remember(context) { SettingsManager.getSearchLandingSectionVisible(context, 1) }.collectAsStateWithLifecycle(initialValue = true)
     val showDiscoverSection by remember(context) { SettingsManager.getSearchLandingSectionVisible(context, 2) }.collectAsStateWithLifecycle(initialValue = true)
-    val hotSearchEnabled by remember(context) { SettingsManager.getSearchHotSectionEnabled(context) }.collectAsStateWithLifecycle(initialValue = true)
+    val hotSearchEnabledPref by remember(context) { SettingsManager.getSearchHotSectionEnabled(context) }.collectAsStateWithLifecycle(initialValue = true)
     val discoverSectionEnabled by remember(context) { SettingsManager.getSearchDiscoverSectionEnabled(context) }.collectAsStateWithLifecycle(initialValue = true)
     val appThemeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+    val hotSearchEnabled = hotSearchEnabledPref && !appThemeConfig.focusViewingHideStatsEnabled
     val androidNativeLiquidGlassEnabled = appThemeConfig.liquidGlassEnabled
     val effectiveLiquidGlassEnabled = rememberAppChromeLiquidGlassEnabled(
         androidNativeEnabled = androidNativeLiquidGlassEnabled,

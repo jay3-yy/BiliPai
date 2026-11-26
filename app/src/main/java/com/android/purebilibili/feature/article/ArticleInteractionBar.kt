@@ -49,11 +49,12 @@ internal fun ArticleInteractionBar(
     visible: Boolean = true,
     backdrop: Backdrop? = null,
     hazeState: HazeState? = null,
+    onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
 ) {
     val account by TokenManager.accountIdentity.collectAsStateWithLifecycle()
     // 操作协程与状态同时绑定文章、账号，切换后不接收旧文章的异步结果。
     key(article.articleId, account) {
-        ArticleInteractionSession(article, comments, onCommentClick, onUserClick, onLinkClick, modifier, openCommentRootRpid, openCommentTargetRpid, visible, backdrop, hazeState)
+        ArticleInteractionSession(article, comments, onCommentClick, onUserClick, onLinkClick, modifier, openCommentRootRpid, openCommentTargetRpid, visible, backdrop, hazeState, onCoveredBlurProgressChange)
     }
 }
 
@@ -70,6 +71,7 @@ private fun ArticleInteractionSession(
     visible: Boolean = true,
     backdrop: Backdrop? = null,
     hazeState: HazeState? = null,
+    onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -196,7 +198,13 @@ private fun ArticleInteractionSession(
         hazeState = hazeState,
         modifier = modifier,
     )
-    ArticleCommentOverlays(comments, article, onUserClick, onLinkClick)
+    ArticleCommentOverlays(
+        viewModel = comments,
+        article = article,
+        onUserClick = onUserClick,
+        onLinkClick = onLinkClick,
+        onCoveredBlurProgressChange = onCoveredBlurProgressChange,
+    )
     if (showRepost) {
         RepostDialog(onDismiss = { showRepost = false }, contentKey = "article:${article.articleId}") { text, alsoComment, richContents, topic, done ->
             // 显式按专栏评论目标同步，不能按动态 ID 推断专栏的评论区。

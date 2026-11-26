@@ -22,10 +22,11 @@ import com.android.purebilibili.feature.video.util.saveScreenshotToGalleryUri
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-/** Captures a frame, saves it first, then offers to share that exact saved image. */
+/** Captures a frame, saves it first, then offers to share that exact saved image or invoke [onScreenshotSaved]. */
 @Composable
 internal fun rememberVideoScreenshotAction(
     captureBitmap: (suspend (PlayerView, Int, Int) -> Bitmap?)? = null,
+    onScreenshotSaved: ((Uri) -> Unit)? = null,
 ): (PlayerView, Int, Int, String) -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -86,6 +87,8 @@ internal fun rememberVideoScreenshotAction(
                     }
                     if (uri == null) {
                         Toast.makeText(context, "截图失败，请稍后重试", Toast.LENGTH_SHORT).show()
+                    } else if (onScreenshotSaved != null) {
+                        onScreenshotSaved(uri)
                     } else {
                         pendingShareUri = uri
                     }

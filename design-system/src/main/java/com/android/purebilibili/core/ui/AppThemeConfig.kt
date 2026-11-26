@@ -43,6 +43,7 @@ data class AppThemeConfig(
     val nowPlayingGlassEnabled: Boolean = liquidGlassEnabled,
     val liquidControlsUseThemeColor: Boolean = false,
     val liquidSwitchThumbMode: LiquidSwitchThumbMode = LiquidSwitchThumbMode.THEME,
+    val focusViewingHideStatsEnabled: Boolean = false,
 )
 
 fun isMiuixNonGlassEnabled(uiStyle: AppUiStyle, liquidGlassEnabled: Boolean): Boolean =

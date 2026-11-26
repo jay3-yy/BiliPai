@@ -56,7 +56,12 @@ internal class TodayWatchHistorySource(
             if (failure is CancellationException) throw failure
             val page = result.getOrNull()
             if (page == null) {
-                if (pages == 0) return TodayWatchHistorySample(emptyList(), unavailable = true)
+                if (pages == 0) {
+                    if (cachedVideos.isNotEmpty()) {
+                        return TodayWatchHistorySample(cachedVideos.take(limit), unavailable = false)
+                    }
+                    return TodayWatchHistorySample(emptyList(), unavailable = true)
+                }
                 break
             }
             merged += page.list.map { it.toVideoItem() }

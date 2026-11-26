@@ -321,6 +321,7 @@ fun AppearanceSettingsContent(
     val isTablet = windowSizeClass.isTablet
     val sectionKeys = when (contentMode) {
         AppearanceSettingsContentMode.APPEARANCE -> listOf(
+            "appearance_scene_recipes",
             "appearance_display_mode_title", "appearance_display_mode",
             "appearance_theme_color_title", "appearance_theme_color", "appearance_theme_home_preview",
             "appearance_text_size_title", "appearance_text_size",
@@ -621,6 +622,11 @@ fun AppearanceSettingsContent(
         contentPadding = PaddingValues(top = LocalSettingsTopContentPadding.current, bottom = contentBottomPadding)
     ) {
         if (contentMode == AppearanceSettingsContentMode.APPEARANCE) {
+        item(key = "appearance_scene_recipes") {
+            Box(modifier = Modifier.entrance()) {
+                AppearanceSceneRecipesSection()
+            }
+        }
         //  显示模式
         item(key = "appearance_display_mode_title") {
             Box(modifier = Modifier.entrance()) {
@@ -1001,9 +1007,9 @@ fun AppearanceSettingsContent(
                                     icon = rememberSettingsSemanticIcon(SettingsIconRole.COLOR_STYLE),
                                     title = "高级色彩调优",
                                     subtitle = if (advancedColorTuningExpanded) {
-                                        "点击收起调色盘、色彩风格、标准与对比度"
+                                        "点击收起配色规则与对比度调节"
                                     } else {
-                                        "展开调整调色盘、色彩风格、标准与对比度"
+                                        "按需调节整体配色方案、色彩鲜艳度与文字对比度"
                                     },
                                     onClick = { advancedColorTuningExpanded = !advancedColorTuningExpanded },
                                     showChevron = true,
@@ -1015,6 +1021,12 @@ fun AppearanceSettingsContent(
                                     exit = shrinkVertically() + fadeOut(),
                                 ) {
                                     Column {
+                                        AppText(
+                                            text = "调色板决定整体配色倾向；选「标准」时可继续微调色彩风格（鲜艳度与辅助色）、色彩标准（Material 配色算法版本）与对比度（文字清晰度）。",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = AppContentColors.secondaryText(),
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                        )
                                 // 种子已提升到内容顶部计算（themePreviewSeed），此处直接复用。
                                 val seedPreviewColor = themePreviewSeed
                                 val seedPreviewSwatches = rememberSeedStyleSwatches(
@@ -2442,20 +2454,6 @@ fun AppearanceSettingsContent(
             item(key = "home_browsing") {
                 Box(modifier = Modifier.entrance()) {
                     AppPreferenceGroup {
-                        SettingsItemAnchor("appearance.is_header_collapse_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_HEADER_COLLAPSE),
-                                title = settingItemTitle("appearance.is_header_collapse_enabled"),
-                                subtitle = context.getString(R.string.appearance_home_header_scroll),
-                                checked = state.isHeaderCollapseEnabled,
-                                onCheckedChange = { value ->
-                                    viewModel.toggleHeaderCollapse(value)
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-
-                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.common_list_header_collapse_mode") {
                             SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.HEADER_COLLAPSE),

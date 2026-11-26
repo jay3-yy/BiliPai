@@ -25,7 +25,7 @@ internal enum class SettingsIconRole(
     DATA_BACKUP(R.drawable.ms_backup_24, R.drawable.ph_archive_24),
     PRIVACY_PERMISSION(R.drawable.ms_lock_24, R.drawable.ph_lock_24),
     DIAGNOSTICS(R.drawable.ms_terminal_24, R.drawable.ph_terminal_window_24),
-    ABOUT_SUPPORT(R.drawable.ms_info_24, R.drawable.ph_info_24),
+    ABOUT_SUPPORT(R.drawable.ic_settings_help_about_24),
     APPEARANCE(R.drawable.ms_palette_24, R.drawable.ph_paint_brush_broad_24),
     ABOUT_CARD_SHAPE(R.drawable.ic_settings_about_card_shape_24),
     ANIMATION(R.drawable.ms_animation_24, R.drawable.ph_film_strip_24),
@@ -36,6 +36,7 @@ internal enum class SettingsIconRole(
     SPACE_PRIVACY_HIDDEN(R.drawable.ph_eye_closed_24),
     LOGIN_ACTIVITY(R.drawable.ic_settings_login_activity_24),
     MESSAGE_NOTIFICATION(R.drawable.ms_notifications_24, R.drawable.ph_bell_24),
+    CUSTOM_PUSH(R.drawable.ms_cloud_done_24, R.drawable.ph_cloud_check_24),
     BLOCKED_LIST(R.drawable.ms_block_24, R.drawable.ph_prohibit_24),
     SETTINGS_SHARE(R.drawable.ms_share_24, R.drawable.ph_share_network_24),
     WEBDAV_BACKUP(R.drawable.ms_cloud_upload_24, R.drawable.ph_cloud_arrow_up_24),
@@ -191,6 +192,7 @@ internal enum class SettingsIconRole(
     SUBTITLE(R.drawable.ms_subtitles_24, R.drawable.ph_subtitles_24),
     COMMENT_DECORATION(R.drawable.ms_mode_comment_24, R.drawable.ph_chat_teardrop_24),
     AI_SUMMARY(R.drawable.ms_smart_toy_24, R.drawable.ph_robot_24),
+    VIDEO_DETAIL_BGM(R.drawable.ms_music_note_24, R.drawable.ph_music_note_24),
     VIDEO_NOTE(R.drawable.ms_edit_note_24, R.drawable.ph_note_pencil_24),
     LIKE_INTERACTION(R.drawable.ms_thumb_up_off_alt_24, R.drawable.ph_thumbs_up_24),
     FAVORITE_TAP_MODE(R.drawable.ms_collections_bookmark_24, R.drawable.ph_bookmarks_24),
@@ -434,6 +436,7 @@ internal fun resolveSettingsSearchTargetIconRole(
     SettingsSearchTarget.SPACE_PRIVACY -> SettingsIconRole.SPACE_PRIVACY
     SettingsSearchTarget.LOGIN_ACTIVITY -> SettingsIconRole.LOGIN_ACTIVITY
     SettingsSearchTarget.MESSAGE_NOTIFICATION -> SettingsIconRole.MESSAGE_NOTIFICATION
+    SettingsSearchTarget.CUSTOM_PUSH -> SettingsIconRole.CUSTOM_PUSH
     SettingsSearchTarget.BLOCKED_LIST -> SettingsIconRole.BLOCKED_LIST
     SettingsSearchTarget.SETTINGS_SHARE -> SettingsIconRole.SETTINGS_SHARE
     SettingsSearchTarget.WEBDAV_BACKUP -> SettingsIconRole.WEBDAV_BACKUP

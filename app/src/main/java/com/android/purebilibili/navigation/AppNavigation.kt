@@ -1054,15 +1054,6 @@ fun AppNavigation(
         LaunchedEffect(profileEntrySelected, inAppProfileAvatarEntrance) {
             if (!profileEntrySelected) inAppProfileAvatarEntrance = null
         }
-        com.android.purebilibili.feature.settings.highlights.UpdateHighlightsHost(
-            allowAutomatic = !entryDialogsBlocked &&
-                currentRoute == ScreenRoutes.Home.route && currentBottomNavItem == BottomNavItem.HOME &&
-                !foregroundSettling && !deferGlobalWallpaperPalette && !mainBottomPagerState.isNavigating &&
-                !isInPipMode && miniPlayerManager?.isPlaying != true &&
-                miniPlayerManager?.isMiniMode != true &&
-                pendingVideoId == null && pendingShortcutRoute == null && pendingNavigationRoute == null &&
-                initialSearchKeyword == null,
-        )
         // A new tab visit is distinct even if the history pager page was uncomposed
         // while away. Playback navigation leaves the selected tab and this identity intact.
         val historyBrowsingSessionKey = remember(currentBottomNavItem) { Any() }
@@ -3226,6 +3217,33 @@ fun AppNavigation(
             com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->
                 pushNavigation3Key(BiliPaiNavKey.AicuQuery(uid = uid ?: 0L))
             },
+            com.android.purebilibili.feature.settings.highlights.LocalUpdateHighlightNavigator provides { action ->
+                when (action) {
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_PLUGINS_SETTINGS ->
+                        pushNavigation3Key(BiliPaiNavKey.PluginsSettings())
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_DOWNLOAD_LIST ->
+                        pushNavigation3Target(BiliPaiNavKey.DownloadList)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_ICON_SETTINGS ->
+                        pushNavigation3Key(BiliPaiNavKey.IconSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_LISTEN_VIDEO ->
+                        pushNavigation3Target(BiliPaiNavKey.ListenVideo)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_PERSONAL_RECAP ->
+                        pushNavigation3Target(BiliPaiNavKey.PersonalRecap)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_WATCH_LATER ->
+                        pushNavigation3Target(BiliPaiNavKey.WatchLater)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_CUSTOM_PUSH_SETTINGS ->
+                        pushNavigation3Key(BiliPaiNavKey.CustomPushSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS ->
+                        pushNavigation3Key(BiliPaiNavKey.PlaybackSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_APPEARANCE_SETTINGS ->
+                        pushNavigation3Key(BiliPaiNavKey.AppearanceSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_HOME_SETTINGS ->
+                        pushNavigation3Key(BiliPaiNavKey.HomeSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_SETTINGS ->
+                        pushNavigation3Key(BiliPaiNavKey.Settings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.PREVIEW_CMF -> Unit
+                }
+            },
             LocalSetBottomBarVisible provides setBottomBarVisible,
             LocalBottomBarVisible provides (finalBottomBarVisible && !driveBottomBarByProgress),
             LocalBottomBarContentPadding provides bottomBarContentPadding,
@@ -3257,6 +3275,15 @@ fun AppNavigation(
             com.android.purebilibili.feature.home.LocalHomeFeedScrollInProgress provides
                 homeFeedScrollInProgressState
         ) {
+            com.android.purebilibili.feature.settings.highlights.UpdateHighlightsHost(
+                allowAutomatic = !entryDialogsBlocked &&
+                    currentRoute == ScreenRoutes.Home.route && currentBottomNavItem == BottomNavItem.HOME &&
+                    !foregroundSettling && !deferGlobalWallpaperPalette && !mainBottomPagerState.isNavigating &&
+                    !isInPipMode && miniPlayerManager?.isPlaying != true &&
+                    miniPlayerManager?.isMiniMode != true &&
+                    pendingVideoId == null && pendingShortcutRoute == null && pendingNavigationRoute == null &&
+                    initialSearchKeyword == null,
+            )
             fun markNavigation3VideoReturnBeforeBackAction(targetKey: BiliPaiNavKey?) {
                 val fromRoute = navigation3BackStack.lastOrNull()?.toLegacyRoute()
                 val targetRoute = targetKey?.toLegacyRoute()
@@ -4283,6 +4310,9 @@ fun AppNavigation(
                                 )
                             )
                         },
+                        onOpenPersonalRecap = {
+                            pushNavigation3Key(BiliPaiNavKey.PersonalRecap)
+                        },
                         onUpClick = { mid -> pushNavigation3Target(BiliPaiNavKey.Space(mid)) },
                         onVideoClick = { lookupKey, cid, cover, isVertical ->
                             val historyItem = historyViewModel.getHistoryItem(lookupKey)
@@ -4703,6 +4733,7 @@ fun AppNavigation(
                         onCommentSourceClick = { url -> openBilibiliLinkInNavigation3(url) },
                         onSearchClick = { navigateFromProfile(BiliPaiNavKey.Search()) },
                         onHistoryClick = { navigateFromProfile(BiliPaiNavKey.History) },
+                        onPersonalRecapClick = { pushNavigation3Key(BiliPaiNavKey.PersonalRecap) },
                         showHistoryService = shouldShowProfileHistoryService(
                             visibleBottomBarItems.map { it.name }
                         ),
@@ -5378,7 +5409,17 @@ fun AppNavigation(
                 fun RenderMessageNotificationSettingsEntryContent(key: BiliPaiNavKey) {
                     SettingsTabletEntry(key) {
                         com.android.purebilibili.feature.settings.MessageNotificationSettingsScreen(
-                            onBack = { performSystemBackAction() }
+                            onBack = { performSystemBackAction() },
+                            onCustomPushClick = { pushNavigation3Key(BiliPaiNavKey.CustomPushSettings) },
+                        )
+                    }
+                }
+
+                @Composable
+                fun RenderCustomPushSettingsEntryContent(key: BiliPaiNavKey) {
+                    SettingsTabletEntry(key) {
+                        com.android.purebilibili.feature.settings.CustomPushSettingsScreen(
+                            onBack = { performSystemBackAction() },
                         )
                     }
                 }
@@ -6687,6 +6728,26 @@ fun AppNavigation(
                             RenderHomeEntryContent(key, isBottomPagerPageActive, isBottomPagerPageVisibleDuringNavigation)
                         BiliPaiNavEntryContentRole.LISTEN_VIDEO ->
                             RenderListenVideoEntryContent(key)
+                        BiliPaiNavEntryContentRole.PERSONAL_RECAP -> {
+                            com.android.purebilibili.feature.list.PersonalRecapScreen(
+                                onBack = { performSystemBackAction() },
+                                onUpClick = { mid -> pushNavigation3Key(BiliPaiNavKey.Space(mid)) },
+                                onShowAllUps = { window, stats ->
+                                    pushNavigation3Key(
+                                        BiliPaiNavKey.PersonalRecapUps(
+                                            window = window,
+                                            stats = stats.copy(watchTimestampsMs = emptyList()),
+                                        )
+                                    )
+                                },
+                                onVideoClick = { bvid, cid, coverUrl ->
+                                    navigateToVideoInNavigation3(bvid, cid, coverUrl)
+                                },
+                                onBangumiClick = { seasonId ->
+                                    navigateToSystemCardWindowOrPush(BiliPaiNavKey.BangumiDetail(seasonId = seasonId))
+                                },
+                            )
+                        }
                         BiliPaiNavEntryContentRole.PERSONAL_RECAP_UPS -> {
                             val recapKey = key as BiliPaiNavKey.PersonalRecapUps
                             com.android.purebilibili.feature.list.PersonalRecapUpsScreen(
@@ -6750,6 +6811,8 @@ fun AppNavigation(
                             RenderLoginActivitySettingsEntryContent(key)
                         BiliPaiNavEntryContentRole.MESSAGE_NOTIFICATION_SETTINGS ->
                             RenderMessageNotificationSettingsEntryContent(key)
+                        BiliPaiNavEntryContentRole.CUSTOM_PUSH_SETTINGS ->
+                            RenderCustomPushSettingsEntryContent(key)
                         BiliPaiNavEntryContentRole.PLUGINS_SETTINGS ->
                             RenderPluginsSettingsEntryContent(key as BiliPaiNavKey.PluginsSettings)
                         BiliPaiNavEntryContentRole.PLUGIN_CENTER_DETAIL ->

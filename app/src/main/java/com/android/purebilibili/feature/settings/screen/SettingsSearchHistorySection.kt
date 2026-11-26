@@ -21,16 +21,18 @@ import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.*
 
 private val SETTINGS_SEARCH_QUICK_TOPICS = listOf(
+    "液态玻璃",
+    "动态环境光",
+    "响度均衡",
+    "长按锁倍速",
+    "应用图标",
     "小窗",
     "后台播放",
     "空降助手",
-    "液态玻璃",
     "画质",
-    "双击点赞",
     "弹幕",
     "底栏",
     "主题色",
-    "自动连播",
 )
 
 @OptIn(ExperimentalLayoutApi::class)

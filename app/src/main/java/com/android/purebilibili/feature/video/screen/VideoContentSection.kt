@@ -482,6 +482,8 @@ internal class VideoContentData(
     val emoteMap: Map<String, String>,
     val followingMids: Set<Long>,
     val videoTags: List<VideoTag>,
+    val bgmInfo: BgmInfo? = null,
+    val bgmInfoList: List<BgmInfo> = emptyList(),
     val relatedLoadState: VideoPlaybackUiState.RelatedLoadState = VideoPlaybackUiState.RelatedLoadState.READY,
 )
 
@@ -1019,6 +1021,8 @@ internal fun VideoContentSection(
                             currentPageIndex = currentPageIndex,
                             followingMids = followingMids,
                             videoTags = videoTags,
+                            bgmInfo = data.bgmInfo,
+                            bgmInfoList = data.bgmInfoList,
                             isFollowing = isFollowing,
                             followStatusKnown = followStatusKnown,
                             isFavorited = isFavorited,
@@ -1471,6 +1475,8 @@ private fun VideoIntroTab(
     aiSummaryPrompt: com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState? = null,
     onShowAiSummarySheet: () -> Unit = {},
     onShowNoteListSheet: () -> Unit = {},
+    bgmInfo: BgmInfo? = null,
+    bgmInfoList: List<BgmInfo> = emptyList(),
     onTimestampClick: ((Long) -> Unit)? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
     sponsorVideoLabel: String = "",
@@ -1538,6 +1544,8 @@ private fun VideoIntroTab(
                 aiSummaryPrompt = aiSummaryPrompt,
                 onShowAiSummarySheet = onShowAiSummarySheet,
                 onShowNoteListSheet = onShowNoteListSheet,
+                bgmInfo = bgmInfo,
+                bgmInfoList = bgmInfoList,
                 relatedVideos = relatedVideos,
                 onlineCount = onlineCount,
                 showOnlineCount = showOnlineCount,
@@ -2246,6 +2254,8 @@ private fun VideoHeaderContent(
     aiSummaryPrompt: com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState? = null,
     onShowAiSummarySheet: () -> Unit = {},
     onShowNoteListSheet: () -> Unit = {},
+    bgmInfo: BgmInfo? = null,
+    bgmInfoList: List<BgmInfo> = emptyList(),
     relatedVideos: List<RelatedVideo> = emptyList(),
     onTimestampClick: ((Long) -> Unit)? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
@@ -2297,6 +2307,11 @@ private fun VideoHeaderContent(
         VideoTitleWithDesc(
             info = info,
             videoTags = videoTags,
+            bgmList = com.android.purebilibili.feature.video.ui.section.resolveDisplayBgmList(
+                bgmInfo = bgmInfo,
+                bgmInfoList = bgmInfoList,
+                videoTags = videoTags,
+            ),
             sponsorLabel = sponsorVideoLabel,
             transitionEnabled = transitionEnabled,  // 🔗 传递共享元素开关
             isQuickReturnLimitedForSharedElements = isQuickReturnLimitedForSharedElements,
@@ -2394,6 +2409,7 @@ internal fun VideoContentTabBar(
     isPagerDraggingProvider: (() -> Boolean)? = null,
     pagerTargetPositionProvider: (() -> Float)? = null,
     showDanmakuActions: Boolean = true,
+    showNearbyAction: Boolean = true,
     measurementLabels: List<String>? = null,
     liquidGlassTabsOffsetX: Dp = 0.dp,
     liquidGlassAlignShellStart: Boolean = false,
@@ -2489,6 +2505,10 @@ internal fun VideoContentTabBar(
                 isPagerDraggingProvider = isPagerDraggingProvider,
                 pagerTargetPositionProvider = pagerTargetPositionProvider,
             )
+
+            if (showNearbyAction && com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED) {
+                com.android.purebilibili.feature.nearby.NearbySmartTabIconButton()
+            }
 
             if (showDanmakuActions && shouldShowVideoContentTabBarDanmakuActions(selectedTabIndex)) {
                 Row(

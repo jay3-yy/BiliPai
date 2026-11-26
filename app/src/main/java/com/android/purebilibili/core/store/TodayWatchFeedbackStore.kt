@@ -77,6 +77,37 @@ fun TodayWatchFeedbackSnapshot.withDislikedVideoFeedback(
     )
 }
 
+fun TodayWatchFeedbackSnapshot.withoutDislikedCreator(creatorMid: Long): TodayWatchFeedbackSnapshot {
+    if (creatorMid <= 0L) return this
+    return copy(
+        dislikedCreatorMids = dislikedCreatorMids - creatorMid,
+    )
+}
+
+fun TodayWatchFeedbackSnapshot.withoutDislikedVideo(bvid: String): TodayWatchFeedbackSnapshot {
+    val normalized = bvid.trim()
+    if (normalized.isBlank()) return this
+    return copy(
+        dislikedBvids = dislikedBvids - normalized,
+        recentDislikedVideos = recentDislikedVideos.filterNot { it.bvid == normalized },
+    )
+}
+
+fun TodayWatchFeedbackSnapshot.withoutDislikedKeyword(keyword: String): TodayWatchFeedbackSnapshot {
+    val normalized = keyword.trim().lowercase()
+    if (normalized.isBlank()) return this
+    return copy(
+        dislikedKeywords = dislikedKeywords - normalized,
+    )
+}
+
+fun TodayWatchFeedbackSnapshot.resolveDislikedCreatorName(creatorMid: Long): String {
+    val matched = recentDislikedVideos
+        .lastOrNull { it.creatorMid == creatorMid && it.creatorName.isNotBlank() }
+        ?.creatorName
+    return matched ?: "UP主$creatorMid"
+}
+
 object TodayWatchFeedbackStore {
     private const val PREFS_NAME = "today_watch_feedback"
     private const val KEY_PAYLOAD = "feedback_payload_v1"

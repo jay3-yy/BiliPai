@@ -41,7 +41,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
@@ -437,6 +439,21 @@ internal fun AudioModeSleepTimerDialog(
     onSelectPreset: (Int?) -> Unit,
     onConfirmCustom: (Int) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val fadeOutEnabled by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getSleepTimerFadeOutEnabled(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.SettingsManager.getSleepTimerFadeOutEnabledSync(context)
+    )
+    val fadeDurationSec by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getSleepTimerFadeDurationSec(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.SettingsManager.getSleepTimerFadeDurationSecSync(context)
+    )
+    val isLateNight = remember {
+        com.android.purebilibili.feature.audio.player.isCurrentlyLateNightForSleepSuggestion()
+    }
     var customInput by remember(currentMinutes) {
         mutableStateOf(formatAudioModeSleepTimerInput(currentMinutes))
     }
@@ -452,6 +469,11 @@ internal fun AudioModeSleepTimerDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                if (isLateNight && onSleepAfterCurrent != null && !sleepAfterCurrent) {
+                    com.android.purebilibili.feature.video.ui.components.LateNightSleepSuggestionCard(
+                        onEnableAfterCurrent = onSleepAfterCurrent,
+                    )
+                }
                 AppText(
                     text = "选择常用时长，或输入分钟数 / 小时:分钟，例如 90、1:30。",
                     color = AppContentColors.secondaryText(),
@@ -462,6 +484,21 @@ internal fun AudioModeSleepTimerDialog(
                         AppText(if (sleepAfterCurrent) "取消播完当前首后停止" else "播完当前首后停止")
                     }
                 }
+                com.android.purebilibili.feature.video.ui.components.SleepTimerFadePreferenceRow(
+                    fadeEnabled = fadeOutEnabled,
+                    onFadeEnabledChange = { enabled ->
+                        scope.launch {
+                            com.android.purebilibili.core.store.SettingsManager.setSleepTimerFadeOutEnabled(context, enabled)
+                        }
+                    },
+                    fadeDurationSec = fadeDurationSec,
+                    onFadeDurationSecChange = { seconds ->
+                        scope.launch {
+                            com.android.purebilibili.core.store.SettingsManager.setSleepTimerFadeDurationSec(context, seconds)
+                        }
+                    },
+                )
+                com.android.purebilibili.feature.audio.ambient.AmbientNoiseMixerSection()
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)

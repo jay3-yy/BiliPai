@@ -1,30 +1,45 @@
 /** 居中资料头部及姓名、UID 的滚动布局。 */
 package com.android.purebilibili.feature.profile
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.AppHapticScene
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.UserLevelBadge
 import com.android.purebilibili.core.ui.components.UserVipBadge
+import com.android.purebilibili.core.ui.rememberAppHapticFeedback
 import com.android.purebilibili.feature.home.UserState
 import kotlin.math.roundToInt
 
@@ -50,6 +65,19 @@ internal fun ProfileIdentityHeader(
     photoScrollConnection: NestedScrollConnection? = null,
     onCollapsePhoto: () -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val textHaptics = rememberAppHapticFeedback(AppHapticScene.TEXT)
+    val heroTextShadow = remember(heroChrome.textColor) {
+        if (heroChrome.textColor == Color.White) {
+            Shadow(
+                color = Color.Black.copy(alpha = 0.52f),
+                offset = Offset(0f, 2f),
+                blurRadius = 10f,
+            )
+        } else {
+            null
+        }
+    }
     val measuredIdentityHeights = remember(LocalDensity.current, statusBarTopPadding) {
         intArrayOf(-1, -1)
     }
@@ -95,6 +123,7 @@ internal fun ProfileIdentityHeader(
                             color = heroChrome.textColor,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
+                            style = TextStyle(shadow = heroTextShadow),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.graphicsLayer { alpha = expandedFractionProvider() * (1f - photoFractionProvider()) },
@@ -125,18 +154,30 @@ internal fun ProfileIdentityHeader(
                     UserLevelBadge(level = user.level, isSeniorMember = user.isSeniorMember)
                     if (user.isVip) UserVipBadge(label = user.vipLabel, compact = true)
                 }
-                Box {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            clipboard?.setPrimaryClip(ClipData.newPlainText("UID", user.mid.toString()))
+                            textHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            Toast.makeText(context, "已复制 UID ${user.mid}", Toast.LENGTH_SHORT).show()
+                        }
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                ) {
                     AppText(
                         text = "UID ${user.mid}",
-                        color = heroChrome.secondaryTextColor,
+                        color = if (heroChrome.textColor == Color.White) Color.White.copy(alpha = 0.90f) else heroChrome.secondaryTextColor,
                         fontSize = 13.sp,
+                        style = TextStyle(shadow = heroTextShadow),
                         maxLines = 1,
                         modifier = Modifier.graphicsLayer { alpha = 1f - photoFractionProvider() },
                     )
                     AppText(
                         text = "UID ${user.mid}",
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = Color.White.copy(alpha = 0.80f),
                         fontSize = 13.sp,
+                        style = TextStyle(shadow = heroTextShadow),
                         maxLines = 1,
                         modifier = Modifier
                             .graphicsLayer { alpha = photoFractionProvider() }

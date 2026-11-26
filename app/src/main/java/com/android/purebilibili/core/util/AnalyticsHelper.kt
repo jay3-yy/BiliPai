@@ -183,7 +183,9 @@ object AnalyticsHelper {
                 startupEvents.activate { (name, params) -> instance.logEvent(name, params) }
                 analyticsReady = true
             }
-            CrashReporter.setLastEvent("analytics_collection_${if (enabled) "enabled" else "disabled"}")
+            if (enabled) {
+                CrashReporter.setLastEvent("analytics_collection_enabled")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set Analytics enabled state", e)
         }
@@ -955,6 +957,70 @@ object AnalyticsHelper {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log home return animation performance", e)
+        }
+    }
+
+    /**
+     * 记录场景配方应用（仅记录分类与配方枚举名，不含个人信息）
+     */
+    fun logRecipeApplied(category: String, recipeId: String) {
+        if (!isEnabled) return
+        if (shouldDropByRateLimit("recipe_applied", "$category:$recipeId", minIntervalMs = 700L)) return
+        try {
+            logAnalyticsEvent("recipe_applied") {
+                param("category", category.take(32))
+                param("recipe_id", recipeId.take(48))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log recipe applied", e)
+        }
+    }
+
+    /**
+     * 记录备份、导出、导入与传输操作（仅记录渠道与动作类型，不含路径或账号信息）
+     */
+    fun logBackupAction(channel: String, action: String) {
+        if (!isEnabled) return
+        if (shouldDropByRateLimit("backup_action", "$channel:$action", minIntervalMs = 700L)) return
+        try {
+            logAnalyticsEvent("backup_action") {
+                param("channel", channel.take(32))
+                param("action", action.take(32))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log backup action", e)
+        }
+    }
+
+    /**
+     * 记录插件或扩展操作（仅记录类型与动作，不含插件地址或规则内容）
+     */
+    fun logPluginAction(pluginType: String, action: String) {
+        if (!isEnabled) return
+        if (shouldDropByRateLimit("plugin_action", "$pluginType:$action", minIntervalMs = 700L)) return
+        try {
+            logAnalyticsEvent("plugin_action") {
+                param("plugin_type", pluginType.take(32))
+                param("action", action.take(32))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log plugin action", e)
+        }
+    }
+
+    /**
+     * 记录关键功能入口或交互使用（仅记录功能名与动作名，不含用户内容）
+     */
+    fun logFeatureAction(feature: String, action: String) {
+        if (!isEnabled) return
+        if (shouldDropByRateLimit("feature_action", "$feature:$action", minIntervalMs = 700L)) return
+        try {
+            logAnalyticsEvent("feature_action") {
+                param("feature", feature.take(32))
+                param("action", action.take(48))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log feature action", e)
         }
     }
 }

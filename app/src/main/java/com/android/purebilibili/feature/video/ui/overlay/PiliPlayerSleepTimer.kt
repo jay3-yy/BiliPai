@@ -6,6 +6,11 @@ import android.os.SystemClock
 import android.widget.Toast
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.feature.audio.player.PlayerVolumeFadeController
+import com.android.purebilibili.feature.audio.player.isCurrentlyLateNightForSleepSuggestion
+import com.android.purebilibili.feature.audio.player.resolveSleepTimerFadeWindowMs
+import com.android.purebilibili.feature.audio.player.resolveSleepTimerWindDownMessage
 import com.android.purebilibili.feature.video.player.PlayerBackgroundPlaybackSessions
 import java.lang.ref.WeakReference
 import java.util.WeakHashMap
@@ -23,6 +28,7 @@ internal class PiliPlayerSleepTimer private constructor(player: Player, context:
     private val playerRef = WeakReference(player)
     private val appContext = context.applicationContext
     private var activityRef = WeakReference<Activity>(null)
+    private val fadeController = PlayerVolumeFadeController()
     private val selectedMinutes = MutableStateFlow<Int?>(null)
     val minutes = selectedMinutes.asStateFlow()
     private val waitingForCurrentEnd = MutableStateFlow(false)
@@ -35,7 +41,7 @@ internal class PiliPlayerSleepTimer private constructor(player: Player, context:
             if (waiting && shouldFinishWaitingForCurrentVideoEnd(
                     playbackState = player.playbackState,
                     hasError = player.playerError != null,
-                )) finish()
+                )) finish(wasAfterCurrent = true)
         }
 
         override fun onPositionDiscontinuity(
@@ -44,7 +50,7 @@ internal class PiliPlayerSleepTimer private constructor(player: Player, context:
             reason: Int,
         ) {
             // 单集循环不发送 ENDED；自动换集或循环回起点同样视为本集结束。
-            if (waiting && reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) finish()
+            if (waiting && reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) finish(wasAfterCurrent = true)
         }
     }
 
@@ -56,9 +62,22 @@ internal class PiliPlayerSleepTimer private constructor(player: Player, context:
         selectedMinutes.value = duration
         val deadline = SystemClock.elapsedRealtime() + duration * 60_000L
         job = scope.launch {
-            delay((deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
-            if (playerRef.get() == null) { cancel(); return@launch }
-            finish()
+            val remainingBeforeFade = (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+            val fadeEnabled = SettingsManager.getSleepTimerFadeOutEnabledSync(appContext)
+            val configuredFadeMs = SettingsManager.getSleepTimerFadeDurationSecSync(appContext) * 1_000L
+            val fadeWindowMs = resolveSleepTimerFadeWindowMs(remainingBeforeFade, fadeEnabled, configuredFadeMs)
+            val waitMs = (remainingBeforeFade - fadeWindowMs).coerceAtLeast(0L)
+            if (waitMs > 0L) delay(waitMs)
+            val activePlayer = playerRef.get()
+            if (activePlayer == null) { cancel(); return@launch }
+            val actualFadeMs = resolveSleepTimerFadeWindowMs(
+                remainingMs = (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L),
+                fadeEnabled = SettingsManager.getSleepTimerFadeOutEnabledSync(appContext),
+                configuredFadeMs = SettingsManager.getSleepTimerFadeDurationSecSync(appContext) * 1_000L,
+            )
+            fadeController.fadeOutAndFinish(activePlayer, actualFadeMs) {
+                finish(wasAfterCurrent = false)
+            }
         }
     }
 
@@ -70,7 +89,7 @@ internal class PiliPlayerSleepTimer private constructor(player: Player, context:
                 playbackState = player.playbackState,
                 hasError = player.playerError != null,
             )) {
-            finish()
+            finish(wasAfterCurrent = true)
             return
         }
         waiting = true
@@ -81,21 +100,29 @@ internal class PiliPlayerSleepTimer private constructor(player: Player, context:
     private fun cancel() {
         job?.cancel()
         job = null
+        fadeController.cancelAndRestore(playerRef.get())
         waiting = false
         playerRef.get()?.removeListener(endedListener)
         selectedMinutes.value = null
         waitingForCurrentEnd.value = false
     }
 
-    private fun finish() {
+    private fun finish(wasAfterCurrent: Boolean) {
         // 先清理等待监听，再暂停，避免播放状态回调重入 finish。
         val player = playerRef.get()
         cancel()
         val exoPlayer = player as? ExoPlayer
         if (exoPlayer != null) PlayerBackgroundPlaybackSessions.pauseForSleepTimer(exoPlayer)
         else player?.pause()
-        if (exitApp) activityRef.get()?.finishAndRemoveTask()
-        else Toast.makeText(appContext, "已暂停播放", Toast.LENGTH_SHORT).show()
+        if (exitApp) {
+            activityRef.get()?.finishAndRemoveTask()
+        } else {
+            val message = resolveSleepTimerWindDownMessage(
+                wasAfterCurrent = wasAfterCurrent,
+                isLateNight = isCurrentlyLateNightForSleepSuggestion(),
+            )
+            Toast.makeText(appContext, message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     companion object {

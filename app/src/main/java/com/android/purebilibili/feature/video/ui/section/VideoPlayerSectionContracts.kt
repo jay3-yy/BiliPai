@@ -152,6 +152,7 @@ internal data class VideoPlayerSectionActions(
     val onPlaybackSpeedChange: (Float) -> Boolean = { false },
     val onAudioLangChange: (String) -> Unit = {},
     val onSaveCover: () -> Unit = {},
+    val onSavePostcardToNote: ((quote: String, moodNote: String, positionMs: Long) -> Unit)? = null,
     val onDownloadAudio: () -> Unit = {},
     val onPlayModeClick: () -> Unit = {},
     val onRelatedVideoClick: (String, Bundle?) -> Unit = { _, _ -> },

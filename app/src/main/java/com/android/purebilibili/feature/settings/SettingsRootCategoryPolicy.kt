@@ -139,7 +139,8 @@ internal fun resolveSettingsRootCategoryForSearchTarget(
     SettingsSearchTarget.SPACE_PRIVACY,
     SettingsSearchTarget.LOGIN_ACTIVITY,
     SettingsSearchTarget.BLOCKED_LIST,
-    SettingsSearchTarget.MESSAGE_NOTIFICATION -> SettingsRootCategory.PRIVACY_PERMISSION
+    SettingsSearchTarget.MESSAGE_NOTIFICATION,
+    SettingsSearchTarget.CUSTOM_PUSH -> SettingsRootCategory.PRIVACY_PERMISSION
 
     SettingsSearchTarget.ANIMATION -> SettingsRootCategory.ANIMATION_HAPTICS
 

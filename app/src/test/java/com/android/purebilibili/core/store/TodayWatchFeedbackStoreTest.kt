@@ -81,4 +81,33 @@ class TodayWatchFeedbackStoreTest {
         assertEquals(setOf("BV1"), snapshot.dislikedBvids)
         assertTrue(snapshot.dislikedCreatorMids.isEmpty())
     }
+
+    @Test
+    fun undoHelpersRemoveIndividualCreatorVideoAndKeywordAndResolveName() {
+        val snapshot = TodayWatchFeedbackSnapshot().withDislikedVideoFeedback(
+            video = TodayWatchDislikedVideoSnapshot(
+                bvid = "BV1",
+                title = "不想看的视频",
+                creatorName = "某UP主",
+                creatorMid = 99L,
+                dislikedAtMillis = 500L,
+            ),
+            keywords = setOf("标题党", "吵闹"),
+            includeCreatorSignal = true,
+        )
+
+        assertEquals("某UP主", snapshot.resolveDislikedCreatorName(99L))
+        assertEquals("UP主77", snapshot.resolveDislikedCreatorName(77L))
+
+        val afterCreatorUndo = snapshot.withoutDislikedCreator(99L)
+        assertTrue(afterCreatorUndo.dislikedCreatorMids.isEmpty())
+        assertEquals(setOf("BV1"), afterCreatorUndo.dislikedBvids)
+
+        val afterKeywordUndo = afterCreatorUndo.withoutDislikedKeyword("标题党")
+        assertEquals(setOf("吵闹"), afterKeywordUndo.dislikedKeywords)
+
+        val afterVideoUndo = afterKeywordUndo.withoutDislikedVideo("BV1")
+        assertTrue(afterVideoUndo.dislikedBvids.isEmpty())
+        assertTrue(afterVideoUndo.recentDislikedVideos.isEmpty())
+    }
 }

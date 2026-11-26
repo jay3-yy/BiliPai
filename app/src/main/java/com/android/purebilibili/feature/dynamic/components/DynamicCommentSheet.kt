@@ -98,8 +98,23 @@ fun DynamicCommentOverlayHost(
     toastContext: Context,
     onUserClick: (Long) -> Unit,
     onUrlClick: (String) -> Unit,
+    onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
 ) {
     val selectedDynamicId by viewModel.selectedDynamicId.collectAsStateWithLifecycle()
+    val overlayVisible = !selectedDynamicId.isNullOrBlank()
+    val coveredBlurProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (overlayVisible) 1f else 0f,
+        animationSpec = tween(200),
+        label = "dynamic_comment_overlay_blur",
+    )
+    SideEffect {
+        onCoveredBlurProgressChange?.invoke(coveredBlurProgress)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            onCoveredBlurProgressChange?.invoke(0f)
+        }
+    }
     // 评论区一次性读取单一状态，避免 5 个独立 flow 分别发射造成中间帧。
     val commentUiState by viewModel.commentUiState.collectAsStateWithLifecycle()
     val comments = commentUiState.comments

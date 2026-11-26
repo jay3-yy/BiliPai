@@ -20,6 +20,7 @@ internal val SETTINGS_SUBTREE_ROUTE_BASES: Set<String> = setOf(
     "space_privacy_settings",
     "login_activity_settings",
     "message_notification_settings",
+    "custom_push_settings",
     "plugins_settings",
     "builtin_plugin_settings",
     "json_plugin_editor",
@@ -59,6 +60,7 @@ private val SETTINGS_DEPTH2_ROUTE_BASES: Set<String> = setOf(
 
 private val SETTINGS_DEPTH3_ROUTE_BASES: Set<String> = setOf(
     "icon_settings",
+    "custom_push_settings",
     "builtin_plugin_settings",
     "json_plugin_editor",
     "plugin_skin_catalog",
@@ -113,6 +115,7 @@ private val ROUTE_TO_CATEGORY: Map<String, SettingsRootCategory> = mapOf(
     "space_privacy_settings" to SettingsRootCategory.PRIVACY_PERMISSION,
     "login_activity_settings" to SettingsRootCategory.PRIVACY_PERMISSION,
     "message_notification_settings" to SettingsRootCategory.MESSAGE_NOTIFICATION,
+    "custom_push_settings" to SettingsRootCategory.MESSAGE_NOTIFICATION,
     "settings_share" to SettingsRootCategory.STORAGE_BACKUP,
     "webdav_backup" to SettingsRootCategory.STORAGE_BACKUP,
     "plugins_settings" to SettingsRootCategory.PLUGINS_EXTENSIONS,
@@ -158,6 +161,7 @@ internal fun resolveSettingsNavParentRoute(childRoute: String?): String? {
         "animation_settings" -> SETTINGS_ROUTE_BASE
         in SETTINGS_DEPTH2_ROUTE_BASES -> SETTINGS_CATEGORY_ROUTE_BASE
         "icon_settings" -> "appearance_settings"
+        "custom_push_settings" -> "message_notification_settings"
         "builtin_plugin_settings", "json_plugin_editor", "plugin_skin_catalog",
         "content_filter_history", "js_plugin" -> "plugins_settings"
         "external_media" -> "js_plugin"

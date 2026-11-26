@@ -619,6 +619,7 @@ private fun CinemaStagePlayer(
                     actions = VideoPlayerSectionActions(
                     resolveNextWatch = playbackActions.resolveNextWatch,
                     playNextWatch = playbackActions.playNextWatch,
+                        onSavePostcardToNote = playbackActions.openVideoNoteWithPostcard,
                         onJumpToLastPlayedPart = playbackActions.jumpToLastPlayedPart,
                         onDismissPartResumeNotice = playbackActions.dismissPartResumeNotice,
                         onToggleFullscreen = onToggleFullscreen,
@@ -1075,6 +1076,11 @@ private fun CinemaVideoIntroSection(
             VideoTitleWithDesc(
                 info = success.info,
                 videoTags = success.videoTags,
+                bgmList = com.android.purebilibili.feature.video.ui.section.resolveDisplayBgmList(
+                    bgmInfo = success.bgmInfo,
+                    bgmInfoList = success.bgmInfoList,
+                    videoTags = success.videoTags,
+                ),
                 sponsorLabel = success.sponsorVideoLabel,
                 trailingStatsContent = {
                     VideoSupplementStatsActions(

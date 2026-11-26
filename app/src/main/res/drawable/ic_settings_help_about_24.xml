@@ -1,0 +1,14 @@
+<!-- App-authored: lifebuoy support emblem for Help & About, distinct from generic info (i) icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,3 A9,9 0 1,0 12,21 A9,9 0 1,0 12,3 Z M12,8 A4,4 0 1,0 12,16 A4,4 0 1,0 12,8 Z M5.64,5.64 L9.17,9.17 M18.36,5.64 L14.83,9.17 M18.36,18.36 L14.83,14.83 M5.64,18.36 L9.17,14.83" />
+</vector>

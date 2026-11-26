@@ -265,7 +265,8 @@ internal enum class PortraitFavoriteAction {
 
 internal enum class PortraitDanmakuSurfaceMode {
     VideoViewport,
-    Page
+    Page,
+    FullScreen,
 }
 
 private data class PortraitPrefetchWindowState(
@@ -1050,11 +1051,11 @@ fun PortraitVideoPager(
         } else requestedPlaybackSnapshot?.takeIf { it.bvid == bvid }
     }
 
-    // 独立竖屏播放器在切到后台继续听音频或纯音频模式时关闭视频轨道硬解，回前台可见窗口后恢复
+    // 独立竖屏播放器在切到后台继续听音频或纯音频模式时关闭视频轨道硬解，回前台可见窗口或系统画中画时保持视频输出
     val disablePortraitVideoTrack = if (useSharedPlayer) {
         portraitAudioOnly
     } else {
-        portraitAudioOnly || (!canPlayInVisibleWindow && continueInBackgroundAudio)
+        portraitAudioOnly || (!canPlayInVisibleWindow && continueInBackgroundAudio && !isInPipMode)
     }
     DisposableEffect(exoPlayer, disablePortraitVideoTrack) {
         val videoTrackType = androidx.media3.common.C.TRACK_TYPE_VIDEO
@@ -2531,6 +2532,12 @@ private fun VideoPageItem(
     val pipDanmakuVisible = !(isInPipMode && pipNoDanmakuEnabled)
     val currentAudioQuality = requestedAudioQuality
     val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
+    // 进入系统画中画时保留已启用的 TextureView，避免 surface 类型切换触发 PlayerView 销毁重建导致小窗闪烁；
+    // HDR 场景仍由 shouldUsePlayerPageTexture 强制使用 SurfaceView。
+    var hasUsedPortraitGlassTexture by remember(bvid) { mutableStateOf(portraitGlassSupported) }
+    LaunchedEffect(portraitGlassSupported) {
+        if (portraitGlassSupported) hasUsedPortraitGlassTexture = true
+    }
     val itemAid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid
     val currentUiState = viewModel.uiState.collectAsStateWithLifecycle().value
     val currentSuccess = currentUiState as? VideoPlaybackUiState.Success
@@ -3439,7 +3446,7 @@ private fun VideoPageItem(
                     isFullscreen = true,
                 ),
                 lineHeightMultiplier = portraitDanmakuSettings.lineHeight,
-            ) / portraitDanmakuSettings.displayArea.coerceIn(0.1f, 1f),
+            ),
             videoScale = scale,
             videoTranslationYPx = panY,
         )
@@ -3468,11 +3475,16 @@ private fun VideoPageItem(
 
         // Wait for persisted surface settings while retaining format-aware HDR selection.
         if (isCurrentPage && isPlayerReadyForThisVideo && isPlayerSurfaceReady && !isAudioOnly) {
-            val preferTexture = shouldUseTextureSurfaceForFlip(
-                isFlippedHorizontal = portraitFlippedHorizontal && !surfaceHdrRequired,
-                isFlippedVertical = portraitFlippedVertical && !surfaceHdrRequired,
-                navigationTransformEnabled = useTextureSurfaceForNavigation || portraitGlassSupported,
-                requiresHdrSurfaceOutput = surfaceHdrRequired,
+            val preferTexture = com.android.purebilibili.feature.video.ui.section.shouldUsePlayerPageTexture(
+                glassSupported = portraitGlassSupported,
+                retainedGlassTexture = hasUsedPortraitGlassTexture,
+                hdr = surfaceHdrRequired,
+                existingTextureRequest = shouldUseTextureSurfaceForFlip(
+                    isFlippedHorizontal = portraitFlippedHorizontal && !surfaceHdrRequired,
+                    isFlippedVertical = portraitFlippedVertical && !surfaceHdrRequired,
+                    navigationTransformEnabled = useTextureSurfaceForNavigation,
+                    requiresHdrSurfaceOutput = surfaceHdrRequired,
+                ),
             )
             PortraitVideoViewportContainer(
                 currentVideoAspect = portraitPagerViewportAspect,
@@ -3538,11 +3550,34 @@ private fun VideoPageItem(
                     videoWidth = exoPlayer.videoSize.width,
                     videoHeight = exoPlayer.videoSize.height,
                     resizeMode = playerViewRef?.resizeMode ?: portraitPagerResizeMode,
+                    fillDisplayArea = true,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .offset(y = with(density) { region.topPx.toDp() })
                         .fillMaxWidth()
                         .height(with(density) { region.heightPx.toDp() }),
+                )
+            }
+        }
+
+        if (
+            shouldComposePortraitDanmakuOverlay(
+                danmakuEnabled = danmakuEnabled && pipDanmakuVisible && !portraitCleanScreen,
+                surfaceMode = danmakuSurfaceMode,
+                expectedMode = PortraitDanmakuSurfaceMode.FullScreen,
+                isCurrentPage = isCurrentPage,
+                isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
+            )
+        ) {
+            Box(modifier = mediaLayerModifier) {
+                PortraitDanmakuOverlay(
+                    danmakuManager = danmakuManager,
+                    videoWidth = exoPlayer.videoSize.width,
+                    videoHeight = exoPlayer.videoSize.height,
+                    resizeMode = playerViewRef?.resizeMode ?: portraitPagerResizeMode,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = pageDanmakuTopInset),
                 )
             }
         }
@@ -3901,8 +3936,11 @@ private fun VideoPageItem(
         if (isCurrentPage && portraitOverlayVisible && !controlsOverlayOpen &&
             com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED
         ) {
-            com.android.purebilibili.feature.nearby.NearbyDevicesButton(
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 72.dp),
+            com.android.purebilibili.feature.nearby.NearbyOverlayChipButton(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 12.dp),
             )
         }
         val portraitPlaybackRecovering by remember(
@@ -4721,9 +4759,10 @@ private fun PortraitDanmakuOverlay(
     videoWidth: Int,
     videoHeight: Int,
     resizeMode: Int,
+    fillDisplayArea: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    DanmakuViewportHost(modifier) { viewport ->
+    DanmakuViewportHost(modifier, fillDisplayArea = fillDisplayArea) { viewport ->
         key(danmakuManager) {
             AndroidView(
                 factory = { ctx ->
@@ -4741,7 +4780,7 @@ private fun PortraitDanmakuOverlay(
                 update = { view ->
                     view.configureAsPassiveDanmakuOverlay()
                     danmakuManager.updateViewport(viewport)
-                    val viewportTag = "$videoWidth:$videoHeight:$resizeMode:${view.width}x${view.height}"
+                    val viewportTag = "$videoWidth:$videoHeight:$resizeMode:$fillDisplayArea:${view.width}x${view.height}"
                     if (view.width > 0 && view.height > 0 && view.tag != viewportTag) {
                         view.tag = viewportTag
                         danmakuManager.attachView(view)
@@ -4760,10 +4799,13 @@ internal fun resolvePortraitDanmakuSurfaceMode(
     upperRegionAvailable: Boolean,
     displayAreaMode: PortraitDanmakuDisplayAreaMode
 ): PortraitDanmakuSurfaceMode {
-    return if (displayAreaMode == PortraitDanmakuDisplayAreaMode.SCREEN_TOP && upperRegionAvailable) {
-        PortraitDanmakuSurfaceMode.Page
-    } else {
-        PortraitDanmakuSurfaceMode.VideoViewport
+    return when (displayAreaMode) {
+        PortraitDanmakuDisplayAreaMode.FULL_SCREEN -> PortraitDanmakuSurfaceMode.FullScreen
+        PortraitDanmakuDisplayAreaMode.SCREEN_TOP -> {
+            if (upperRegionAvailable) PortraitDanmakuSurfaceMode.Page
+            else PortraitDanmakuSurfaceMode.VideoViewport
+        }
+        PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT -> PortraitDanmakuSurfaceMode.VideoViewport
     }
 }
 

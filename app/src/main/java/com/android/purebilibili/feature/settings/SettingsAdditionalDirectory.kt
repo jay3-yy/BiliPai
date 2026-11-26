@@ -65,7 +65,18 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("glass.dock_motion_style", "玻璃底栏动画", SettingsRootCategory.ANIMATION_HAPTICS, "animation_glass", { context -> com.android.purebilibili.core.store.home.LiquidGlassSettingsStore.observeDockMotionStyle(context).map { it.label } }, aliases = listOf("底栏动画", "搜索动画", "合体", "解体", "弹性"), target = SettingsSearchTarget.ANIMATION),
     PlaybackSettingItem("glass.popup_motion_style", "玻璃菜单动画", SettingsRootCategory.ANIMATION_HAPTICS, "animation_glass", { context -> com.android.purebilibili.core.store.home.LiquidGlassSettingsStore.observePopupMotionStyle(context).map { it.label } }, aliases = listOf("菜单动画", "标准", "弹性", "弹簧参数", "菜单形变"), target = SettingsSearchTarget.ANIMATION),
     PlaybackSettingItem("glass.popup_palette", "玻璃弹窗配色", SettingsRootCategory.ANIMATION_HAPTICS, "animation_glass", { context -> com.android.purebilibili.core.store.home.LiquidGlassSettingsStore.observePopupPalette(context).map { it.label } }, target = SettingsSearchTarget.ANIMATION),
-    // 设备接力未开发完成：搜索目录条目暂不下发，入口由 NearbyHandoffFeatureGate 统一隐藏。
+    PlaybackSettingItem(
+        "playback.nearby_handoff",
+        com.android.purebilibili.feature.nearby.NEARBY_TITLE,
+        SettingsRootCategory.PLAYBACK_QUALITY,
+        "playback_nearby_handoff",
+        { context ->
+            com.android.purebilibili.feature.nearby.NearbyHandoffRuntime.getInstance(context).enabled
+                .map { if (it) "已开启" else "已关闭" }
+        },
+        aliases = listOf("接力续播", "跨设备播放", "平板联动", "手机平板", "局域网接力", "多设备"),
+        target = SettingsSearchTarget.NEARBY_HANDOFF,
+    ),
     PlaybackSettingItem("animation.app_navigation_settings.liquid_indicator_dynamic_length_enabled", "液态玻璃指示器动态长度", SettingsRootCategory.ANIMATION_HAPTICS, "animation_glass", { context -> com.android.purebilibili.core.store.SettingsManager.getAppNavigationSettings(context).map { if (it.liquidIndicatorDynamicLengthEnabled) "开启" else "关闭" } }, aliases = listOf("指示器宽度", "标签长度", "动态胶囊"), target = SettingsSearchTarget.ANIMATION),
     PlaybackSettingItem("animation.app_navigation_settings.liquid_indicator_wobble_enabled", "液态玻璃指示器甩尾", SettingsRootCategory.ANIMATION_HAPTICS, "animation_glass", { context -> com.android.purebilibili.core.store.SettingsManager.getAppNavigationSettings(context).map { if (it.liquidIndicatorWobbleEnabled) "开启" else "关闭" } }, target = SettingsSearchTarget.ANIMATION),
     PlaybackSettingItem("appearance.theme_role_overrides.enabled", "高级配色", SettingsRootCategory.APPEARANCE_THEME, "appearance_theme_color", { context -> com.android.purebilibili.core.store.SettingsManager.getThemeRoleOverrides(context).map { if (it.enabled) "开启" else "关闭" } }, target = SettingsSearchTarget.APPEARANCE),
@@ -94,7 +105,7 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("appearance.home_hero_carousel_enabled", "首页顶部轮播封面", SettingsRootCategory.HOME_RECOMMENDATION, "home_recommendation", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeHeroCarouselEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.home_hero_carousel_autoplay_enabled", "轮播默认播放", SettingsRootCategory.HOME_RECOMMENDATION, "home_recommendation", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeHeroCarouselAutoplayEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.show_pgc_timeline", "追番时间表", SettingsRootCategory.HOME_RECOMMENDATION, "home_recommendation", { context -> com.android.purebilibili.core.store.SettingsManager.getShowPgcTimeline(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
-    PlaybackSettingItem("appearance.is_header_collapse_enabled", "顶栏滚动时收起", SettingsRootCategory.HOME_RECOMMENDATION, "home_browsing", null, target = SettingsSearchTarget.HOME_FEED, readState = { state -> if (state.isHeaderCollapseEnabled) "开启" else "关闭" }),
+    PlaybackSettingItem("appearance.is_header_collapse_enabled", "顶栏滚动时收起", SettingsRootCategory.NAVIGATION_INTERACTION, "navigation_top_tabs", null, target = SettingsSearchTarget.BOTTOM_BAR, readState = { state -> if (state.isHeaderCollapseEnabled) "开启" else "关闭" }),
     PlaybackSettingItem("appearance.video_card_long_press_action_enabled", "长按视频卡片", SettingsRootCategory.HOME_RECOMMENDATION, "home_browsing", { context -> com.android.purebilibili.core.store.SettingsManager.getVideoCardLongPressActionEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.show_profile_edit_button", "编辑资料按钮", SettingsRootCategory.HOME_RECOMMENDATION, "home_browsing", { context -> com.android.purebilibili.core.store.SettingsManager.getShowProfileEditButton(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("animation.global_drag_feedback_enabled", "全局拖拽反馈", SettingsRootCategory.ANIMATION_HAPTICS, "animation_page", { context -> com.android.purebilibili.core.store.SettingsManager.getGlobalDragFeedbackEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.ANIMATION, aliases = listOf("拖拽", "拖动形变", "弹性拖拽")),
@@ -182,10 +193,10 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("home.dynamic_comment_preview_visible", "显示动态评论提示", SettingsRootCategory.HOME_RECOMMENDATION, "home_options", { context -> com.android.purebilibili.core.store.home.DynamicSettingsStore.observeCommentPreviewVisible(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED, openCategory = true, aliases = listOf("动态评论摘要", "动态评论预览", "相关评论")),
     PlaybackSettingItem("home.dynamic_up_list_visible", "显示动态UP主头像栏", SettingsRootCategory.HOME_RECOMMENDATION, "home_options", { context -> com.android.purebilibili.core.store.home.DynamicSettingsStore.observeUpListVisible(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED, openCategory = true),
     PlaybackSettingItem("home.dynamic_top_bar_collapse_on_scroll", "浏览动态时收起顶部栏", SettingsRootCategory.HOME_RECOMMENDATION, "home_options", { context -> com.android.purebilibili.core.store.SettingsManager.getDynamicTopBarCollapseOnScroll(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED, openCategory = true),
-    PlaybackSettingItem("privacy.search_hot_control", "显示大家都在搜", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchLandingSectionVisible(context, 0).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
-    PlaybackSettingItem("privacy.search_history_control", "显示搜索历史", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchLandingSectionVisible(context, 1).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
-    PlaybackSettingItem("privacy.search_discover_control", "显示搜索发现", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchLandingSectionVisible(context, 2).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
-    PlaybackSettingItem("privacy.search_suggestions_enabled", "个性化搜索推荐", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchSuggestionsEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
+    PlaybackSettingItem("privacy.search_hot_control", "显示大家都在搜", SettingsRootCategory.NAVIGATION_INTERACTION, "navigation_search_display", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchLandingSectionVisible(context, 0).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.BOTTOM_BAR),
+    PlaybackSettingItem("privacy.search_history_control", "显示搜索历史", SettingsRootCategory.NAVIGATION_INTERACTION, "navigation_search_display", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchLandingSectionVisible(context, 1).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.BOTTOM_BAR),
+    PlaybackSettingItem("privacy.search_discover_control", "显示搜索发现", SettingsRootCategory.NAVIGATION_INTERACTION, "navigation_search_display", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchLandingSectionVisible(context, 2).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.BOTTOM_BAR),
+    PlaybackSettingItem("privacy.search_suggestions_enabled", "个性化搜索推荐", SettingsRootCategory.NAVIGATION_INTERACTION, "navigation_search_display", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchSuggestionsEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.BOTTOM_BAR),
     PlaybackSettingItem(
         settingId = "privacy.link_preview_enabled",
         title = "链接即时预览",
@@ -201,8 +212,30 @@ internal val additionalSettingsDirectory = listOf(
     ),
     PlaybackSettingItem("privacy.privacy_mode_enabled", "不记录历史", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getPrivacyModeEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
     PlaybackSettingItem("privacy.privacy_content_authentication_enabled", "进入隐私内容时验证", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getPrivacyContentAuthenticationEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
-    PlaybackSettingItem("diagnostics.crash_tracking_enabled", "记录崩溃信息", SettingsRootCategory.PLAYER_DIAGNOSTICS, "diagnostics_options", { context -> com.android.purebilibili.core.store.SettingsManager.getCrashTrackingEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
-    PlaybackSettingItem("diagnostics.analytics_enabled", "使用情况统计", SettingsRootCategory.PLAYER_DIAGNOSTICS, "diagnostics_options", { context -> com.android.purebilibili.core.store.SettingsManager.getAnalyticsEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
+    PlaybackSettingItem(
+        settingId = TELEMETRY_GLOBAL_SETTING_ID,
+        title = "遥测与数据收集",
+        page = SettingsRootCategory.PRIVACY_PERMISSION,
+        sectionKey = "privacy_options",
+        observeValue = { context ->
+            kotlinx.coroutines.flow.combine(
+                com.android.purebilibili.core.store.SettingsManager.getCrashTrackingEnabled(context),
+                com.android.purebilibili.core.store.SettingsManager.getAnalyticsEnabled(context),
+            ) { crash, analytics ->
+                when {
+                    crash && analytics -> "已开启"
+                    crash -> "仅崩溃报告"
+                    analytics -> "仅使用统计"
+                    else -> "已关闭"
+                }
+            }
+        },
+        aliases = listOf("遥测", "数据收集", "匿名统计", "关闭遥测", "收集信息", "Firebase"),
+        target = SettingsSearchTarget.PRIVACY_PERMISSION,
+        openCategory = true,
+    ),
+    PlaybackSettingItem("diagnostics.crash_tracking_enabled", "记录崩溃信息", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getCrashTrackingEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
+    PlaybackSettingItem("diagnostics.analytics_enabled", "使用情况统计", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getAnalyticsEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
     PlaybackSettingItem("diagnostics.enhanced_diagnostic_logging_enabled", "详细运行日志", SettingsRootCategory.PLAYER_DIAGNOSTICS, "diagnostics_options", { context -> com.android.purebilibili.core.store.SettingsManager.getEnhancedDiagnosticLoggingEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
     PlaybackSettingItem("help.auto_check_update_enabled", "自动检查更新", SettingsRootCategory.SYSTEM_ABOUT, "help_options", { context -> com.android.purebilibili.core.store.SettingsManager.getAutoCheckAppUpdate(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.ABOUT_SUPPORT, openCategory = true),
     PlaybackSettingItem(

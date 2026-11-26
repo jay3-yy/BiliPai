@@ -16,7 +16,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.android.purebilibili.core.ui.AppHapticScene
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.rememberAppHapticFeedback
+import kotlinx.coroutines.launch
 
 internal const val VIDEO_TRIPLE_HOLD_MILLIS = 900
 private const val VIDEO_TRIPLE_CANCEL_MILLIS = 180
@@ -65,6 +68,8 @@ internal fun rememberVideoTriplePressState(
 ): VideoTriplePressState {
     val state = remember(identity) { VideoTriplePressState() }
     val latestOnComplete by rememberUpdatedState(onComplete)
+    val haptics = rememberAppHapticFeedback(AppHapticScene.VIDEO_ACTIONS)
+    val cadence = remember(identity) { TriplePressHapticCadenceTracker() }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(state, lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -79,14 +84,24 @@ internal fun rememberVideoTriplePressState(
     LaunchedEffect(state, enabled, state.isPressing) {
         if (!enabled) state.release()
         if (enabled && state.isPressing) {
+            cadence.reset()
             // This is an intentional hold, not a decorative animation. System animation
             // duration scaling must never turn a long press into an immediate submission.
             val startNanos = withFrameNanos { it }
             while (state.progress < 1f) {
-                state.updateProgress(withFrameNanos { resolveVideoTripleHoldProgress(it - startNanos) })
+                val nextProgress = withFrameNanos { resolveVideoTripleHoldProgress(it - startNanos) }
+                state.updateProgress(nextProgress)
+                val cue = cadence.onProgress(nextProgress)
+                if (cue == TriplePressHapticCue.ChargeTick) {
+                    performTriplePressHapticCue(haptics, cue)
+                }
             }
-            if (state.complete()) latestOnComplete()
+            if (state.complete()) {
+                launch { performTriplePressHapticCue(haptics, TriplePressHapticCue.Complete) }
+                latestOnComplete()
+            }
         } else {
+            cadence.reset()
             animate(
                 initialValue = state.progress,
                 targetValue = 0f,

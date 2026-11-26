@@ -80,6 +80,7 @@ fun SettingsShareScreen(
     var profileName by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
+        com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("SettingsShareScreen")
         viewModel.loadSavedProfiles()
     }
 
@@ -87,6 +88,7 @@ fun SettingsShareScreen(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         if (uri != null) {
+            com.android.purebilibili.core.util.AnalyticsHelper.logBackupAction("settings_share", "export")
             viewModel.exportToUri(uri)
         }
     }
@@ -94,6 +96,7 @@ fun SettingsShareScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
+            com.android.purebilibili.core.util.AnalyticsHelper.logBackupAction("settings_share", "import")
             viewModel.loadImportPreview(uri)
         }
     }
@@ -275,7 +278,7 @@ fun SettingsShareScreen(
                                     settingsIconResource(R.drawable.ph_arrow_u_down_left_24, R.drawable.ms_restore_24),
                                 ),
                                 title = profile.name,
-                                subtitle = "点击立即恢复此配置",
+                                subtitle = "点击恢复此配置",
                                 onClick = { viewModel.restoreSavedProfile(profile) },
                                 iconTint = AppContentColors.secondaryText(),
                             )

@@ -82,4 +82,23 @@ class TodayWatchHistorySourceTest {
         current = true
         assertEquals(listOf("BV2"), source.load(false, 20) { }.videos.map { it.bvid })
     }
+
+    @Test
+    fun transientFailureAfterSuccessfulLoadFallsBackToStaleCacheWithoutUnavailableFlag() = runTest {
+        var now = 1_000L
+        var calls = 0
+        val source = TodayWatchHistorySource(
+            loadPage = { _, _, _ ->
+                calls++
+                if (calls == 1) Result.success(HistoryResult(listOf(video("BV_CACHED")), null))
+                else Result.failure(IllegalStateException("network blip"))
+            },
+            nowMillis = { now },
+        )
+        assertEquals(listOf("BV_CACHED"), source.load(false, 20) { }.videos.map { it.bvid })
+        now += TODAY_WATCH_HISTORY_CACHE_TTL_MS + 1L
+        val fallback = source.load(false, 20) { }
+        assertFalse(fallback.unavailable)
+        assertEquals(listOf("BV_CACHED"), fallback.videos.map { it.bvid })
+    }
 }

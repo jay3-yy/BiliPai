@@ -150,6 +150,10 @@ import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.components.PageAwareAsyncImage
 import com.android.purebilibili.core.ui.AppScaffold
 import com.android.purebilibili.core.ui.AppTopBar
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.CardGiftcard
+import com.android.purebilibili.feature.personal.MealtimeGachaSheet
+import com.android.purebilibili.feature.personal.toMealtimeGachaCandidate
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
 import com.android.purebilibili.feature.home.LocalHomeScrollOffset
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
@@ -255,6 +259,7 @@ fun CommonListScreen(
     onVideoClick: (String, Long, String, Boolean) -> Unit,
     onUpClick: ((Long) -> Unit)? = null,
     onRecapUpsClick: ((PersonalRecapWindow, PersonalVideoRecapStats) -> Unit)? = null,
+    onOpenPersonalRecap: (() -> Unit)? = null,
     onCollectionClick: ((FavoriteCollectionRoute) -> Unit)? = null,
     onFavoriteFolderClick: ((Long, Long, String, String) -> Unit)? = null,
     onFavoriteBangumiClick: (Long) -> Unit = {},
@@ -602,6 +607,7 @@ fun CommonListScreen(
     var showFavoriteBatchDeleteConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var pendingFavoriteTransferCopy by rememberSaveable { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
     var showCreateFavoriteFolder by rememberSaveable { mutableStateOf(false) }
+    var showMealtimeGacha by rememberSaveable { mutableStateOf(false) }
     var favoriteFolderEditorTitle by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
     var favoriteFolderEditorIntro by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
     var favoriteFolderEditorPrivate by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
@@ -894,6 +900,7 @@ fun CommonListScreen(
         showFavoriteBatchDeleteConfirm = false
         pendingFavoriteTransferCopy = null
         showCreateFavoriteFolder = false
+        showMealtimeGacha = false
         favoriteFolderEditorTitle = ""
         favoriteFolderEditorIntro = ""
         favoriteFolderEditorPrivate = false
@@ -1520,20 +1527,62 @@ fun CommonListScreen(
                             val pageGridState = historyPagerGridStates.getValue(pageIndex)
 
                             val recapHeader: (@Composable () -> Unit)? = if (
-                                pageFilter == HistoryContentFilter.ALL && personalRecapEnabled == true &&
+                                pageFilter == HistoryContentFilter.ALL &&
                                 !isSearchDestination && searchQuery.isBlank() && !isHistoryBatchMode
                             ) {
                                 {
-                                    HistoryRecapCard(
-                                        refreshToken = state.items,
-                                        active = isCurrentPage && !state.isLoading,
-                                        onUpClick = onUpClick,
-                                        expanded = personalRecapExpanded,
-                                        onExpandedChange = { personalRecapExpanded = it },
-                                        snapshotCache = historyViewModel.recapSnapshots,
-                                        onShowAllUps = onRecapUpsClick,
+                                    var historyMemoryPick by remember(historyViewModel, state.items.size) {
+                                        mutableStateOf<HistoryMemoryPick?>(null)
+                                    }
+                                    var memoryDismissed by rememberSaveable { mutableStateOf(false) }
+                                    LaunchedEffect(historyViewModel, isCurrentPage, state.items.isNotEmpty()) {
+                                        if (!isCurrentPage || memoryDismissed || state.items.isEmpty()) return@LaunchedEffect
+                                        try {
+                                            val recent = fetchPersonalVideoRecapHistory(
+                                                windowStartMs = 0L,
+                                                maxPages = 5,
+                                            )
+                                            historyMemoryPick = pickHistoryMemoryFromData(recent)
+                                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                            throw cancelled
+                                        } catch (_: Exception) {
+                                            // 拾遗加载失败静默降级，不影响历史列表浏览。
+                                        }
+                                    }
+                                    Column(
                                         modifier = Modifier.fillMaxWidth(),
-                                    )
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        if (personalRecapEnabled == true) {
+                                            if (onOpenPersonalRecap != null) {
+                                                HistoryRecapEntryBanner(
+                                                    onClick = onOpenPersonalRecap,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                )
+                                            } else {
+                                                HistoryRecapCard(
+                                                    refreshToken = state.items,
+                                                    active = isCurrentPage && !state.isLoading,
+                                                    onUpClick = onUpClick,
+                                                    expanded = personalRecapExpanded,
+                                                    onExpandedChange = { personalRecapExpanded = it },
+                                                    snapshotCache = historyViewModel.recapSnapshots,
+                                                    onShowAllUps = onRecapUpsClick,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                )
+                                            }
+                                        }
+                                        val activeMemory = historyMemoryPick
+                                        if (activeMemory != null && !memoryDismissed) {
+                                            HistoryMemoryCard(
+                                                pick = activeMemory,
+                                                onPlay = { pick ->
+                                                    onVideoClick(pick.bvid, pick.cid, pick.coverUrl, false)
+                                                },
+                                                onDismiss = { memoryDismissed = true },
+                                            )
+                                        }
+                                    }
                                 }
                             } else null
                             CommonListContent(
@@ -2015,6 +2064,16 @@ fun CommonListScreen(
                                 if (favoriteViewModel != null && favoriteSection == FavoriteSection.VIDEO) {
                                     if (!isBatchActionMode) {
                                     AppIconButton(
+                                        enabled = activeFavoriteItems.isNotEmpty(),
+                                        onClick = { showMealtimeGacha = true },
+                                    ) {
+                                        AppIcon(
+                                            imageVector = Icons.Outlined.CardGiftcard,
+                                            contentDescription = "下饭盲盒",
+                                        )
+                                    }
+
+                                    AppIconButton(
                                         enabled = activeFavoriteItems.isNotEmpty() && !isSubscribedBrowse,
                                         onClick = {
                                             playFavoriteVideo(
@@ -2161,6 +2220,23 @@ fun CommonListScreen(
 
                                 if (historyViewModel != null) {
                                     if (!isHistoryBatchMode) {
+                                        AppIconButton(
+                                            enabled = state.items.any { it.bvid.isNotBlank() },
+                                            onClick = { showMealtimeGacha = true },
+                                        ) {
+                                            AppIcon(
+                                                imageVector = Icons.Outlined.CardGiftcard,
+                                                contentDescription = "下饭盲盒",
+                                            )
+                                        }
+                                        if (onOpenPersonalRecap != null) {
+                                            AppIconButton(onClick = onOpenPersonalRecap) {
+                                                AppIcon(
+                                                    imageVector = Icons.Outlined.BarChart,
+                                                    contentDescription = "观看与阅读统计",
+                                                )
+                                            }
+                                        }
                                         AppWindowActionMenu(
                                             enabled = !isHistoryManagementBusy,
                                             groups = listOf(
@@ -2561,6 +2637,27 @@ fun CommonListScreen(
         )
     }
 
+    if (showMealtimeGacha) {
+        val gachaSourceItems = when {
+            favoriteViewModel != null -> activeFavoriteItems
+            historyViewModel != null -> state.items
+            else -> emptyList()
+        }
+        val gachaCandidates = remember(gachaSourceItems) {
+            gachaSourceItems.mapNotNull { it.toMealtimeGachaCandidate() }
+        }
+        if (gachaCandidates.isNotEmpty()) {
+            MealtimeGachaSheet(
+                candidates = gachaCandidates,
+                sourceLabel = if (historyViewModel != null) "观看历史" else "当前收藏夹",
+                onPlay = { picked ->
+                    onVideoClick(picked.bvid, picked.cid, picked.coverUrl, picked.isVertical)
+                },
+                onDismiss = { showMealtimeGacha = false },
+            )
+        }
+    }
+
     if (showCreateFavoriteFolder) {
         AppAlertDialog(
             onDismissRequest = { showCreateFavoriteFolder = false },
@@ -2605,6 +2702,7 @@ fun CommonListScreen(
                             isPrivate = favoriteFolderEditorPrivate,
                         )
                         showCreateFavoriteFolder = false
+        showMealtimeGacha = false
                     },
                 ) {
                     AppText("创建")

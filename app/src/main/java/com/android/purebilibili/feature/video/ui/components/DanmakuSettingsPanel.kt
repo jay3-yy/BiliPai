@@ -540,6 +540,11 @@ fun DanmakuSettingsPanel(
                                     )
                                 }
                             }
+                            AppText(
+                                text = portraitDisplayAreaMode.description,
+                                color = panelColors.supportingColor,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                         }
                         DanmakuSettingsSectionTitle("互动与屏蔽")
                         DanmakuSettingsToggle("视频内互动提示", !hideInteractiveCommands, { onHideInteractiveCommandsChange(!it) })
@@ -1676,6 +1681,12 @@ private fun PortraitDanmakuDisplayAreaModeSelector(
                 text = "竖屏弹幕显示区域",
                 color = colors.titleColor,
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            AppText(
+                text = currentMode.description,
+                color = colors.supportingColor,
+                style = MaterialTheme.typography.bodySmall
             )
             Spacer(modifier = Modifier.height(12.dp))
             Row(

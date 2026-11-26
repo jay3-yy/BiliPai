@@ -1,9 +1,14 @@
 package com.android.purebilibili.feature.settings.webdav
 
-import com.android.purebilibili.core.network.buildAppDns
 import android.content.Context
-import com.android.purebilibili.BuildConfig
+import android.net.Uri
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.network.buildAppDns
+import com.android.purebilibili.feature.settings.backup.AppBackupArchiveEngine
+import com.android.purebilibili.feature.settings.backup.AppBackupArchiveInspection
+import com.android.purebilibili.feature.settings.backup.AppBackupRestoreReport
+import com.android.purebilibili.feature.settings.backup.AppBackupScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
@@ -11,24 +16,26 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.File
 import java.io.IOException
-import java.time.Instant
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
-
-private const val ZIP_ENTRY_DATASTORE_SETTINGS = "datastore/settings_prefs.preferences_pb"
-private const val ZIP_ENTRY_DATASTORE_PLUGIN = "datastore/plugin_prefs.preferences_pb"
-private const val ZIP_ENTRY_SHARED_PREFS_JSON_PLUGIN = "shared_prefs/json_plugins.xml"
-private const val ZIP_ENTRY_JSON_PLUGIN_DIR = "json_plugins/"
 
 private const val XML_CONTENT_TYPE = "application/xml; charset=utf-8"
 private const val ZIP_CONTENT_TYPE = "application/zip"
 
+data class LocalBackupExportResult(
+    val fileName: String,
+    val sizeBytes: Long,
+    val scopes: Set<AppBackupScope>,
+)
+
+data class LocalBackupInspectionSession(
+    val uri: Uri,
+    val zipBytes: ByteArray,
+    val inspection: AppBackupArchiveInspection,
+)
+
 class WebDavBackupService(private val context: Context) {
+
+    private val archiveEngine = AppBackupArchiveEngine(context)
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -41,8 +48,56 @@ class WebDavBackupService(private val context: Context) {
             .build()
     }
 
+    suspend fun exportLocalBackup(
+        uri: Uri,
+        scopes: Set<AppBackupScope> = AppBackupScope.entries.toSet(),
+    ): Result<LocalBackupExportResult> = withContext(Dispatchers.IO) {
+        runCatchingCancelable {
+            val now = System.currentTimeMillis()
+            val fileName = buildWebDavBackupFileName(now)
+            val bytes = archiveEngine.createArchive(scopes = scopes, nowEpochMs = now)
+            context.contentResolver.openOutputStream(uri)?.use { out ->
+                out.write(bytes)
+            } ?: throw IOException("无法写入所选备份文件")
+            LocalBackupExportResult(
+                fileName = fileName,
+                sizeBytes = bytes.size.toLong(),
+                scopes = scopes,
+            )
+        }
+    }
+
+    suspend fun inspectLocalBackup(uri: Uri): Result<LocalBackupInspectionSession> = withContext(Dispatchers.IO) {
+        runCatchingCancelable {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: throw IOException("无法读取所选备份文件")
+            val inspection = archiveEngine.inspectArchive(bytes)
+            if (inspection.restorableEntryCount <= 0) {
+                throw IOException("该文件不包含可恢复的 BiliPai 备份内容")
+            }
+            LocalBackupInspectionSession(
+                uri = uri,
+                zipBytes = bytes,
+                inspection = inspection,
+            )
+        }
+    }
+
+    suspend fun restoreLocalBackup(
+        session: LocalBackupInspectionSession,
+        scopes: Set<AppBackupScope> = AppBackupScope.entries.toSet(),
+    ): Result<AppBackupRestoreReport> = withContext(Dispatchers.IO) {
+        runCatchingCancelable {
+            val report = archiveEngine.restoreArchive(session.zipBytes, allowedScopes = scopes)
+            if (report.restoredCount <= 0) {
+                throw IOException("未匹配到所选范围内的可恢复文件")
+            }
+            report
+        }
+    }
+
     suspend fun testConnection(config: WebDavBackupConfig): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
+        runCatchingCancelable {
             validateConfig(config)
             val authHeader = Credentials.basic(config.username, config.password)
             val directoryUrl = ensureRemoteDirectory(config, authHeader)
@@ -52,7 +107,7 @@ class WebDavBackupService(private val context: Context) {
     }
 
     suspend fun listBackups(config: WebDavBackupConfig): Result<List<WebDavBackupEntry>> = withContext(Dispatchers.IO) {
-        runCatching {
+        runCatchingCancelable {
             validateConfig(config)
             val authHeader = Credentials.basic(config.username, config.password)
             val directoryUrl = ensureRemoteDirectory(config, authHeader)
@@ -60,8 +115,11 @@ class WebDavBackupService(private val context: Context) {
         }
     }
 
-    suspend fun backupNow(config: WebDavBackupConfig): Result<WebDavBackupEntry> = withContext(Dispatchers.IO) {
-        runCatching {
+    suspend fun backupNow(
+        config: WebDavBackupConfig,
+        scopes: Set<AppBackupScope> = AppBackupScope.entries.toSet(),
+    ): Result<WebDavBackupEntry> = withContext(Dispatchers.IO) {
+        runCatchingCancelable {
             validateConfig(config)
             val authHeader = Credentials.basic(config.username, config.password)
             val directoryUrl = ensureRemoteDirectory(config, authHeader)
@@ -69,7 +127,7 @@ class WebDavBackupService(private val context: Context) {
             val now = System.currentTimeMillis()
             val fileName = buildWebDavBackupFileName(now)
             val uploadUrl = "$directoryUrl/$fileName"
-            val archiveBytes = buildBackupArchive(now)
+            val archiveBytes = archiveEngine.createArchive(scopes = scopes, nowEpochMs = now)
 
             val putRequest = Request.Builder()
                 .url(uploadUrl)
@@ -83,45 +141,120 @@ class WebDavBackupService(private val context: Context) {
                 }
             }
 
+            if (config.maxRemoteBackups > 0) {
+                pruneOlderBackupsBestEffort(config, directoryUrl, authHeader)
+            }
+
             WebDavBackupEntry(
                 fileName = fileName,
                 href = uploadUrl,
                 sizeBytes = archiveBytes.size.toLong(),
-                lastModifiedEpochMs = now
+                lastModifiedEpochMs = now,
             )
         }
     }
 
-    suspend fun restoreLatest(config: WebDavBackupConfig): Result<WebDavBackupEntry> = withContext(Dispatchers.IO) {
-        runCatching {
+    suspend fun restoreLatest(
+        config: WebDavBackupConfig,
+        scopes: Set<AppBackupScope> = AppBackupScope.entries.toSet(),
+    ): Result<WebDavBackupEntry> = withContext(Dispatchers.IO) {
+        runCatchingCancelable {
             validateConfig(config)
             val authHeader = Credentials.basic(config.username, config.password)
             val directoryUrl = ensureRemoteDirectory(config, authHeader)
             val entries = listBackupsInternal(directoryUrl, authHeader)
             val latest = selectLatestWebDavBackup(entries)
                 ?: throw IllegalStateException("未找到可恢复的备份文件")
-
-            val downloadUrl = resolveWebDavDownloadUrl(config.baseUrl, latest.href)
-            val getRequest = Request.Builder()
-                .url(downloadUrl)
-                .header("Authorization", authHeader)
-                .get()
-                .build()
-
-            val zipBytes = httpClient.newCall(getRequest).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IOException("下载失败: HTTP ${response.code}")
-                }
-                response.body.bytes()
-            }
-
-            val restoredCount = restoreFromBackupArchive(zipBytes)
-            if (restoredCount <= 0) {
-                throw IOException("备份文件无可恢复内容")
-            }
-
+            restoreEntryInternal(config, authHeader, latest, scopes)
             latest
         }
+    }
+
+    suspend fun restoreEntry(
+        config: WebDavBackupConfig,
+        entry: WebDavBackupEntry,
+        scopes: Set<AppBackupScope> = AppBackupScope.entries.toSet(),
+    ): Result<AppBackupRestoreReport> = withContext(Dispatchers.IO) {
+        runCatchingCancelable {
+            validateConfig(config)
+            val authHeader = Credentials.basic(config.username, config.password)
+            restoreEntryInternal(config, authHeader, entry, scopes)
+        }
+    }
+
+    suspend fun deleteBackup(
+        config: WebDavBackupConfig,
+        entry: WebDavBackupEntry,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatchingCancelable {
+            validateConfig(config)
+            val authHeader = Credentials.basic(config.username, config.password)
+            val deleteUrl = resolveWebDavDownloadUrl(config.baseUrl, entry.href)
+            val request = Request.Builder()
+                .url(deleteUrl)
+                .header("Authorization", authHeader)
+                .delete()
+                .build()
+            httpClient.newCall(request).execute().use { response ->
+                if (response.code !in setOf(200, 202, 204, 404)) {
+                    throw IOException("删除云端备份失败: HTTP ${response.code}")
+                }
+            }
+            Unit
+        }
+    }
+
+    private fun pruneOlderBackupsBestEffort(
+        config: WebDavBackupConfig,
+        directoryUrl: String,
+        authHeader: String,
+    ) {
+        val entries = try {
+            listBackupsInternal(directoryUrl, authHeader)
+        } catch (_: IOException) {
+            return
+        }
+        val toPrune = selectWebDavBackupsToPrune(entries, config.maxRemoteBackups)
+        for (oldEntry in toPrune) {
+            try {
+                val deleteUrl = resolveWebDavDownloadUrl(config.baseUrl, oldEntry.href)
+                val request = Request.Builder()
+                    .url(deleteUrl)
+                    .header("Authorization", authHeader)
+                    .delete()
+                    .build()
+                httpClient.newCall(request).execute().close()
+            } catch (_: IOException) {
+                // 单条旧快照清理失败不影响已上传成功的新快照
+            }
+        }
+    }
+
+    private fun restoreEntryInternal(
+        config: WebDavBackupConfig,
+        authHeader: String,
+        entry: WebDavBackupEntry,
+        scopes: Set<AppBackupScope>,
+    ): AppBackupRestoreReport {
+        val downloadUrl = resolveWebDavDownloadUrl(config.baseUrl, entry.href)
+        val getRequest = Request.Builder()
+            .url(downloadUrl)
+            .header("Authorization", authHeader)
+            .get()
+            .build()
+
+        val zipBytes = httpClient.newCall(getRequest).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("下载失败: HTTP ${response.code}")
+            }
+            response.body.bytes()
+        }
+
+        val report = archiveEngine.restoreArchive(zipBytes, allowedScopes = scopes)
+        if (report.restoredCount <= 0) {
+            throw IOException("备份文件无可恢复内容")
+        }
+        return report
     }
 
     private fun listBackupsInternal(directoryUrl: String, authHeader: String): List<WebDavBackupEntry> {
@@ -157,15 +290,9 @@ class WebDavBackupService(private val context: Context) {
                 probeStatus = probeDirectoryDepthZero(current, authHeader)
             )
             when (action) {
-                WebDavDirectoryAction.EXISTS -> Unit // 已存在,跳过创建
-
-                WebDavDirectoryAction.CREATE -> {
-                    mkcolDirectory(current, authHeader)
-                }
-
+                WebDavDirectoryAction.EXISTS -> Unit
+                WebDavDirectoryAction.CREATE -> mkcolDirectory(current, authHeader)
                 WebDavDirectoryAction.CREATE_OR_VERIFY -> {
-                    // 探测异常(部分服务器不支持对目录 Depth:0 PROPFIND):
-                    // 回退幂等 MKCOL,再探测确认。
                     mkcolDirectory(current, authHeader)
                     val confirmStatus = probeDirectoryDepthZero(current, authHeader)
                     if (confirmStatus !in setOf(200, 207)) {
@@ -176,11 +303,9 @@ class WebDavBackupService(private val context: Context) {
                 }
             }
         }
-
         return current
     }
 
-    /** PROPFIND Depth: 0 探测目录是否存在;返回 HTTP 状态码,网络异常返回 null。 */
     private fun probeDirectoryDepthZero(url: String, authHeader: String): Int? {
         return try {
             val request = Request.Builder()
@@ -190,7 +315,7 @@ class WebDavBackupService(private val context: Context) {
                 .method("PROPFIND", buildWebDavPropfindBody().toRequestBody(XML_CONTENT_TYPE.toMediaType()))
                 .build()
             httpClient.newCall(request).execute().use { it.code }
-        } catch (e: IOException) {
+        } catch (_: IOException) {
             null
         }
     }
@@ -221,99 +346,11 @@ class WebDavBackupService(private val context: Context) {
         }
     }
 
-    private fun buildBackupArchive(nowEpochMs: Long): ByteArray {
-        val output = ByteArrayOutputStream()
-        ZipOutputStream(output).use { zip ->
-            val manifest = """
-                {
-                  "createdAtEpochMs": $nowEpochMs,
-                  "createdAtIso": "${Instant.ofEpochMilli(nowEpochMs)}",
-                  "appVersion": "${BuildConfig.VERSION_NAME}",
-                  "scope": [
-                    "$ZIP_ENTRY_DATASTORE_SETTINGS",
-                    "$ZIP_ENTRY_DATASTORE_PLUGIN",
-                    "$ZIP_ENTRY_SHARED_PREFS_JSON_PLUGIN",
-                    "${ZIP_ENTRY_JSON_PLUGIN_DIR}*.json"
-                  ]
-                }
-            """.trimIndent()
-            zip.putNextEntry(ZipEntry("manifest.json"))
-            zip.write(manifest.toByteArray(Charsets.UTF_8))
-            zip.closeEntry()
-
-            addFileIfExists(
-                zip = zip,
-                file = File(context.filesDir, "datastore/settings_prefs.preferences_pb"),
-                entryName = ZIP_ENTRY_DATASTORE_SETTINGS
-            )
-            addFileIfExists(
-                zip = zip,
-                file = File(context.filesDir, "datastore/plugin_prefs.preferences_pb"),
-                entryName = ZIP_ENTRY_DATASTORE_PLUGIN
-            )
-
-            val sharedPrefsDir = File(context.applicationInfo.dataDir, "shared_prefs")
-            addFileIfExists(
-                zip = zip,
-                file = File(sharedPrefsDir, "json_plugins.xml"),
-                entryName = ZIP_ENTRY_SHARED_PREFS_JSON_PLUGIN
-            )
-
-            val pluginDir = File(context.filesDir, "json_plugins")
-            if (pluginDir.exists() && pluginDir.isDirectory) {
-                pluginDir.listFiles()
-                    ?.filter { it.isFile && it.extension.equals("json", ignoreCase = true) }
-                    ?.sortedBy { it.name }
-                    ?.forEach { file ->
-                        addFileIfExists(zip, file, "$ZIP_ENTRY_JSON_PLUGIN_DIR${file.name}")
-                    }
-            }
-        }
-
-        return output.toByteArray()
-    }
-
-    private fun addFileIfExists(zip: ZipOutputStream, file: File, entryName: String) {
-        if (!file.exists() || !file.isFile) return
-        zip.putNextEntry(ZipEntry(entryName))
-        file.inputStream().use { input -> input.copyTo(zip) }
-        zip.closeEntry()
-    }
-
-    private fun restoreFromBackupArchive(zipBytes: ByteArray): Int {
-        var restored = 0
-
-        ZipInputStream(ByteArrayInputStream(zipBytes)).use { zipInput ->
-            var entry = zipInput.nextEntry
-            while (entry != null) {
-                if (!entry.isDirectory) {
-                    val entryName = entry.name.trim()
-                    val target = resolveRestoreTarget(entryName)
-                    if (target != null) {
-                        target.parentFile?.mkdirs()
-                        target.outputStream().use { output -> zipInput.copyTo(output) }
-                        restored++
-                    }
-                }
-                zipInput.closeEntry()
-                entry = zipInput.nextEntry
-            }
-        }
-
-        return restored
-    }
-
-    private fun resolveRestoreTarget(entryName: String): File? {
-        if (entryName.contains("..")) return null
-        return when {
-            entryName == ZIP_ENTRY_DATASTORE_SETTINGS -> File(context.filesDir, "datastore/settings_prefs.preferences_pb")
-            entryName == ZIP_ENTRY_DATASTORE_PLUGIN -> File(context.filesDir, "datastore/plugin_prefs.preferences_pb")
-            entryName == ZIP_ENTRY_SHARED_PREFS_JSON_PLUGIN -> File(context.applicationInfo.dataDir, "shared_prefs/json_plugins.xml")
-            entryName.startsWith(ZIP_ENTRY_JSON_PLUGIN_DIR) -> {
-                val fileName = entryName.removePrefix(ZIP_ENTRY_JSON_PLUGIN_DIR)
-                if (fileName.isBlank()) null else File(context.filesDir, "json_plugins/$fileName")
-            }
-            else -> null
-        }
+    private inline fun <T> runCatchingCancelable(block: () -> T): Result<T> = try {
+        Result.success(block())
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Throwable) {
+        Result.failure(error)
     }
 }

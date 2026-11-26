@@ -120,6 +120,18 @@ fun SettingsSearchScreen(
         ) {
             when {
                 searchQuery.isBlank() -> {
+                    item(key = "hidden_gems") {
+                        EntranceGroup(startWhen = rootEntranceStartWhen) {
+                            SettingsRootCategoryEntranceSection {
+                                com.android.purebilibili.feature.settings.SettingsHiddenGemsSpotlightCard(
+                                    onExploreGem = { gem ->
+                                        searchInput.setTextAndPlaceCursorAtEnd(gem.searchQuery)
+                                        viewModel.recordSearchQuery(gem.searchQuery)
+                                    },
+                                )
+                            }
+                        }
+                    }
                     item(key = "quick_topics") {
                         EntranceGroup(startWhen = rootEntranceStartWhen) {
                             SettingsRootCategoryEntranceSection {
@@ -177,7 +189,7 @@ fun SettingsSearchScreen(
                                 )
                             }
                             if (result.target == com.android.purebilibili.feature.settings.SettingsSearchTarget.NEARBY_HANDOFF) {
-                                nearbyHandoff?.openDevices?.invoke()
+                                nearbyHandoff?.openDeviceManager?.invoke()
                             } else onSearchResultClick(result)
                         },
                     )
