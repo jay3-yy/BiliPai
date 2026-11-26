@@ -1857,6 +1857,40 @@ private fun VideoPlayerSectionContent(
     var scale by remember { mutableFloatStateOf(1f) }
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
+    val zoomSettleScope = rememberCoroutineScope()
+    var zoomSettleJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val zoomReduceMotion by rememberUpdatedState(com.android.purebilibili.core.ui.LocalSystemReduceMotion.current)
+
+    fun cancelZoomSettle() {
+        zoomSettleJob?.cancel()
+        zoomSettleJob = null
+    }
+
+    fun animateZoomTo(targetScale: Float, targetPanX: Float, targetPanY: Float) {
+        cancelZoomSettle()
+        if (zoomReduceMotion) {
+            scale = targetScale
+            panX = targetPanX
+            panY = targetPanY
+            return
+        }
+        val startScale = scale
+        val startPanX = panX
+        val startPanY = panY
+        zoomSettleJob = zoomSettleScope.launch {
+            androidx.compose.animation.core.Animatable(0f).animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = 0.82f,
+                    stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow,
+                ),
+            ) {
+                scale = startScale + (targetScale - startScale) * value
+                panX = startPanX + (targetPanX - startPanX) * value
+                panY = startPanY + (targetPanY - startPanY) * value
+            }
+        }
+    }
 
     LaunchedEffect(fixedFullscreenAspectRatio, isVerticalVideo, sessionAspectRatio, aspectRatioSession) {
         currentAspectRatio = resolveSafeVideoAspectRatio(
@@ -1867,12 +1901,14 @@ private fun VideoPlayerSectionContent(
 
     // Changing forced aspect ratio invalidates free pinch/pan offsets from the prior frame.
     LaunchedEffect(currentAspectRatio) {
+        cancelZoomSettle()
         scale = 1f
         panX = 0f
         panY = 0f
     }
     // 上滑/按钮进全屏也必须清掉 free-form 缩放，否则残留 scale 会造成右/下黑边。
     LaunchedEffect(isFullscreen, isPortraitFullscreen) {
+        cancelZoomSettle()
         scale = 1f
         panX = 0f
         panY = 0f
@@ -2762,6 +2798,10 @@ private fun VideoPlayerSectionContent(
                             )
                             zoomSnapHintText = "已缩放至铺满画面"
                             zoomSnapHintGeneration += 1L
+                        },
+                        onCancelZoomSettle = { cancelZoomSettle() },
+                        onAnimateZoomRelease = { targetScale, targetPanX, targetPanY ->
+                            animateZoomTo(targetScale, targetPanX, targetPanY)
                         },
                     )
                 },

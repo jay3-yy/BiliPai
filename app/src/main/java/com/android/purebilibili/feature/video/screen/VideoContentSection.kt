@@ -2506,9 +2506,8 @@ internal fun VideoContentTabBar(
                 pagerTargetPositionProvider = pagerTargetPositionProvider,
             )
 
-            if (showNearbyAction && com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED) {
-                com.android.purebilibili.feature.nearby.NearbySmartTabIconButton()
-            }
+            // 设备接力入口已统一收敛在播放器顶栏（TopControlBar）与全屏更多菜单中，
+            // 避免与「简介 / 评论」标签栏右侧同时出现两个相同的设备接力图标。
 
             if (showDanmakuActions && shouldShowVideoContentTabBarDanmakuActions(selectedTabIndex)) {
                 Row(

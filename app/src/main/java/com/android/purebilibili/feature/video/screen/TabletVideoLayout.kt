@@ -157,9 +157,6 @@ internal fun TabletSecondaryDanmakuActions(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED) {
-            com.android.purebilibili.feature.nearby.NearbySmartTabIconButton()
-        }
         AppIconButton(
             onClick = onDanmakuSendClick,
             modifier = Modifier

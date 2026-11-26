@@ -799,16 +799,17 @@ internal fun resolvePinchZoomReleaseScale(
     fillScale: Float,
     snapEnabled: Boolean,
 ): PinchZoomReleaseResult {
+    val clampedScale = currentScale.coerceIn(1f, 5f)
     if (!snapEnabled) {
-        return PinchZoomReleaseResult(scale = currentScale, resetPan = currentScale <= 1.01f, snappedToFill = false)
+        return PinchZoomReleaseResult(scale = clampedScale, resetPan = clampedScale <= 1.01f, snappedToFill = false)
     }
-    if (currentScale < 1.06f) {
+    if (clampedScale < 1.06f) {
         return PinchZoomReleaseResult(scale = 1f, resetPan = true, snappedToFill = false)
     }
-    if (fillScale > 1.05f && kotlin.math.abs(currentScale - fillScale) <= 0.14f) {
+    if (fillScale > 1.05f && kotlin.math.abs(clampedScale - fillScale) <= 0.14f) {
         return PinchZoomReleaseResult(scale = fillScale, resetPan = true, snappedToFill = true)
     }
-    return PinchZoomReleaseResult(scale = currentScale, resetPan = false, snappedToFill = false)
+    return PinchZoomReleaseResult(scale = clampedScale, resetPan = false, snappedToFill = false)
 }
 
 internal fun formatPinchZoomRestoreLabel(scale: Float, showScaleBadge: Boolean): String {

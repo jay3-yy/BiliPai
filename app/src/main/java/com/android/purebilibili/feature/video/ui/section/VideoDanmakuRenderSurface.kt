@@ -2,7 +2,10 @@ package com.android.purebilibili.feature.video.ui.section
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
@@ -18,9 +21,11 @@ internal fun VideoDanmakuRenderSurface(
     modifier: Modifier = Modifier,
 ) {
     key(manager) {
+        val viewRef = remember { mutableStateOf<DanmakuRenderView?>(null) }
         AndroidView(
             factory = { context ->
                 DanmakuRenderView(context).apply {
+                    viewRef.value = this
                     manager.useFullscreenTextSize = useFullscreenTextSize
                     manager.updateViewport(viewport)
                     addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
@@ -36,6 +41,7 @@ internal fun VideoDanmakuRenderSurface(
             // 临时离开布局只暂停；真正离开播放宿主才由 onRelease 释放。
             onReset = { view -> manager.setRenderingPaused(view, true) },
             update = { view ->
+                viewRef.value = view
                 manager.updateViewport(viewport)
                 manager.useFullscreenTextSize = useFullscreenTextSize
                 if (view.width > 0 && view.height > 0) {
@@ -47,8 +53,13 @@ internal fun VideoDanmakuRenderSurface(
                 }
                 manager.setRenderingPaused(view, renderingPaused)
             },
-            onRelease = manager::detachView,
-            modifier = modifier,
+            onRelease = { view ->
+                if (viewRef.value === view) viewRef.value = null
+                manager.detachView(view)
+            },
+            modifier = modifier.onGloballyPositioned { coordinates ->
+                viewRef.value?.let { view -> manager.updateViewCoordinates(view, coordinates) }
+            },
         )
     }
 }

@@ -3,10 +3,12 @@ package com.android.purebilibili.feature.video.ui.section
 import android.os.SystemClock
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.media3.common.Player
 import com.android.purebilibili.data.model.response.ViewPoint
@@ -38,7 +40,36 @@ internal data class VideoPlayerMultiTouchCallbacks(
     val onChapterSeek: (positionMs: Long, feedbackText: String) -> Unit,
     val isPinchZoomSnapAndBadgeEnabled: () -> Boolean,
     val onZoomSnappedToFill: () -> Unit,
+    val onCancelZoomSettle: () -> Unit = {},
+    val onAnimateZoomRelease: ((targetScale: Float, targetPanX: Float, targetPanY: Float) -> Unit)? = null,
 )
+
+private const val PLAYER_ZOOM_MIN_OVERSHOOT = 0.86f
+private const val PLAYER_ZOOM_MAX_OVERSHOOT = 5.35f
+private const val PLAYER_ZOOM_RUBBER_BAND_RESISTANCE = 0.35f
+
+private fun applyPlayerPinchRubberBandScale(currentScale: Float, zoomFactor: Float): Float {
+    val rawNext = currentScale * zoomFactor
+    return when {
+        rawNext < 1f -> {
+            val damped = if (currentScale < 1f) {
+                currentScale + (rawNext - currentScale) * PLAYER_ZOOM_RUBBER_BAND_RESISTANCE
+            } else {
+                1f - (1f - rawNext) * PLAYER_ZOOM_RUBBER_BAND_RESISTANCE
+            }
+            damped.coerceIn(PLAYER_ZOOM_MIN_OVERSHOOT, 1f)
+        }
+        rawNext > 5f -> {
+            val damped = if (currentScale > 5f) {
+                currentScale + (rawNext - currentScale) * PLAYER_ZOOM_RUBBER_BAND_RESISTANCE
+            } else {
+                5f + (rawNext - 5f) * PLAYER_ZOOM_RUBBER_BAND_RESISTANCE
+            }
+            damped.coerceIn(5f, PLAYER_ZOOM_MAX_OVERSHOOT)
+        }
+        else -> rawNext
+    }
+}
 
 /**
  * 横屏/详情内嵌播放器的多点触控与缩放手势：
@@ -75,6 +106,7 @@ internal fun Modifier.videoPlayerMultiTouchGestures(
         var lastTwoFingerTapForward: Boolean? = null
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false)
+            callbacks.onCancelZoomSettle()
             var totalPanX = 0f
             var totalPanY = 0f
             var lockedAxis: LockedTwoFingerSpeedAxis? = null
@@ -200,15 +232,29 @@ internal fun Modifier.videoPlayerMultiTouchGestures(
                         isVerticalVideo = callbacks.isVerticalVideo(),
                     ) && (zoom != 1f || pan != Offset.Zero)
                 ) {
-                    val updatedScale = (callbacks.getScale() * zoom).coerceIn(1f, 5f)
+                    val oldScale = callbacks.getScale()
+                    val updatedScale = applyPlayerPinchRubberBandScale(oldScale, zoom)
                     callbacks.setScale(updatedScale)
 
                     if (updatedScale > 1f) {
+                        val currentPanX = callbacks.getPanX()
+                        val currentPanY = callbacks.getPanY()
+                        val centroid = event.calculateCentroid(useCurrent = false)
+                        val centroidDx: Float
+                        val centroidDy: Float
+                        if (centroid.isSpecified && oldScale > 0f && updatedScale != oldScale) {
+                            val zoomRatio = updatedScale / oldScale
+                            centroidDx = (1f - zoomRatio) * (centroid.x - size.width / 2f - currentPanX)
+                            centroidDy = (1f - zoomRatio) * (centroid.y - size.height / 2f - currentPanY)
+                        } else {
+                            centroidDx = 0f
+                            centroidDy = 0f
+                        }
                         val (nextX, nextY) = resolvePortraitZoomedPan(
-                            currentPanX = callbacks.getPanX(),
-                            currentPanY = callbacks.getPanY(),
-                            deltaX = pan.x * updatedScale,
-                            deltaY = pan.y * updatedScale,
+                            currentPanX = currentPanX,
+                            currentPanY = currentPanY,
+                            deltaX = pan.x + centroidDx,
+                            deltaY = pan.y + centroidDy,
                             scale = updatedScale,
                             containerWidth = size.width.toFloat(),
                             containerHeight = size.height.toFloat(),
@@ -284,10 +330,32 @@ internal fun Modifier.videoPlayerMultiTouchGestures(
                     fillScale = fillScale,
                     snapEnabled = callbacks.isPinchZoomSnapAndBadgeEnabled(),
                 )
-                callbacks.setScale(releaseResult.scale)
-                if (releaseResult.resetPan) {
-                    callbacks.setPanX(0f)
-                    callbacks.setPanY(0f)
+                val targetScale = releaseResult.scale.coerceIn(1f, 5f)
+                val (targetPanX, targetPanY) = if (releaseResult.resetPan) {
+                    0f to 0f
+                } else {
+                    resolvePortraitZoomedPan(
+                        currentPanX = callbacks.getPanX(),
+                        currentPanY = callbacks.getPanY(),
+                        deltaX = 0f,
+                        deltaY = 0f,
+                        scale = targetScale,
+                        containerWidth = size.width.toFloat(),
+                        containerHeight = size.height.toFloat(),
+                    )
+                }
+                val animateRelease = callbacks.onAnimateZoomRelease
+                if (animateRelease != null && (
+                        abs(callbacks.getScale() - targetScale) > 0.001f ||
+                            abs(callbacks.getPanX() - targetPanX) > 0.5f ||
+                            abs(callbacks.getPanY() - targetPanY) > 0.5f
+                    )
+                ) {
+                    animateRelease(targetScale, targetPanX, targetPanY)
+                } else {
+                    callbacks.setScale(targetScale)
+                    callbacks.setPanX(targetPanX)
+                    callbacks.setPanY(targetPanY)
                 }
                 if (releaseResult.snappedToFill) {
                     callbacks.onZoomSnappedToFill()

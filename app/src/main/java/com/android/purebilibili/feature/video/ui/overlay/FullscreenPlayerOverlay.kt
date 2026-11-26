@@ -1258,7 +1258,7 @@ private fun FullscreenPlayerOverlayContent(
                     }
                 }
 
-                key(exoPlayer, useTextureSurface) {
+                key(exoPlayer, useTextureSurface, configuration.orientation) {
                 AndroidView(
                     factory = { ctx ->
                         com.android.purebilibili.feature.video.ui.components.createVideoPlayerView(ctx, useTextureSurface).apply {

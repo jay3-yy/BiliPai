@@ -39,21 +39,21 @@ import kotlinx.coroutines.TimeoutCancellationException
 /** 桌面控件只响应媒体事件和用户操作，不轮询进度或启动逐帧更新。 */
 class PlaybackWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
-        runPending(context) {
+        runPending(context) { appContext ->
             val current = MiniPlayerManager.getInstanceOrNull()?.mediaSession?.player
             if (current?.currentMediaItem != null) {
                 val owner = MiniPlayerManager.getInstanceOrNull()
-                publish(context, current, owner?.currentTitle, owner?.currentBvid)
+                publish(appContext, current, owner?.currentTitle, owner?.currentBvid)
             }
             else {
-                val future = MediaController.Builder(context, SessionToken(context,
-                    ComponentName(context, BackgroundAudioService::class.java))).buildAsync()
+                val future = MediaController.Builder(appContext, SessionToken(appContext,
+                    ComponentName(appContext, BackgroundAudioService::class.java))).buildAsync()
                 try {
                     val remote = future.awaitBackgroundAudio()
-                    if (remote.currentMediaItem != null) publish(context, remote)
+                    if (remote.currentMediaItem != null) publish(appContext, remote)
                     else {
-                        val saved = AudioMediaLibrary(context).saved()
-                        render(context, saved?.current?.title, saved?.current?.bvid, false, false, false)
+                        val saved = AudioMediaLibrary(appContext).saved()
+                        render(appContext, saved?.current?.title, saved?.current?.bvid, false, false, false)
                     }
                 } finally { MediaController.releaseFuture(future) }
             }
@@ -71,11 +71,11 @@ class PlaybackWidgetProvider : AppWidgetProvider() {
         }
         val command = intent.getStringExtra("command") ?: return
         if (command !in listOf("toggle", "previous", "next")) return
-        runPending(context) {
+        runPending(context) { appContext ->
             val controllers = mutableListOf<MediaController>()
             try {
                 suspend fun connect(service: Class<*>): MediaController? {
-                    val future = MediaController.Builder(context, SessionToken(context, ComponentName(context, service))).buildAsync()
+                    val future = MediaController.Builder(appContext, SessionToken(appContext, ComponentName(appContext, service))).buildAsync()
                     return try { future.awaitBackgroundAudio().also(controllers::add) }
                     catch (cancelled: CancellationException) { MediaController.releaseFuture(future); throw cancelled }
                     catch (error: Exception) {
@@ -86,12 +86,12 @@ class PlaybackWidgetProvider : AppWidgetProvider() {
                 }
                 val local = MiniPlayerManager.getInstanceOrNull()?.mediaSession?.player?.takeIf { it.currentMediaItem != null }
                 val active = local ?: connect(BackgroundAudioService::class.java)
-                checkNotNull(active) { context.getString(R.string.playback_widget_empty) }
+                checkNotNull(active) { appContext.getString(R.string.playback_widget_empty) }
                 when (command) {
                     "toggle" -> if (active.playWhenReady) active.pause() else {
                         if (active.currentMediaItem == null) {
-                            check(!SystemMediaPreferences.libraryProtected(context)) { context.getString(R.string.audio_library_locked) }
-                            check(AudioMediaLibrary(context).saved()?.current != null) { context.getString(R.string.playback_widget_empty) }
+                            check(!SystemMediaPreferences.libraryProtected(appContext)) { appContext.getString(R.string.audio_library_locked) }
+                            check(AudioMediaLibrary(appContext).saved()?.current != null) { appContext.getString(R.string.playback_widget_empty) }
                         }
                         active.play()
                         if (active is MediaController && active.currentMediaItem == null) awaitPlaybackStart(active)
@@ -100,7 +100,7 @@ class PlaybackWidgetProvider : AppWidgetProvider() {
                     "next" -> if (active.isCommandAvailable(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)) active.seekToNextMediaItem()
                 }
                 // 实际状态随后由服务的 Player 事件更新。
-                if (active.currentMediaItem != null) publish(context, active)
+                if (active.currentMediaItem != null) publish(appContext, active)
             } finally { controllers.forEach { it.release() } }
         }
     }
@@ -126,28 +126,31 @@ class PlaybackWidgetProvider : AppWidgetProvider() {
         continuation.invokeOnCancellation { controller.removeListener(listener) }
     }
 
-    private fun runPending(context: Context, block: suspend () -> Unit) {
+    private fun runPending(context: Context, block: suspend (Context) -> Unit) {
+        // BroadcastReceiver 传入的 ReceiverRestrictedContext 禁止 bindService，MediaController 必须使用 applicationContext。
+        val appContext = context.applicationContext ?: context
         val pending = goAsync()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope.launch {
-            try { withTimeout(8_000L) { block() } }
+            try { withTimeout(8_000L) { block(appContext) } }
             catch (timeout: TimeoutCancellationException) {
                 Logger.w("PlaybackWidget", "Widget operation timed out", timeout)
-                Toast.makeText(context, R.string.playback_widget_error, Toast.LENGTH_SHORT).show()
+                Toast.makeText(appContext, R.string.playback_widget_error, Toast.LENGTH_SHORT).show()
             }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 Logger.w("PlaybackWidget", "Widget operation failed", error)
-                Toast.makeText(context, error.message ?: context.getString(R.string.playback_widget_error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(appContext, error.message ?: appContext.getString(R.string.playback_widget_error), Toast.LENGTH_SHORT).show()
             } finally { pending.finish(); scope.cancel() }
         }
     }
 
     companion object {
         fun requestUpdate(context: Context) {
-            val ids = AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, PlaybackWidgetProvider::class.java))
+            val appContext = context.applicationContext ?: context
+            val ids = AppWidgetManager.getInstance(appContext).getAppWidgetIds(ComponentName(appContext, PlaybackWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            context.sendBroadcast(Intent(context, PlaybackWidgetProvider::class.java)
+            appContext.sendBroadcast(Intent(appContext, PlaybackWidgetProvider::class.java)
                 .setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
         }

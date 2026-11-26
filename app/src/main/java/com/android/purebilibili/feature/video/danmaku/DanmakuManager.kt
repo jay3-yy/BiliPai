@@ -114,7 +114,15 @@ class DanmakuManager private constructor(
     // 视图和控制器
     private var danmakuView: DanmakuRenderView? = null
     private val renderTargets = LinkedHashSet<DanmakuRenderView>()
+    private val viewCoordinates = java.util.WeakHashMap<DanmakuRenderView, androidx.compose.ui.layout.LayoutCoordinates>()
     private val renderPauseState = DanmakuRenderPauseState<DanmakuRenderView>()
+
+    fun updateViewCoordinates(
+        view: DanmakuRenderView,
+        coordinates: androidx.compose.ui.layout.LayoutCoordinates,
+    ) {
+        viewCoordinates[view] = coordinates
+    }
     private val isRenderingEnabled: Boolean
         get() = renderPauseState.isRenderingEnabled(config.isEnabled, danmakuView)
 
@@ -1585,6 +1593,7 @@ class DanmakuManager private constructor(
         if (danmakuView === view) clearTapSelection()
         renderPauseState.detach(view)
         renderTargets.remove(view)
+        viewCoordinates.remove(view)
         if (danmakuView !== view) {
             view.releaseRenderer()
             return
@@ -3188,11 +3197,26 @@ class DanmakuManager private constructor(
         val view = danmakuView ?: return null
         val listener = danmakuClickListener ?: return null
         if (source == null || !source.isAttached || !view.isShown || !isRenderingEnabled) return null
-        val windowPosition = source.localToWindow(position)
-        val location = IntArray(2)
-        view.getLocationInWindow(location)
-        val x = windowPosition.x - location[0]
-        val y = windowPosition.y - location[1]
+        // 优先在同棵 Compose 布局树内做相对坐标转换，避免横屏沉浸切换期间
+        // AndroidComposeView 缓存的窗口偏移与 View.getLocationInWindow 短暂失步。
+        val targetCoordinates = viewCoordinates[view]?.takeIf { it.isAttached }
+        val localInDanmaku = if (targetCoordinates != null) {
+            runCatching { targetCoordinates.localPositionOf(source, position) }.getOrNull()
+        } else {
+            null
+        }
+        val x: Float
+        val y: Float
+        if (localInDanmaku != null) {
+            x = localInDanmaku.x
+            y = localInDanmaku.y
+        } else {
+            val windowPosition = source.localToWindow(position)
+            val location = IntArray(2)
+            view.getLocationInWindow(location)
+            x = windowPosition.x - location[0]
+            y = windowPosition.y - location[1]
+        }
         if (x < 0f || y < 0f || x >= view.width || y >= view.height) return null
         clearTapSelection()
         val click = controller?.captureClick(x, y) ?: return null
@@ -3283,6 +3307,7 @@ class DanmakuManager private constructor(
         requestedHotDanmakuSlotHeightPx = 0f
         config.hotBarReservedHeightPx = 0f
         clearViewReference()
+        viewCoordinates.clear()
         loadJob?.cancel()
         loadJob = null
         loadGeneration++

@@ -16,8 +16,10 @@ import androidx.compose.animation.core.*
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -348,9 +350,11 @@ private fun MiniPlayerSessionOverlay(
             retainedHandoff = null
             return@LaunchedEffect
         }
-        snapshotFlow {
-            cover.firstFrameRendered && miniPlayerMotion?.handoff !== cover
-        }.first { it }
+        kotlinx.coroutines.withTimeoutOrNull(400L) {
+            snapshotFlow {
+                cover.firstFrameRendered && miniPlayerMotion?.handoff !== cover
+            }.first { it }
+        }
         withFrameNanos { }
         landingCoverAlpha?.animateTo(0f, iosMorphTween(80))
         retainedHandoff = null
@@ -363,6 +367,7 @@ private fun MiniPlayerSessionOverlay(
 
     var isPlaying by remember { mutableStateOf(player?.isPlaying ?: false) }
     var currentProgress by remember { mutableFloatStateOf(0f) }
+    var currentPositionMs by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
     var isSeekable by remember { mutableStateOf(false) }
     DisposableEffect(player) {
@@ -532,7 +537,8 @@ private fun MiniPlayerSessionOverlay(
             val currentPlayer = player ?: break
             val currentIsPlaying = currentPlayer.isPlaying
             duration = currentPlayer.duration.coerceAtLeast(0L)
-            val currentPosition = currentPlayer.currentPosition
+            val currentPosition = currentPlayer.currentPosition.coerceAtLeast(0L)
+            currentPositionMs = currentPosition
             currentProgress = if (duration > 0L) (currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f) else 0f
             delay(resolveMiniPlayerPollingIntervalMs(isPlaying = currentIsPlaying))
         }
@@ -825,6 +831,12 @@ private fun MiniPlayerSessionOverlay(
         exit = exitTransition,
             modifier = modifier.zIndex(100f)
     ) {
+        val haptic = rememberHapticFeedback()
+        LaunchedEffect(edgeStashSide) {
+            if (edgeStashSide != null) {
+                haptic(HapticType.LIGHT)
+            }
+        }
         if (edgePreviewSide != null && edgePreviewProgress > 0.1f && !suppressContentForPip) {
             val previewHeightPx = with(density) { layoutPolicy.stashedHeightDp.dp.toPx() }
             val previewMinY = paddingPx + dragTopInsetPx
@@ -857,6 +869,7 @@ private fun MiniPlayerSessionOverlay(
                 accentColor = accentColor,
                 side = stashSide,
                 onUnstash = {
+                    haptic(HapticType.LIGHT)
                     isStashed = false
                     // 恢复时，X 坐标应该弹回正常位置
                     offsetX = if (stashSide == com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT) {
@@ -955,7 +968,12 @@ private fun MiniPlayerSessionOverlay(
                                 }
                             }
                         }
-                    },
+                    }
+                    .border(
+                        width = if (isResizing) 1.2.dp else 0.8.dp,
+                        color = if (isResizing) accentColor.copy(alpha = 0.78f) else Color.White.copy(alpha = 0.16f),
+                        shape = miniPlayerShape,
+                    ),
                 shape = AppCardShape.Uniform(miniPlayerCornerRadius),
                 colors = AppCardDefaults.colors(containerColor = Color.Black),
             ) {
@@ -1003,6 +1021,11 @@ private fun MiniPlayerSessionOverlay(
                                 this.player = exoPlayer
                                 useController = false
                                 setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+                                if (exoPlayer.playWhenReady && !exoPlayer.isPlaying &&
+                                    exoPlayer.playbackState == Player.STATE_READY
+                                ) {
+                                    exoPlayer.play()
+                                }
                             }
                         },
                         update = { view -> view.player = exoPlayer },
@@ -1040,128 +1063,192 @@ private fun MiniPlayerSessionOverlay(
                 }
 
                 // 控件直接叠在视频上；玻璃与原生材质共用媒体白色图标，不增加标题栏。
-                if (chrome.showHeaderChrome) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            .align(Alignment.TopCenter)
-                            .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .5f), Color.Transparent)))
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (controlLayout.showCloseButton) {
-                            AppIconButton(
-                                onClick = { dismissMiniPlayer(fromCloseButton = true) },
-                                modifier = Modifier.size(48.dp).onGloballyPositioned { closeCoordinates[0] = it },
-                            ) {
-                                AppIcon(clearIcon, "关闭小窗", tint = Color.White, modifier = Modifier.size(24.dp))
-                            }
-                        }
-                        Spacer(Modifier.weight(1f))
-                        if (chrome.showCenterControls && controlLayout.showHeaderTransport) {
-                            AppIconButton(onClick = ::toggleMiniPlayback, modifier = Modifier.size(48.dp)) {
-                                AppIcon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                    if (isPlaying) "暂停" else "播放", tint = Color.White, modifier = Modifier.size(28.dp))
-                            }
-                        }
-                        com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { moreExpanded = true }) {
-                            AppIconButton(onClick = { moreExpanded = true }, modifier = Modifier.size(48.dp)) {
-                                AppIcon(Icons.Outlined.MoreVert, "小窗更多操作", tint = Color.White, modifier = Modifier.size(20.dp))
-                            }
-                            AppDropdownMenu(expanded = moreExpanded, onDismissRequest = {
-                                moreExpanded = false
-                                lastInteractionTime = System.currentTimeMillis()
-                            }) {
-                                if (!controlLayout.showCloseButton) {
-                                    AppDropdownMenuItem(text = { AppText("关闭小窗") }, onClick = {
-                                        moreExpanded = false
-                                        dismissMiniPlayer()
-                                    })
+                val chromeFadeEnter = if (reduceMotion) EnterTransition.None else fadeIn(tween(180))
+                val chromeFadeExit = if (reduceMotion) ExitTransition.None else fadeOut(tween(150))
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = chrome.showHeaderChrome,
+                    enter = chromeFadeEnter,
+                    exit = chromeFadeExit,
+                    modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                .align(Alignment.TopCenter)
+                                .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .58f), Color.Transparent)))
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (controlLayout.showCloseButton) {
+                                AppIconButton(
+                                    onClick = { dismissMiniPlayer(fromCloseButton = true) },
+                                    modifier = Modifier.size(48.dp).onGloballyPositioned { closeCoordinates[0] = it },
+                                ) {
+                                    AppIcon(clearIcon, "关闭小窗", tint = Color.White, modifier = Modifier.size(24.dp))
                                 }
-                                if (!controlLayout.showBottomTransport && !controlLayout.showHeaderTransport) {
-                                    AppDropdownMenuItem(text = { AppText(if (isPlaying) "暂停" else "播放") }, onClick = {
-                                        moreExpanded = false
-                                        toggleMiniPlayback()
-                                    })
+                            }
+                            Spacer(Modifier.weight(1f))
+                            if (chrome.showCenterControls && controlLayout.showHeaderTransport) {
+                                AppIconButton(onClick = ::toggleMiniPlayback, modifier = Modifier.size(48.dp)) {
+                                    AppIcon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                        if (isPlaying) "暂停" else "播放", tint = Color.White, modifier = Modifier.size(28.dp))
                                 }
-                                AppDropdownMenuItem(text = { AppText("返回播放详情") }, onClick = {
+                            }
+                            com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { moreExpanded = true }) {
+                                AppIconButton(onClick = { moreExpanded = true }, modifier = Modifier.size(48.dp)) {
+                                    AppIcon(Icons.Outlined.MoreVert, "小窗更多操作", tint = Color.White, modifier = Modifier.size(20.dp))
+                                }
+                                AppDropdownMenu(expanded = moreExpanded, onDismissRequest = {
                                     moreExpanded = false
-                                    onOpenDetailClick()
-                                })
-                                AppDropdownMenuItem(text = { AppText("恢复默认大小") }, onClick = {
-                                    moreExpanded = false
-                                    miniPlayerWidthDp = layoutPolicy.miniPlayerWidthDp.toFloat()
-                                        .coerceIn(resizeBounds.minWidthDp, resizeBounds.maxWidthDp)
                                     lastInteractionTime = System.currentTimeMillis()
-                                })
-                                AppDropdownMenuItem(text = { AppText("贴边隐藏") }, onClick = {
-                                    moreExpanded = false
-                                    stashMiniPlayer(if (offsetX + miniPlayerWidthPx / 2 < screenWidthPx / 2) {
-                                        com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT
-                                    } else com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT)
-                                })
-                                if (onPictureInPictureClick != null) {
-                                    AppDropdownMenuItem(text = { AppText("系统画中画") }, onClick = {
+                                }) {
+                                    if (!controlLayout.showCloseButton) {
+                                        AppDropdownMenuItem(text = { AppText("关闭小窗") }, onClick = {
+                                            moreExpanded = false
+                                            dismissMiniPlayer()
+                                        })
+                                    }
+                                    if (!controlLayout.showBottomTransport && !controlLayout.showHeaderTransport) {
+                                        AppDropdownMenuItem(text = { AppText(if (isPlaying) "暂停" else "播放") }, onClick = {
+                                            moreExpanded = false
+                                            toggleMiniPlayback()
+                                        })
+                                    }
+                                    AppDropdownMenuItem(text = { AppText("返回播放详情") }, onClick = {
                                         moreExpanded = false
-                                        onPictureInPictureClick()
+                                        onOpenDetailClick()
                                     })
+                                    AppDropdownMenuItem(text = { AppText("恢复默认大小") }, onClick = {
+                                        moreExpanded = false
+                                        miniPlayerWidthDp = layoutPolicy.miniPlayerWidthDp.toFloat()
+                                            .coerceIn(resizeBounds.minWidthDp, resizeBounds.maxWidthDp)
+                                        lastInteractionTime = System.currentTimeMillis()
+                                    })
+                                    AppDropdownMenuItem(text = { AppText("贴边隐藏") }, onClick = {
+                                        moreExpanded = false
+                                        stashMiniPlayer(if (offsetX + miniPlayerWidthPx / 2 < screenWidthPx / 2) {
+                                            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT
+                                        } else com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT)
+                                    })
+                                    if (onPictureInPictureClick != null) {
+                                        AppDropdownMenuItem(text = { AppText("系统画中画") }, onClick = {
+                                            moreExpanded = false
+                                            onPictureInPictureClick()
+                                        })
+                                    }
                                 }
                             }
-                        }
-                        if (controlLayout.showExpandButton) {
-                            AppIconButton(onClick = { latestExpand() }, modifier = Modifier.size(48.dp)) {
-                                AppIcon(Icons.Outlined.OpenInFull, "展开播放器", tint = Color.White, modifier = Modifier.size(24.dp))
+                            if (controlLayout.showExpandButton) {
+                                AppIconButton(onClick = { latestExpand() }, modifier = Modifier.size(48.dp)) {
+                                    AppIcon(Icons.Outlined.OpenInFull, "展开播放器", tint = Color.White, modifier = Modifier.size(24.dp))
+                                }
                             }
                         }
                     }
                 }
 
-                // 控制层 - 播放按钮等（位于中间和底部）
-                if (chrome.showCenterControls && controlLayout.showBottomTransport) {
-                    // 底部渐变
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(layoutPolicy.controlsGradientHeightDp.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f))
+                // 控制层 - 播放按钮等（居中播放控件 + 底部渐变与时间角标）
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = chrome.showCenterControls && controlLayout.showBottomTransport,
+                    enter = chromeFadeEnter,
+                    exit = chromeFadeExit,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // 底部渐变
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(layoutPolicy.controlsGradientHeightDp.dp)
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.68f))
+                                    )
                                 )
-                            )
-                    )
+                        )
 
-                    // 窄竖屏小窗只保留播放键，避免与关闭、展开等按钮互相遮挡。
-                    Row(
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (controlLayout.showSeekButtons) {
-                            AppIconButton(onClick = {
-                                lastInteractionTime = System.currentTimeMillis()
-                                player?.let { seekPlayerFromUserAction(it, (it.currentPosition - 10_000L).coerceAtLeast(0L)) }
-                            }, modifier = Modifier.size(48.dp)) {
-                                AppIcon(Icons.Filled.Replay10, "后退10秒", tint = Color.White, modifier = Modifier.size(28.dp))
+                        // 居中主播控区；窄竖屏小窗只保留播放键，避免与关闭、展开等按钮互相遮挡。
+                        Row(
+                            modifier = Modifier.align(Alignment.Center),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (controlLayout.showSeekButtons) {
+                                AppIconButton(onClick = {
+                                    lastInteractionTime = System.currentTimeMillis()
+                                    player?.let { seekPlayerFromUserAction(it, (it.currentPosition - 10_000L).coerceAtLeast(0L)) }
+                                }, modifier = Modifier.size(44.dp)) {
+                                    AppIcon(Icons.Filled.Replay10, "后退10秒", tint = Color.White, modifier = Modifier.size(24.dp))
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.38f))
+                                    .border(0.6.dp, Color.White.copy(alpha = 0.2f), CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                AppIconButton(onClick = ::toggleMiniPlayback, modifier = Modifier.size(44.dp)) {
+                                    AppIcon(
+                                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                        contentDescription = if (isPlaying) "暂停" else "播放",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                            }
+                            if (controlLayout.showSeekButtons) {
+                                AppIconButton(onClick = {
+                                    lastInteractionTime = System.currentTimeMillis()
+                                    player?.let { seekPlayerFromUserAction(it, (it.currentPosition + 10_000L).coerceAtMost(duration)) }
+                                }, modifier = Modifier.size(44.dp)) {
+                                    AppIcon(Icons.Filled.Forward10, "前进10秒", tint = Color.White, modifier = Modifier.size(24.dp))
+                                }
                             }
                         }
-                        AppIconButton(onClick = ::toggleMiniPlayback, modifier = Modifier.size(48.dp)) {
-                            AppIcon(
-                                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                contentDescription = if (isPlaying) "暂停" else "播放",
-                                tint = Color.White,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                        if (controlLayout.showSeekButtons) {
-                            AppIconButton(onClick = {
-                                lastInteractionTime = System.currentTimeMillis()
-                                player?.let { seekPlayerFromUserAction(it, (it.currentPosition + 10_000L).coerceAtMost(duration)) }
-                            }, modifier = Modifier.size(48.dp)) {
-                                AppIcon(Icons.Filled.Forward10, "前进10秒", tint = Color.White, modifier = Modifier.size(28.dp))
+
+                        if (miniPlayerWidthDpEffective >= 184f) {
+                            val badgeText = if (miniPlayerManager.isLiveMode) {
+                                "直播中"
+                            } else if (duration > 0L) {
+                                "${formatMiniTime(currentPositionMs)} / ${formatMiniTime(duration)}"
+                            } else {
+                                null
+                            }
+                            if (badgeText != null) {
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(start = 10.dp, bottom = (layoutPolicy.progressBarHeightDp + 6).dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color.Black.copy(alpha = 0.44f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    if (miniPlayerManager.isLiveMode) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(5.dp)
+                                                .clip(CircleShape)
+                                                .background(accentColor),
+                                        )
+                                    }
+                                    AppText(
+                                        text = badgeText,
+                                        color = Color.White.copy(alpha = 0.92f),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                    )
+                                }
                             }
                         }
                     }
@@ -1258,19 +1345,44 @@ private fun StashedMiniPlayerView(
     onDrag: (Float) -> Unit
 ) {
     val latestOnDrag by rememberUpdatedState(onDrag)
+    val latestOnUnstash by rememberUpdatedState(onUnstash)
     val isLeft = side == com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT
+    val pullUnstashThresholdPx = with(LocalDensity.current) { 28.dp.toPx() }
     Box(
         modifier = modifier
             .width(layoutPolicy.stashedWidthDp.dp)
             .height(layoutPolicy.stashedHeightDp.dp)
-            .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
+            .pointerInput(isLeft) {
+                var accumulatedPullX = 0f
+                var unstashedByPull = false
+                detectDragGestures(
+                    onDragStart = {
+                        accumulatedPullX = 0f
+                        unstashedByPull = false
+                    },
+                    onDragEnd = {
+                        accumulatedPullX = 0f
+                        unstashedByPull = false
+                    },
+                    onDragCancel = {
+                        accumulatedPullX = 0f
+                        unstashedByPull = false
+                    },
+                ) { change, dragAmount ->
                     change.consume()
-                    latestOnDrag(dragAmount.y)
+                    if (unstashedByPull) return@detectDragGestures
+                    val outwardDelta = if (isLeft) dragAmount.x else -dragAmount.x
+                    accumulatedPullX = (accumulatedPullX + outwardDelta).coerceAtLeast(0f)
+                    if (accumulatedPullX >= pullUnstashThresholdPx) {
+                        unstashedByPull = true
+                        latestOnUnstash()
+                    } else {
+                        latestOnDrag(dragAmount.y)
+                    }
                 }
             }
             .clickable(role = Role.Button, onClickLabel = "恢复小窗", onClick = onUnstash)
-            .semantics { contentDescription = "恢复小窗，可上下拖动" },
+            .semantics { contentDescription = "恢复小窗，可上下拖动或向内拉出" },
     ) {
         MiniPlayerEdgeHandle(
             left = isLeft,
@@ -1289,22 +1401,31 @@ private fun MiniPlayerEdgeHandle(
     accentColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    val outline = AppSurfaceTokens.onSurface().copy(alpha = if (highlighted) 0.25f else 0.12f)
+    val outline = AppSurfaceTokens.onSurface().copy(alpha = if (highlighted) 0.28f else 0.14f)
     val gripColor = if (highlighted) accentColor else AppSurfaceTokens.onSurfaceSecondary()
     Box(modifier) {
         AppSurface(
             modifier = Modifier
                 .align(if (left) Alignment.CenterStart else Alignment.CenterEnd)
                 .offset(x = if (left) (-8).dp else 8.dp)
-                .size(width = 22.dp, height = 44.dp),
+                .size(width = 24.dp, height = 48.dp),
             shape = RoundedCornerShape(14.dp),
             color = AppSurfaceTokens.surfaceContainerHigh().copy(alpha = 0.96f),
             border = BorderStroke(0.8.dp, outline),
-            shadowElevation = 2.dp,
+            shadowElevation = 3.dp,
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Box(Modifier.size(width = 2.dp, height = 16.dp)
-                    .background(gripColor.copy(alpha = 0.8f), RoundedCornerShape(1.dp)))
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = if (left) 6.dp else 0.dp, end = if (left) 0.dp else 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppIcon(
+                    imageVector = if (left) Icons.Filled.ChevronRight else Icons.Filled.ChevronLeft,
+                    contentDescription = null,
+                    tint = gripColor.copy(alpha = 0.9f),
+                    modifier = Modifier.size(16.dp),
+                )
             }
         }
     }

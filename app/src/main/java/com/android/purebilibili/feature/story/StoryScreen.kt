@@ -51,6 +51,7 @@ fun StoryScreen(
     engagementViewModel: VideoEngagementViewModel = viewModel(),
     isActive: Boolean = true,
     isFeedEntrySelected: Boolean = true,
+    isInPipMode: Boolean = false,
     onBack: () -> Unit,
     onOpenVideoDetail: (bvid: String, cid: Long, coverUrl: String, positionMs: Long) -> Unit = { _, _, _, _ -> },
     onUserClick: (Long) -> Unit = {},
@@ -193,11 +194,20 @@ fun StoryScreen(
                             onLoadMoreRecommendations = viewModel::loadMoreStories,
                             onlyVerticalRecommendations = onlyVerticalRecommendations == true,
                             isActive = isActive,
+                            isInPipMode = isInPipMode,
                             onBack = onBack,
                             onHomeClick = onBack,
                             onVideoChange = viewModel::updateCurrentVideo,
                             viewModel = playerViewModel,
                             engagementViewModel = engagementViewModel,
+                            onProgressUpdate = { bvid, positionMs, cid, coverUrl ->
+                                latestExitSnapshot = StoryPortraitExitSnapshot(
+                                    bvid = bvid,
+                                    cid = cid,
+                                    coverUrl = coverUrl,
+                                    positionMs = positionMs,
+                                )
+                            },
                             onExitSnapshot = { bvid, positionMs, cid, coverUrl ->
                                 latestExitSnapshot = StoryPortraitExitSnapshot(
                                     bvid = bvid,
@@ -216,7 +226,12 @@ fun StoryScreen(
                                         snapshot.bvid, snapshot.cid, snapshot.coverUrl, snapshot.positionMs,
                                     )
                                 } else {
-                                    onRotateToLandscape()
+                                    val fallback = portraitFeed.initialInfo
+                                    if (fallback.bvid.isNotBlank()) {
+                                        onOpenVideoDetail(fallback.bvid, fallback.cid, fallback.pic, 0L)
+                                    } else {
+                                        onRotateToLandscape()
+                                    }
                                 }
                             }
                         )

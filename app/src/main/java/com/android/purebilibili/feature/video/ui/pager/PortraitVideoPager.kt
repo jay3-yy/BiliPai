@@ -3932,17 +3932,8 @@ private fun VideoPageItem(
     ) {
     // 系统小窗不合成竖屏流装饰层：标题 / 互动 / 进度条 / 旋转等控件在小窗里无法操作，
     // 缩放后只会变成错误渲染，播放面本身仍在下方正常输出。
+    // 设备接力入口保留在右上角操作栏，不在顶部居中叠加胶囊，避免重复及与挖孔屏冲突。
     if (!isInPipMode && !entryTransitionInProgress) {
-        if (isCurrentPage && portraitOverlayVisible && !controlsOverlayOpen &&
-            com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED
-        ) {
-            com.android.purebilibili.feature.nearby.NearbyOverlayChipButton(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = 12.dp),
-            )
-        }
         val portraitPlaybackRecovering by remember(
             bvid, snapshotCid, initialProgressPositionMs, exoPlayer, isCurrentPage,
             isPlaying, exoPlayer.playWhenReady, exoPlayer.playbackState,
