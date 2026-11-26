@@ -65,44 +65,44 @@ class UpdateHighlightPolicyTest {
     @Test
     fun newerReleaseReplacesPreviousHighlightsInAutomaticAndManualPreview() {
         val baseSettings = AppThemeSettings(uiStyle = AppUiStyle.MIUIX)
-        val currentHighlights = latestReleaseHighlights(616)
+        val currentHighlights = latestReleaseHighlights(617)
         assertEquals(
             listOf(
-                "donate_qr_refresh_616",
-                "cdn_parallel_chunk_616",
-                "offline_cache_refresh_616",
-                "custom_icon_zero_diff_616",
-                "listen_ambient_winddown_616",
-                "personal_recap_keepsake_616",
-                "mealtime_gacha_watchlater_616",
-                "custom_push_nearby_616",
-                "appearance_scene_recipes_616",
+                "donate_qr_refresh_617",
+                "cdn_parallel_chunk_617",
+                "offline_cache_refresh_617",
+                "custom_icon_zero_diff_617",
+                "listen_ambient_winddown_617",
+                "personal_recap_keepsake_617",
+                "mealtime_gacha_watchlater_617",
+                "custom_push_nearby_617",
+                "appearance_scene_recipes_617",
             ),
             currentHighlights.map { it.id },
         )
 
         val upgraded = prepareUpdateHighlights(
-            history = UpdateHighlightHistory(lastVersionCode = 615),
-            currentVersionCode = 616,
+            history = UpdateHighlightHistory(lastVersionCode = 616),
+            currentVersionCode = 617,
             isExistingInstall = true,
         )
-        val auto616 = resolveAutomaticReleaseHighlights(616, upgraded.pendingIds, baseSettings)
-        assertEquals(currentHighlights.map { it.id }, auto616.map { it.id })
+        val auto617 = resolveAutomaticReleaseHighlights(617, upgraded.pendingIds, baseSettings)
+        assertEquals(currentHighlights.map { it.id }, auto617.map { it.id })
 
         val nextReleaseCatalog = updateHighlightCatalog + UpdateHighlight(
-            id = "next_release_617",
-            introducedVersionCode = 617,
+            id = "next_release_618",
+            introducedVersionCode = 618,
             title = "下一版本新能力",
             description = "替换上一版本的更新要点。",
             action = UpdateHighlightAction.OPEN_SETTINGS,
         )
         val upgradedNext = prepareUpdateHighlights(
             history = upgraded,
-            currentVersionCode = 617,
+            currentVersionCode = 618,
             isExistingInstall = true,
             catalog = nextReleaseCatalog,
         )
-        val auto617 = resolveAutomaticReleaseHighlights(617, upgradedNext.pendingIds, baseSettings, nextReleaseCatalog)
-        assertEquals(listOf("next_release_617"), auto617.map { it.id })
+        val auto618 = resolveAutomaticReleaseHighlights(618, upgradedNext.pendingIds, baseSettings, nextReleaseCatalog)
+        assertEquals(listOf("next_release_618"), auto618.map { it.id })
     }
 }

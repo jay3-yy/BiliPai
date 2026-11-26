@@ -10,6 +10,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -223,6 +224,12 @@ internal fun MealtimeGachaSheet(
                         tonalElevation = 2.dp,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clip(AppShapes.container(ContainerLevel.Card))
+                            .clickable {
+                                confirmHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onDismiss()
+                                onPlay(card)
+                            }
                             .graphicsLayer {
                                 if (!reduceMotion) {
                                     val offset = dragOffsetX.value

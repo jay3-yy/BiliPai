@@ -2110,7 +2110,8 @@ fun AppNavigation(
                 try {
                     if (!videoNavigationRequests.isCurrent(
                             navigationRequest, navigation3BackStack, navigation3ReturnSession.sourceGeneration,
-                        ) || !hostActivity.window.decorView.hasWindowFocus()) return
+                        ) || !(hostActivity.window.decorView.hasWindowFocus() || hostWindowResumed)
+                    ) return
                     openId = maxOf(SystemClock.uptimeMillis(), lastVideoDetailOpenId + 1L)
                     lastVideoDetailOpenId = openId
                     preparedVideoPlayers[openId] = pending
