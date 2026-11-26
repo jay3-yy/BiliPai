@@ -28,8 +28,16 @@ import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -62,6 +70,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
@@ -147,11 +156,27 @@ fun CollectionSheet(
         currentCid = currentCid
     )
 
-    // 首帧直接定位当前集，面板位移不叠加列表滚动；手动定位按钮仍使用滚动动画。
+    // 首帧与分区切换直接定位当前集，避免叠加面板入场；仅在用户主动切换排序时平滑滚动并播放排序过渡。
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
-    LaunchedEffect(selectedSectionIndex, currentIndex, sortMode) {
-        listState.scrollToItem(currentIndex.coerceAtLeast(0))
+    val sortMotionEnabled = isEpisodeSortMotionEnabled()
+    var sortToggleGeneration by remember(ugcSeason.id, selectedSectionIndex) { mutableIntStateOf(0) }
+    var lastHandledSortGeneration by remember(ugcSeason.id, selectedSectionIndex) { mutableIntStateOf(0) }
+    LaunchedEffect(selectedSectionIndex, currentIndex, sortMode, sortToggleGeneration) {
+        val isUserSortToggle = sortToggleGeneration != lastHandledSortGeneration
+        lastHandledSortGeneration = sortToggleGeneration
+        val targetIndex = currentIndex.coerceAtLeast(0)
+        if (isUserSortToggle && sortMotionEnabled && targetIndex in sortedEpisodes.indices) {
+            listState.animateScrollToItem(targetIndex)
+        } else {
+            listState.scrollToItem(targetIndex)
+        }
     }
+    val sortListTransitionModifier = rememberEpisodeSortListTransitionModifier(
+        sortKey = sortToggleGeneration,
+        scopeKey = ugcSeason.id to selectedSectionIndex,
+        direction = resolveCollectionSortTransitionDirection(sortMode),
+        enabled = sortMotionEnabled,
+    )
 
     fun scrollToEpisode(index: Int) {
         if (index < 0 || sortedEpisodes.isEmpty()) return
@@ -161,12 +186,14 @@ fun CollectionSheet(
     }
 
     fun cycleSortMode() {
+        selectionHaptic(HapticType.LIGHT)
         val nextMode = when (sortMode) {
             CollectionSortMode.ASCENDING -> CollectionSortMode.DESCENDING
             CollectionSortMode.DESCENDING -> CollectionSortMode.RECENT
             CollectionSortMode.RECENT -> CollectionSortMode.ASCENDING
         }
         localSortMode = nextMode
+        sortToggleGeneration += 1
         scope.launch {
             SettingsManager.setCollectionSortMode(context, collectionSubscriptionId, nextMode)
         }
@@ -229,17 +256,33 @@ fun CollectionSheet(
                     )
                 }
                 AppIconButton(onClick = ::cycleSortMode) {
-                    val sortIcon: ImageVector = when (sortMode) {
-                        CollectionSortMode.ASCENDING -> Icons.Outlined.ArrowUpward
-                        CollectionSortMode.DESCENDING -> Icons.Outlined.ArrowDownward
-                        CollectionSortMode.RECENT -> Icons.Outlined.History
+                    val iconFadeSpec = AppMotionTokens.standardSpec<Float>()
+                    val iconSlideSpec = AppMotionTokens.standardSpec<androidx.compose.ui.unit.IntOffset>()
+                    AnimatedContent(
+                        targetState = sortMode,
+                        transitionSpec = {
+                            if (!sortMotionEnabled) {
+                                EnterTransition.None togetherWith ExitTransition.None
+                            } else {
+                                val direction = resolveCollectionSortTransitionDirection(targetState)
+                                (fadeIn(iconFadeSpec) + slideInVertically(iconSlideSpec) { (it / 2) * direction }) togetherWith
+                                    (fadeOut(iconFadeSpec) + slideOutVertically(iconSlideSpec) { -(it / 2) * direction })
+                            }
+                        },
+                        label = "collection_sort_icon",
+                    ) { mode ->
+                        val sortIcon: ImageVector = when (mode) {
+                            CollectionSortMode.ASCENDING -> Icons.Outlined.ArrowUpward
+                            CollectionSortMode.DESCENDING -> Icons.Outlined.ArrowDownward
+                            CollectionSortMode.RECENT -> Icons.Outlined.History
+                        }
+                        Icon(
+                            sortIcon,
+                            contentDescription = "排序：${mode.label}",
+                            tint = AppContentColors.secondaryText(),
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
-                    Icon(
-                        sortIcon,
-                        contentDescription = "排序：${sortMode.label}",
-                        tint = AppContentColors.secondaryText(),
-                        modifier = Modifier.size(20.dp)
-                    )
                 }
                 AppIconButton(onClick = requestDismiss) {
                     AppIcon(
@@ -354,12 +397,14 @@ fun CollectionSheet(
                 state = listState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f, fill = false),
+                    .weight(1f, fill = false)
+                    .then(sortListTransitionModifier),
                 contentPadding = PaddingValues(top = 7.dp, bottom = 16.dp)
             ) {
                 itemsIndexed(
                     sortedEpisodes,
-                    key = { _, episode -> "${selectedSectionIndex}-${episode.bvid}-${episode.cid}-${episode.id}" }
+                    key = { _, episode -> "${selectedSectionIndex}-${episode.bvid}-${episode.cid}-${episode.id}" },
+                    contentType = { _, episode -> episode.pages.size > 1 },
                 ) { _, episode ->
                     val isCurrentEpisode = isCurrentUgcEpisode(
                         currentBvid = currentBvid,
@@ -370,6 +415,7 @@ fun CollectionSheet(
                         episode = episode,
                         knownDetail = currentVideoInfo,
                         isCurrentEpisode = isCurrentEpisode,
+                        modifier = episodeSortItemModifier(sortMotionEnabled),
                         onClick = {
                             if (!isCurrentEpisode) {
                                 selectionHaptic(HapticType.LIGHT)
@@ -402,6 +448,7 @@ internal fun CollectionEpisodeRow(
     onClick: () -> Unit,
     onPartClick: (Page) -> Unit,
     knownDetail: com.android.purebilibili.data.model.response.ViewInfo? = null,
+    modifier: Modifier = Modifier,
 ) {
     val arc = episode.arc
     val publishTimeText = remember(episode.arc?.pubdate, episode.arc?.ctime) {
@@ -409,7 +456,7 @@ internal fun CollectionEpisodeRow(
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {

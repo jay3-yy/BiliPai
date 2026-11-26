@@ -505,6 +505,16 @@ class VideoDetailReturnCoverPolicyTest {
                 keepLoadedContentForBackPreview = true,
             )
         )
+        assertFalse(
+            shouldConsumeMiuixReturnSessionForVideoDetailEntry(
+                entryOwnsMiuixCardTransition = true,
+                isReturningFromDetail = true,
+                transitionEnabled = true,
+                sharedBoundsActive = true,
+                keepLoadedContentForBackPreview = false,
+                hasCommittedRelatedVideoNavigation = true,
+            )
+        )
     }
 
     @Test
@@ -640,6 +650,42 @@ class VideoDetailReturnCoverPolicyTest {
                 expandForSharedReturn = expand,
             ),
             0.0001f,
+        )
+    }
+
+    @Test
+    fun coveredParentAtZeroDepthIsNotTreatedAsSharedContainerReturning() {
+        assertFalse(
+            shouldTreatSharedContainerNavigationAsReturning(
+                sharedSurfaceVisible = false,
+                isRemoving = false,
+                isRunning = true,
+                relativeDepth = 0f,
+            )
+        )
+        assertFalse(
+            shouldTreatSharedContainerNavigationAsReturning(
+                sharedSurfaceVisible = true,
+                isRemoving = true,
+                isRunning = true,
+                relativeDepth = -0.3f,
+            )
+        )
+        assertTrue(
+            shouldTreatSharedContainerNavigationAsReturning(
+                sharedSurfaceVisible = false,
+                isRemoving = true,
+                isRunning = true,
+                relativeDepth = 0f,
+            )
+        )
+        assertTrue(
+            shouldTreatSharedContainerNavigationAsReturning(
+                sharedSurfaceVisible = false,
+                isRemoving = false,
+                isRunning = true,
+                relativeDepth = -0.15f,
+            )
         )
     }
 

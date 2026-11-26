@@ -126,12 +126,14 @@ internal fun shouldConsumeMiuixReturnSessionForVideoDetailEntry(
     transitionEnabled: Boolean,
     sharedBoundsActive: Boolean,
     keepLoadedContentForBackPreview: Boolean,
+    hasCommittedRelatedVideoNavigation: Boolean = false,
 ): Boolean {
     return entryOwnsMiuixCardTransition &&
         isReturningFromDetail &&
         transitionEnabled &&
         sharedBoundsActive &&
-        !keepLoadedContentForBackPreview
+        !keepLoadedContentForBackPreview &&
+        !hasCommittedRelatedVideoNavigation
 }
 
 /**
@@ -535,6 +537,16 @@ internal fun shouldKeepPlaybackSessionActiveForSharedReturnMorph(
  * 规则：只要处于返回手势或已提交的 exit morph，布局层把折叠进度压为 0，
  * 让飞行壳带着完整封面缩回列表卡。
  */
+internal fun shouldTreatSharedContainerNavigationAsReturning(
+    sharedSurfaceVisible: Boolean,
+    isRemoving: Boolean,
+    isRunning: Boolean,
+    relativeDepth: Float,
+): Boolean {
+    if (sharedSurfaceVisible) return false
+    return isRemoving || (isRunning && relativeDepth < 0f)
+}
+
 internal fun shouldExpandPlayerViewportForSharedReturn(
     isExitTransitionInProgress: Boolean,
     isReturnGestureInProgress: Boolean,

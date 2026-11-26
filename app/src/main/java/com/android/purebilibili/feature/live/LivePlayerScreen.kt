@@ -51,6 +51,7 @@ import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.CardGiftcard
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Share
@@ -832,6 +833,42 @@ private fun LiveRoomScreen(
             uname = uname,
             externalPlayer = exoPlayer
         )
+    }
+
+    val nearbyLiveQualityId = successState?.currentQuality ?: 0
+    val nearbyLiveDanmakuEnabled = successState?.isDanmakuEnabled ?: liveDanmakuEnabledPreference
+    val nearbyLiveAvailableQualities = remember(successState?.qualityList) {
+        successState?.qualityList?.map { it.qn }.orEmpty()
+    }
+    DisposableEffect(
+        exoPlayer,
+        bilibiliRoomId,
+        liveTitle,
+        uname,
+        liveCover,
+        siteId,
+        nearbyLiveQualityId,
+        currentQualityDesc,
+        nearbyLiveDanmakuEnabled,
+        nearbyLiveAvailableQualities,
+    ) {
+        if (siteId == "bilibili" && bilibiliRoomId > 0L) {
+            com.android.purebilibili.feature.nearby.NearbyPlaybackBridge.bindLive(
+                roomId = bilibiliRoomId,
+                title = liveTitle,
+                uname = uname,
+                cover = liveCover,
+                player = exoPlayer,
+                qualityId = nearbyLiveQualityId,
+                qualityLabel = currentQualityDesc.takeUnless { it == "自动" }.orEmpty(),
+                danmakuEnabled = nearbyLiveDanmakuEnabled,
+                availableQualityIds = nearbyLiveAvailableQualities,
+                onChangeQuality = { viewModel.changeQuality(it) },
+            )
+        }
+        onDispose {
+            com.android.purebilibili.feature.nearby.NearbyPlaybackBridge.unbindLive(exoPlayer)
+        }
     }
 
     // ... (播放监听与 URL 管理保持不变)
@@ -2162,6 +2199,7 @@ private fun LivePortraitOverlayAppBar(
             glass = glass,
             modifier = if (glass) Modifier.appGlassMenuSource(moreSource) else Modifier,
         ) {
+            val nearbyHandoff = com.android.purebilibili.feature.nearby.LocalNearbyHandoff.current
             AppWindowActionMenu(
                 compact = glass,
                 source = moreSource.takeIf { glass },
@@ -2170,6 +2208,13 @@ private fun LivePortraitOverlayAppBar(
                 modifier = Modifier.size(if (glass) 34.dp else 30.dp),
                 groups = listOf(
                     buildList {
+                        if (nearbyHandoff != null && com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED) {
+                            add(AppWindowAction(
+                                label = com.android.purebilibili.feature.nearby.NEARBY_TITLE,
+                                icon = Icons.Outlined.Devices,
+                                onClick = nearbyHandoff.openDevices,
+                            ))
+                        }
                         if (onOpenFansPanel != null) add(AppWindowAction(
                             label = "粉丝团",
                             icon = Icons.Outlined.Groups,

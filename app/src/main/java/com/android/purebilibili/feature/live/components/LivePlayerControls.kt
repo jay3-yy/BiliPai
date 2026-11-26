@@ -365,9 +365,6 @@ fun LivePlayerControls(
                             )
                         }
                         .pointerInput(gesturePolicy.centerDragFullscreen) {
-                            val screenHeight = size.height.toFloat()
-                            val screenWidth = size.width.toFloat()
-
                             // 使用 Float 累积变化量，解决"不跟手"问题
                             var volumeAccumulator = 0f
                             var brightnessAccumulator = 0f
@@ -378,8 +375,11 @@ fun LivePlayerControls(
 
                             detectEdgeSafeVerticalDragGestures(
                                 shouldIgnoreStart = { downOffset ->
+                                    // 直播间横竖屏/全屏复用同一组合节点，每次手势必须读取当前实时尺寸。
+                                    val containerHeight = size.height.toFloat()
+                                    val containerWidth = size.width.toFloat()
                                     val exclusions = resolveVideoPlayerGestureVerticalExclusions(
-                                        containerHeightPx = screenHeight,
+                                        containerHeightPx = containerHeight,
                                         isFullscreen = latestFullscreen,
                                         controlsVisible = false,
                                         requestedBottomControlsExclusionPx = 0f,
@@ -390,21 +390,22 @@ fun LivePlayerControls(
                                     )
                                     shouldIgnoreVideoPlayerDragStart(
                                         offsetY = downOffset.y,
-                                        containerHeightPx = screenHeight,
+                                        containerHeightPx = containerHeight,
                                         topGestureExclusionPx = exclusions.topPx,
                                         bottomGestureExclusionPx = exclusions.bottomPx,
                                     ) || shouldIgnoreVideoPlayerHorizontalEdgeDragStart(
                                         offsetX = downOffset.x,
-                                        containerWidthPx = screenWidth,
+                                        containerWidthPx = containerWidth,
                                         isFullscreen = latestFullscreen,
                                         edgeGestureExclusionPx = FULLSCREEN_PLAYER_EDGE_GESTURE_EXCLUSION_DP.dp.toPx(),
                                     )
                                 },
                                 onDragStart = { offset ->
+                                    val containerWidth = size.width.toFloat()
                                     // 三分区：左 1/3 亮度、右 1/3 音量、中间 1/3 上下滑切换全屏
                                     gestureZone = when {
-                                        offset.x < screenWidth / 3f -> LiveGestureZone.Brightness
-                                        offset.x > 2f * screenWidth / 3f -> LiveGestureZone.Volume
+                                        offset.x < containerWidth / 3f -> LiveGestureZone.Brightness
+                                        offset.x > 2f * containerWidth / 3f -> LiveGestureZone.Volume
                                         gesturePolicy.centerDragFullscreen -> LiveGestureZone.FullscreenToggle
                                         else -> LiveGestureZone.None
                                     }
@@ -449,7 +450,7 @@ fun LivePlayerControls(
                                 },
                                 onVerticalDrag = { _, dragAmount ->
                                     // 灵敏度基于屏幕高度: 拖动全屏高度 = 100% 调整
-                                    val sensitivity = screenHeight
+                                    val sensitivity = size.height.toFloat().coerceAtLeast(1f)
                                     val delta = -dragAmount / sensitivity
 
                                     when (gestureZone) {

@@ -10,6 +10,7 @@ import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppTabRowRole
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import com.android.purebilibili.core.ui.components.appCombinedClickable
 import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import com.android.purebilibili.core.ui.components.AppIconButton as IconButton
 import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -30,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -115,11 +118,34 @@ fun PlayerEpisodeMenu(
     val initialIndex = if (sectionIndex == content.currentSectionIndex) currentIndex().coerceAtLeast(0) else 0
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
     val scope = rememberCoroutineScope()
+    val sortMotionEnabled = isEpisodeSortMotionEnabled()
+    var previousReversed by remember(content, sectionIndex) { mutableStateOf(reversed) }
     LaunchedEffect(content, sectionIndex, reversed) {
+        val isSortToggle = previousReversed != reversed
+        previousReversed = reversed
         val index = if (sectionIndex == content.currentSectionIndex) currentIndex() else 0
-        // 自动定位不与面板入场叠加滚动动画，首帧及分区/顺序变化后保持当前集完整可见。
-        if (index in entries.indices) listState.scrollToItem(index)
+        // 首帧与分区切换直接定位，避免与面板入场叠加；用户点击排序时平滑滚动保持当前集可见。
+        if (index in entries.indices) {
+            if (isSortToggle && sortMotionEnabled) listState.animateScrollToItem(index)
+            else listState.scrollToItem(index)
+        }
     }
+    val playOrderRotation = animateFloatAsState(
+        targetValue = if (isReversed) 180f else 0f,
+        animationSpec = AppMotionTokens.standardSpec(),
+        label = "episode_play_order_rotation",
+    )
+    val listSortFlipScale = animateFloatAsState(
+        targetValue = if (reversed) -1f else 1f,
+        animationSpec = AppMotionTokens.standardSpec(),
+        label = "episode_list_sort_flip",
+    )
+    val sortListTransitionModifier = rememberEpisodeSortListTransitionModifier(
+        sortKey = reversed,
+        scopeKey = content to sectionIndex,
+        direction = resolveEpisodeSortTransitionDirection(descending = reversed),
+        enabled = sortMotionEnabled,
+    )
     PlayerEpisodeSelectionHost(title = if (pages.size > 1) "分P" else "合集", isFullscreen = isFullscreen,
         playerBounds = playerBounds, onDismiss = onDismiss, inlinePanel = inlinePanel) { requestPanelDismiss ->
         Row(Modifier.fillMaxWidth().height(45.dp).horizontalScroll(rememberScrollState())
@@ -138,11 +164,34 @@ fun PlayerEpisodeMenu(
                 }
             }
             if (onReverse != null && sectionIndex == content.currentSectionIndex) {
-                PanelAction(if (isReversed) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
-                    if (isReversed) "正序播放" else "倒序播放", onReverse)
+                PanelAction(
+                    icon = Icons.Default.ArrowUpward,
+                    label = if (isReversed) "正序播放" else "倒序播放",
+                    onClick = {
+                        selectionHaptic(HapticType.LIGHT)
+                        onReverse()
+                    },
+                    iconModifier = if (sortMotionEnabled) {
+                        Modifier.graphicsLayer { rotationZ = playOrderRotation.value }
+                    } else {
+                        Modifier.graphicsLayer { rotationZ = if (isReversed) 180f else 0f }
+                    },
+                )
             }
             Spacer(Modifier.weight(1f))
-            PanelAction(Icons.Default.Sort, if (reversed) "顺序" else "倒序") { reverseSections[sectionIndex] = !reversed }
+            PanelAction(
+                icon = Icons.Default.Sort,
+                label = if (reversed) "顺序" else "倒序",
+                onClick = {
+                    selectionHaptic(HapticType.LIGHT)
+                    reverseSections[sectionIndex] = !reversed
+                },
+                iconModifier = if (sortMotionEnabled) {
+                    Modifier.graphicsLayer { scaleY = listSortFlipScale.value }
+                } else {
+                    Modifier.graphicsLayer { scaleY = if (reversed) -1f else 1f }
+                },
+            )
             PanelAction(Icons.Default.Close, "关闭", requestPanelDismiss)
         }
         com.android.purebilibili.core.ui.components.AppHorizontalDivider(
@@ -178,17 +227,22 @@ fun PlayerEpisodeMenu(
         }
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds().appScrollBoundaryHaptics(listState),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .clipToBounds()
+                .then(sortListTransitionModifier)
+                .appScrollBoundaryHaptics(listState),
             overscrollEffect = null,
             contentPadding = PaddingValues(top = 7.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             itemsIndexed(
                 items = entries,
-                key = { index, group ->
+                key = { _, group ->
                     when (val target = group.first().target) {
                         is PlayerEpisodeMenuTarget.Episode -> "ep_${sectionIndex}_${target.episode.id}"
-                        is PlayerEpisodeMenuTarget.Part -> "part_${target.pageIndex}_$index"
+                        is PlayerEpisodeMenuTarget.Part -> "part_${sectionIndex}_${target.pageIndex}"
                     }
                 },
                 contentType = { _, group -> group.size > 1 },
@@ -206,7 +260,7 @@ fun PlayerEpisodeMenu(
                         is PlayerEpisodeMenuTarget.Episode -> onEpisodeSelect?.invoke(target.episode)
                     }
                 }
-                Column {
+                Column(modifier = episodeSortItemModifier(sortMotionEnabled)) {
                     PlayerPanelMediaRow(
                         title = if (group.size > 1) episode?.title.orEmpty().ifBlank { entry.title } else entry.title,
                         cover = entry.cover.ifBlank { cover },
@@ -271,8 +325,18 @@ private fun PlayerEpisodeSelectionHost(
 
 @Composable
 internal fun PanelAction(icon: ImageVector, label: String, onClick: () -> Unit) {
+    PanelAction(icon = icon, label = label, iconModifier = Modifier, onClick = onClick)
+}
+
+@Composable
+internal fun PanelAction(
+    icon: ImageVector,
+    label: String,
+    iconModifier: Modifier,
+    onClick: () -> Unit,
+) {
     IconButton(onClick = onClick, modifier = Modifier.size(35.dp)) {
-        Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp).then(iconModifier))
     }
 }
 

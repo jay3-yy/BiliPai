@@ -856,7 +856,14 @@ private fun AppGlassChoicePopupOverlay(
             }
             .semantics { if (request.title.isNotBlank()) paneTitle = request.title; isTraversalGroup = true }
             // 弹窗打开期间拦截页面手势：点按空白处关闭，拖拽不透传给列表滚动。
-            .pointerInput(Unit) { detectTapGestures { controller.requestDismiss() } },
+            // 关闭动画期间立即放行底层页面手势，避免点选菜单项后列表短暂无法滑动。
+            .then(
+                if (morph.opening) {
+                    Modifier.pointerInput(Unit) { detectTapGestures { controller.requestDismiss() } }
+                } else {
+                    Modifier
+                }
+            ),
     ) {
         val density = LocalDensity.current
         val margins = PopupPlacementMargins(
@@ -1283,28 +1290,37 @@ private fun AppGlassChoicePopupCard(
                 val origin = coordinates.positionInWindow()
                 morph.card = Rect(origin, Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
             }
-            .pointerInput(controller, touchSlop) {
-                // 整面高光只在真实拖动越过手势阈值后出现，点按与静止按住均不点亮。
-                // 独立旁观，不消费列表滚动或子控件的点击。
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    var dragging = false
-                    controller.updateLight(morph.card.topLeft + down.position, false)
-                    try {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Final)
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed || event.changes.count { it.pressed } > 1) break
-                            dragging = dragging || (change.position - down.position).getDistance() > touchSlop
-                            controller.updateLight(morph.card.topLeft + change.position, dragging)
+            .then(
+                if (morph.opening) {
+                    Modifier
+                        .pointerInput(controller, touchSlop) {
+                            // 整面高光只在真实拖动越过手势阈值后出现，点按与静止按住均不点亮。
+                            // 独立旁观，不消费列表滚动或子控件的点击。
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                                var dragging = false
+                                controller.updateLight(morph.card.topLeft + down.position, false)
+                                try {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Final)
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        if (!change.pressed || event.changes.count { it.pressed } > 1) break
+                                        dragging = dragging || (change.position - down.position).getDistance() > touchSlop
+                                        controller.updateLight(morph.card.topLeft + change.position, dragging)
+                                    }
+                                } finally {
+                                    controller.updateLight(controller.lightPosition, false)
+                                }
+                            }
                         }
-                    } finally {
-                        controller.updateLight(controller.lightPosition, false)
-                    }
+                        .nestedScroll(scrollDrag)
+                } else {
+                    Modifier
                 }
-            }
-            .nestedScroll(scrollDrag)
-            .pointerInput(controller, interactivePanel, scrollDrag) {
+            )
+            .then(
+                if (morph.opening) {
+                    Modifier.pointerInput(controller, interactivePanel, scrollDrag) {
                 if (interactivePanel) {
                     // 子列表与控件优先消费事件；仅通过嵌套滚动接收真正未消费的纵向位移。
                     awaitEachGesture {
@@ -1390,7 +1406,11 @@ private fun AppGlassChoicePopupCard(
                         controller.cancelPress()
                     }
                 }
-            },
+            }
+                } else {
+                    Modifier
+                }
+            ),
     ) {
         // 光学范围固定覆盖卡片与源控件；只改变轮廓，采样不随卡片缩放。
         // 阴影位于光学裁切之外，正文背景的捕获只包含下方材质层。

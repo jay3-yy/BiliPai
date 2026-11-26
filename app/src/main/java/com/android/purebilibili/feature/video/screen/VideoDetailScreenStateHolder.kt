@@ -195,6 +195,7 @@ import com.android.purebilibili.feature.video.ui.components.ReplyHeader
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.CommentFraudResultDialog
 import com.android.purebilibili.feature.video.ui.components.VideoCommentSheetHost
+import com.android.purebilibili.feature.video.ui.components.commentThreadNavigationBlur
 import com.android.purebilibili.feature.video.ui.components.VideoInlineSubReplyDetailContent
 
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode  //  新增
@@ -743,6 +744,7 @@ internal fun VideoDetailScreenStateHolder(
             createFavoriteFolder = viewModel::createFavoriteFolder,
             retryAiSummary = viewModel::retryAiSummary,
             createVideoNoteDraftFromAiSummary = viewModel::createVideoNoteDraftFromAiSummary,
+            openVideoNoteWithPostcard = viewModel::openVideoNoteWithPostcard,
             openVideoNoteEditor = viewModel::openVideoNoteEditor,
             closeVideoNoteEditor = viewModel::closeVideoNoteEditor,
             updateVideoNoteEditorDocument = viewModel::updateVideoNoteEditorDocument,
@@ -1863,6 +1865,7 @@ internal fun VideoDetailScreenStateHolder(
         transitionEnabled = transitionEnabled,
         sharedBoundsActive = sharedBoundsActive,
         keepLoadedContentForBackPreview = keepLoadedContentForBackPreview,
+        hasCommittedRelatedVideoNavigation = hasCommittedRelatedVideoNavigation,
     )
     val useReturningVideoDetailVisualState = shouldUseReturningVideoDetailVisualState(
         forceCoverOnlyForReturn = forceCoverOnlyForReturn,
@@ -3600,6 +3603,54 @@ internal fun VideoDetailScreenStateHolder(
         }
     }
 
+    val nearbyVideoSuccess = uiState as? VideoPlaybackUiState.Success
+    val nearbyVideoCid = nearbyVideoSuccess?.info?.cid ?: 0L
+    val nearbySwitchableQualities = remember(
+        nearbyVideoSuccess?.switchableQualityIds,
+        nearbyVideoSuccess?.qualityIds,
+    ) {
+        nearbyVideoSuccess?.let { state ->
+            state.switchableQualityIds.ifEmpty { state.qualityIds }
+        }.orEmpty()
+    }
+    val nearbyAvailableAudioQualities = remember(nearbyVideoSuccess?.availableAudioQualities) {
+        nearbyVideoSuccess?.availableAudioQualities
+            ?.map { it.preferenceId }
+            ?.filter { it > 0 }
+            .orEmpty()
+    }
+    val nearbyAvailableAudioLangs = remember(nearbyVideoSuccess?.aiAudio) {
+        nearbyVideoSuccess?.aiAudio?.items
+            ?.mapNotNull { it.langCode.takeIf { code -> code.isNotBlank() } }
+            .orEmpty()
+    }
+    DisposableEffect(
+        playerState.player,
+        currentBvid,
+        nearbyVideoCid,
+        nearbySwitchableQualities,
+        nearbyAvailableAudioQualities,
+        nearbyAvailableAudioLangs,
+        isVisible,
+    ) {
+        if (isVisible && currentBvid.isNotBlank() && nearbyVideoCid > 0L) {
+            com.android.purebilibili.feature.nearby.NearbyPlaybackBridge.bindVideoControls(
+                bvid = currentBvid,
+                cid = nearbyVideoCid,
+                availableQualityIds = nearbySwitchableQualities,
+                player = playerState.player,
+                onChangeQuality = viewModel::changeQuality,
+                availableAudioQualityIds = nearbyAvailableAudioQualities,
+                availableAudioLangs = nearbyAvailableAudioLangs,
+                onChangeAudioQuality = viewModel::setAudioQuality,
+                onChangeAudioLang = viewModel::changeAudioLanguage,
+            )
+        }
+        onDispose {
+            com.android.purebilibili.feature.nearby.NearbyPlaybackBridge.unbindVideoControls(playerState.player)
+        }
+    }
+
     //  弹幕加载逻辑已移至 VideoPlayerState 内部处理
     // 避免在此处重复消耗 InputStream
 
@@ -4216,6 +4267,9 @@ internal fun VideoDetailScreenStateHolder(
                     Box(modifier = Modifier
                         .fillMaxSize()
                         .then(wholeCardReturn.modifier)
+                        .commentThreadNavigationBlur {
+                            if (subReplyVisible) subReplyCoveredBlurProgress else 0f
+                        }
                         .onGloballyPositioned(largeScreenGeometry::recordRoot)) {
                     // Shared movable player content for tablet and large screen.
                     // onPortraitFullscreen = { enterPortraitFullscreen() }
@@ -4793,6 +4847,7 @@ internal fun VideoDetailScreenStateHolder(
                             isExitTransitionInProgress,
                             isCommittedCardReturn,
                             keepLoadedContentForBackPreview,
+                            hasCommittedRelatedVideoNavigation,
                             isOrientationOwner,
                             detailShellSharedBoundsEnabled,
                             sharedBoundsActive,
@@ -4808,10 +4863,15 @@ internal fun VideoDetailScreenStateHolder(
                                     entryOwnsMiuixCardTransition &&
                                         miuixReturnState.enabled &&
                                         miuixReturnState.isGestureInProgressProvider()
-                                val sharedContainerReturning = !sharedNavSurfaceVisible &&
-                                    sharedNavTransition != null &&
-                                    (sharedNavTransition.isRemoving ||
-                                        (sharedNavTransition.isRunning && sharedNavTransition.relativeDepth <= 0f))
+                                val ownsExitTransition =
+                                    !miuixReturnState.enabled || entryOwnsMiuixCardTransition
+                                val sharedContainerReturning = sharedNavTransition != null &&
+                                    shouldTreatSharedContainerNavigationAsReturning(
+                                        sharedSurfaceVisible = sharedNavSurfaceVisible,
+                                        isRemoving = sharedNavTransition.isRemoving,
+                                        isRunning = sharedNavTransition.isRunning,
+                                        relativeDepth = sharedNavTransition.relativeDepth,
+                                    )
                                 val phase = if (entryOwnsMiuixCardTransition) {
                                     videoCardDepthBackgroundState.phaseProvider()
                                 } else {
@@ -4819,11 +4879,13 @@ internal fun VideoDetailScreenStateHolder(
                                 }
                                 shouldExpandPlayerViewportForSharedReturn(
                                     isCommittedCardReturn = isCommittedCardReturn,
-                                    keepLoadedContentForBackPreview = keepLoadedContentForBackPreview,
-                                    isExitTransitionInProgress = isExitTransitionInProgress ||
-                                        miuixGesture ||
-                                        sharedContainerReturning ||
-                                        phase == VideoCardTransitionBackgroundPhase.RETURNING,
+                                    keepLoadedContentForBackPreview = keepLoadedContentForBackPreview ||
+                                        hasCommittedRelatedVideoNavigation,
+                                    isExitTransitionInProgress =
+                                        (ownsExitTransition && isExitTransitionInProgress) ||
+                                            miuixGesture ||
+                                            sharedContainerReturning ||
+                                            phase == VideoCardTransitionBackgroundPhase.RETURNING,
                                     isReturnGestureInProgress =
                                         (
                                             entryOwnsMiuixCardTransition &&
@@ -4918,7 +4980,9 @@ internal fun VideoDetailScreenStateHolder(
                         val phoneTheaterTargetStageHeight = resolvePhoneTheaterStageHeightDp(
                             baseInlineHeightDp = collapseMotion.viewportHeight.value.value,
                             screenHeightDp = screenHeightDp.value.toInt(),
-                            isTheaterMode = isPhoneTheaterActive && layoutCollapseProgress.value == 0f,
+                            isTheaterMode = isPhoneTheaterActive &&
+                                !expandPlayerForSharedReturn &&
+                                layoutCollapseProgress.value == 0f,
                         ).dp
                         val animatedPhoneStageHeight by animateDpAsState(
                             targetValue = phoneTheaterTargetStageHeight,
@@ -4928,10 +4992,15 @@ internal fun VideoDetailScreenStateHolder(
                             collapseMotion,
                             playerTopInset,
                             isPhoneTheaterActive,
+                            expandPlayerForSharedReturn,
                             animatedPhoneStageHeight,
                         ) {
                             derivedStateOf {
-                                val effectiveViewportHeight = if (isPhoneTheaterActive && layoutCollapseProgress.value == 0f) {
+                                val effectiveViewportHeight = if (
+                                    isPhoneTheaterActive &&
+                                        !expandPlayerForSharedReturn &&
+                                        layoutCollapseProgress.value == 0f
+                                ) {
                                     animatedPhoneStageHeight
                                 } else {
                                     collapseMotion.viewportHeight.value
