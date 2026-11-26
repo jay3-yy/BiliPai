@@ -105,7 +105,7 @@ object AccountCookieStore {
     @Synchronized
     fun cachedCookie(sessData: String?, name: String): String? {
         val session = AccountCookieSession(sessData.orEmpty(), emptyMap())
-        return cache[session.storageKey]?.get(name)
+        return cache[session.storageKey]?.get(name)?.takeIf { it.isNotBlank() }
     }
 
     private fun write(context: Context?, session: AccountCookieSession, cookies: Map<String, String>) {
@@ -143,9 +143,13 @@ class AccountCookieInterceptor : Interceptor {
             cookies,
         )
         val response = chain.proceed(boundRequest)
+        val now = System.currentTimeMillis()
+        val responseCookies = Cookie.parseAll(url, response.headers)
+            .filter { it.expiresAt > now && it.value.isNotBlank() }
+            .associate { it.name to it.value }
         AccountCookieStore.update(
             NetworkModule.appContext, session,
-            Cookie.parseAll(url, response.headers).associate { it.name to it.value },
+            responseCookies,
         )
         return response
     }

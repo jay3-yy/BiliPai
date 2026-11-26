@@ -160,6 +160,56 @@ object DownloadManager {
      * 获取下载目录
      */
     fun getDownloadDir(): File = downloadDir ?: throw IllegalStateException("DownloadManager not initialized")
+
+    /**
+     * 为已缓存任务重新拉取并替换本地弹幕文件。
+     * 仅在新弹幕分片写入成功后替换记录并清理多余旧分片，失败时保留原有本地弹幕。
+     */
+    suspend fun refreshTaskDanmaku(taskId: String): Result<Int> {
+        val task = _tasks.value[taskId]
+            ?: return Result.failure(IllegalStateException("缓存任务不存在"))
+        if (!task.isComplete) {
+            return Result.failure(IllegalStateException("请等待视频缓存完成后再更新弹幕"))
+        }
+        if (task.cid <= 0L) {
+            return Result.failure(IllegalStateException("缺少分P标识，无法更新弹幕"))
+        }
+        val previousSegmentPaths = task.localDanmakuSegmentPaths
+        return try {
+            val danmakuResult = DownloadDanmakuAssetService.download(
+                task = task,
+                taskDir = getTaskDir(task.id),
+                forceDownload = true,
+                updateState = { state ->
+                    updateTaskInMemory(task.id) { it.withAssetState(state) }
+                },
+            )
+            if (danmakuResult.segmentPaths.isEmpty()) {
+                return Result.failure(IllegalStateException("未获取到弹幕"))
+            }
+            val nextPathSet = danmakuResult.segmentPaths.toSet()
+            previousSegmentPaths.forEach { oldPath ->
+                if (oldPath !in nextPathSet) {
+                    runCatching { File(oldPath).delete() }
+                }
+            }
+            updateTask(task.id) {
+                it.copy(
+                    options = it.options.copy(includeDanmaku = true),
+                    localDanmakuSegmentPaths = danmakuResult.segmentPaths,
+                    localDanmakuMetadataPath = danmakuResult.metadataPath,
+                )
+            }
+            Result.success(danmakuResult.segmentPaths.size)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            updateAssetState(task.id, DownloadAssetKind.DANMAKU) {
+                it.copy(status = DownloadAssetStatus.FAILED, errorMessage = e.message ?: "弹幕更新失败")
+            }
+            Result.failure(e)
+        }
+    }
     
     /**
      * 添加下载任务

@@ -183,4 +183,42 @@ class DownloadListQueryPolicyTest {
         val afterClearVisible = resolveDownloadSelectionAllToggle(visible, afterSelectAll)
         assertEquals(setOf("hidden"), afterClearVisible)
     }
+
+    @Test
+    fun groupsMultiplePartsOfSameBvidInEpisodeOrderAndPreservesSingleItems() {
+        val part2 = sampleTask(
+            bvid = "BV_MULTI",
+            cid = 202L,
+            title = "周杰伦精选 - P2 以父之名",
+            episodeLabel = "P2 以父之名",
+            episodeSortIndex = 2,
+            createdAt = 300L,
+        )
+        val solo = sampleTask(
+            bvid = "BV_SOLO",
+            cid = 301L,
+            title = "独立视频",
+            createdAt = 200L,
+        )
+        val part1 = sampleTask(
+            bvid = "BV_MULTI",
+            cid = 201L,
+            title = "周杰伦精选 - P1 安静",
+            episodeLabel = "P1 安静",
+            episodeSortIndex = 1,
+            createdAt = 100L,
+        )
+
+        val grouped = buildDownloadListEntries(listOf(part2, solo, part1), groupMultiPart = true)
+        assertEquals(2, grouped.size)
+        val firstGroup = grouped[0] as DownloadListEntry.MultiPartGroup
+        assertEquals("BV_MULTI", firstGroup.bvid)
+        assertEquals("周杰伦精选", firstGroup.groupTitle)
+        assertEquals(listOf(201L, 202L), firstGroup.tasks.map { it.cid })
+        assertEquals("BV_SOLO", (grouped[1] as DownloadListEntry.Single).task.bvid)
+
+        val ungrouped = buildDownloadListEntries(listOf(part2, solo, part1), groupMultiPart = false)
+        assertEquals(3, ungrouped.size)
+        assertTrue(ungrouped.all { it is DownloadListEntry.Single })
+    }
 }

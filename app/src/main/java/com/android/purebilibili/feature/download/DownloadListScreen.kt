@@ -99,6 +99,9 @@ fun DownloadListScreen(
     onOfflineVideoClick: (String) -> Unit = {}  // 🔧 [新增] taskId - 离线播放
 ) {
     val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("DownloadListScreen")
+    }
     val actionScope = rememberCoroutineScope()
     val deleteDialogExitDelayMs = if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
         com.android.purebilibili.core.ui.AppGlassPopupMotionSpec.UnanchoredExitMillis.toLong()
@@ -122,6 +125,9 @@ fun DownloadListScreen(
     val sortOrder = remember(storedSortOrderKey) {
         DownloadListSortOrder.fromStorageKey(storedSortOrderKey)
     }
+    val groupMultiPart by remember(context) {
+        SettingsManager.getDownloadListGroupMultiPart(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
     var searchQuery by rememberSaveable { mutableStateOf("") }
     val hasActiveSearch = searchQuery.isNotBlank()
     val allTaskList = remember(tasks) { tasks.values.toList() }
@@ -132,12 +138,73 @@ fun DownloadListScreen(
             sortOrder = sortOrder,
         )
     }
+    val displayEntries = remember(taskList, groupMultiPart) {
+        buildDownloadListEntries(
+            tasks = taskList,
+            groupMultiPart = groupMultiPart,
+        )
+    }
+    var expandedGroupBvids by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    var activeSheetGroupBvid by remember { mutableStateOf<String?>(null) }
     var pendingDeleteTask by remember { mutableStateOf<com.android.purebilibili.feature.download.DownloadTask?>(null) }
+    var pendingDeleteGroup by remember { mutableStateOf<DownloadListEntry.MultiPartGroup?>(null) }
     var dissolvingTaskIds by remember { mutableStateOf(setOf<String>()) }
+    var refreshingDanmakuTaskIds by remember { mutableStateOf(emptySet<String>()) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedTaskIds by remember { mutableStateOf(emptySet<String>()) }
     var pendingBatchDeleteIds by remember { mutableStateOf(emptySet<String>()) }
     var deletingBatch by remember { mutableStateOf(false) }
+
+    fun refreshDanmakuForTasks(targetTasks: List<DownloadTask>) {
+        val candidates = targetTasks.filter { it.isComplete && it.id !in refreshingDanmakuTaskIds }
+        if (candidates.isEmpty()) return
+        if (!NetworkUtils.isNetworkAvailable(context)) {
+            Toast.makeText(context, "当前无网络，无法更新弹幕", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val candidateIds = candidates.map { it.id }.toSet()
+        refreshingDanmakuTaskIds = refreshingDanmakuTaskIds + candidateIds
+        actionScope.launch {
+            var successCount = 0
+            var lastError: String? = null
+            try {
+                candidates.forEach { target ->
+                    val result = DownloadManager.refreshTaskDanmaku(target.id)
+                    result.onSuccess {
+                        successCount++
+                    }.onFailure { error ->
+                        lastError = error.message
+                    }
+                    refreshingDanmakuTaskIds = refreshingDanmakuTaskIds - target.id
+                }
+            } finally {
+                refreshingDanmakuTaskIds = refreshingDanmakuTaskIds - candidateIds
+            }
+            val message = when {
+                candidates.size == 1 && successCount == 1 -> "已更新弹幕"
+                candidates.size == 1 -> "更新弹幕失败：${lastError ?: "请稍后重试"}"
+                successCount == candidates.size -> "已更新 $successCount 个视频弹幕"
+                successCount > 0 -> "已更新 $successCount/${candidates.size} 个视频弹幕"
+                else -> "更新弹幕失败：${lastError ?: "请稍后重试"}"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun handlePauseResumeTask(task: DownloadTask) {
+        actionScope.launch {
+            val currentTask = DownloadManager.tasks.value[task.id] ?: return@launch
+            if (currentTask.isDownloading || currentTask.isWaitingForRetry) {
+                DownloadManager.pauseDownload(task.id)
+            } else if (currentTask.canResume) {
+                DownloadManager.startDownload(task.id)
+            }
+            val updatedStatus = DownloadManager.tasks.value[task.id]?.status
+            if (updatedStatus != null && updatedStatus != currentTask.status) {
+                downloadHaptic(HapticType.LIGHT)
+            }
+        }
+    }
     val completedTaskIds = remember(allTaskList, dissolvingTaskIds) {
         allTaskList.filter { it.isComplete && it.id !in dissolvingTaskIds }.map { it.id }.toSet()
     }
@@ -262,12 +329,44 @@ fun DownloadListScreen(
                                 }
                             }
                             val canManage = visibleCompletedTaskIds.isNotEmpty()
-                            if (canManage || hasActive || hasResumable) {
+                            val hasAnyTasks = allTaskList.isNotEmpty()
+                            if (hasAnyTasks || canManage || hasActive || hasResumable) {
                                 AppWindowActionMenu(
                                     groups = listOf(
                                         buildList {
+                                            if (hasAnyTasks) {
+                                                add(
+                                                    AppWindowAction(
+                                                        label = "合并分P显示",
+                                                        selected = groupMultiPart,
+                                                        onClick = {
+                                                            actionScope.launch {
+                                                                SettingsManager.setDownloadListGroupMultiPart(
+                                                                    context,
+                                                                    !groupMultiPart,
+                                                                )
+                                                            }
+                                                        },
+                                                    )
+                                                )
+                                            }
                                             if (canManage) {
                                                 add(AppWindowAction(label = "管理", onClick = { selectionMode = true }))
+                                                add(
+                                                    AppWindowAction(
+                                                        label = if (refreshingDanmakuTaskIds.isNotEmpty()) {
+                                                            "正在更新弹幕…"
+                                                        } else {
+                                                            "更新全部弹幕"
+                                                        },
+                                                        enabled = refreshingDanmakuTaskIds.isEmpty(),
+                                                        onClick = {
+                                                            refreshDanmakuForTasks(
+                                                                taskList.filter { it.isComplete && it.id !in dissolvingTaskIds }
+                                                            )
+                                                        },
+                                                    )
+                                                )
                                             }
                                             if (hasActive || hasResumable) {
                                                 add(
@@ -379,7 +478,7 @@ fun DownloadListScreen(
             val columns = resolveVideoListColumns(listLayout.singleColumn, maxWidth.value)
             val alignRows = columns > 1 && !com.android.purebilibili.core.ui.LocalFullVideoCardContentVisible.current
             val playbackMotionGroup = rememberNavigationControlMotionGroup()
-            val taskKeys = remember(taskList) { taskList.map { it.id } }
+            val entryKeys = remember(displayEntries) { displayEntries.map { it.key } }
             val allVisibleSelected = visibleCompletedTaskIds.isNotEmpty() &&
                 visibleCompletedTaskIds.all { it in selectedCompletedIds }
             LazyVerticalGrid(
@@ -477,130 +576,186 @@ fun DownloadListScreen(
                         }
                     }
                 }
-                val renderTask: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
-                    val task = taskList[index]
-                    val isDissolving = task.id in dissolvingTaskIds
-                    AnimatedVideoListItem(modifier = cardModifier, enabled = true, useLookaheadBounds = false) {
-                    com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
-                        isDissolving = isDissolving,
-                        onDissolveComplete = {
-                            actionScope.launch {
-                                try {
-                                    DownloadManager.removeTask(task.id)
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (error: Exception) {
-                                    android.util.Log.e("DownloadList", "Failed to delete cache task ${task.id}", error)
-                                    Toast.makeText(context, "删除失败，请重试", Toast.LENGTH_SHORT).show()
-                                } finally {
-                                    dissolvingTaskIds = dissolvingTaskIds - task.id
-                                    deletingTaskId = null
-                                }
-                            }
-                        },
-                        cardId = task.id,
-                        preset = com.android.purebilibili.core.ui.animation.DissolveAnimationPreset.TELEGRAM_FAST,
-                        // 删除只作用于当前卡片，避免相邻内容在磨砂背景中持续抖动。
-                        publishGlobalDissolveState = false,
-                        keepInvisibleAfterDissolve = true,
-                    ) {
-                        val playableOffline = remember(task.filePath, task.status) {
-                            isDownloadTaskPlayableOffline(task)
-                        }
-                        val playbackTarget = if (!selectionMode && !isDissolving) {
-                            resolveDownloadTaskClickTarget(task, isNetworkAvailable, playableOffline)
-                        } else null
-                        val navigationTarget = when (playbackTarget) {
-                            DownloadTaskClickTarget.OfflinePlayer -> BiliPaiNavKey.OfflineVideoPlayer(task.id)
-                            DownloadTaskClickTarget.OnlinePlayer -> BiliPaiNavKey.VideoDetail(task.bvid)
-                            null -> null
-                        }
-                        fun openPlayback(target: DownloadTaskClickTarget?) {
-                            when (target) {
-                                DownloadTaskClickTarget.OfflinePlayer -> onOfflineVideoClick(task.id)
-                                DownloadTaskClickTarget.OnlinePlayer -> {
-                                    Toast.makeText(context, "本地文件不可用，已切换在线播放", Toast.LENGTH_SHORT).show()
-                                    onVideoClick(task.bvid)
-                                }
-                                null -> Unit
-                            }
-                        }
-                        CompositionLocalProvider(LocalNavigationControlMotionGroup provides playbackMotionGroup) {
-                            val playback = rememberSystemWindowNavigationControl(
-                                navigationTarget, AppShapes.container(ContainerLevel.Card),
-                            ) { openPlayback(playbackTarget) }
-                            DownloadTaskItem(
-                                task = task,
-                                modifier = playback.modifier.then(if (alignRows) Modifier.fillMaxHeight() else Modifier),
-                                stacked = columns > 1,
-                                onClick = {
-                                    if (selectionMode) {
-                                        if (!deletingBatch && task.id in completedTaskIds) {
-                                            selectedTaskIds = if (task.id in selectedTaskIds) {
-                                                selectedTaskIds - task.id
-                                            } else selectedTaskIds + task.id
+                val renderEntry: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
+                    when (val entry = displayEntries[index]) {
+                        is DownloadListEntry.Single -> {
+                            val task = entry.task
+                            val isDissolving = task.id in dissolvingTaskIds
+                            AnimatedVideoListItem(modifier = cardModifier, enabled = true, useLookaheadBounds = false) {
+                                com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard(
+                                    isDissolving = isDissolving,
+                                    onDissolveComplete = {
+                                        actionScope.launch {
+                                            try {
+                                                DownloadManager.removeTask(task.id)
+                                            } catch (cancelled: CancellationException) {
+                                                throw cancelled
+                                            } catch (error: Exception) {
+                                                android.util.Log.e("DownloadList", "Failed to delete cache task ${task.id}", error)
+                                                Toast.makeText(context, "删除失败，请重试", Toast.LENGTH_SHORT).show()
+                                            } finally {
+                                                dissolvingTaskIds = dissolvingTaskIds - task.id
+                                                deletingTaskId = null
+                                            }
                                         }
-                                    } else {
-                                        // 文件可能在列表显示后被清理，点击时按实际可用性决定去哪。
-                                        val currentTarget = resolveDownloadTaskClickTarget(task, isNetworkAvailable)
-                                        if (currentTarget == playbackTarget) playback.onClick()
-                                        else openPlayback(currentTarget)
+                                    },
+                                    cardId = task.id,
+                                    preset = com.android.purebilibili.core.ui.animation.DissolveAnimationPreset.TELEGRAM_FAST,
+                                    // 删除只作用于当前卡片，避免相邻内容在磨砂背景中持续抖动。
+                                    publishGlobalDissolveState = false,
+                                    keepInvisibleAfterDissolve = true,
+                                ) {
+                                    val playableOffline = remember(task.filePath, task.status) {
+                                        isDownloadTaskPlayableOffline(task)
                                     }
-                                },
-                                onPauseResume = {
-                                    actionScope.launch {
-                                        val currentTask = DownloadManager.tasks.value[task.id] ?: return@launch
-                                        if (currentTask.isDownloading || currentTask.isWaitingForRetry) {
-                                            DownloadManager.pauseDownload(task.id)
-                                        } else if (currentTask.canResume) {
-                                            DownloadManager.startDownload(task.id)
-                                        }
-                                        val updatedStatus = DownloadManager.tasks.value[task.id]?.status
-                                        if (updatedStatus != null && updatedStatus != currentTask.status) {
-                                            downloadHaptic(HapticType.LIGHT)
+                                    val playbackTarget = if (!selectionMode && !isDissolving) {
+                                        resolveDownloadTaskClickTarget(task, isNetworkAvailable, playableOffline)
+                                    } else null
+                                    val navigationTarget = when (playbackTarget) {
+                                        DownloadTaskClickTarget.OfflinePlayer -> BiliPaiNavKey.OfflineVideoPlayer(task.id)
+                                        DownloadTaskClickTarget.OnlinePlayer -> BiliPaiNavKey.VideoDetail(task.bvid)
+                                        null -> null
+                                    }
+                                    fun openPlayback(target: DownloadTaskClickTarget?) {
+                                        when (target) {
+                                            DownloadTaskClickTarget.OfflinePlayer -> onOfflineVideoClick(task.id)
+                                            DownloadTaskClickTarget.OnlinePlayer -> {
+                                                Toast.makeText(context, "本地文件不可用，已切换在线播放", Toast.LENGTH_SHORT).show()
+                                                onVideoClick(task.bvid)
+                                            }
+                                            null -> Unit
                                         }
                                     }
-                                },
-                                onDelete = {
-                                    if (deletingTaskId == null) pendingDeleteTask = task
-                                },
-                                selectionMode = selectionMode,
-                                selected = task.id in selectedCompletedIds,
-                                selectionEnabled = !deletingBatch && task.id in completedTaskIds,
-                                offlinePlayable = playableOffline,
-                                speedBytesPerSecond = if (task.status == DownloadStatus.DOWNLOADING) {
-                                    downloadSpeedsByTask[task.id] ?: 0L
-                                } else {
-                                    0L
+                                    CompositionLocalProvider(LocalNavigationControlMotionGroup provides playbackMotionGroup) {
+                                        val playback = rememberSystemWindowNavigationControl(
+                                            navigationTarget, AppShapes.container(ContainerLevel.Card),
+                                        ) { openPlayback(playbackTarget) }
+                                        DownloadTaskItem(
+                                            task = task,
+                                            modifier = playback.modifier.then(if (alignRows) Modifier.fillMaxHeight() else Modifier),
+                                            stacked = columns > 1,
+                                            onClick = {
+                                                if (selectionMode) {
+                                                    if (!deletingBatch && task.id in completedTaskIds) {
+                                                        selectedTaskIds = if (task.id in selectedTaskIds) {
+                                                            selectedTaskIds - task.id
+                                                        } else selectedTaskIds + task.id
+                                                    }
+                                                } else {
+                                                    // 文件可能在列表显示后被清理，点击时按实际可用性决定去哪。
+                                                    val currentTarget = resolveDownloadTaskClickTarget(task, isNetworkAvailable)
+                                                    if (currentTarget == playbackTarget) playback.onClick()
+                                                    else openPlayback(currentTarget)
+                                                }
+                                            },
+                                            onPauseResume = { handlePauseResumeTask(task) },
+                                            onOpenOriginalVideo = { onVideoClick(task.bvid) },
+                                            onRefreshDanmaku = { refreshDanmakuForTasks(listOf(task)) },
+                                            isRefreshingDanmaku = task.id in refreshingDanmakuTaskIds,
+                                            onDelete = {
+                                                if (deletingTaskId == null) pendingDeleteTask = task
+                                            },
+                                            selectionMode = selectionMode,
+                                            selected = task.id in selectedCompletedIds,
+                                            selectionEnabled = !deletingBatch && task.id in completedTaskIds,
+                                            offlinePlayable = playableOffline,
+                                            speedBytesPerSecond = if (task.status == DownloadStatus.DOWNLOADING) {
+                                                downloadSpeedsByTask[task.id] ?: 0L
+                                            } else {
+                                                0L
+                                            },
+                                        )
+                                    }
                                 }
-                            )
+                            }
                         }
-                    }
+
+                        is DownloadListEntry.MultiPartGroup -> {
+                            AnimatedVideoListItem(modifier = cardModifier, enabled = true, useLookaheadBounds = false) {
+                                DownloadMultiPartGroupItem(
+                                    group = entry,
+                                    expanded = entry.bvid in expandedGroupBvids,
+                                    stacked = columns > 1,
+                                    selectionMode = selectionMode,
+                                    selectedTaskIds = selectedCompletedIds,
+                                    completedTaskIds = completedTaskIds,
+                                    refreshingDanmakuTaskIds = refreshingDanmakuTaskIds,
+                                    downloadSpeedsByTask = downloadSpeedsByTask,
+                                    onToggleExpand = {
+                                        if (columns > 1) {
+                                            activeSheetGroupBvid = entry.bvid
+                                        } else {
+                                            expandedGroupBvids = if (entry.bvid in expandedGroupBvids) {
+                                                expandedGroupBvids - entry.bvid
+                                            } else {
+                                                expandedGroupBvids + entry.bvid
+                                            }
+                                        }
+                                    },
+                                    onToggleGroupSelection = {
+                                        if (!deletingBatch) {
+                                            val groupCompleted = entry.tasks.map { it.id }.filter { it in completedTaskIds }.toSet()
+                                            if (groupCompleted.isNotEmpty()) {
+                                                selectedTaskIds = if (groupCompleted.all { it in selectedTaskIds }) {
+                                                    selectedTaskIds - groupCompleted
+                                                } else {
+                                                    selectedTaskIds + groupCompleted
+                                                }
+                                            }
+                                        }
+                                    },
+                                    onOpenOriginalVideo = { onVideoClick(entry.bvid) },
+                                    onRefreshGroupDanmaku = { refreshDanmakuForTasks(entry.tasks) },
+                                    onDeleteGroup = { pendingDeleteGroup = entry },
+                                    onPartClick = { part ->
+                                        when (resolveDownloadTaskClickTarget(part, isNetworkAvailable)) {
+                                            DownloadTaskClickTarget.OfflinePlayer -> onOfflineVideoClick(part.id)
+                                            DownloadTaskClickTarget.OnlinePlayer -> {
+                                                Toast.makeText(context, "本地文件不可用，已切换在线播放", Toast.LENGTH_SHORT).show()
+                                                onVideoClick(part.bvid)
+                                            }
+                                            null -> Unit
+                                        }
+                                    },
+                                    onPartPauseResume = ::handlePauseResumeTask,
+                                    onPartRefreshDanmaku = { part -> refreshDanmakuForTasks(listOf(part)) },
+                                    onPartDelete = { part ->
+                                        if (deletingTaskId == null) pendingDeleteTask = part
+                                    },
+                                    modifier = if (alignRows) Modifier.fillMaxHeight() else Modifier,
+                                )
+                            }
+                        }
                     }
                 }
                 if (!alignRows) {
                     itemsIndexed(
-                        items = taskList,
-                        key = { _, task -> task.id },
-                        contentType = { _, task -> if (task.isComplete) "download_complete" else "download_active" },
+                        items = displayEntries,
+                        key = { _, entry -> entry.key },
+                        contentType = { _, entry ->
+                            when (entry) {
+                                is DownloadListEntry.MultiPartGroup -> "download_multipart_group"
+                                is DownloadListEntry.Single -> if (entry.task.isComplete) "download_complete" else "download_active"
+                            }
+                        },
                     ) { index, _ ->
-                        renderTask(index, videoListItemModifier())
+                        renderEntry(index, videoListItemModifier())
                     }
                 } else {
-                    com.android.purebilibili.feature.home.resolveHomeFeedAlignedRows(taskList.size, columns)
+                    com.android.purebilibili.feature.home.resolveHomeFeedAlignedRows(displayEntries.size, columns)
                         .forEach { row ->
                             item(
-                                key = "download_row_${taskKeys[row.first]}",
+                                key = "download_row_${entryKeys[row.first]}",
                                 contentType = "download_aligned_row",
                                 span = { GridItemSpan(maxLineSpan) },
                             ) {
                                 com.android.purebilibili.feature.home.HomeAlignedVideoRow(
                                     indices = row,
-                                    itemKeys = taskKeys,
+                                    itemKeys = entryKeys,
                                     columns = columns,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                     modifier = videoListItemModifier().fillMaxWidth(),
-                                    content = renderTask,
+                                    content = renderEntry,
                                 )
                             }
                         }
@@ -704,6 +859,88 @@ fun DownloadListScreen(
         )
     }
 
+    activeSheetGroupBvid?.let { targetBvid ->
+        val sheetGroup = displayEntries.filterIsInstance<DownloadListEntry.MultiPartGroup>()
+            .firstOrNull { it.bvid == targetBvid }
+        if (sheetGroup == null) {
+            activeSheetGroupBvid = null
+        } else {
+            DownloadMultiPartGroupSheet(
+                group = sheetGroup,
+                refreshingDanmakuTaskIds = refreshingDanmakuTaskIds,
+                downloadSpeedsByTask = downloadSpeedsByTask,
+                onDismiss = { activeSheetGroupBvid = null },
+                onOpenOriginalVideo = { onVideoClick(sheetGroup.bvid) },
+                onRefreshGroupDanmaku = { refreshDanmakuForTasks(sheetGroup.tasks) },
+                onPartClick = { part ->
+                    when (resolveDownloadTaskClickTarget(part, isNetworkAvailable)) {
+                        DownloadTaskClickTarget.OfflinePlayer -> onOfflineVideoClick(part.id)
+                        DownloadTaskClickTarget.OnlinePlayer -> {
+                            Toast.makeText(context, "本地文件不可用，已切换在线播放", Toast.LENGTH_SHORT).show()
+                            onVideoClick(part.bvid)
+                        }
+                        null -> Unit
+                    }
+                },
+                onPartPauseResume = ::handlePauseResumeTask,
+                onPartRefreshDanmaku = { part -> refreshDanmakuForTasks(listOf(part)) },
+                onPartDelete = { part ->
+                    if (deletingTaskId == null) pendingDeleteTask = part
+                },
+            )
+        }
+    }
+
+    pendingDeleteGroup?.let { groupToDelete ->
+        AppAlertDialog(
+            onDismissRequest = { pendingDeleteGroup = null },
+            title = { AppText("删除全部分P缓存") },
+            text = {
+                AppText(
+                    text = "确定删除「${groupToDelete.groupTitle}」下的全部 ${groupToDelete.tasks.size} 个分P缓存吗？视频、音频和弹幕文件将一并清除。",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val ids = groupToDelete.tasks.map { it.id }
+                        pendingDeleteGroup = null
+                        actionScope.launch {
+                            withContext(NonCancellable) {
+                                delay(deleteDialogExitDelayMs)
+                                var failed = 0
+                                ids.forEach { id ->
+                                    try {
+                                        DownloadManager.removeTask(id)
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (error: Exception) {
+                                        android.util.Log.e("DownloadList", "Failed to delete group part $id", error)
+                                        failed++
+                                    }
+                                }
+                                Toast.makeText(
+                                    context,
+                                    if (failed == 0) "已删除全部分P缓存" else "$failed 个分P删除失败，请重试",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.appElasticPress(),
+                ) {
+                    AppText("删除", color = AppContentColors.error())
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteGroup = null }, modifier = Modifier.appElasticPress()) {
+                    AppText("取消")
+                }
+            },
+        )
+    }
+
     // 删除确认：避免误触直接清掉已下载的文件
     pendingDeleteTask?.let { taskToDelete ->
         AppAlertDialog(
@@ -719,12 +956,28 @@ fun DownloadListScreen(
                 TextButton(
                     onClick = {
                         if (deletingTaskId != null) return@TextButton
+                        val isSingleCardEntry = displayEntries.any {
+                            it is DownloadListEntry.Single && it.task.id == taskToDelete.id
+                        }
                         deletingTaskId = taskToDelete.id
                         pendingDeleteTask = null
                         actionScope.launch {
                             // 玻璃弹窗退场完成后再改变背景；原生弹窗关闭后直接开始。
                             delay(deleteDialogExitDelayMs)
-                            dissolvingTaskIds = dissolvingTaskIds + taskToDelete.id
+                            if (isSingleCardEntry) {
+                                dissolvingTaskIds = dissolvingTaskIds + taskToDelete.id
+                            } else {
+                                try {
+                                    DownloadManager.removeTask(taskToDelete.id)
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (error: Exception) {
+                                    android.util.Log.e("DownloadList", "Failed to delete cache task ${taskToDelete.id}", error)
+                                    Toast.makeText(context, "删除失败，请重试", Toast.LENGTH_SHORT).show()
+                                } finally {
+                                    deletingTaskId = null
+                                }
+                            }
                         }
                     }, modifier = Modifier.appElasticPress()
                 ) {
@@ -762,6 +1015,9 @@ internal fun DownloadTaskItem(
     onClick: () -> Unit,
     onPauseResume: () -> Unit,
     onDelete: () -> Unit,
+    onOpenOriginalVideo: () -> Unit = {},
+    onRefreshDanmaku: () -> Unit = {},
+    isRefreshingDanmaku: Boolean = false,
     stacked: Boolean = false,
     offlinePlayable: Boolean,
     speedBytesPerSecond: Long = 0L,
@@ -902,65 +1158,124 @@ internal fun DownloadTaskItem(
         )
 
         if (task.isComplete) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
+            val cacheSummary = buildString {
+                append(if (task.isAudioOnly) "已缓存音频" else "已缓存")
+                if (task.fileSize > 0L) {
+                    append(" · ")
+                    append(formatDownloadStorageBytes(task.fileSize))
+                }
+            }
+            val cacheNotice = when {
+                isRefreshingDanmaku -> "正在更新弹幕…"
+                !offlinePlayable && !task.exportedFileUri.isNullOrBlank() -> "已导出到自定义目录，当前列表不直接离线播放"
+                !offlinePlayable -> "本地缓存文件不可用"
+                task.assetState(DownloadAssetKind.DANMAKU)?.status == DownloadAssetStatus.FAILED -> "弹幕下载失败"
+                else -> null
+            }
+            val taskActionMenu: @Composable () -> Unit = {
+                AppWindowActionMenu(
+                    anchorModifier = Modifier.size(if (stacked) 34.dp else 36.dp),
+                    groups = listOf(
+                        listOf(
+                            AppWindowAction(
+                                label = if (isRefreshingDanmaku) "正在更新弹幕…" else "更新弹幕",
+                                icon = Icons.Outlined.Refresh,
+                                enabled = !isRefreshingDanmaku,
+                                onClick = onRefreshDanmaku,
+                            ),
+                            AppWindowAction(
+                                label = "删除缓存",
+                                icon = Icons.Outlined.Delete,
+                                iconTint = AppContentColors.error(),
+                                onClick = onDelete,
+                            ),
+                        ),
+                    ),
                 ) {
-                    val cacheSummary = buildString {
-                        append(if (task.isAudioOnly) "已缓存音频" else "已缓存")
-                        if (task.fileSize > 0L) {
-                            append(" · ")
-                            append(formatDownloadStorageBytes(task.fileSize))
-                        }
-                    }
+                    AppIcon(rememberAppMoreIcon(), contentDescription = "缓存操作")
+                }
+            }
+            if (stacked) {
+                // 多列窄卡将缓存摘要与操作区拆成两行，避免文字被挤成竖排。
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     AppText(
                         text = cacheSummary,
                         style = typography.statistic,
                         color = AppContentColors.secondaryText(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
-                    val cacheNotice = when {
-                        !offlinePlayable && !task.exportedFileUri.isNullOrBlank() -> "已导出到自定义目录，当前列表不直接离线播放"
-                        !offlinePlayable -> "本地缓存文件不可用"
-                        task.assetState(DownloadAssetKind.DANMAKU)?.status == DownloadAssetStatus.FAILED -> "弹幕下载失败"
-                        else -> null
-                    }
                     if (cacheNotice != null) {
                         AppText(
                             text = cacheNotice,
                             style = typography.statistic,
-                            color = AppContentColors.secondaryText(),
+                            color = if (isRefreshingDanmaku) AppContentColors.accent() else AppContentColors.secondaryText(),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                }
-                if (selectionMode) {
-                    AppCheckbox(
-                        checked = selected,
-                        onCheckedChange = null,
-                        enabled = selectionEnabled,
-                        modifier = Modifier.size(48.dp),
-                    )
-                } else {
-                    AppWindowActionMenu(
-                        anchorModifier = Modifier.size(48.dp),
-                        groups = listOf(
-                            listOf(
-                                AppWindowAction(
-                                    label = "删除缓存",
-                                    icon = Icons.Outlined.Delete,
-                                    iconTint = AppContentColors.error(),
-                                    onClick = onDelete,
-                                ),
-                            ),
-                        ),
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        AppIcon(rememberAppMoreIcon(), contentDescription = "缓存操作")
+                        if (selectionMode) {
+                            AppCheckbox(
+                                checked = selected,
+                                onCheckedChange = null,
+                                enabled = selectionEnabled,
+                                modifier = Modifier.size(36.dp),
+                            )
+                        } else {
+                            if (task.bvid.isNotBlank()) {
+                                OriginalVideoPageButton(onClick = onOpenOriginalVideo, compact = true)
+                            }
+                            taskActionMenu()
+                        }
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
+                    ) {
+                        AppText(
+                            text = cacheSummary,
+                            style = typography.statistic,
+                            color = AppContentColors.secondaryText(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (cacheNotice != null) {
+                            AppText(
+                                text = cacheNotice,
+                                style = typography.statistic,
+                                color = if (isRefreshingDanmaku) AppContentColors.accent() else AppContentColors.secondaryText(),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    if (selectionMode) {
+                        AppCheckbox(
+                            checked = selected,
+                            onCheckedChange = null,
+                            enabled = selectionEnabled,
+                            modifier = Modifier.size(48.dp),
+                        )
+                    } else {
+                        if (task.bvid.isNotBlank()) {
+                            OriginalVideoPageButton(onClick = onOpenOriginalVideo)
+                        }
+                        taskActionMenu()
                     }
                 }
             }
@@ -1018,12 +1333,15 @@ internal fun DownloadTaskItem(
         if (!selectionMode) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                horizontalArrangement = Arrangement.spacedBy(if (stacked) 4.dp else 8.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (task.bvid.isNotBlank()) {
+                    OriginalVideoPageButton(onClick = onOpenOriginalVideo, compact = stacked)
+                }
                 val canPause = task.isDownloading || task.isWaitingForRetry
                 if (canPause || task.canResume) {
-                    AppIconButton(onClick = onPauseResume, modifier = Modifier.size(48.dp)) {
+                    AppIconButton(onClick = onPauseResume, modifier = Modifier.size(if (stacked) 36.dp else 44.dp)) {
                         AppIcon(
                             imageVector = if (canPause) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
                             contentDescription = if (canPause) "暂停" else "继续",
@@ -1031,7 +1349,7 @@ internal fun DownloadTaskItem(
                         )
                     }
                 }
-                AppIconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+                AppIconButton(onClick = onDelete, modifier = Modifier.size(if (stacked) 36.dp else 44.dp)) {
                     AppIcon(
                         imageVector = Icons.Outlined.Delete,
                         contentDescription = "删除",

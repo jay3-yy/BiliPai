@@ -136,6 +136,19 @@ class AccountCookieSessionTest {
     }
 
     @Test
+    fun `expired or blank set-cookie response does not wipe stored bili_jct`() {
+        val account = session(31)
+        AccountCookieStore.replace(null, account, account.seed)
+        val request = Request.Builder().url("https://api.bilibili.com/x/v3/fav/folder/add")
+            .tag(AccountCookieSession::class.java, account).build()
+        intercept(request) { sent ->
+            response(sent, "bili_jct=; Max-Age=0; Domain=.bilibili.com; Path=/")
+        }.close()
+        assertEquals("csrf-31", AccountCookieStore.read(null, account)["bili_jct"])
+        assertEquals("csrf-31", AccountCookieStore.cachedCookie(account.sessData, "bili_jct"))
+    }
+
+    @Test
     fun `grpc credential snapshot rejects mismatched expected sender mid`() {
         assertFailsWith<IllegalStateException> {
             com.android.purebilibili.core.network.grpc.BiliGrpcClient.snapshotAccountCredentials(

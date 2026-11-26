@@ -15,13 +15,24 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.PersonOff
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
@@ -32,12 +43,27 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.android.purebilibili.core.ui.AppHapticScene
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppCard
 import com.android.purebilibili.core.ui.components.AppCardDefaults
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
+import com.android.purebilibili.core.ui.components.AppDropdownMenu
+import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
+import com.android.purebilibili.core.ui.components.AppFilterChip
+import com.android.purebilibili.core.ui.components.AppGlassMenuAnchor
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.appHorizontalScroll
+import com.android.purebilibili.core.ui.rememberAppHapticFeedback
+import com.android.purebilibili.core.util.FormatUtils
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import java.util.Calendar
 import androidx.compose.runtime.*
 import com.android.purebilibili.core.ui.blur.ChromeBackdropSource
 import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
@@ -198,6 +224,18 @@ internal fun shouldRequestHomeCategoryLoadMore(
         hasMore
 }
 
+internal fun shouldShowHomeGuestLoginBanner(
+    category: HomeCategory,
+    isUserLoggedIn: Boolean,
+    hasStoredSession: Boolean,
+    isSessionRestored: Boolean,
+    dismissed: Boolean,
+): Boolean = category == HomeCategory.RECOMMEND &&
+    isSessionRestored &&
+    !isUserLoggedIn &&
+    !hasStoredSession &&
+    !dismissed
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun HomeCategoryPageContent(
@@ -281,6 +319,7 @@ internal fun HomeCategoryPageContent(
     todayWatchCollapsed: Boolean = false,
     todayWatchCardConfig: TodayWatchCardUiConfig = TodayWatchCardUiConfig(),
     onTodayWatchModeChange: (TodayWatchMode) -> Unit = {},
+    onTodayWatchStrategyChange: (com.android.purebilibili.plugin.sdk.RecommendationStrategy) -> Unit = {},
     onTodayWatchCollapsedChange: (Boolean) -> Unit = {},
     onTodayWatchRefresh: () -> Unit = {},
     onTodayWatchUpClick: (Long) -> Unit = {},
@@ -300,6 +339,12 @@ internal fun HomeCategoryPageContent(
             )
         )
     },
+    onTodayWatchVideoDismiss: (VideoItem) -> Unit = {},
+    onTodayWatchCreatorDismiss: (VideoItem) -> Unit = {},
+    onTodayWatchUndoCreator: (Long) -> Unit = {},
+    onTodayWatchUndoVideo: (String) -> Unit = {},
+    onTodayWatchUndoKeyword: (String) -> Unit = {},
+    onTodayWatchClearFeedback: () -> Unit = {},
     firstGridItemModifier: Modifier = Modifier,
     showGuestLoginBanner: Boolean = false,
     onGuestLoginClick: () -> Unit = {},
@@ -953,10 +998,20 @@ internal fun HomeCategoryPageContent(
                                 showUpBadges = showUpBadges,
                                 showUpAvatars = showUpAvatars,
                                 onModeChange = onTodayWatchModeChange,
+                                onStrategyChange = onTodayWatchStrategyChange,
                                 onCollapsedChange = onTodayWatchCollapsedChange,
                                 onRefresh = onTodayWatchRefresh,
                                 onUpClick = onTodayWatchUpClick,
-                                onVideoClick = onTodayWatchVideoClick
+                                onVideoClick = onTodayWatchVideoClick,
+                                onVideoDismiss = onTodayWatchVideoDismiss,
+                                onCreatorDismiss = onTodayWatchCreatorDismiss,
+                                onWatchLater = { video ->
+                                    onWatchLater(video.bvid, resolveWatchLaterAid(video))
+                                },
+                                onUndoCreator = onTodayWatchUndoCreator,
+                                onUndoVideo = onTodayWatchUndoVideo,
+                                onUndoKeyword = onTodayWatchUndoKeyword,
+                                onClearAllNegativeFeedback = onTodayWatchClearFeedback,
                             )
                         }
                     }
@@ -1241,300 +1296,714 @@ private fun TodayWatchPlanCard(
     showUpBadges: Boolean,
     showUpAvatars: Boolean,
     onModeChange: (TodayWatchMode) -> Unit,
+    onStrategyChange: (com.android.purebilibili.plugin.sdk.RecommendationStrategy) -> Unit = {},
     onCollapsedChange: (Boolean) -> Unit,
     onRefresh: () -> Unit,
     onUpClick: (Long) -> Unit,
-    onVideoClick: (VideoItem) -> Unit
+    onVideoClick: (VideoItem) -> Unit,
+    onVideoDismiss: (VideoItem) -> Unit = {},
+    onCreatorDismiss: (VideoItem) -> Unit = {},
+    onWatchLater: (VideoItem) -> Unit = {},
+    onUndoCreator: (Long) -> Unit = {},
+    onUndoVideo: (String) -> Unit = {},
+    onUndoKeyword: (String) -> Unit = {},
+    onClearAllNegativeFeedback: () -> Unit = {},
 ) {
     val todayWatchBackdropSource = com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
     val todayWatchBackdrop = todayWatchBackdropSource.backdrop
-    var revealContent by remember(plan?.generatedAt, isLoading, cardConfig.enableWaterfallAnimation) {
-        mutableStateOf(!cardConfig.enableWaterfallAnimation)
+    val haptics = rememberAppHapticFeedback(AppHapticScene.CONTROLS)
+    val reduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
+    var showTasteSheet by remember { mutableStateOf(false) }
+    var durationFilter by remember(selectedMode, plan?.generatedAt) {
+        mutableStateOf(TodayWatchDurationFilter.ALL)
     }
-    LaunchedEffect(plan?.generatedAt, isLoading, cardConfig.enableWaterfallAnimation) {
-        if (!cardConfig.enableWaterfallAnimation) {
-            revealContent = true
-            return@LaunchedEffect
+
+    val previewLimit = cardConfig.queuePreviewLimit.coerceAtLeast(1)
+    val rawQueue = plan?.videoQueue.orEmpty()
+    val countsByFilter = remember(rawQueue) {
+        TodayWatchDurationFilter.entries.associateWith { filter ->
+            filterTodayWatchQueueByDuration(rawQueue, filter).size
         }
-        if (isLoading) {
-            revealContent = false
-            return@LaunchedEffect
-        }
-        revealContent = false
-        yield()
-        revealContent = true
     }
+    val filteredQueue = remember(rawQueue, durationFilter) {
+        filterTodayWatchQueueByDuration(rawQueue, durationFilter)
+    }
+    val visibleQueue = remember(filteredQueue, previewLimit) {
+        filteredQueue.take(previewLimit)
+    }
+    val totalMinutes = remember(visibleQueue) {
+        estimateTodayWatchQueueMinutes(visibleQueue)
+    }
+    val currentHour = remember(plan?.generatedAt) {
+        Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+    }
+    val contextHeadline = remember(selectedMode, plan?.nightSignalUsed, currentHour) {
+        resolveTodayWatchContextHeadline(
+            mode = selectedMode,
+            nightSignalUsed = plan?.nightSignalUsed == true,
+            hourOfDay = currentHour,
+        )
+    }
+    val cardContainerColor = AppSurfaceTokens.surfaceContainer()
 
     AppCard(
         colors = AppCardDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            containerColor = cardContainerColor,
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.ExtraSmall)
+            .padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.ExtraSmall),
     ) {
-        Box(modifier = Modifier.padding(AppSpacingTokens.Medium)) {
+        Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
                     .then(todayWatchBackdropSource.modifier)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                    .background(cardContainerColor),
             )
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small + AppSpacingTokens.Micro)
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) cardBody@ {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                AppText(
-                    text = "今日推荐单",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = AppContentColors.accent(),
-                    modifier = Modifier.weight(1f)
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)) {
-                    AppTextButton(
-                        enabled = !isLoading,
-                        onClick = onRefresh
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        AppIcon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = null,
-                            modifier = Modifier.size(AppSpacingTokens.Large)
-                        )
-                        Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
-                        AppText("刷新")
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            AppText(
+                                text = "今日推荐单",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = AppContentColors.primaryText(),
+                                maxLines = 1,
+                            )
+                            if (isLoading) {
+                                AdaptiveLoadingIndicator(
+                                    size = 14.dp,
+                                    strokeWidth = 1.8.dp,
+                                )
+                            } else if (visibleQueue.isNotEmpty() && !collapsed) {
+                                AppSurface(
+                                    shape = AppShapes.container(ContainerLevel.Pill),
+                                    color = AppContentColors.accent().copy(alpha = 0.14f),
+                                ) {
+                                    AppText(
+                                        text = if (totalMinutes > 0) {
+                                            "${visibleQueue.size} 支 · ${totalMinutes} 分"
+                                        } else {
+                                            "${visibleQueue.size} 支"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = AppContentColors.accent(),
+                                        maxLines = 1,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (!collapsed) {
+                                AppIconButton(
+                                    onClick = { showTasteSheet = true },
+                                    modifier = Modifier.size(32.dp),
+                                ) {
+                                    AppIcon(
+                                        imageVector = Icons.Outlined.Tune,
+                                        contentDescription = "兴趣画像与负反馈管理",
+                                        tint = AppContentColors.secondaryText(),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
+                            if (!collapsed && visibleQueue.isNotEmpty()) {
+                                AppIconButton(
+                                    enabled = !isLoading,
+                                    onClick = {
+                                        val picked = visibleQueue.randomOrNull() ?: return@AppIconButton
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onVideoClick(picked)
+                                    },
+                                    modifier = Modifier.size(32.dp),
+                                ) {
+                                    AppIcon(
+                                        imageVector = Icons.Outlined.AutoAwesome,
+                                        contentDescription = "帮我随机挑一支",
+                                        tint = AppContentColors.accent(),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
+                            AppIconButton(
+                                enabled = !isLoading,
+                                onClick = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onRefresh()
+                                },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                AppIcon(
+                                    imageVector = Icons.Rounded.Refresh,
+                                    contentDescription = "换一批",
+                                    tint = AppContentColors.secondaryText(),
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                            AppIconButton(
+                                onClick = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onCollapsedChange(!collapsed)
+                                },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                AppIcon(
+                                    imageVector = if (collapsed) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
+                                    contentDescription = if (collapsed) "展开今日推荐单" else "收起今日推荐单",
+                                    tint = AppContentColors.secondaryText(),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
                     }
-                    AppTextButton(
-                        onClick = { onCollapsedChange(!collapsed) }
-                    ) {
-                        AppIcon(
-                            imageVector = if (collapsed) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
-                            contentDescription = null,
-                            modifier = Modifier.size(AppSpacingTokens.Large)
+
+                    if (!collapsed && cardConfig.showReasonHint) {
+                        AppText(
+                            text = contextHeadline,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppContentColors.secondaryText(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
-                        AppText(if (collapsed) "展开" else "收起")
                     }
                 }
-            }
 
-            if (collapsed) {
-                AppText(
-                    text = "已收起推荐单。展开后恢复自动更新；也可以直接点“刷新”换一批。",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = AppContentColors.secondaryText()
+                if (collapsed) {
+                    val count = plan?.videoQueue?.size ?: 0
+                    AppText(
+                        text = if (count > 0) "已收起 · 备选 $count 支精选，展开即可选看" else "已收起推荐单 · 点右侧展开",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppContentColors.secondaryText(),
+                        modifier = Modifier.clickable { onCollapsedChange(false) },
+                    )
+                    if (!error.isNullOrBlank()) {
+                        AppText(
+                            text = error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppContentColors.error(),
+                        )
+                    }
+                    return@cardBody
+                }
+
+                TodayWatchModeSegmentedControl(
+                    selectedMode = selectedMode,
+                    enabled = !isLoading,
+                    onModeChange = { nextMode ->
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onModeChange(nextMode)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    miuixBackdrop = todayWatchBackdrop,
                 )
+
+                if (isLoading && plan == null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AdaptiveLoadingIndicator(
+                            size = AppSpacingTokens.Medium + AppSpacingTokens.Micro,
+                            strokeWidth = AppSpacingTokens.Micro * 0.9f,
+                        )
+                        AppText("正在结合你的完播偏好定制今日片单…", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
                 if (!error.isNullOrBlank()) {
                     AppText(
                         text = error,
                         style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.error()
+                        color = AppContentColors.error(),
                     )
                 }
-                return@cardBody
-            }
 
-            TodayWatchModeSegmentedControl(
-                selectedMode = selectedMode,
-                enabled = !isLoading,
-                onModeChange = onModeChange,
-                modifier = Modifier.fillMaxWidth(),
-                miuixBackdrop = todayWatchBackdrop,
-            )
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small + AppSpacingTokens.Micro)
-            ) {
-            AppText(
-                text = "点开后会自动从推荐单移除；想换一批可点右上角“刷新”。",
-                style = MaterialTheme.typography.labelSmall,
-                color = AppContentColors.secondaryText()
-            )
+                val activePlan = plan ?: return@cardBody
 
-            if (isLoading) {
+                // 紧凑时长预算筛选胶囊条（带每档数量提示，减少纵向留白）
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .appHorizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    AdaptiveLoadingIndicator(
-                        size = AppSpacingTokens.Medium + AppSpacingTokens.Micro,
-                        strokeWidth = AppSpacingTokens.Micro * 0.9f
-                    )
-                    AppText("正在根据你的历史观看习惯生成推荐…", style = MaterialTheme.typography.bodySmall)
-                }
-            }
-
-            if (!error.isNullOrBlank()) {
-                AppText(
-                    text = error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppContentColors.error()
-                )
-            }
-
-            val activePlan = plan ?: return@cardBody
-            var revealIndex = 0
-
-            if (cardConfig.showReasonHint) {
-                val hintOrder = revealIndex++
-                WaterfallReveal(
-                    enabled = cardConfig.enableWaterfallAnimation,
-                    visible = revealContent,
-                    index = hintOrder,
-                    exponent = cardConfig.waterfallExponent
-                ) {
-                    AppText(
-                        text = if (activePlan.nightSignalUsed) {
-                            "已结合护眼状态：夜间优先短时长、低刺激内容"
+                    TodayWatchDurationFilter.entries.forEach { filter ->
+                        val selected = durationFilter == filter
+                        val bucketCount = countsByFilter[filter] ?: 0
+                        val hasItems = filter == TodayWatchDurationFilter.ALL || bucketCount > 0
+                        val chipShape = AppShapes.container(ContainerLevel.Pill)
+                        val labelText = if (filter == TodayWatchDurationFilter.ALL || bucketCount <= 0) {
+                            filter.label
                         } else {
-                            "当前按你的观看习惯与模式偏好生成"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.secondaryText()
-                    )
-                }
-            }
-
-            if (cardConfig.showUpRank && activePlan.upRanks.isNotEmpty()) {
-                val titleOrder = revealIndex++
-                WaterfallReveal(
-                    enabled = cardConfig.enableWaterfallAnimation,
-                    visible = revealContent,
-                    index = titleOrder,
-                    exponent = cardConfig.waterfallExponent
-                ) {
-                    AppText("UP主榜", style = MaterialTheme.typography.labelLarge)
-                }
-                val ranksOrder = revealIndex++
-                WaterfallReveal(
-                    enabled = cardConfig.enableWaterfallAnimation,
-                    visible = revealContent,
-                    index = ranksOrder,
-                    exponent = cardConfig.waterfallExponent
-                ) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
-                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
-                    ) {
-                        activePlan.upRanks.forEachIndexed { index, up ->
-                            val clickable = shouldEnableTodayWatchUpRankClick(up)
-                            AppText(
-                                text = "${index + 1}. ${up.name}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (clickable) {
-                                    AppContentColors.accent()
-                                } else {
-                                    AppContentColors.primaryText()
+                            "${filter.label} $bucketCount"
+                        }
+                        AppSurface(
+                            shape = chipShape,
+                            color = if (selected) {
+                                AppContentColors.accent()
+                            } else {
+                                AppSurfaceTokens.surfaceContainerHigh().copy(alpha = if (hasItems) 1f else 0.55f)
+                            },
+                            modifier = Modifier
+                                .clip(chipShape)
+                                .clickable(enabled = hasItems || selected) {
+                                    if (durationFilter != filter) {
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        durationFilter = filter
+                                    }
                                 },
-                                modifier = Modifier
-                                    .clickable(enabled = clickable) { onUpClick(up.mid) }
-                                    .padding(horizontal = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro, vertical = AppSpacingTokens.Micro)
+                        ) {
+                            AppText(
+                                text = labelText,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                                color = when {
+                                    selected -> AppContentColors.onAccent()
+                                    hasItems -> AppContentColors.primaryText().copy(alpha = 0.88f)
+                                    else -> AppContentColors.secondaryText().copy(alpha = 0.52f)
+                                },
+                                maxLines = 1,
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
                             )
                         }
                     }
                 }
-            }
 
-            if (activePlan.videoQueue.isNotEmpty()) {
-                val queueTitleOrder = revealIndex++
-                WaterfallReveal(
-                    enabled = cardConfig.enableWaterfallAnimation,
-                    visible = revealContent,
-                    index = queueTitleOrder,
-                    exponent = cardConfig.waterfallExponent
-                ) {
-                    AppText("视频队列", style = MaterialTheme.typography.labelLarge)
+                // 常看 UP 胶囊
+                if (cardConfig.showUpRank && activePlan.upRanks.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .appHorizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppText(
+                            text = "常看",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppContentColors.secondaryText(),
+                        )
+                        activePlan.upRanks.forEachIndexed { index, up ->
+                            val clickable = shouldEnableTodayWatchUpRankClick(up)
+                            val pillShape = AppShapes.container(ContainerLevel.Pill)
+                            AppSurface(
+                                shape = pillShape,
+                                color = AppSurfaceTokens.surfaceContainerHigh(),
+                                modifier = Modifier
+                                    .clip(pillShape)
+                                    .clickable(enabled = clickable) { onUpClick(up.mid) },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                ) {
+                                    AppText(
+                                        text = "${index + 1}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (index == 0) AppContentColors.accent() else AppContentColors.secondaryText(),
+                                    )
+                                    AppText(
+                                        text = up.name,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (clickable) AppContentColors.primaryText() else AppContentColors.secondaryText(),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-                activePlan.videoQueue
-                    .take(cardConfig.queuePreviewLimit.coerceAtLeast(1))
-                    .forEachIndexed { index, video ->
-                        val rowOrder = revealIndex++
-                        WaterfallReveal(
-                            enabled = cardConfig.enableWaterfallAnimation,
-                            visible = revealContent,
-                            index = rowOrder,
-                            exponent = cardConfig.waterfallExponent
+
+                AnimatedContent(
+                    targetState = Triple(selectedMode, durationFilter, activePlan.generatedAt),
+                    transitionSpec = {
+                        if (reduceMotion) {
+                            fadeIn(continuityTween(0)) togetherWith fadeOut(continuityTween(0))
+                        } else {
+                            fadeIn(continuityTween(180)) togetherWith fadeOut(continuityTween(120))
+                        }
+                    },
+                    label = "todayWatchQueueTransition",
+                ) { _ ->
+                    if (visibleQueue.isEmpty()) {
+                        AppSurface(
+                            shape = AppShapes.container(ContainerLevel.Card),
+                            color = AppSurfaceTokens.surfaceContainerHigh(),
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onVideoClick(video) }
-                                    .padding(vertical = AppSpacingTokens.ExtraSmall),
-                                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small + AppSpacingTokens.Micro),
-                                verticalAlignment = Alignment.CenterVertically
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 AppText(
-                                    text = "${index + 1}.",
+                                    text = if (durationFilter != TodayWatchDurationFilter.ALL) {
+                                        "当前时长档位暂无片源"
+                                    } else {
+                                        "当前片单已看完，点刷新换一批"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = AppContentColors.accent()
+                                    color = AppContentColors.secondaryText(),
                                 )
-                                if (showUpAvatars && video.owner.face.isNotBlank()) {
-                                    PageAwareAsyncImage(
-                                        model = video.owner.face,
-                                        contentDescription = video.owner.name,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .size(AppSpacingTokens.ExtraLarge)
-                                            .clip(CircleShape)
-                                    )
-                                } else if (showUpAvatars) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(AppSpacingTokens.ExtraLarge)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surfaceTint.copy(alpha = 0.15f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        AppText(
-                                            text = video.owner.name.take(1).ifBlank { "UP" },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = AppContentColors.accent()
-                                        )
+                                if (durationFilter != TodayWatchDurationFilter.ALL) {
+                                    AppTextButton(onClick = { durationFilter = TodayWatchDurationFilter.ALL }) {
+                                        AppText("看全部")
                                     }
                                 }
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)
+                            }
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            visibleQueue.forEachIndexed { index, video ->
+                                TodayWatchQueueVideoRow(
+                                    index = index,
+                                    video = video,
+                                    explanation = activePlan.explanationByBvid[video.bvid].orEmpty(),
+                                    showUpBadges = showUpBadges,
+                                    showUpAvatars = showUpAvatars,
+                                    onClick = { onVideoClick(video) },
+                                    onUpClick = onUpClick,
+                                    onWatchLater = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onWatchLater(video)
+                                    },
+                                    onDismiss = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onVideoDismiss(video)
+                                    },
+                                    onDismissCreator = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onCreatorDismiss(video)
+                                    },
+                                )
+                            }
+                            if (visibleQueue.size >= 2) {
+                                val accent = AppContentColors.accent()
+                                val playAllShape = AppShapes.container(ContainerLevel.Pill)
+                                AppSurface(
+                                    shape = playAllShape,
+                                    color = accent.copy(alpha = 0.12f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(0.5.dp, accent.copy(alpha = 0.28f), playAllShape)
+                                        .clip(playAllShape)
+                                        .clickable(enabled = !isLoading) {
+                                            val items = buildTodayWatchPlaylistItems(visibleQueue)
+                                            val first = visibleQueue.firstOrNull() ?: return@clickable
+                                            if (items.isNotEmpty()) {
+                                                com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
+                                                    items = items,
+                                                    startIndex = 0,
+                                                    source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.UNKNOWN,
+                                                )
+                                                com.android.purebilibili.feature.video.player.PlaylistManager.setPlayMode(
+                                                    com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL
+                                                )
+                                            }
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            onVideoClick(first)
+                                        },
                                 ) {
-                                    AppText(
-                                        text = video.title,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = AppContentColors.primaryText()
-                                    )
-                                    UpBadgeName(
-                                        name = video.owner.name,
-                                        nameStyle = MaterialTheme.typography.labelSmall,
-                                        nameColor = AppContentColors.secondaryText(),
-                                        badgeTextColor = AppContentColors.secondaryText().copy(alpha = 0.85f),
-                                        badgeBorderColor = AppContentColors.secondaryText().copy(alpha = 0.35f),
-                                        showUpBadge = showUpBadges,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    val explanation = activePlan.explanationByBvid[video.bvid].orEmpty()
-                                    if (explanation.isNotBlank()) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center,
+                                    ) {
+                                        AppIcon(
+                                            imageVector = Icons.AutoMirrored.Outlined.PlaylistPlay,
+                                            contentDescription = null,
+                                            tint = accent,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         AppText(
-                                            text = explanation,
-                                            style = MaterialTheme.typography.labelSmall,
+                                            text = if (totalMinutes > 0) {
+                                                "按片单连播（${visibleQueue.size} 支 · 约 ${totalMinutes} 分）"
+                                            } else {
+                                                "按片单连播（${visibleQueue.size} 支）"
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = accent,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
-                                            color = AppContentColors.accent().copy(alpha = 0.85f)
                                         )
                                     }
                                 }
                             }
                         }
                     }
-            }
-            }
+                }
             }
         }
+    }
+
+    if (showTasteSheet) {
+        TodayWatchTasteSheet(
+            mode = selectedMode,
+            currentStrategy = cardConfig.strategy,
+            onStrategyChange = onStrategyChange,
+            onUpClick = onUpClick,
+            onUndoCreator = onUndoCreator,
+            onUndoVideo = onUndoVideo,
+            onUndoKeyword = onUndoKeyword,
+            onClearAllNegativeFeedback = onClearAllNegativeFeedback,
+            onDismiss = { showTasteSheet = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TodayWatchQueueVideoRow(
+    index: Int,
+    video: VideoItem,
+    explanation: String,
+    showUpBadges: Boolean,
+    showUpAvatars: Boolean,
+    onClick: () -> Unit,
+    onUpClick: (Long) -> Unit,
+    onWatchLater: () -> Unit,
+    onDismiss: () -> Unit,
+    onDismissCreator: () -> Unit,
+) {
+    val haptics = rememberAppHapticFeedback(AppHapticScene.CONTROLS)
+    var menuExpanded by remember(video.bvid) { mutableStateOf(false) }
+    val coverUrl = remember(video.pic) { FormatUtils.fixImageUrl(video.pic) }
+    val durationLabel = remember(video.duration) {
+        if (video.duration > 0) FormatUtils.formatDuration(video.duration) else ""
+    }
+    val viewLabel = remember(video.stat.view) {
+        if (video.stat.view > 0) "${FormatUtils.formatStat(video.stat.view.toLong())}播放" else ""
+    }
+
+    val reasonTags = remember(explanation) {
+        explanation.split(" · ").map { it.trim() }.filter { it.isNotBlank() }.take(2)
+    }
+    val rowShape = AppShapes.container(ContainerLevel.Card)
+    val accent = AppContentColors.accent()
+
+    AppSurface(
+        shape = rowShape,
+        color = AppSurfaceTokens.surfaceContainerHigh(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.24f),
+                shape = rowShape,
+            )
+            .clip(rowShape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    menuExpanded = true
+                },
+            ),
+    ) {
+        com.android.purebilibili.feature.home.components.cards.HorizontalVideoCardFrame(
+            plainHorizontal = true,
+            fillInfoHeight = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            coverContent = {
+                if (coverUrl.isNotBlank()) {
+                    PageAwareAsyncImage(
+                        model = coverUrl,
+                        contentDescription = video.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            },
+            coverOverlayContent = {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(5.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (index == 0) accent else Color.Black.copy(alpha = 0.62f))
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                ) {
+                    AppText(
+                        text = "${index + 1}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (index == 0) AppContentColors.onAccent() else Color.White,
+                    )
+                }
+                if (durationLabel.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(5.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.68f))
+                            .padding(horizontal = 5.dp, vertical = 1.dp),
+                    ) {
+                        AppText(
+                            text = durationLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                        )
+                    }
+                }
+            },
+            infoContent = {
+                AppText(
+                    text = video.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    minLines = 2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = AppContentColors.primaryText(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            supportingContent = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        if (showUpAvatars && video.owner.face.isNotBlank()) {
+                            PageAwareAsyncImage(
+                                model = FormatUtils.fixImageUrl(video.owner.face),
+                                contentDescription = video.owner.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clip(CircleShape),
+                            )
+                        }
+                        UpBadgeName(
+                            name = if (viewLabel.isNotEmpty()) "${video.owner.name} · $viewLabel" else video.owner.name,
+                            nameStyle = MaterialTheme.typography.labelSmall,
+                            nameColor = AppContentColors.secondaryText(),
+                            badgeTextColor = AppContentColors.secondaryText().copy(alpha = 0.85f),
+                            badgeBorderColor = AppContentColors.secondaryText().copy(alpha = 0.35f),
+                            showUpBadge = showUpBadges,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
+                    if (reasonTags.isNotEmpty()) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            reasonTags.forEach { tag ->
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(accent.copy(alpha = 0.12f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                ) {
+                                    AppText(
+                                        text = tag,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = accent,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            trailingContent = {
+                AppGlassMenuAnchor(onOpen = { menuExpanded = true }) {
+                    AppIconButton(
+                        onClick = { menuExpanded = true },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Rounded.MoreVert,
+                            contentDescription = "更多操作",
+                            tint = AppContentColors.secondaryText().copy(alpha = 0.8f),
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                    AppDropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        AppDropdownMenuItem(
+                            text = { AppText("加入稍后再看") },
+                            leadingIcon = { AppIcon(Icons.Outlined.WatchLater, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onWatchLater()
+                            },
+                        )
+                        if (video.owner.mid > 0L) {
+                            AppDropdownMenuItem(
+                                text = { AppText("查看 UP 主空间") },
+                                leadingIcon = { AppIcon(Icons.Outlined.PersonOutline, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onUpClick(video.owner.mid)
+                                },
+                            )
+                        }
+                        AppDropdownMenuItem(
+                            text = { AppText("不感兴趣（换一条）") },
+                            leadingIcon = { AppIcon(Icons.Rounded.Close, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onDismiss()
+                            },
+                        )
+                        if (video.owner.mid > 0L) {
+                            AppDropdownMenuItem(
+                                text = { AppText("减少该 UP 推荐") },
+                                leadingIcon = { AppIcon(Icons.Outlined.PersonOff, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    onDismissCreator()
+                                },
+                            )
+                        }
+                    }
+                }
+            },
+        )
     }
 }
 

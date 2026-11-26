@@ -400,7 +400,9 @@ interface BilibiliApi {
         @retrofit2.http.Field("title") title: String,
         @retrofit2.http.Field("intro") intro: String = "",
         @retrofit2.http.Field("privacy") privacy: Int = 0, // 0:公开, 1:私密
-        @retrofit2.http.Field("csrf") csrf: String
+        @retrofit2.http.Field("cover") cover: String = "",
+        @retrofit2.http.Field("csrf") csrf: String,
+        @retrofit2.http.Tag accountSession: AccountCookieSession? = null,
     ): SimpleApiResponse
 
     @retrofit2.http.FormUrlEncoded

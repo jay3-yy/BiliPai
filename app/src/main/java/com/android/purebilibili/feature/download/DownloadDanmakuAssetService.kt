@@ -43,9 +43,10 @@ internal object DownloadDanmakuAssetService {
     suspend fun download(
         task: DownloadTask,
         taskDir: File,
+        forceDownload: Boolean = false,
         updateState: (DownloadAssetState) -> Unit
     ): DownloadDanmakuAssetResult = withContext(Dispatchers.IO) {
-        if (!task.options.includeDanmaku) {
+        if (!forceDownload && !task.options.includeDanmaku) {
             updateState(
                 DownloadAssetState(
                     kind = DownloadAssetKind.DANMAKU,

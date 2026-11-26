@@ -122,6 +122,92 @@ private fun resolveDownloadTaskComparator(
     }
 }
 
+internal sealed interface DownloadListEntry {
+    val key: String
+    val tasks: List<DownloadTask>
+
+    data class Single(val task: DownloadTask) : DownloadListEntry {
+        override val key: String get() = task.id
+        override val tasks: List<DownloadTask> get() = listOf(task)
+    }
+
+    data class MultiPartGroup(
+        val bvid: String,
+        val groupTitle: String,
+        override val tasks: List<DownloadTask>,
+    ) : DownloadListEntry {
+        override val key: String get() = "group_$bvid"
+        val primaryTask: DownloadTask get() = tasks.first()
+    }
+}
+
+internal fun resolveMultiPartGroupTitle(tasks: List<DownloadTask>): String {
+    val explicit = tasks.firstNotNullOfOrNull { it.groupTitle?.trim()?.takeIf(String::isNotEmpty) }
+    if (explicit != null) return explicit
+    val first = tasks.firstOrNull() ?: return ""
+    val rawTitle = first.title.trim()
+    val label = first.episodeLabel?.trim().orEmpty()
+    if (label.isNotEmpty()) {
+        for (separator in listOf(" - ", " · ")) {
+            val suffix = "$separator$label"
+            if (rawTitle.endsWith(suffix) && rawTitle.length > suffix.length) {
+                return rawTitle.removeSuffix(suffix).trim()
+            }
+        }
+    }
+    return rawTitle
+}
+
+/**
+ * 将同一 BV 号下的多个分P任务合并为单个分组条目；单分P视频保持独立卡片。
+ * 分组在列表中的位置保持其首个任务在当前排序下的位置，组内按分P序号升序排列。
+ */
+internal fun buildDownloadListEntries(
+    tasks: List<DownloadTask>,
+    groupMultiPart: Boolean,
+): List<DownloadListEntry> {
+    if (!groupMultiPart || tasks.size <= 1) {
+        return tasks.map(DownloadListEntry::Single)
+    }
+    val groupedByBvid = LinkedHashMap<String, MutableList<DownloadTask>>()
+    tasks.forEach { task ->
+        val normalizedBvid = task.bvid.trim()
+        if (normalizedBvid.isNotEmpty()) {
+            groupedByBvid.getOrPut(normalizedBvid) { mutableListOf() }.add(task)
+        }
+    }
+    val emittedBvids = HashSet<String>()
+    val entries = ArrayList<DownloadListEntry>(tasks.size)
+    tasks.forEach { task ->
+        val normalizedBvid = task.bvid.trim()
+        if (normalizedBvid.isEmpty()) {
+            entries.add(DownloadListEntry.Single(task))
+            return@forEach
+        }
+        val bucket = groupedByBvid[normalizedBvid].orEmpty()
+        if (bucket.size <= 1) {
+            entries.add(DownloadListEntry.Single(task))
+        } else if (emittedBvids.add(normalizedBvid)) {
+            val orderedParts = bucket.sortedWith(
+                compareBy<DownloadTask>(
+                    { resolveOfflineEpisodeSortIndex(it) },
+                    { it.createdAt },
+                    { it.cid },
+                    { it.id },
+                )
+            )
+            entries.add(
+                DownloadListEntry.MultiPartGroup(
+                    bvid = normalizedBvid,
+                    groupTitle = resolveMultiPartGroupTitle(orderedParts),
+                    tasks = orderedParts,
+                )
+            )
+        }
+    }
+    return entries
+}
+
 internal fun resolveDownloadSelectionAllToggle(
     visibleCompletedIds: Set<String>,
     currentSelected: Set<String>,

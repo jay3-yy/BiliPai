@@ -1022,17 +1022,28 @@ object ActionRepository {
         return withContext(Dispatchers.IO) {
             try {
                 if (title.isBlank()) return@withContext Result.failure(Exception("标题不能为空"))
+                TokenManager.awaitRestore()
                 if (session != interactionSession()) {
                     return@withContext Result.failure(IllegalStateException("交互账号已变更"))
                 }
                 val privacy = if (isPrivate) 1 else 0
-                val csrf = TokenManager.csrfCache ?: return@withContext Result.failure(Exception("未登录"))
-                
+                // 固定本次请求的 Cookie 会话，并直接从该会话的 Cookie 集合取 bili_jct，保证表单 csrf 与请求头 Cookie 一致。
+                val cookieSession = com.android.purebilibili.core.network.AccountCookieSession.main()
+                val cookies = com.android.purebilibili.core.network.AccountCookieStore.read(
+                    NetworkModule.appContext,
+                    cookieSession,
+                )
+                val csrf = cookies["bili_jct"]?.takeIf { it.isNotBlank() }
+                    ?: cookieSession.seed["bili_jct"]?.takeIf { it.isNotBlank() }
+                    ?: return@withContext Result.failure(Exception("未登录或登录态缺少 CSRF，请重新登录"))
+
                 val response = api.createFavFolder(
                     title = title,
                     intro = intro,
                     privacy = privacy,
-                    csrf = csrf
+                    cover = "",
+                    csrf = csrf,
+                    accountSession = cookieSession,
                 )
                 
                 if (response.code == 0) {

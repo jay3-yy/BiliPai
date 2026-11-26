@@ -35,6 +35,8 @@ data class AccountSessionIdentity(val mid: Long? = null, val generation: Long = 
 object TokenManager {
     private val _accountIdentity = MutableStateFlow(AccountSessionIdentity())
     val accountIdentity = _accountIdentity.asStateFlow()
+    private val _sessionRestored = MutableStateFlow(false)
+    val sessionRestored = _sessionRestored.asStateFlow()
 
     private fun publishAccountIdentity() {
         val mid = midCache?.takeIf { it > 0L }
@@ -190,6 +192,7 @@ object TokenManager {
                 com.android.purebilibili.core.network.CoreDataLog.e("TokenManager", "Unable to restore session backup", e)
             } finally {
                 restoreCompleted = true
+                _sessionRestored.value = true
                 restoreLatch.countDown()
             }
 
@@ -280,8 +283,16 @@ object TokenManager {
     
     //  [新增] 保存 CSRF Token
     suspend fun saveCsrf(context: Context, csrf: String) {
-        synchronized(this) { csrfCache = csrf }
-        val encryptedCsrf = SessionStorageCipher.encrypt(csrf)
+        val normalized = csrf.trim()
+        synchronized(this) { csrfCache = normalized.ifBlank { null } }
+        if (normalized.isNotBlank() && !sessDataCache.isNullOrBlank()) {
+            com.android.purebilibili.core.network.AccountCookieStore.update(
+                context,
+                com.android.purebilibili.core.network.AccountCookieSession.main(),
+                mapOf("bili_jct" to normalized),
+            )
+        }
+        val encryptedCsrf = SessionStorageCipher.encrypt(normalized)
         encryptedCsrf?.let { encrypted ->
             context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
                 .edit().putString(SP_KEY_CSRF, encrypted).apply()

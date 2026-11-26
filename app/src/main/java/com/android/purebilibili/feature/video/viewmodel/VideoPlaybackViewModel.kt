@@ -672,6 +672,8 @@ sealed class VideoPlaybackUiState {
         val aiSummary: AiSummaryData? = null,
         val aiSummaryPrompt: AiSummaryPromptState? = null,
         val videoNoteState: VideoNoteUiState = VideoNoteUiState(),
+        val bgmInfo: BgmInfo? = null,
+        val bgmInfoList: List<BgmInfo> = emptyList(),
         // [New] AI Audio Translation
         val aiAudio: AiAudioInfo? = null,
         val currentAudioLang: String? = null,
@@ -1799,6 +1801,40 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     // [新增] 播放完成选择对话框状态
     private val _showPlaybackEndedDialog = MutableStateFlow(false)
     val showPlaybackEndedDialog = _showPlaybackEndedDialog.asStateFlow()
+    private val _completionKeepsakePrompt = MutableStateFlow<com.android.purebilibili.feature.personal.CompletionKeepsakePrompt?>(null)
+    val completionKeepsakePrompt = _completionKeepsakePrompt.asStateFlow()
+
+    fun dismissCompletionKeepsake() {
+        val prompt = _completionKeepsakePrompt.value ?: return
+        _completionKeepsakePrompt.value = null
+        val context = appContext ?: return
+        viewModelScope.launch {
+            com.android.purebilibili.feature.personal.CompletionKeepsakeStore.markDismissed(context, prompt.id)
+        }
+    }
+
+    fun saveCompletionKeepsake(reflection: String) {
+        val prompt = _completionKeepsakePrompt.value ?: return
+        _completionKeepsakePrompt.value = null
+        val context = appContext ?: return
+        viewModelScope.launch {
+            com.android.purebilibili.feature.personal.CompletionKeepsakeStore.saveRecord(
+                context = context,
+                record = com.android.purebilibili.feature.personal.CompletionKeepsakeRecord(
+                    id = prompt.id,
+                    kind = prompt.kind,
+                    title = prompt.title,
+                    episodeCount = prompt.episodeCount,
+                    coverUrl = prompt.coverUrl,
+                    reflection = reflection,
+                    completedAtMs = System.currentTimeMillis(),
+                    bvid = prompt.bvid,
+                    seasonId = prompt.seasonId,
+                ),
+            )
+            toast("已收进完结纪念")
+        }
+    }
     
     fun dismissPlaybackEndedDialog() {
         _showPlaybackEndedDialog.value = false
@@ -2593,6 +2629,34 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 if (outcome.shouldHidePlaybackEndedDialog) {
                     // 自动播放关闭或后续无法连播：保持结束态，不弹窗打断
                     _showPlaybackEndedDialog.value = false
+                }
+                if (!hasNextPage && !hasNextSeasonEpisode) {
+                    val success = _uiState.value as? VideoPlaybackUiState.Success
+                    val info = success?.info
+                    if (info != null) {
+                        val season = info.ugc_season
+                        val seasonEpisodeBvids = season?.sections
+                            ?.flatMap { it.episodes }
+                            .orEmpty()
+                            .map { it.bvid }
+                        val keepsakePrompt = com.android.purebilibili.feature.personal.resolveVideoSeriesCompletionKeepsake(
+                            bvid = info.bvid,
+                            title = info.title,
+                            coverUrl = info.pic,
+                            cid = info.cid,
+                            pageCids = info.pages.map { it.cid },
+                            seasonId = season?.id,
+                            seasonTitle = season?.title,
+                            seasonEpisodeBvids = seasonEpisodeBvids,
+                        )
+                        if (keepsakePrompt != null) {
+                            viewModelScope.launch {
+                                if (com.android.purebilibili.feature.personal.CompletionKeepsakeStore.shouldPrompt(context, keepsakePrompt.id)) {
+                                    _completionKeepsakePrompt.value = keepsakePrompt
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -6651,6 +6715,28 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         }
                     }
 
+                    // 2. 处理 BGM 信息（player/wbi/v2 单曲 + 多曲 BGM 列表）
+                    data.bgmInfo?.let { loadedBgmInfo ->
+                        _uiState.update { current ->
+                            if (current is VideoPlaybackUiState.Success && current.info.bvid == bvid) {
+                                current.copy(bgmInfo = loadedBgmInfo)
+                            } else current
+                        }
+                        Logger.d("PlayerVM", "🎵 Loaded BGM: ${loadedBgmInfo.musicTitle}")
+                    }
+                    val bgmAid = (_uiState.value as? VideoPlaybackUiState.Success)?.info?.aid ?: 0L
+                    if (bgmAid > 0L) {
+                        ViewGrpcRepository.getBgmList(bgmAid, bvid, cid).onSuccess { bgmList ->
+                            if (bgmList.isNotEmpty()) {
+                                _uiState.update { current ->
+                                    if (current is VideoPlaybackUiState.Success && current.info.bvid == bvid) {
+                                        current.copy(bgmInfoList = bgmList)
+                                    } else current
+                                }
+                            }
+                        }
+                    }
+
                     // 3. 字幕信息（优先中文主字幕 + 英文副字幕）
                     if (isSubtitleFeatureEnabledForUser()) {
                         loadSubtitleTracksFromPlayerInfo(
@@ -7739,6 +7825,39 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         hasExistingPrivateNote = success.videoNoteState.privateNoteDocument != null
                     ),
                     errorMessage = null
+                )
+            )
+        }
+    }
+
+    /** 将台词明信片的时间点、引用台词与心情短注追加进当前视频私有笔记草稿并打开编辑。 */
+    fun openVideoNoteWithPostcard(quote: String, moodNote: String, positionMs: Long) {
+        val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
+        if (current.videoNoteState.forbidNoteEntrance) return
+        val noteState = current.videoNoteState
+        val baseDoc = resolveVideoNoteEditableDocument(
+            noteState = noteState,
+            defaultTitle = current.info.title
+        )
+        val pageIndex = current.info.pages.indexOfFirst { it.cid == current.info.cid }.coerceAtLeast(0)
+        val appendedBlocks = com.android.purebilibili.feature.video.postcard.buildPostcardNoteBlocks(
+            quote = quote,
+            moodNote = moodNote,
+            positionMs = positionMs,
+            cid = current.info.cid,
+            pageIndex = pageIndex,
+            cidCount = current.info.pages.size.coerceAtLeast(1),
+        )
+        val mergedDoc = baseDoc.copy(blocks = baseDoc.blocks + appendedBlocks)
+        _uiState.update { state ->
+            val success = state as? VideoPlaybackUiState.Success ?: return@update state
+            success.copy(
+                videoNoteState = success.videoNoteState.copy(
+                    editorVisible = true,
+                    editorDocument = mergedDoc,
+                    editorFromAiSummary = false,
+                    feedbackMessage = "已将台词明信片摘录加入笔记草稿",
+                    errorMessage = null,
                 )
             )
         }

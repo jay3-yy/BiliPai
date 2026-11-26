@@ -325,6 +325,7 @@ internal fun HomeScreen(
     val subscriptionListState = rememberHomeStaggeredGridState()
     // [Feature] Video Preview State (Global Scope)
     val downloadAccount by com.android.purebilibili.core.store.TokenManager.accountIdentity.collectAsStateWithLifecycle()
+    val tokenSessionRestored by com.android.purebilibili.core.store.TokenManager.sessionRestored.collectAsStateWithLifecycle()
     val downloadSelection = remember(currentCategory, popularSubCategory, downloadAccount) { HomeDownloadSelection() }
     val targetVideoItemState = remember { mutableStateOf<VideoItem?>(null) }
     var dissolvingNotInterestedVideo by remember { mutableStateOf<VideoItem?>(null) }
@@ -2360,8 +2361,31 @@ internal fun HomeScreen(
                                   }
                                  val onLiveClickCallback = feedNavigation.onLiveClick
                                  val onTodayWatchModeChange = remember(viewModel) { { mode: TodayWatchMode -> viewModel.switchTodayWatchMode(mode) } }
+                                 val onTodayWatchStrategyChange = remember(viewModel) {
+                                     { strategy: com.android.purebilibili.plugin.sdk.RecommendationStrategy ->
+                                         viewModel.switchTodayWatchStrategy(strategy)
+                                     }
+                                 }
                                  val onTodayWatchCollapsedChange = remember(viewModel) { { collapsed: Boolean -> viewModel.setTodayWatchCollapsed(collapsed) } }
                                  val onTodayWatchRefresh = remember(viewModel) { { viewModel.refreshTodayWatchOnly() } }
+                                 val onTodayWatchVideoDismiss: (VideoItem) -> Unit = remember(viewModel) {
+                                     { video -> viewModel.dismissTodayWatchVideo(video, blockCreator = false) }
+                                 }
+                                 val onTodayWatchCreatorDismiss: (VideoItem) -> Unit = remember(viewModel) {
+                                     { video -> viewModel.dismissTodayWatchVideo(video, blockCreator = true) }
+                                 }
+                                 val onTodayWatchUndoCreator: (Long) -> Unit = remember(viewModel) {
+                                     { mid -> viewModel.undoTodayWatchDislikedCreator(mid) }
+                                 }
+                                 val onTodayWatchUndoVideo: (String) -> Unit = remember(viewModel) {
+                                     { bvid -> viewModel.undoTodayWatchDislikedVideo(bvid) }
+                                 }
+                                 val onTodayWatchUndoKeyword: (String) -> Unit = remember(viewModel) {
+                                     { keyword -> viewModel.undoTodayWatchDislikedKeyword(keyword) }
+                                 }
+                                 val onTodayWatchClearFeedback: () -> Unit = remember(viewModel) {
+                                     { viewModel.clearTodayWatchNegativeFeedback() }
+                                 }
                                  val onTodayWatchUpClick = feedNavigation.onUpClick
                                  val onHomeFeedUpClick = feedNavigation.onUpClick
                                  val onPopularSubCategoryChange = remember(viewModel) {
@@ -2392,9 +2416,14 @@ internal fun HomeScreen(
                                  HomeTodayWatchContentHost(viewModel, category, pageWork.collectUpdates) { todayWatch ->
                                      HomeCategoryPageContent(
                                          category = category,
-                                         showGuestLoginBanner = category == HomeCategory.RECOMMEND &&
-                                             !user.isLogin &&
-                                             !guestLoginBannerDismissed,
+                                         showGuestLoginBanner = shouldShowHomeGuestLoginBanner(
+                                             category = category,
+                                             isUserLoggedIn = user.isLogin,
+                                             hasStoredSession = downloadAccount.mid != null ||
+                                                 !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrBlank(),
+                                             isSessionRestored = tokenSessionRestored,
+                                             dismissed = guestLoginBannerDismissed,
+                                         ),
                                          onGuestLoginClick = {
                                              onHeaderNavigate(
                                                  com.android.purebilibili.navigation3.BiliPaiNavKey.Login,
@@ -2505,6 +2534,7 @@ internal fun HomeScreen(
                                          todayWatchCollapsed = todayWatch.collapsed,
                                          todayWatchCardConfig = todayWatch.cardConfig,
                                          onTodayWatchModeChange = onTodayWatchModeChange,
+                                         onTodayWatchStrategyChange = onTodayWatchStrategyChange,
                                          onTodayWatchCollapsedChange = onTodayWatchCollapsedChange,
                                          onTodayWatchRefresh = onTodayWatchRefresh,
                                          onTodayWatchUpClick = onTodayWatchUpClick,
@@ -2512,6 +2542,12 @@ internal fun HomeScreen(
                                          onPopularSubCategoryChange = onPopularSubCategoryChange,
                                          onWeeklySeriesClick = onWeeklySeriesClick,
                                          onTodayWatchVideoClick = onTodayWatchVideoClick,
+                                         onTodayWatchVideoDismiss = onTodayWatchVideoDismiss,
+                                         onTodayWatchCreatorDismiss = onTodayWatchCreatorDismiss,
+                                         onTodayWatchUndoCreator = onTodayWatchUndoCreator,
+                                         onTodayWatchUndoVideo = onTodayWatchUndoVideo,
+                                         onTodayWatchUndoKeyword = onTodayWatchUndoKeyword,
+                                         onTodayWatchClearFeedback = onTodayWatchClearFeedback,
                                          firstGridItemModifier = Modifier,
                                          // 首屏骨架作为内容网格的首批 item 铺进去：同一个 LazyLayout、
                                          // 同一种 contentType，数据到达时原地替换 + animateItem 交叉淡入。
