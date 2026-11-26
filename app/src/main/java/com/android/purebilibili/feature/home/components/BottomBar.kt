@@ -238,7 +238,7 @@ enum class BottomNavItem(
         ScreenRoutes.Dynamic.route
     ),
     STORY(
-        "短视频",
+        "刷视频",
         R.string.bottom_nav_story,
         R.string.bottom_nav_story,
         emptyList(),

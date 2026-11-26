@@ -116,11 +116,15 @@ class DampedDragAnimation(
 
     val modifier: Modifier = Modifier.pointerInput(Unit) {
         var gestureAccepted = false
+        var dragStarted = false
+        var downPosition = Offset.Zero
         inspectDragGestures(
             onDragStart = { down ->
                 // Decide ownership from the initial down and keep it for the whole gesture.
                 // A predictive-back swipe may enter the dock after starting in the system edge
                 // band; it must never be adopted halfway through by the liquid indicator.
+                downPosition = down.position
+                dragStarted = false
                 gestureAccepted = canDrag(down.position)
                 if (gestureAccepted) {
                     beginDrag(down.position)
@@ -135,6 +139,7 @@ class DampedDragAnimation(
                     release()
                 }
                 gestureAccepted = false
+                dragStarted = false
             },
             onDragCancel = {
                 if (gestureAccepted && isDragging) {
@@ -143,9 +148,22 @@ class DampedDragAnimation(
                     release()
                 }
                 gestureAccepted = false
+                dragStarted = false
             }
         ) { change, dragAmount ->
             if (!gestureAccepted || !isDragging) return@inspectDragGestures
+            // Require movement past system touchSlop before consuming pointer deltas so slight
+            // finger jitter during a tap (especially on tablets) does not cancel sibling clickable.
+            if (!dragStarted) {
+                val totalDelta = change.position - downPosition
+                if (totalDelta.getDistance() <= viewConfiguration.touchSlop) {
+                    return@inspectDragGestures
+                }
+                dragStarted = true
+                change.consume()
+                onDrag(size, totalDelta)
+                return@inspectDragGestures
+            }
             // Once the indicator owns this pointer, keep following it even if the moving
             // hit box translates out from under the finger. Dropping deltas here is what
             // made a second drag lose real-time tracking after search resized the dock.

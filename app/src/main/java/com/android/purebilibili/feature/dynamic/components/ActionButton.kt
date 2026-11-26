@@ -27,7 +27,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.IosShare
-import androidx.compose.material.icons.outlined.Sms
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -35,10 +34,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.rememberAppLikeFilledIcon
 import com.android.purebilibili.core.ui.rememberAppLikeIcon
 import com.android.purebilibili.core.theme.AppUiStyle
@@ -88,13 +90,13 @@ fun ActionButton(
     val interactionSource = remember { MutableInteractionSource() }
 
     //  优雅的图标 - 根据状态切换填充/描边
+    val commentBubbleIcon = ImageVector.vectorResource(R.drawable.ic_dynamic_comment_bubble_24)
     val buttonIcon = when {
         isLike && isActive -> rememberAppLikeFilledIcon()
         isLike -> rememberAppLikeIcon()
-        // 动态底栏采用 PiliPlus 的“方框箭头 / 方框气泡”线性图标，而不是节点式 Share。
         isForward -> Icons.Outlined.IosShare
-        isComment -> Icons.Outlined.Sms
-        else -> Icons.Outlined.Sms
+        isComment -> commentBubbleIcon
+        else -> commentBubbleIcon
     }
     val countFadeAnimationSpec = AppMotionTokens.standardSpec<Float>()
     val countSlideAnimationSpec = AppMotionTokens.standardSpec<IntOffset>()

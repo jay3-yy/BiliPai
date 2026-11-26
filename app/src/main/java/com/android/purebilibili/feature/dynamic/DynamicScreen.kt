@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.dynamic
 
 import com.android.purebilibili.feature.dynamic.components.DynamicUserMenuAnchor
 
+import com.android.purebilibili.navigation.isTabSelectionInProgress
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
@@ -461,7 +462,10 @@ fun DynamicScreen(
 
     LaunchedEffect(activeSelectedTab, pagerState.pageCount) {
         val targetIndex = visibleTabs.indexOfFirst { it.logicalIndex == activeSelectedTab }
-        if (targetIndex in visibleTabs.indices && targetIndex != pagerState.settledPage) {
+        if (targetIndex in visibleTabs.indices &&
+            !pagerState.isTabSelectionInProgress &&
+            targetIndex != pagerState.settledPage
+        ) {
             animatePagerSelection(
                 pagerState = pagerState,
                 targetPage = targetIndex,
@@ -520,6 +524,8 @@ fun DynamicScreen(
                 DynamicTabReselectAction.SWITCH_TAB -> {
                     // Reuse the shared pager-follow deformation: tap switching now drives the
                     // same indicator stretch, scale and settle motion as other tab docks.
+                    resolveDynamicSettledLogicalTab(visibleIndex, visibleTabs)
+                        ?.let(viewModel::setSelectedTab)
                     animatePagerSelection(pagerState, visibleIndex)
                 }
             }

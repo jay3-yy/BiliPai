@@ -332,6 +332,7 @@ internal fun BangumiHubContent(
                                 if (category == activeCategory && !pager.isScrollInProgress) {
                                     indexGridStates[category.name]?.animateScrollToTop()
                                 } else {
+                                    latestCategorySelected(category)
                                     animatePagerSelection(pager, categories.indexOf(category))
                                 }
                             }

@@ -18,9 +18,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.TransformOrigin
@@ -37,6 +41,7 @@ import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.util.WindowWidthSizeClass
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -157,20 +162,24 @@ internal fun Modifier.homeFeedPinchZoom(
     val onColumnsChangeState = rememberUpdatedState(onColumnsChange)
     val onGestureEndState = rememberUpdatedState(onGestureEnd)
 
-    val liveScale = remember { Animatable(1.0f) }
-    // 双指中心的偏移：缩放围绕手指捏合中心而非固定屏幕中心，
-    // 视口收缩方向与手指一致，符合"内容跟着手指走"的直觉。
-    val centroidX = remember { Animatable(0.5f) }
-    val centroidY = remember { Animatable(0.5f) }
+    // 仅在 graphicsLayer 阶段读取，拖拽期间直接赋值避免每帧新建协程；
+    // 换档补偿与松手回弹各自持有 Job，二次捏合时立即打断避免动画竞争。
+    var liveScale by remember { mutableFloatStateOf(1.0f) }
+    var stepKickScale by remember { mutableFloatStateOf(1.0f) }
+    var centroidX by remember { mutableFloatStateOf(0.5f) }
+    var centroidY by remember { mutableFloatStateOf(0.5f) }
+    var settleJob by remember { mutableStateOf<Job?>(null) }
+    var stepKickJob by remember { mutableStateOf<Job?>(null) }
     val coroutineScope = rememberCoroutineScope()
 
     return this
         .graphicsLayer {
-            scaleX = liveScale.value
-            scaleY = liveScale.value
+            val effectiveScale = (liveScale * stepKickScale).coerceIn(0.75f, 1.35f)
+            scaleX = effectiveScale
+            scaleY = effectiveScale
             transformOrigin = TransformOrigin(
-                pivotFractionX = centroidX.value,
-                pivotFractionY = centroidY.value,
+                pivotFractionX = centroidX,
+                pivotFractionY = centroidY,
             )
         }
         .pointerInput(enabled) {
@@ -192,30 +201,32 @@ internal fun Modifier.homeFeedPinchZoom(
                         if (!isPinchActive && abs(cumulativeZoom - 1.0f) > PINCH_ACTIVATION_THRESHOLD) {
                             isPinchActive = true
                             committedColumns = currentColumnsState.value
+                            settleJob?.cancel()
+                            settleJob = null
+                            val initialCentroid = event.calculateCentroid(useCurrent = true)
+                            if (initialCentroid.isSpecified && size.width > 0 && size.height > 0) {
+                                centroidX = (initialCentroid.x / size.width).coerceIn(0f, 1f)
+                                centroidY = (initialCentroid.y / size.height).coerceIn(0f, 1f)
+                            }
                         }
 
                         if (isPinchActive) {
                             // 消费所有多指事件，阻止子级 LazyGrid 或外层 Pager 接收到滑动/点击
                             event.changes.forEach { it.consume() }
 
-                            // AwaitPointerEventScope 是受限挂起作用域，Animatable 调用须经协程：
-                            // 单事件单 launch，动画写与输入帧逐帧对齐。
                             val visualScale = calculatePinchVisualScale(
                                 cumulativeZoom = cumulativeZoom,
                                 currentColumns = committedColumns,
                                 bounds = boundsState.value,
                             )
-                            coroutineScope.launch {
-                                liveScale.snapTo(visualScale)
-                                val centroid = event.calculateCentroid(useCurrent = true)
-                                if (centroid.isSpecified && size.width > 0 && size.height > 0) {
-                                    centroidX.snapTo(
-                                        (centroid.x / size.width).coerceIn(0f, 1f)
-                                    )
-                                    centroidY.snapTo(
-                                        (centroid.y / size.height).coerceIn(0f, 1f)
-                                    )
-                                }
+                            liveScale = visualScale
+                            val centroid = event.calculateCentroid(useCurrent = true)
+                            if (centroid.isSpecified && size.width > 0 && size.height > 0) {
+                                val targetX = (centroid.x / size.width).coerceIn(0f, 1f)
+                                val targetY = (centroid.y / size.height).coerceIn(0f, 1f)
+                                // 低通平滑双指中心，避免手指微漂导致网格画面晃动
+                                centroidX += (targetX - centroidX) * 0.25f
+                                centroidY += (targetY - centroidY) * 0.25f
                             }
 
                             val (nextColumns, resetZoom) = calculatePinchStepColumns(
@@ -226,10 +237,25 @@ internal fun Modifier.homeFeedPinchZoom(
                             cumulativeZoom = resetZoom
 
                             if (nextColumns != committedColumns) {
+                                val expandedCards = nextColumns < committedColumns
                                 committedColumns = nextColumns
                                 onColumnsChangeState.value(nextColumns)
-                                // 换档后 cumulativeZoom 已重置为 1.0，下一帧 snapTo 会
-                                // 以 1.0 为基准继续；此处无需 animateTo（会被逐帧 snapTo 覆盖）。
+                                // 换档后以轻微反向缩放补偿卡片尺寸突变，再通过弹簧平滑归 1.0
+                                liveScale = 1.0f
+                                stepKickJob?.cancel()
+                                stepKickJob = coroutineScope.launch {
+                                    val kickStart = if (expandedCards) 0.92f else 1.08f
+                                    stepKickScale = kickStart
+                                    Animatable(kickStart).animateTo(
+                                        targetValue = 1.0f,
+                                        animationSpec = spring(
+                                            dampingRatio = 0.78f,
+                                            stiffness = Spring.StiffnessMedium,
+                                        ),
+                                    ) {
+                                        stepKickScale = value
+                                    }
+                                }
                             }
                         }
                     } else if (isPinchActive) {
@@ -241,12 +267,17 @@ internal fun Modifier.homeFeedPinchZoom(
 
                 if (isPinchActive) {
                     onGestureEndState.value(committedColumns)
-                    // 手指完全离屏：弹簧回弹归位至 1.0f，同时中心回到屏幕中心，
-                    // 两个动画并行，避免回正时视觉锚点突跳。
-                    coroutineScope.launch {
-                        launch { liveScale.animateTo(1.0f, PINCH_SETTLE_SPRING) }
-                        launch { centroidX.animateTo(0.5f, PINCH_SETTLE_SPRING) }
-                        launch { centroidY.animateTo(0.5f, PINCH_SETTLE_SPRING) }
+                    // 手指完全离屏：单次进度弹簧并行归位缩放与锚点，避免视觉突跳
+                    settleJob?.cancel()
+                    val startScale = liveScale
+                    val startCx = centroidX
+                    val startCy = centroidY
+                    settleJob = coroutineScope.launch {
+                        Animatable(0f).animateTo(1f, PINCH_SETTLE_SPRING) {
+                            liveScale = startScale + (1.0f - startScale) * value
+                            centroidX = startCx + (0.5f - startCx) * value
+                            centroidY = startCy + (0.5f - startCy) * value
+                        }
                     }
                 }
             }

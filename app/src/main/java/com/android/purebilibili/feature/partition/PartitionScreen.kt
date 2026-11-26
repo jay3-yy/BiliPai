@@ -752,7 +752,7 @@ private fun PartitionSideRail(
     }
     val selectedIndex = partitions.indexOfFirst { it.id == selectedId }.coerceAtLeast(0)
     val density = LocalDensity.current
-    // 玻璃侧栏使用纵向槽位；随文字缩放保留胶囊比例，原生 MD3/Miuix 沿用 48dp。
+    // 玻璃侧栏使用纵向胶囊槽位，随文字缩放保持纵向比例；原生 MD3/Miuix 沿用 48dp。
     val railItemHeight = if (liquidGlassIndicatorEnabled) {
         64.dp * density.fontScale.coerceIn(1f, 1.35f)
     } else PartitionSideRailItemHeight
@@ -994,18 +994,15 @@ private fun PartitionSideRail(
                 shellHeightDp = railDockWidth.value,
             ).dp
         } else (railDockWidth - nativeIndicatorPadding.start - nativeIndicatorPadding.end).coerceAtLeast(0.dp)
-        val indicatorHeight = if (liquidGlassIndicatorEnabled) railItemHeight
-            else PartitionSideRailIndicatorHeight
+        val indicatorHeight = if (liquidGlassIndicatorEnabled) {
+            railItemHeight
+        } else PartitionSideRailIndicatorHeight
         val indicatorHorizontalPadding = if (liquidGlassIndicatorEnabled) {
             val inset = ((railDockWidth - indicatorWidth) / 2).coerceAtLeast(0.dp)
             PartitionSideRailIndicatorHorizontalPadding(inset, inset)
         } else nativeIndicatorPadding
         val railIndicatorShape = if (liquidGlassIndicatorEnabled) {
-            RoundedCornerShape(resolveFloatingDockIndicatorCornerRadiusDp(
-                shellThicknessDp = railDockWidth.value,
-                indicatorThicknessDp = indicatorWidth.value,
-                indicatorSlotExtentDp = indicatorHeight.value,
-            ).dp)
+            RoundedCornerShape(percent = 50)
         } else resolveSharedBottomBarCapsuleShape()
         val railGeometry = if (liquidGlassIndicatorEnabled) {
             resolveFloatingDockIndicatorGeometry(
@@ -1113,14 +1110,12 @@ private fun PartitionSideRail(
                             liquidGlassTuning = liquidGlassTuning,
                         ),
                 )
-                // 与横向标签栏相同：隐藏采样带按静止指示器厚度录制玻璃、文字与高光。
-                // 纵向取窄于外壳的实际内容宽度，放大透镜跨过材质边界后形成左右缝隙和色散。
+                // 与顶部标签栏保持一致：隐藏采样带按完整侧栏宽度录制玻璃、文字与高光，
+                // 避免指示器横向缩放时在左右边沿采到壳外暗缝；条目内边距与可见列表 1:1 对齐。
                 // 此层不显示到屏幕，也不回采可见外壳或移动指示器。
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        // Match the visible LazyColumn's horizontal content bounds exactly.
-                        .padding(start = indicatorHorizontalPadding.start, end = indicatorHorizontalPadding.end)
                         .wrapContentHeight(align = Alignment.Top, unbounded = true)
                         .clearAndSetSemantics {}
                         .graphicsLayer {
@@ -1139,7 +1134,10 @@ private fun PartitionSideRail(
                 ) {
                     partitions.forEach { partition ->
                         Box(
-                            Modifier.fillMaxWidth().height(railItemHeight),
+                            Modifier
+                                .fillMaxWidth()
+                                .height(railItemHeight)
+                                .padding(horizontal = railHorizontalInset),
                             contentAlignment = Alignment.Center,
                         ) {
                             PartitionSideRailItem(
@@ -1152,8 +1150,7 @@ private fun PartitionSideRail(
                                 onClick = {},
                                 interactive = false,
                                 contentColorOverride = AppContentColors.selectionAccent(liquidGlassIndicatorEnabled),
-                                itemHeight = indicatorHeight,
-                                modifier = Modifier.width(indicatorWidth),
+                                itemHeight = railItemHeight,
                             )
                         }
                     }
@@ -1458,12 +1455,24 @@ private fun PartitionSideRailItem(
                 Spacer(modifier = Modifier.height(1.dp))
             }
             if (showText) {
+                val fontScale = LocalDensity.current.fontScale.coerceAtLeast(0.01f)
                 AppText(
                     text = partition.name,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
-                    style = if (showIcon) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                    style = com.android.purebilibili.core.ui.appTextStyleWithLineHeightStyle(
+                        com.android.purebilibili.feature.home.components.DockLabelLineHeightStyle
+                    ),
+                    fontSize = com.android.purebilibili.feature.home.components.resolveFloatingDockLabelFontSize(
+                        showIcon = showIcon,
+                        showText = true,
+                        fontScale = fontScale,
+                    ),
+                    lineHeight = com.android.purebilibili.feature.home.components.resolveFloatingDockLabelLineHeight(
+                        showIcon = showIcon,
+                        fontScale = fontScale,
+                    ),
                     fontWeight = if (selected || clampedSelectionProgress > 0.5f) {
                         FontWeight.SemiBold
                     } else {

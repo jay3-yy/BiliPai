@@ -16,13 +16,14 @@ internal suspend fun loadHomeFeedVideos(
     pageToFetch: Int,
     recommendRequestIndex: Int,
     columns: Int,
+    refreshCount: Int = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT,
     isLoadMore: Boolean,
     isManualRefresh: Boolean,
 ): Result<HomeFeedVideoResponse> {
     if (category == HomeCategory.RECOMMEND) {
         return VideoRepository.getHomeFeed(
             idx = recommendRequestIndex,
-            refreshCount = resolveHomeFeedPageSize(columns),
+            refreshCount = com.android.purebilibili.core.store.normalizeHomeRefreshCount(refreshCount),
             columns = columns,
             flush = resolveHomeFeedFlush(isLoadMore, isManualRefresh),
             hdFeedIndex = pageToFetch - 1,

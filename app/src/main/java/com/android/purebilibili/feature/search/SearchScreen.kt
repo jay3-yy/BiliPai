@@ -1,6 +1,7 @@
 // 文件路径: feature/search/SearchScreen.kt
 package com.android.purebilibili.feature.search
 
+import com.android.purebilibili.navigation.isTabSelectionInProgress
 import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
@@ -1229,6 +1230,7 @@ fun SearchScreen(
         // Hard-settle only when the pager is fully idle. Mid-flight corrections would snap the
         // tab indicator while animatePagerSelection is still gliding.
         if (
+            !searchPagerState.isTabSelectionInProgress &&
             !searchPagerState.isScrollInProgress &&
             kotlin.math.abs(searchPagerState.currentPageOffsetFraction) <= 0.001f &&
             searchPagerState.currentPage != targetPage
@@ -1568,6 +1570,7 @@ fun SearchScreen(
                                                             animateSearchHeaderOffsetTo(0f)
                                                         } else {
                                                             scope.launch { animatePagerSelection(searchPagerState, page) }
+                                                            viewModel.setSearchType(type)
                                                         }
                                                     }
                                                 )

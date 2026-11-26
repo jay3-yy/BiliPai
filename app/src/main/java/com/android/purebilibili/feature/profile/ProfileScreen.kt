@@ -1733,6 +1733,7 @@ private fun ProfileSpaceContent(
                 )
             }
         } else {
+            Box(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1865,35 +1866,6 @@ private fun ProfileSpaceContent(
                         }
                     }
                 }
-
-            }
-            ProfilePinnedSpaceTopBarBackground(
-                progressiveTopChrome = progressiveTopChrome,
-                statusBarTopPadding = statusBarTopPadding,
-                modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
-            )
-            ProfilePinnedSpaceTopBar(
-                listState = mobileListState,
-                heroTextColor = heroChrome.textColor,
-                contentColor = contentChrome.onSurfaceColor,
-                statusBarTopPadding = statusBarTopPadding,
-                privacyModeEnabled = privacyModeEnabled,
-                onBack = if (photoVisible) collapsePhoto else onBack,
-                onSearchClick = onSearchClick,
-                onInboxClick = onInboxClick,
-                onPrivacyClick = onPrivacyClick,
-                onAccountManageClick = onAccountManageClick,
-                onThemeClick = onThemeClick,
-                onSettingsClick = onSettingsClick,
-                onWallpaperClick = { showWallpaperActionSheet = true },
-                onEditClick = { showEditDialog = true },
-                photoFractionProvider = photoFractionProvider,
-                // Only transparent actions sit above the avatar; the chrome background stays below it.
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .zIndex(1f),
-            )
             ProfileIdentityHeader(
                 user = user,
                 heroChrome = heroChrome,
@@ -1948,6 +1920,36 @@ private fun ProfileSpaceContent(
                         }
                     },
             )
+            }
+            ProfilePinnedSpaceTopBarBackground(
+                progressiveTopChrome = progressiveTopChrome,
+                statusBarTopPadding = statusBarTopPadding,
+                modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter),
+            )
+            ProfilePinnedSpaceTopBar(
+                listState = mobileListState,
+                heroTextColor = heroChrome.textColor,
+                contentColor = contentChrome.onSurfaceColor,
+                statusBarTopPadding = statusBarTopPadding,
+                privacyModeEnabled = privacyModeEnabled,
+                onBack = if (photoVisible) collapsePhoto else onBack,
+                onSearchClick = onSearchClick,
+                onInboxClick = onInboxClick,
+                onPrivacyClick = onPrivacyClick,
+                onAccountManageClick = onAccountManageClick,
+                onThemeClick = onThemeClick,
+                onSettingsClick = onSettingsClick,
+                onWallpaperClick = { showWallpaperActionSheet = true },
+                onEditClick = { showEditDialog = true },
+                topBarBackdrop = progressiveTopChrome.backdrop,
+                photoFractionProvider = photoFractionProvider,
+                // Only transparent actions sit above the avatar; the chrome background stays below it.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .zIndex(1f),
+            )
+            }
         }
     }
 }
@@ -1987,6 +1989,7 @@ private fun ProfilePinnedSpaceTopBar(
     onWallpaperClick: () -> Unit,
     onEditClick: () -> Unit,
     modifier: Modifier = Modifier,
+    topBarBackdrop: top.yukonga.miuix.kmp.blur.Backdrop? = null,
     photoFractionProvider: () -> Float = { 0f },
 ) {
     val openLedger = LocalProfileLedgerNavigation.current
@@ -2016,17 +2019,30 @@ private fun ProfilePinnedSpaceTopBar(
         if (showQrAuthorization) {
             OfficialQrAuthorizationDialog(onDismiss = { showQrAuthorization = false })
         }
+        val liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+        val resolvedTopBarBackdrop = topBarBackdrop
+            ?: com.android.purebilibili.core.ui.components.LocalAppTopBarIconBackdrop.current
+        val useTopBarBackdropDecoration = liquidGlassEnabled && resolvedTopBarBackdrop != null
         val haloAlpha = ((1f - topChromeScrim.value) * (1f - photoFractionProvider())).coerceIn(0f, 1f)
-        val iconHaloColor = if (heroTextColor == Color.White) {
+        val iconHaloColor = if (!useTopBarBackdropDecoration && heroTextColor == Color.White) {
             Color.Black.copy(alpha = 0.28f * haloAlpha)
         } else {
             Color.Transparent
         }
+        CompositionLocalProvider(
+            com.android.purebilibili.core.ui.components.LocalAppTopBarIconBackdrop provides resolvedTopBarBackdrop,
+            com.android.purebilibili.core.ui.components.LocalAppTopBarIconDecorationEnabled provides
+                useTopBarBackdropDecoration,
+        ) {
         AppIconButton(
             onClick = onBack,
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(iconHaloColor),
+            modifier = if (useTopBarBackdropDecoration) {
+                Modifier
+            } else {
+                Modifier
+                    .clip(CircleShape)
+                    .background(iconHaloColor)
+            },
         ) {
             ProfilePhotoToolbarIcon(
                 rememberAppBackIcon(),
@@ -2037,9 +2053,13 @@ private fun ProfilePinnedSpaceTopBar(
         }
         Spacer(modifier = Modifier.weight(1f))
         Box(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(iconHaloColor),
+            modifier = if (useTopBarBackdropDecoration) {
+                Modifier
+            } else {
+                Modifier
+                    .clip(CircleShape)
+                    .background(iconHaloColor)
+            },
         ) {
         AppWindowActionMenu(
             onActionSource = LocalProfileAccountPopupSource.current,
@@ -2070,6 +2090,7 @@ private fun ProfilePinnedSpaceTopBar(
             ),
         ) {
             ProfilePhotoToolbarIcon(Icons.Rounded.MoreVert, "更多", topBarIconColor, photoFractionProvider)
+        }
         }
         }
     }
@@ -4266,7 +4287,7 @@ private fun rememberProfileProgressiveTopChrome(): ProfileProgressiveTopChrome {
         enabled = themeConfig.progressiveTopBlurEnabled,
         hasBackdrop = true,
     ) && !isLowBlurBudgetForced()
-    val source = if (enabled) rememberChromeBackdropSource() else null
+    val source = if (enabled || themeConfig.liquidGlassEnabled) rememberChromeBackdropSource() else null
     return remember(source, enabled) { ProfileProgressiveTopChrome(source, enabled) }
 }
 
@@ -5941,17 +5962,18 @@ private fun ProfileFavoriteFolderShortcutChip(
             .padding(horizontal = if (compact) 10.dp else 11.dp, vertical = if (compact) 8.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val accentColor = AppContentColors.accent()
         Box(
             modifier = Modifier
                 .size(if (compact) 28.dp else 30.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)),
+                .background(accentColor.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) {
             AppIcon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.tertiary,
+                tint = accentColor,
                 modifier = Modifier.size(if (compact) 16.dp else 18.dp),
             )
         }

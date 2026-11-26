@@ -3,9 +3,11 @@ package com.android.purebilibili.feature.dynamic.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -141,6 +143,33 @@ fun ZoomableImage(
                 offsetX = offset.x
                 offsetY = offset.y
                 latestOnZoomChange(scale)
+            }
+        }
+    }
+
+    fun animateTransformSpring(targetScale: Float, targetOffset: Offset) {
+        stopMotion()
+        if (reduceMotion) {
+            scale = targetScale
+            offsetX = targetOffset.x
+            offsetY = targetOffset.y
+            latestOnZoomChange(scale)
+            return
+        }
+        val startScale = scale
+        val startOffset = Offset(offsetX, offsetY)
+        motionJob = motionScope.launch {
+            Animatable(0f).animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = 0.82f,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            ) {
+                scale = startScale + (targetScale - startScale) * value
+                offsetX = startOffset.x + (targetOffset.x - startOffset.x) * value
+                offsetY = startOffset.y + (targetOffset.y - startOffset.y) * value
+                latestOnZoomChange(scale.coerceAtLeast(1f))
             }
         }
     }
@@ -350,27 +379,55 @@ fun ZoomableImage(
                                                 containerWidth = containerSize.width,
                                                 containerHeight = containerSize.height
                                             ).maxScale
-                                            scale = (scale * zoomChange).coerceIn(1f, maxScale)
-
-                                            if (oldScale != scale) {
-                                                val zoomFactor = scale / oldScale
-                                                val dx = (1 - zoomFactor) * (centroid.x - containerSize.width / 2f - offsetX)
-                                                val dy = (1 - zoomFactor) * (centroid.y - containerSize.height / 2f - offsetY)
-                                                offsetX += dx
-                                                offsetY += dy
+                                            val rawScale = oldScale * zoomChange
+                                            scale = if (isMultiTouch) {
+                                                when {
+                                                    rawScale < 1f -> (
+                                                        if (oldScale < 1f) oldScale + (rawScale - oldScale) * 0.35f
+                                                        else 1f - (1f - rawScale) * 0.35f
+                                                    ).coerceIn(0.85f, 1f)
+                                                    rawScale > maxScale -> (
+                                                        if (oldScale > maxScale) oldScale + (rawScale - oldScale) * 0.35f
+                                                        else maxScale + (rawScale - maxScale) * 0.35f
+                                                    ).coerceAtMost(maxScale * 1.15f)
+                                                    else -> rawScale
+                                                }
+                                            } else {
+                                                rawScale.coerceIn(1f, maxScale)
                                             }
 
-                                            offsetX += panChange.x
-                                            offsetY += panChange.y
+                                            var deltaX = panChange.x
+                                            var deltaY = panChange.y
+                                            if (oldScale != scale) {
+                                                val zoomFactor = scale / oldScale
+                                                deltaX += (1 - zoomFactor) * (centroid.x - containerSize.width / 2f - offsetX)
+                                                deltaY += (1 - zoomFactor) * (centroid.y - containerSize.height / 2f - offsetY)
+                                            }
 
-                                            val offset = clampZoomableImageOffset(
-                                                Offset(offsetX, offsetY),
-                                                resolveZoomableImagePanBounds(imageSize, containerSize, scale),
+                                            val bounds = resolveZoomableImagePanBounds(
+                                                imageSize,
+                                                containerSize,
+                                                scale.coerceIn(1f, maxScale),
                                             )
-                                            offsetX = offset.x
-                                            offsetY = offset.y
+                                            if (isMultiTouch || scale > 1.01f) {
+                                                val maxOverPanPx = 72f * density
+                                                fun applyRubberBandPan(current: Float, delta: Float, limit: Float): Float {
+                                                    val pullingOutward = (current > limit && delta > 0f) || (current < -limit && delta < 0f)
+                                                    val next = current + if (pullingOutward) delta * 0.35f else delta
+                                                    return next.coerceIn(-limit - maxOverPanPx, limit + maxOverPanPx)
+                                                }
+                                                offsetX = applyRubberBandPan(offsetX, deltaX, bounds.x)
+                                                offsetY = applyRubberBandPan(offsetY, deltaY, bounds.y)
+                                            } else {
+                                                val clamped = clampZoomableImageOffset(
+                                                    Offset(offsetX + deltaX, offsetY + deltaY),
+                                                    bounds,
+                                                )
+                                                offsetX = clamped.x
+                                                offsetY = clamped.y
+                                            }
 
-                                            latestOnZoomChange(scale)
+                                            latestOnZoomChange(scale.coerceAtLeast(1f))
                                         }
 
                                         if (isMultiTouch || scale > 1.01f) {
@@ -397,11 +454,29 @@ fun ZoomableImage(
                             }
                         } while (!gestureCanceled && event.changes.any { it.pressed })
 
-                        if (!gestureCanceled && !isMultiTouch &&
+                        if (!gestureCanceled &&
                             gestureMode == ZoomableImageGestureMode.IMAGE_INTERACTION
                         ) {
-                            val velocity = panVelocityTracker.calculateVelocity()
-                            flingImage(Offset(velocity.x, velocity.y))
+                            val maxScale = resolveZoomableImageScaleLimits(
+                                imageWidth = imageSize.width,
+                                imageHeight = imageSize.height,
+                                containerWidth = containerSize.width,
+                                containerHeight = containerSize.height,
+                            ).maxScale
+                            val clampedScale = scale.coerceIn(1f, maxScale)
+                            val clampedOffset = clampZoomableImageOffset(
+                                Offset(offsetX, offsetY),
+                                resolveZoomableImagePanBounds(imageSize, containerSize, clampedScale),
+                            )
+                            val needsRebound = abs(scale - clampedScale) > 0.001f ||
+                                abs(offsetX - clampedOffset.x) > 0.5f ||
+                                abs(offsetY - clampedOffset.y) > 0.5f
+                            if (needsRebound) {
+                                animateTransformSpring(clampedScale, clampedOffset)
+                            } else if (!isMultiTouch) {
+                                val velocity = panVelocityTracker.calculateVelocity()
+                                flingImage(Offset(velocity.x, velocity.y))
+                            }
                         }
                         if (verticalDismissStarted) {
                             verticalDismissStarted = false

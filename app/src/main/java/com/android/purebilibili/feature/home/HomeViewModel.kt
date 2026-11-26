@@ -171,6 +171,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val followFeedSource = HomeFollowFeedSource()
     /** 当前网格列数，由 UI 同步过来，用来决定每次请求多少条。 */
     private var feedGridColumns: Int = 2
+    private var homeRefreshCount: Int = SettingsManager.getHomeRefreshCountSync(application)
     private var incrementalTimelineRefreshEnabled = false
 
     // 推荐保留与位置提示独立；动态流仍使用自己的增量刷新配置。
@@ -273,6 +274,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             SettingsManager.getIncrementalTimelineRefresh(getApplication()).collect { enabled ->
                 incrementalTimelineRefreshEnabled = enabled
+            }
+        }
+        viewModelScope.launch {
+            SettingsManager.getHomeRefreshCount(getApplication()).collect { count ->
+                homeRefreshCount = count
             }
         }
         viewModelScope.launch {
@@ -1703,6 +1709,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             pageToFetch = pageToFetch,
             recommendRequestIndex = recommendRequestIndex,
             columns = feedGridColumns,
+            refreshCount = homeRefreshCount,
             isLoadMore = isLoadMore,
             isManualRefresh = isManualRefresh,
         )
