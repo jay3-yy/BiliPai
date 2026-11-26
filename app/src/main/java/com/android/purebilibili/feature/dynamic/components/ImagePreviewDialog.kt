@@ -649,6 +649,16 @@ private fun ImagePreviewOverlayContent(
 
     // 图片身份变化后不沿用上一组图片的原图模式。
     var originalQualityPages by remember(images) { mutableStateOf(setOf<Int>()) }
+    var chromeOverlayVisible by remember(requestToken) { mutableStateOf(true) }
+    val chromeOverlayAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (chromeOverlayVisible) 1f else 0f,
+        animationSpec = if (reducePreviewMotion) {
+            androidx.compose.animation.core.snap()
+        } else {
+            androidx.compose.animation.core.tween(durationMillis = 180)
+        },
+        label = "imagePreviewChromeOverlayAlpha",
+    )
 
     LaunchedEffect(pagerState.currentPage) {
         activeZoomScale = 1f
@@ -1282,13 +1292,14 @@ private fun ImagePreviewOverlayContent(
                                     transformOrigin = TransformOrigin.Center
                                 }
                             }
-                            .pointerInput(Unit) {
-                                // 阻止点击穿透到关闭手势
+                            .pointerInput(images.size, useCommentPreviewChrome) {
+                                // 阻止点击穿透到关闭手势；多图时点按切换底部缩略图与顶栏显隐。
                                 detectTapGestures {
-                                     if (!useCommentPreviewChrome) {
-                                         // 点击图片也关闭
-                                         latestTriggerDismiss()
-                                     }
+                                    if (images.size > 1) {
+                                        chromeOverlayVisible = !chromeOverlayVisible
+                                    } else if (!useCommentPreviewChrome) {
+                                        latestTriggerDismiss()
+                                    }
                                 }
                             },
                         contentAlignment = Alignment.Center
@@ -1502,8 +1513,10 @@ private fun ImagePreviewOverlayContent(
                                 }
                             },
                             onClick = {
-                                if (!useCommentPreviewChrome) {
-                                    // 点击图片关闭预览
+                                if (images.size > 1) {
+                                    chromeOverlayVisible = !chromeOverlayVisible
+                                } else if (!useCommentPreviewChrome) {
+                                    // 单图点击关闭预览
                                     triggerDismiss()
                                 }
                             }
@@ -1544,6 +1557,8 @@ private fun ImagePreviewOverlayContent(
                                 onClick = {
                                     if (showLivePhotoMenu) {
                                         showLivePhotoMenu = false
+                                    } else if (images.size > 1) {
+                                        chromeOverlayVisible = !chromeOverlayVisible
                                     } else if (!useCommentPreviewChrome) {
                                         triggerDismiss()
                                     }
@@ -1571,7 +1586,8 @@ private fun ImagePreviewOverlayContent(
                 }
             }
 
-            // 3. UI 覆盖层 - 退出时先于图片清掉 chrome，只剩干净一镜 morph
+            // 3. UI 覆盖层 - 退出时先于图片清掉 chrome，只剩干净一镜 morph；多图点按可平滑隐藏。
+            if (chromeOverlayAlpha > 0.005f) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1579,7 +1595,7 @@ private fun ImagePreviewOverlayContent(
                         alpha = resolveImagePreviewChromeAlpha(
                             visualProgress = currentTransitionProgress(),
                             isDismissing = isDismissing
-                        )
+                        ) * chromeOverlayAlpha
                     }
             ) {
                 val safeDrawingPadding = WindowInsets.safeDrawing.asPaddingValues()
@@ -1712,9 +1728,9 @@ private fun ImagePreviewOverlayContent(
                     }
                 }
 
-                // PiliPlus 普通画廊：底部轻渐变 + 紧凑数字页码，单图也显示 1/1。
+                // 普通画廊底部：多图提供缩略图拖拽条 + 页码，单图保留紧凑数字页码 1/1。
                 if (!useCommentPreviewChrome) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
@@ -1723,18 +1739,32 @@ private fun ImagePreviewOverlayContent(
                                 androidx.compose.ui.graphics.Brush.verticalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        MediaContrastPalette.Scrim.copy(alpha = 0.3f)
+                                        MediaContrastPalette.Scrim.copy(alpha = 0.42f)
                                     )
                                 )
                             )
                             .padding(
-                                start = overlayPadding.start + AppSpacingTokens.Medium,
+                                start = overlayPadding.start + AppSpacingTokens.Small,
                                 top = AppSpacingTokens.Small,
-                                end = overlayPadding.end + AppSpacingTokens.Medium,
+                                end = overlayPadding.end + AppSpacingTokens.Small,
                                 bottom = overlayPadding.bottom + AppSpacingTokens.Small
                             ),
-                        contentAlignment = Alignment.Center
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
                     ) {
+                        if (images.size > 1) {
+                            ImagePreviewThumbnailScrubber(
+                                images = images,
+                                currentIndex = pagerState.currentPage,
+                                imageLoader = gifImageLoader,
+                                onSelectIndex = { targetIndex ->
+                                    if (targetIndex != pagerState.currentPage) {
+                                        scope.launch { pagerState.scrollToPage(targetIndex) }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                         AppText(
                             text = "${pagerState.currentPage + 1}/${images.size}",
                             color = Color.White,
@@ -1986,18 +2016,7 @@ private fun ImagePreviewOverlayContent(
                 }
 
                 if (useCommentPreviewChrome && commentContext != null) {
-                    ImagePreviewCommentPanel(
-                        context = commentContext,
-                        likeIcon = likeIcon,
-                        likeFilledIcon = likeFilledIcon,
-                        shareIcon = shareIcon,
-                        isSharing = isSharing,
-                        enabled = !isSharing && !isSaving,
-                        onShare = { requestShareCurrentImage(currentImageUrl) },
-                        onReply = {
-                            commentContext.onReplyClick?.invoke()
-                            triggerDismiss()
-                        },
+                    Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
@@ -2005,9 +2024,40 @@ private fun ImagePreviewOverlayContent(
                                 start = overlayPadding.start,
                                 end = overlayPadding.end,
                                 bottom = overlayPadding.bottom + AppSpacingTokens.Medium
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                    ) {
+                        if (images.size > 1) {
+                            ImagePreviewThumbnailScrubber(
+                                images = images,
+                                currentIndex = pagerState.currentPage,
+                                imageLoader = gifImageLoader,
+                                onSelectIndex = { targetIndex ->
+                                    if (targetIndex != pagerState.currentPage) {
+                                        scope.launch { pagerState.scrollToPage(targetIndex) }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
                             )
-                            .then(chromeModifier)
-                    )
+                        }
+                        ImagePreviewCommentPanel(
+                            context = commentContext,
+                            likeIcon = likeIcon,
+                            likeFilledIcon = likeFilledIcon,
+                            shareIcon = shareIcon,
+                            isSharing = isSharing,
+                            enabled = !isSharing && !isSaving,
+                            onShare = { requestShareCurrentImage(currentImageUrl) },
+                            onReply = {
+                                commentContext.onReplyClick?.invoke()
+                                triggerDismiss()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(chromeModifier)
+                        )
+                    }
                 }
 
                 // 若展开了实况菜单，点击背景空白区域收起菜单
@@ -2158,6 +2208,7 @@ private fun ImagePreviewOverlayContent(
                         )
                     }
                 }
+            }
             }
     }
 
