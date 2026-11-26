@@ -1,33 +1,71 @@
 package com.android.purebilibili.feature.settings.highlights
 
 import android.content.Context
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.WatchLater
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.store.AppThemeSettings
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.UpdateHighlightsStore
 import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppDialogAction
+import com.android.purebilibili.core.ui.AppModalBottomSheet
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import com.android.purebilibili.feature.settings.DarkThemeStyle
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
@@ -37,22 +75,33 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
 
+internal val LocalUpdateHighlightNavigator = staticCompositionLocalOf<(UpdateHighlightAction) -> Unit> { {} }
+
 @Suppress("DEPRECATION")
 private fun isExistingInstallation(context: Context): Boolean {
     val info = context.packageManager.getPackageInfo(context.packageName, 0)
     return info.lastUpdateTime > info.firstInstallTime
 }
 
-/** One invitation on an idle homepage; settings may reopen the same offline catalog.
- * Eligibility never changes settings. Presentation is remembered by stable feature IDs. */
+/**
+ * Post-update congratulations & release highlights bottom sheet.
+ *
+ * Automatically appears once on an idle homepage after a version upgrade, congratulating the user
+ * and previewing the latest release highlights with one-tap jump to each feature area.
+ * Settings -> 关于 -> 本次更新 may reopen the same latest-release sheet at any time.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun UpdateHighlightsHost(
     allowAutomatic: Boolean = false,
     manualOpen: Boolean = false,
     onManualDismiss: () -> Unit = {},
+    onNavigateToHighlight: ((UpdateHighlightAction) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val defaultNavigator = LocalUpdateHighlightNavigator.current
+    val navigateToHighlight = onNavigateToHighlight ?: defaultNavigator
     // Observe lifecycle transitions even below STARTED, so a background pause cancels the invite delay.
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsState()
     val canShowAutomatically = allowAutomatic && lifecycleState == Lifecycle.State.RESUMED
@@ -76,28 +125,34 @@ internal fun UpdateHighlightsHost(
                 UpdateHighlightsStore.prepare(context, BuildConfig.VERSION_CODE, existing)
                 initialized = true
             } catch (_: IOException) {
-                // Leave history untouched; the next entry can retry without repeated dialogs.
+                // Leave history untouched; the next entry can retry without repeated sheets.
             }
         }
     }
     val currentSettings = settings
     val pending = remember(history.pendingIds, currentSettings) {
-        if (currentSettings == null) emptyList() else updateHighlightCatalog.filter {
-            it.introducedVersionCode <= BuildConfig.VERSION_CODE &&
-                it.id in history.pendingIds && canPreviewUpdateHighlight(it, currentSettings) &&
-                !isUpdateHighlightAlreadyEnabled(it, currentSettings)
-        }.sortedByDescending { it.introducedVersionCode }.take(3)
+        if (currentSettings == null) {
+            emptyList()
+        } else {
+            resolveAutomaticReleaseHighlights(
+                versionCode = BuildConfig.VERSION_CODE,
+                pendingIds = history.pendingIds,
+                settings = currentSettings,
+            )
+        }
     }
     LaunchedEffect(initialized, canShowAutomatically, pending, manualOpen) {
-        if (!initialized || !canShowAutomatically || manualOpen || automaticIds.isNotEmpty() || pending.isEmpty()) return@LaunchedEffect
-        delay(1_500)
-        // Mark the whole pending batch once, so a skipped-version update never chains dialogs.
+        if (!initialized || !canShowAutomatically || manualOpen || automaticIds.isNotEmpty() || pending.isEmpty()) {
+            return@LaunchedEffect
+        }
+        delay(1_200)
+        // Mark the whole pending batch once, so a skipped-version update never chains sheets.
         val batchIds = history.pendingIds
         automaticIds = pending.joinToString(",") { it.id }
         try {
             UpdateHighlightsStore.markPresented(context, batchIds)
         } catch (_: IOException) {
-            // Keep the displayed invitation usable; persist again on the next entry.
+            // Keep the displayed sheet usable; persist again on the next entry.
         }
     }
     // Already enabled features need no invitation if the user later switches away again.
@@ -115,9 +170,11 @@ internal fun UpdateHighlightsHost(
             }
         }
     }
-    val features = if (manualOpen) latestReleaseHighlights(BuildConfig.VERSION_CODE) else {
-        val ids = automaticIds.split(',').toSet()
-        updateHighlightCatalog.filter { it.id in ids }
+    val features = if (manualOpen) {
+        latestReleaseHighlights(BuildConfig.VERSION_CODE)
+    } else {
+        val ids = automaticIds.split(',').filter { it.isNotBlank() }.toSet()
+        latestReleaseHighlights(BuildConfig.VERSION_CODE).filter { it.id in ids }
     }
     LaunchedEffect(manualOpen, features.map { it.id }) {
         if (manualOpen && features.isNotEmpty()) {
@@ -129,6 +186,7 @@ internal fun UpdateHighlightsHost(
         }
     }
     if ((!manualOpen && (!canShowAutomatically || automaticIds.isEmpty())) || currentSettings == null) return
+
     val snapshot = previewSnapshot
     fun dismiss() {
         if (applying) return
@@ -138,68 +196,339 @@ internal fun UpdateHighlightsHost(
         message = null
         onManualDismiss()
     }
-    AppAlertDialog(
-        onDismissRequest = ::dismiss,
-        title = { Text(if (applied) "已应用新配色" else if (snapshot != null) "预览 CMF 配色" else "本次更新") },
-        text = {
-            Column(
-                modifier = Modifier
-                    .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.62f).dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (applied) {
-                    Text("已启用 Standard · Cmf · SPEC_2026。可随时在外观设置中选择其他配色。")
-                } else if (snapshot != null) {
-                    Text("应用后将切换为 Standard · Cmf · SPEC_2026，保留颜色来源、种子色、对比度及高级覆盖色。")
-                    CmfComparison(snapshot, glassEnabled)
-                    Text("仅预览不会保存设置。", style = MaterialTheme.typography.bodySmall)
+
+    if (snapshot != null || applied) {
+        AppAlertDialog(
+            onDismissRequest = ::dismiss,
+            title = { Text(if (applied) "已应用新配色" else "预览 CMF 配色") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.62f).dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (applied) {
+                        Text("已启用 Standard · Cmf · SPEC_2026。可随时在外观设置中选择其他配色。")
+                    } else if (snapshot != null) {
+                        Text("应用后将切换为 Standard · Cmf · SPEC_2026，保留颜色来源、种子色、对比度及高级覆盖色。")
+                        CmfComparison(snapshot, glassEnabled)
+                        Text("仅预览不会保存设置。", style = MaterialTheme.typography.bodySmall)
+                    }
+                    message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                if (snapshot != null && !applied) {
+                    if (applying) {
+                        Text("正在应用…")
+                    } else {
+                        AppDialogAction(onClick = {
+                            if (applying) return@AppDialogAction
+                            applying = true
+                            scope.launch {
+                                try {
+                                    applied = SettingsManager.applyCmfUpdateTrial(context, snapshot)
+                                    if (applied) {
+                                        previewSnapshot = null
+                                    } else {
+                                        previewSnapshot = null
+                                        message = "设置已发生变化，请重新预览后再应用。"
+                                    }
+                                } catch (_: IOException) {
+                                    message = "保存失败，请稍后重试。"
+                                } finally {
+                                    applying = false
+                                }
+                            }
+                        }) { Text("应用新配色") }
+                    }
                 } else {
-                    Text("v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
-                    if (features.isEmpty()) Text("当前没有新的体验项目。")
-                    features.forEach { feature ->
-                        Text(feature.title, style = MaterialTheme.typography.titleMedium)
-                        Text(feature.description)
-                        if (isUpdateHighlightAlreadyEnabled(feature, currentSettings)) {
-                            Text("你已启用这项功能。", style = MaterialTheme.typography.bodySmall)
-                        } else if (!canPreviewUpdateHighlight(feature, currentSettings)) {
-                            Text("切换到 MD3 主题并选择自定义颜色后，可从这里预览；当前设置会保持不变。",
-                                style = MaterialTheme.typography.bodySmall)
-                        } else if (feature.action == UpdateHighlightAction.PREVIEW_CMF) {
-                            AppDialogAction(onClick = { previewSnapshot = currentSettings; message = null }) { Text("预览新配色") }
-                        }
+                    AppDialogAction(onClick = ::dismiss) { Text("完成") }
+                }
+            },
+            dismissButton = {
+                if (snapshot != null && !applying) {
+                    AppDialogAction(onClick = { previewSnapshot = null; message = null }) { Text("返回") }
+                }
+            },
+        )
+        return
+    }
+
+    val accentColor = AppContentColors.accent()
+    val maxScrollHeight = (LocalConfiguration.current.screenHeightDp * 0.56f).dp
+
+    AppModalBottomSheet(onDismissRequest = ::dismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            // 顶部恭喜横幅与版本徽标
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = accentColor.copy(alpha = 0.12f),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.AutoAwesome,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(15.dp),
+                        )
+                        AppText(
+                            text = if (manualOpen) {
+                                "v${BuildConfig.VERSION_NAME} 更新内容"
+                            } else {
+                                "更新成功 · v${BuildConfig.VERSION_NAME}"
+                            },
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = accentColor,
+                        )
                     }
                 }
-                message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                AppText(
+                    text = if (manualOpen) {
+                        "本次更新要点预览"
+                    } else {
+                        "恭喜更新至 v${BuildConfig.VERSION_NAME}"
+                    },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = AppContentColors.primaryText(),
+                )
+                AppText(
+                    text = if (manualOpen) {
+                        "点击下方任意要点卡片，即可一键前往对应功能区域体验。"
+                    } else {
+                        "新版本已准备就绪，以下是本次更新要点预览，点击任意条目可直接前往对应区域。"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = AppContentColors.secondaryText(),
+                )
             }
-        },
-        confirmButton = {
-            if (snapshot != null && !applied) {
-                if (applying) Text("正在应用…") else AppDialogAction(onClick = {
-                    if (applying) return@AppDialogAction
-                    applying = true
-                    scope.launch {
-                        try {
-                            applied = SettingsManager.applyCmfUpdateTrial(context, snapshot)
-                            if (applied) {
-                                previewSnapshot = null
-                            } else {
-                                previewSnapshot = null
-                                message = "设置已发生变化，请重新预览后再应用。"
-                            }
-                        } catch (_: IOException) {
-                            message = "保存失败，请稍后重试。"
-                        } finally {
-                            applying = false
+
+            // 更新内容要点卡片列表
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = maxScrollHeight)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (features.isEmpty()) {
+                    AppText(
+                        text = "当前版本暂无可预览的更新要点。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = AppContentColors.secondaryText(),
+                    )
+                } else {
+                    features.forEach { feature ->
+                        val isCmfPreview = feature.action == UpdateHighlightAction.PREVIEW_CMF
+                        val enabled = canPreviewUpdateHighlight(feature, currentSettings) &&
+                            !isUpdateHighlightAlreadyEnabled(feature, currentSettings)
+                        val clickable = feature.action != null && (!isCmfPreview || enabled)
+                        UpdateHighlightPreviewCard(
+                            feature = feature,
+                            clickable = clickable,
+                            statusHint = when {
+                                isUpdateHighlightAlreadyEnabled(feature, currentSettings) -> "你已启用这项功能"
+                                isCmfPreview && !canPreviewUpdateHighlight(feature, currentSettings) ->
+                                    "切换到 MD3 主题并选择自定义颜色后可从这里预览"
+                                else -> null
+                            },
+                            onClick = {
+                                val action = feature.action ?: return@UpdateHighlightPreviewCard
+                                if (action == UpdateHighlightAction.PREVIEW_CMF) {
+                                    previewSnapshot = currentSettings
+                                    message = null
+                                } else {
+                                    dismiss()
+                                    navigateToHighlight(action)
+                                }
+                            },
+                        )
+                    }
+                }
+                message?.let {
+                    AppText(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+
+            if (!manualOpen) {
+                AppText(
+                    text = "后续可随时在「设置 → 关于 → 本次更新」重复查看",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AppContentColors.secondaryText(),
+                )
+            }
+
+            // 底部确认按钮
+            Button(
+                onClick = ::dismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = AppShapes.container(ContainerLevel.Card),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accentColor,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+            ) {
+                AppText(
+                    text = if (manualOpen) "关闭" else "知道了，开始体验",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateHighlightPreviewCard(
+    feature: UpdateHighlight,
+    clickable: Boolean,
+    statusHint: String?,
+    onClick: () -> Unit,
+) {
+    val accentColor = AppContentColors.accent()
+    val cardShape = AppShapes.container(ContainerLevel.Card)
+    val iconShape = AppShapes.container(ContainerLevel.Field)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .then(if (clickable) Modifier.clickable(onClick = onClick) else Modifier),
+        shape = cardShape,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(0.5.dp, AppSurfaceTokens.divider().copy(alpha = 0.6f)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(iconShape)
+                    .background(accentColor.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppIcon(
+                    imageVector = resolveUpdateHighlightIcon(feature.action),
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    feature.badge?.takeIf { it.isNotBlank() }?.let { badgeText ->
+                        Surface(
+                            shape = CircleShape,
+                            color = accentColor.copy(alpha = 0.10f),
+                        ) {
+                            AppText(
+                                text = badgeText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = accentColor,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                            )
                         }
                     }
-                }) { Text("应用新配色") }
-            } else AppDialogAction(onClick = ::dismiss) { Text(if (applied) "完成" else "保持当前设置") }
-        },
-        dismissButton = {
-            if (snapshot != null && !applying) AppDialogAction(onClick = { previewSnapshot = null; message = null }) { Text("返回") }
-        },
-    )
+                    AppText(
+                        text = feature.title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = AppContentColors.primaryText(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                AppText(
+                    text = feature.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppContentColors.secondaryText(),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                statusHint?.let { hint ->
+                    AppText(
+                        text = hint,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accentColor,
+                    )
+                }
+            }
+
+            if (clickable) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    feature.actionLabel?.takeIf { it.isNotBlank() }?.let { label ->
+                        AppText(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = accentColor,
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                    }
+                    AppIcon(
+                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun resolveUpdateHighlightIcon(action: UpdateHighlightAction?): ImageVector = when (action) {
+    UpdateHighlightAction.OPEN_PLUGINS_SETTINGS -> Icons.Outlined.Speed
+    UpdateHighlightAction.OPEN_DOWNLOAD_LIST -> Icons.Outlined.Download
+    UpdateHighlightAction.OPEN_ICON_SETTINGS,
+    UpdateHighlightAction.OPEN_APPEARANCE_SETTINGS,
+    UpdateHighlightAction.PREVIEW_CMF -> Icons.Outlined.Palette
+    UpdateHighlightAction.OPEN_LISTEN_VIDEO -> Icons.Outlined.Headphones
+    UpdateHighlightAction.OPEN_PERSONAL_RECAP -> Icons.Outlined.History
+    UpdateHighlightAction.OPEN_WATCH_LATER -> Icons.Outlined.WatchLater
+    UpdateHighlightAction.OPEN_CUSTOM_PUSH_SETTINGS -> Icons.Outlined.Notifications
+    UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS -> Icons.Outlined.PlayCircle
+    UpdateHighlightAction.OPEN_HOME_SETTINGS -> Icons.Outlined.Home
+    UpdateHighlightAction.OPEN_SETTINGS -> Icons.Outlined.Tune
+    null -> Icons.Outlined.AutoAwesome
 }
 
 @Composable

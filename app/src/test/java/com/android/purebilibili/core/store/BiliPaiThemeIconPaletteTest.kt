@@ -3,6 +3,7 @@ package com.android.purebilibili.core.store
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BiliPaiThemeIconPaletteTest {
@@ -56,5 +57,17 @@ class BiliPaiThemeIconPaletteTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun exactMatchDetectionDistinguishesZeroDiffFromNearestPreset() {
+        val exactFg = biliPaiIconForegroundChoices.first()
+        val exactBg = biliPaiIconBackgroundChoices.first()
+        val exactIndex = resolveBiliPaiThemeIconIndex(exactFg, exactBg)
+        assertTrue(isBiliPaiThemeIconExactMatch(exactFg, exactBg, exactIndex))
+
+        val approxFg = 0xFFFB7299.toInt()
+        val approxIndex = resolveBiliPaiThemeIconIndex(approxFg, exactBg)
+        assertFalse(isBiliPaiThemeIconExactMatch(approxFg, exactBg, approxIndex))
     }
 }

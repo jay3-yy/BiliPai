@@ -37,13 +37,35 @@ private class DonationQrAnchors {
     var compact: LayoutCoordinates? = null
     var preview: LayoutCoordinates? = null
 
-    fun imageBounds(image: LayoutCoordinates?): Rect? {
+    fun imageBounds(image: LayoutCoordinates?, intrinsicSize: Size): Rect? {
         val container = host?.takeIf { it.isAttached } ?: return null
         val coordinates = image?.takeIf { it.isAttached } ?: return null
         val offset = container.localPositionOf(coordinates, Offset.Zero)
-        // 两端均为 ContentScale.Fit；预览的图像槽位可能是长方形。
-        val side = minOf(coordinates.size.width, coordinates.size.height).toFloat()
-        return Rect(offset + Offset((coordinates.size.width - side) / 2, (coordinates.size.height - side) / 2), Size(side, side))
+        val slotWidth = coordinates.size.width.toFloat()
+        val slotHeight = coordinates.size.height.toFloat()
+        if (slotWidth <= 0f || slotHeight <= 0f) return null
+        val ratio = if (
+            intrinsicSize != Size.Unspecified &&
+            intrinsicSize.width.isFinite() && intrinsicSize.height.isFinite() &&
+            intrinsicSize.width > 0f && intrinsicSize.height > 0f
+        ) {
+            intrinsicSize.width / intrinsicSize.height
+        } else {
+            1f
+        }
+        val fittedWidth: Float
+        val fittedHeight: Float
+        if (slotWidth / slotHeight > ratio) {
+            fittedHeight = slotHeight
+            fittedWidth = slotHeight * ratio
+        } else {
+            fittedWidth = slotWidth
+            fittedHeight = slotWidth / ratio
+        }
+        return Rect(
+            offset + Offset((slotWidth - fittedWidth) / 2f, (slotHeight - fittedHeight) / 2f),
+            Size(fittedWidth, fittedHeight),
+        )
     }
 }
 
@@ -54,11 +76,12 @@ internal fun DonationPreviewContainer(
     previewActive: Boolean,
     compactMaxWidth: Dp,
     modifier: Modifier = Modifier,
+    @androidx.annotation.DrawableRes qrResource: Int = donationQrResource(),
     compact: @Composable (qrModifier: Modifier) -> Unit,
     preview: @Composable (qrModifier: Modifier) -> Unit,
 ) {
     val anchors = remember { DonationQrAnchors() }
-    val painter = painterResource(donationQrResource())
+    val painter = painterResource(qrResource)
     val qrPath = remember { Path() }
     val compactQrCorner = AppShapes.containerCornerDp(ContainerLevel.Card)
     val compactBlur = remember { BlurRenderEffectCache() }
@@ -94,8 +117,8 @@ internal fun DonationPreviewContainer(
             Canvas(Modifier.clearAndSetSemantics { }) {
                 val fraction = progress().coerceIn(0f, 1f)
                 if (fraction > 0f && fraction < 1f) {
-                    val start = anchors.imageBounds(anchors.compact)
-                    val end = anchors.imageBounds(anchors.preview)
+                    val start = anchors.imageBounds(anchors.compact, painter.intrinsicSize)
+                    val end = anchors.imageBounds(anchors.preview, painter.intrinsicSize)
                     if (start != null && end != null) {
                         val bounds = lerp(start, end, fraction)
                         val radius = donationCornerRadius(compactQrCorner.toPx(), 0f, fraction)

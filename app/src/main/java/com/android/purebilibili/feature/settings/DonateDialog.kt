@@ -7,9 +7,20 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -45,8 +56,12 @@ import androidx.core.content.ContextCompat
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.*
 import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppTabRowRole
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.util.rememberDeviceCornerShape
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -161,10 +176,12 @@ private fun DonateDialogContent(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val qrResource = donationQrResource()
+    var channel by rememberSaveable { mutableStateOf(DonationPaymentChannel.WECHAT) }
+    val qrResource = donationQrResource(channel)
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
-    var saved by rememberSaveable { mutableStateOf(false) }
+    var savedChannels by remember { mutableStateOf(emptySet<DonationPaymentChannel>()) }
+    val saved = channel in savedChannels
     var showSaveConfirmation by remember { mutableStateOf(false) }
     val requestLongPressSave: () -> Unit = { if (!saving) showSaveConfirmation = true }
     val previewMotion = rememberDonationPreviewMotion()
@@ -183,12 +200,17 @@ private fun DonateDialogContent(
     var error by remember { mutableStateOf<Int?>(null) }
     fun save() {
         if (saving) return
+        val targetChannel = channel
+        val targetQrResource = donationQrResource(targetChannel)
         saving = true
         error = null
         scope.launch {
             try {
-                if (saveDonationQrToGallery(context, qrResource)) saved = true
-                else error = R.string.settings_donate_save_failed
+                if (saveDonationQrToGallery(context, targetQrResource)) {
+                    savedChannels = savedChannels + targetChannel
+                } else {
+                    error = R.string.settings_donate_save_failed
+                }
             } finally {
                 saving = false
             }
@@ -203,15 +225,23 @@ private fun DonateDialogContent(
         ) permission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         else save()
     }
-    val openWechat: () -> Unit = {
-        val intent = context.packageManager.getLaunchIntentForPackage("com.tencent.mm")
-        if (intent == null) error = R.string.settings_donate_wechat_unavailable
+    val openPaymentApp: () -> Unit = {
+        val packageName = when (channel) {
+            DonationPaymentChannel.WECHAT -> "com.tencent.mm"
+            DonationPaymentChannel.ALIPAY -> "com.eg.android.AlipayGphone"
+        }
+        val unavailableMessage = when (channel) {
+            DonationPaymentChannel.WECHAT -> R.string.settings_donate_wechat_unavailable
+            DonationPaymentChannel.ALIPAY -> R.string.settings_donate_alipay_unavailable
+        }
+        val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+        if (intent == null) error = unavailableMessage
         else try {
             context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (_: ActivityNotFoundException) {
-            error = R.string.settings_donate_wechat_unavailable
+            error = unavailableMessage
         } catch (_: SecurityException) {
-            error = R.string.settings_donate_wechat_unavailable
+            error = unavailableMessage
         }
     }
     Dialog(
@@ -282,6 +312,7 @@ private fun DonateDialogContent(
                             modifier = Modifier.heightIn(max = maxHeight),
                         ) {
                             DonationPreviewContainer(
+                                qrResource = qrResource,
                                 progress = { previewMotion.progress.value },
                                 previewActive = previewMotion.expanded,
                                 compactMaxWidth = if (wide) 740.dp else 420.dp,
@@ -292,15 +323,29 @@ private fun DonateDialogContent(
                                         saved = saved,
                                         error = error,
                                         onSave = requestSave,
-                                        onOpenWechat = openWechat,
+                                        onOpenWechat = openPaymentApp,
                                         onEnlarge = previewMotion.open,
                                         onDismiss = onDismiss,
                                         modifier = Modifier.fillMaxWidth(),
                                         qrModifier = qrModifier,
                                         onQrLongPress = requestLongPressSave,
+                                        channel = channel,
+                                        onChannelChange = { next ->
+                                            if (channel != next) {
+                                                channel = next
+                                                error = null
+                                            }
+                                        },
                                     )
                                 },
-                                preview = { qrModifier -> DonationQrPreview(previewMotion.close, requestLongPressSave, qrModifier) },
+                                preview = { qrModifier ->
+                                    DonationQrPreview(
+                                        qrResource = qrResource,
+                                        onBack = previewMotion.close,
+                                        onLongPress = requestLongPressSave,
+                                        imageModifier = qrModifier,
+                                    )
+                                },
                             )
                         }
                     }
@@ -341,7 +386,11 @@ internal fun DonationCardContent(
     modifier: Modifier = Modifier,
     qrModifier: Modifier = Modifier,
     onQrLongPress: () -> Unit = {},
+    channel: DonationPaymentChannel = DonationPaymentChannel.WECHAT,
+    onChannelChange: (DonationPaymentChannel) -> Unit = {},
 ) {
+    val wechatLabel = stringResource(R.string.settings_donate_channel_wechat)
+    val alipayLabel = stringResource(R.string.settings_donate_channel_alipay)
     Column(modifier = modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AppText(
@@ -358,27 +407,47 @@ internal fun DonationCardContent(
             style = MaterialTheme.typography.bodyMedium,
             color = AppContentColors.secondaryText(),
         )
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(14.dp))
+        AppThemeAdaptiveTabRow(
+            options = listOf(
+                AppSegmentOption(DonationPaymentChannel.WECHAT, wechatLabel),
+                AppSegmentOption(DonationPaymentChannel.ALIPAY, alipayLabel),
+            ),
+            selectedValue = channel,
+            onSelectionChange = onChannelChange,
+            role = AppTabRowRole.SECONDARY,
+            dragSelectionEnabled = true,
+            tapPressRefractionEnabled = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(16.dp))
         if (wide) {
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                DonationQr(onEnlarge, onQrLongPress, Modifier.weight(1f), qrModifier)
-                DonationActions(saving, saved, error, onSave, onOpenWechat, Modifier.weight(1f))
+                DonationQr(channel, onEnlarge, onQrLongPress, Modifier.weight(1f), qrModifier)
+                DonationActions(channel, saving, saved, error, onSave, onOpenWechat, Modifier.weight(1f))
             }
         } else {
-            DonationQr(onEnlarge, onQrLongPress, Modifier.widthIn(max = 320.dp).fillMaxWidth().align(Alignment.CenterHorizontally), qrModifier)
-            Spacer(Modifier.height(20.dp))
-            DonationActions(saving, saved, error, onSave, onOpenWechat, Modifier.fillMaxWidth())
+            DonationQr(channel, onEnlarge, onQrLongPress, Modifier.widthIn(max = 320.dp).fillMaxWidth().align(Alignment.CenterHorizontally), qrModifier)
+            Spacer(Modifier.height(16.dp))
+            DonationActions(channel, saving, saved, error, onSave, onOpenWechat, Modifier.fillMaxWidth())
         }
     }
 }
 
 @Composable
-private fun DonationQr(onEnlarge: () -> Unit, onLongPress: () -> Unit, modifier: Modifier = Modifier, imageModifier: Modifier = Modifier) {
+private fun DonationQr(
+    channel: DonationPaymentChannel,
+    onEnlarge: () -> Unit,
+    onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
+    imageModifier: Modifier = Modifier,
+) {
+    val motionEnabled = LocalComponentMotionEnabled.current && !rememberSystemReduceMotion()
+    val slideSpec = AppMotionTokens.emphasizedSpec<androidx.compose.ui.unit.IntOffset>()
+    val fadeSpec = AppMotionTokens.standardSpec<Float>()
+    val scaleSpec = AppMotionTokens.emphasizedSpec<Float>()
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Image(
-            painter = painterResource(donationQrResource()),
-            contentDescription = stringResource(R.string.settings_donate_qr_description),
-            contentScale = ContentScale.Fit,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
@@ -391,7 +460,34 @@ private fun DonationQr(onEnlarge: () -> Unit, onLongPress: () -> Unit, modifier:
                     onLongClickLabel = stringResource(R.string.settings_donate_save),
                     onLongClick = onLongPress,
                 ),
-        )
+            contentAlignment = Alignment.Center,
+        ) {
+            AnimatedContent(
+                targetState = channel,
+                transitionSpec = {
+                    if (!motionEnabled) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                        (slideInHorizontally(slideSpec) { (it / 4) * direction } +
+                            fadeIn(fadeSpec) +
+                            scaleIn(scaleSpec, initialScale = 0.96f)) togetherWith
+                            (slideOutHorizontally(slideSpec) { -(it / 4) * direction } +
+                                fadeOut(fadeSpec) +
+                                scaleOut(scaleSpec, targetScale = 0.96f)) using
+                            SizeTransform(clip = false)
+                    }
+                },
+                label = "donation_qr_channel_switch",
+            ) { currentChannel ->
+                Image(
+                    painter = painterResource(donationQrResource(currentChannel)),
+                    contentDescription = stringResource(R.string.settings_donate_qr_description),
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
         Spacer(Modifier.height(8.dp))
         AppTextButton(onClick = onEnlarge) {
             AppText(
@@ -404,33 +500,69 @@ private fun DonationQr(onEnlarge: () -> Unit, onLongPress: () -> Unit, modifier:
 
 @Composable
 private fun DonationActions(
+    channel: DonationPaymentChannel,
     saving: Boolean,
     saved: Boolean,
     error: Int?,
     onSave: () -> Unit,
-    onOpenWechat: () -> Unit,
+    onOpenPaymentApp: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val motionEnabled = LocalComponentMotionEnabled.current && !rememberSystemReduceMotion()
+    val textFadeSpec = AppMotionTokens.standardSpec<Float>()
+    val textSlideSpec = AppMotionTokens.standardSpec<androidx.compose.ui.unit.IntOffset>()
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AppText(
             stringResource(R.string.settings_donate_voluntary),
             style = MaterialTheme.typography.titleSmall,
             color = AppContentColors.primaryText(),
         )
-        AppText(
-            stringResource(R.string.settings_donate_steps),
-            style = MaterialTheme.typography.bodyMedium,
-            color = AppContentColors.secondaryText(),
-        )
+        AnimatedContent(
+            targetState = channel,
+            transitionSpec = {
+                if (!motionEnabled) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
+                    val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    (fadeIn(textFadeSpec) + slideInHorizontally(textSlideSpec) { (it / 6) * direction }) togetherWith
+                        (fadeOut(textFadeSpec) + slideOutHorizontally(textSlideSpec) { -(it / 6) * direction }) using
+                        SizeTransform(clip = false)
+                }
+            },
+            label = "donation_steps_channel_switch",
+        ) { currentChannel ->
+            AppText(
+                text = stringResource(
+                    when (currentChannel) {
+                        DonationPaymentChannel.WECHAT -> R.string.settings_donate_steps
+                        DonationPaymentChannel.ALIPAY -> R.string.settings_donate_steps_alipay
+                    }
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = AppContentColors.secondaryText(),
+            )
+        }
         if (saved) {
             AppText(
-                stringResource(R.string.settings_donate_saved),
+                stringResource(
+                    when (channel) {
+                        DonationPaymentChannel.WECHAT -> R.string.settings_donate_saved
+                        DonationPaymentChannel.ALIPAY -> R.string.settings_donate_saved_alipay
+                    }
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = AppContentColors.secondaryText(),
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
-            AppButton(onClick = onOpenWechat, enabled = !saving, modifier = Modifier.fillMaxWidth()) {
-                AppText(stringResource(R.string.settings_donate_open_wechat))
+            AppButton(onClick = onOpenPaymentApp, enabled = !saving, modifier = Modifier.fillMaxWidth()) {
+                AppText(
+                    stringResource(
+                        when (channel) {
+                            DonationPaymentChannel.WECHAT -> R.string.settings_donate_open_wechat
+                            DonationPaymentChannel.ALIPAY -> R.string.settings_donate_open_alipay
+                        }
+                    )
+                )
             }
             AppTextButton(onClick = onSave, enabled = !saving, modifier = Modifier.fillMaxWidth()) {
                 AppText(stringResource(if (saving) R.string.settings_donate_saving else R.string.settings_donate_save_again))
@@ -459,7 +591,12 @@ private fun DonationActions(
 }
 
 @Composable
-private fun DonationQrPreview(onBack: () -> Unit, onLongPress: () -> Unit, imageModifier: Modifier = Modifier) {
+private fun DonationQrPreview(
+    @androidx.annotation.DrawableRes qrResource: Int,
+    onBack: () -> Unit,
+    onLongPress: () -> Unit,
+    imageModifier: Modifier = Modifier,
+) {
     val longPressLabel = stringResource(R.string.settings_donate_save)
     val feedbackLongPress = com.android.purebilibili.core.ui.components.appLongClickWithFeedback(onLongClick = onLongPress)
     Column(
@@ -472,7 +609,7 @@ private fun DonationQrPreview(onBack: () -> Unit, onLongPress: () -> Unit, image
             AppTextButton(onClick = onBack) { AppText(stringResource(R.string.common_back)) }
         }
         Image(
-            painter = painterResource(donationQrResource()),
+            painter = painterResource(qrResource),
             contentDescription = stringResource(R.string.settings_donate_qr_description),
             contentScale = ContentScale.Fit,
             modifier = Modifier
