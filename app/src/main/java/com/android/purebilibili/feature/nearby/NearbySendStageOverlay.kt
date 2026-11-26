@@ -221,6 +221,10 @@ internal fun NearbySendStageOverlay(
     val accent = AppContentColors.accent()
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    val stageBackdropSource = if (glassEnabled) {
+        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+    } else null
+    val stageBackdrop = stageBackdropSource?.takeIf { it.isReady }?.backdrop
 
     val reveal = remember(peer.pin, video.contentKey) { Animatable(0f) }
     val dragY = remember(peer.pin, video.contentKey) { Animatable(0f) }
@@ -400,7 +404,8 @@ internal fun NearbySendStageOverlay(
             },
             modifier = Modifier
                 .align(Alignment.Center)
-                .requiredSize(width = 560.dp, height = 460.dp),
+                .requiredSize(width = 560.dp, height = 460.dp)
+                .then(stageBackdropSource?.modifier ?: Modifier),
         )
 
         // 3. 屏幕顶部：目标设备接收口胶囊（上滑吸附高亮 + 吸入微压回弹）
@@ -410,7 +415,7 @@ internal fun NearbySendStageOverlay(
             label = "nearbyTargetPillScale",
         )
         val targetBorderColor by animateColorAsState(
-            targetValue = if (armedToSend) accent else Color.White.copy(alpha = 0.18f),
+            targetValue = if (armedToSend) accent else Color.White.copy(alpha = if (glassEnabled) 0.24f else 0.18f),
             animationSpec = continuityTween(if (reduceMotion) 0 else 160),
             label = "nearbyTargetPillBorder",
         )
@@ -445,15 +450,7 @@ internal fun NearbySendStageOverlay(
                     translationY = if (reduceMotion) 0f else (1f - reveal.value) * -28f
                 },
         ) {
-            AppPopupSurface(
-                type = AppPopupSurfaceType.MENU,
-                shape = targetPillShape,
-                containerColor = AppSurfaceTokens.surfaceContainerHigh(),
-                tonalElevation = 4.dp,
-                modifier = Modifier
-                    .widthIn(max = 400.dp)
-                    .border(if (armedToSend) 1.5.dp else 1.dp, targetBorderColor, targetPillShape),
-            ) {
+            val topPillContent: @Composable () -> Unit = {
                 Row(
                     modifier = Modifier.padding(
                         start = 14.dp,
@@ -468,7 +465,7 @@ internal fun NearbySendStageOverlay(
                         modifier = Modifier
                             .size(30.dp)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(if (armedToSend) accent else accent.copy(alpha = 0.16f)),
+                            .background(if (armedToSend) accent else accent.copy(alpha = 0.18f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         AppIcon(
@@ -485,7 +482,7 @@ internal fun NearbySendStageOverlay(
                         AppText(
                             text = "流转至 ${peer.name}",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = AppContentColors.primaryText(),
+                            color = if (glassEnabled) Color.White else AppContentColors.primaryText(),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -496,17 +493,42 @@ internal fun NearbySendStageOverlay(
                                 else -> "${peer.formFactor.label} · 向上拖动或轻甩发送"
                             },
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (armedToSend) accent else AppContentColors.secondaryText(),
+                            color = if (armedToSend) accent else if (glassEnabled) Color.White.copy(alpha = 0.72f) else AppContentColors.secondaryText(),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
                     if (!launching) {
                         AppTextButton(onClick = onSwitchDevice) {
-                            AppText(if (canSwitchDevice) "切换" else "设备")
+                            AppText(
+                                text = if (canSwitchDevice) "切换" else "设备",
+                                color = if (glassEnabled) Color.White else Color.Unspecified,
+                            )
                         }
                     }
                 }
+            }
+            if (glassEnabled) {
+                NearbyGlassPill(
+                    nativeContainerColor = AppSurfaceTokens.surfaceContainerHigh(),
+                    backdrop = stageBackdrop,
+                    shape = targetPillShape,
+                    glassContainerColor = Color.Black.copy(alpha = 0.34f),
+                    borderColor = targetBorderColor,
+                    borderWidth = if (armedToSend) 1.5.dp else 0.8.dp,
+                    blurRadius = 18.dp,
+                    modifier = Modifier.widthIn(max = 400.dp),
+                ) { topPillContent() }
+            } else {
+                AppPopupSurface(
+                    type = AppPopupSurfaceType.MENU,
+                    shape = targetPillShape,
+                    containerColor = AppSurfaceTokens.surfaceContainerHigh(),
+                    tonalElevation = 4.dp,
+                    modifier = Modifier
+                        .widthIn(max = 400.dp)
+                        .border(if (armedToSend) 1.5.dp else 1.dp, targetBorderColor, targetPillShape),
+                ) { topPillContent() }
             }
         }
 
@@ -710,84 +732,103 @@ internal fun NearbySendStageOverlay(
                             shape = cardShape,
                         ),
                 ) {
-                    if (video.cover.isNotBlank()) {
-                        AsyncImage(
-                            model = video.cover,
-                            contentDescription = null,
-                            modifier = Modifier.matchParentSize(),
-                            contentScale = ContentScale.Crop,
+                    val cardBackdropSource = if (glassEnabled) {
+                        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+                    } else null
+                    val cardBackdrop = cardBackdropSource?.takeIf { it.isReady }?.backdrop
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .then(cardBackdropSource?.modifier ?: Modifier),
+                    ) {
+                        if (video.cover.isNotBlank()) {
+                            AsyncImage(
+                                model = video.cover,
+                                contentDescription = null,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        0.00f to Color.Black.copy(alpha = 0.24f),
+                                        0.34f to Color.Black.copy(alpha = 0.04f),
+                                        0.66f to Color.Black.copy(alpha = 0.36f),
+                                        1.00f to Color.Black.copy(alpha = 0.86f),
+                                    )
+                                )
                         )
                     }
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    0.00f to Color.Black.copy(alpha = 0.24f),
-                                    0.34f to Color.Black.copy(alpha = 0.04f),
-                                    0.66f to Color.Black.copy(alpha = 0.36f),
-                                    1.00f to Color.Black.copy(alpha = 0.86f),
-                                )
-                            )
-                    )
 
                     // 左上角：媒体类型 + 进度 / 倍速 / 播单上下文
-                    Row(
+                    NearbyGlassPill(
+                        nativeContainerColor = Color.Black.copy(alpha = 0.56f),
+                        backdrop = cardBackdrop,
+                        glassContainerColor = Color.Black.copy(alpha = 0.28f),
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(14.dp)
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(Color.Black.copy(alpha = 0.56f))
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            .padding(14.dp),
                     ) {
-                        AppIcon(
-                            imageVector = nearbyMediaIcon(video),
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        val tagText = if (video.isLive) {
-                            video.mediaTypeLabel
-                        } else {
-                            val speedPart = if (video.speed != 1f) " · ${video.speed}x" else ""
-                            val queuePart = video.queue?.items?.size?.takeIf { it > 1 }?.let { " · ${it}集播单" }.orEmpty()
-                            "${video.mediaTypeLabel} · ${formatNearbyDuration(video.positionMs)}$speedPart$queuePart"
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            AppIcon(
+                                imageVector = nearbyMediaIcon(video),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            val tagText = if (video.isLive) {
+                                video.mediaTypeLabel
+                            } else {
+                                val speedPart = if (video.speed != 1f) " · ${video.speed}x" else ""
+                                val queuePart = video.queue?.items?.size?.takeIf { it > 1 }?.let { " · ${it}集播单" }.orEmpty()
+                                "${video.mediaTypeLabel} · ${formatNearbyDuration(video.positionMs)}$speedPart$queuePart"
+                            }
+                            AppText(
+                                text = tagText,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
-                        AppText(
-                            text = tagText,
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
                     }
 
                     // 右上角：上滑提示微标
-                    Row(
+                    NearbyGlassPill(
+                        nativeContainerColor = if (armedToSend) accent else Color.Black.copy(alpha = 0.56f),
+                        backdrop = cardBackdrop,
+                        glassContainerColor = if (armedToSend) accent.copy(alpha = 0.78f) else Color.Black.copy(alpha = 0.28f),
+                        borderColor = if (armedToSend) Color.White.copy(alpha = 0.42f) else null,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(14.dp)
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(if (armedToSend) accent else Color.Black.copy(alpha = 0.56f))
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            .padding(14.dp),
                     ) {
-                        AppIcon(
-                            imageVector = Icons.Outlined.ArrowUpward,
-                            contentDescription = null,
-                            tint = if (armedToSend) AppContentColors.onAccent() else Color.White,
-                            modifier = Modifier.size(13.dp),
-                        )
-                        AppText(
-                            text = if (armedToSend) "松手发送" else "上滑发送",
-                            color = if (armedToSend) AppContentColors.onAccent() else Color.White,
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = if (armedToSend) FontWeight.SemiBold else FontWeight.Medium
-                            ),
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            AppIcon(
+                                imageVector = Icons.Outlined.ArrowUpward,
+                                contentDescription = null,
+                                tint = if (armedToSend) AppContentColors.onAccent() else Color.White,
+                                modifier = Modifier.size(13.dp),
+                            )
+                            AppText(
+                                text = if (armedToSend) "松手发送" else "上滑发送",
+                                color = if (armedToSend) AppContentColors.onAccent() else Color.White,
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (armedToSend) FontWeight.SemiBold else FontWeight.Medium
+                                ),
+                            )
+                        }
                     }
 
                     // 底部：视频标题与元信息（含画质与弹幕偏好摘要）
@@ -840,20 +881,24 @@ internal fun NearbySendStageOverlay(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                AppIconButton(
-                    onClick = dismissWithAnim,
-                    enabled = !launching,
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(Color.White.copy(alpha = 0.16f)),
+                NearbyGlassPill(
+                    nativeContainerColor = Color.White.copy(alpha = 0.16f),
+                    backdrop = stageBackdrop,
+                    glassContainerColor = Color.White.copy(alpha = 0.14f),
+                    modifier = Modifier.size(46.dp),
                 ) {
-                    AppIcon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = "取消接力",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp),
-                    )
+                    AppIconButton(
+                        onClick = dismissWithAnim,
+                        enabled = !launching,
+                        modifier = Modifier.matchParentSize(),
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = "取消接力",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
                 Spacer(Modifier.size(0.dp))
                 AppPrimaryButton(

@@ -21,28 +21,20 @@ import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.ui.platform.ViewConfiguration
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 
-/** Keep input and semantics in the control's visible layout bounds, without a hidden hit halo. */
+/**
+ * Prevent Material 3 from inflating layout size for compact controls, while preserving
+ * [androidx.compose.ui.platform.ViewConfiguration.minimumTouchTargetSize] so pointer hit-testing
+ * retains non-layout-inflating touch tolerance (especially on tablets and large screens).
+ */
 @Composable
 fun AppExactTouchTargets(content: @Composable () -> Unit) {
-    val viewConfiguration = LocalViewConfiguration.current
-    if (viewConfiguration.minimumTouchTargetSize == DpSize.Zero &&
-        LocalMinimumInteractiveComponentSize.current == 0.dp
-    ) {
+    if (LocalMinimumInteractiveComponentSize.current == 0.dp) {
         content()
         return
     }
-    val boundedViewConfiguration = remember(viewConfiguration) {
-        object : ViewConfiguration by viewConfiguration {
-            override val minimumTouchTargetSize: DpSize = DpSize.Zero
-        }
-    }
     CompositionLocalProvider(
-        LocalViewConfiguration provides boundedViewConfiguration,
         LocalMinimumInteractiveComponentSize provides 0.dp,
         content = content,
     )

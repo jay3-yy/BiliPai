@@ -95,6 +95,10 @@ internal fun NearbyReceiveStageOverlay(
 ) {
     val reduceMotion = rememberSystemReduceMotion()
     val glassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
+    val stageBackdropSource = if (glassEnabled) {
+        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+    } else null
+    val stageBackdrop = stageBackdropSource?.takeIf { it.isReady }?.backdrop
     val blurEnabled = !reduceMotion && !isLowBlurBudgetForced()
     val haptic = rememberAppHapticFeedback(AppHapticScene.CONTROLS)
     val hapticEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
@@ -224,7 +228,8 @@ internal fun NearbyReceiveStageOverlay(
             },
             modifier = Modifier
                 .align(Alignment.Center)
-                .requiredSize(width = 560.dp, height = 460.dp),
+                .requiredSize(width = 560.dp, height = 460.dp)
+                .then(stageBackdropSource?.modifier ?: Modifier),
         )
 
         // 3. 顶部对称来源设备胶囊
@@ -245,15 +250,7 @@ internal fun NearbyReceiveStageOverlay(
                     translationY = if (reduceMotion) 0f else (1f - p) * -28f
                 },
         ) {
-            AppPopupSurface(
-                type = AppPopupSurfaceType.MENU,
-                shape = sourcePillShape,
-                containerColor = AppSurfaceTokens.surfaceContainerHigh(),
-                tonalElevation = 4.dp,
-                modifier = Modifier
-                    .widthIn(max = 400.dp)
-                    .border(1.dp, accent.copy(alpha = 0.45f), sourcePillShape),
-            ) {
+            val sourcePillContent: @Composable () -> Unit = {
                 Row(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -263,7 +260,7 @@ internal fun NearbyReceiveStageOverlay(
                         modifier = Modifier
                             .size(30.dp)
                             .clip(RoundedCornerShape(10.dp))
-                            .background(accent.copy(alpha = 0.16f)),
+                            .background(accent.copy(alpha = 0.18f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         AppIcon(
@@ -277,7 +274,7 @@ internal fun NearbyReceiveStageOverlay(
                         AppText(
                             text = "来自 ${peer.name}",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = AppContentColors.primaryText(),
+                            color = if (glassEnabled) Color.White else AppContentColors.primaryText(),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -290,6 +287,28 @@ internal fun NearbyReceiveStageOverlay(
                         )
                     }
                 }
+            }
+            if (glassEnabled) {
+                NearbyGlassPill(
+                    nativeContainerColor = AppSurfaceTokens.surfaceContainerHigh(),
+                    backdrop = stageBackdrop,
+                    shape = sourcePillShape,
+                    glassContainerColor = Color.Black.copy(alpha = 0.34f),
+                    borderColor = accent.copy(alpha = 0.45f),
+                    borderWidth = 0.9.dp,
+                    blurRadius = 18.dp,
+                    modifier = Modifier.widthIn(max = 400.dp),
+                ) { sourcePillContent() }
+            } else {
+                AppPopupSurface(
+                    type = AppPopupSurfaceType.MENU,
+                    shape = sourcePillShape,
+                    containerColor = AppSurfaceTokens.surfaceContainerHigh(),
+                    tonalElevation = 4.dp,
+                    modifier = Modifier
+                        .widthIn(max = 400.dp)
+                        .border(1.dp, accent.copy(alpha = 0.45f), sourcePillShape),
+                ) { sourcePillContent() }
             }
         }
 
@@ -429,58 +448,72 @@ internal fun NearbyReceiveStageOverlay(
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                         .border(1.dp, Color.White.copy(alpha = 0.28f), cardShape),
                 ) {
-                    if (media.cover.isNotBlank()) {
-                        AsyncImage(
-                            model = media.cover,
-                            contentDescription = null,
-                            modifier = Modifier.matchParentSize(),
-                            contentScale = ContentScale.Crop,
+                    val cardBackdropSource = if (glassEnabled) {
+                        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
+                    } else null
+                    val cardBackdrop = cardBackdropSource?.takeIf { it.isReady }?.backdrop
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .then(cardBackdropSource?.modifier ?: Modifier),
+                    ) {
+                        if (media.cover.isNotBlank()) {
+                            AsyncImage(
+                                model = media.cover,
+                                contentDescription = null,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .matchParentSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        0.00f to Color.Black.copy(alpha = 0.24f),
+                                        0.34f to Color.Black.copy(alpha = 0.04f),
+                                        0.66f to Color.Black.copy(alpha = 0.36f),
+                                        1.00f to Color.Black.copy(alpha = 0.86f),
+                                    )
+                                )
                         )
                     }
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    0.00f to Color.Black.copy(alpha = 0.24f),
-                                    0.34f to Color.Black.copy(alpha = 0.04f),
-                                    0.66f to Color.Black.copy(alpha = 0.36f),
-                                    1.00f to Color.Black.copy(alpha = 0.86f),
-                                )
-                            )
-                    )
 
                     // 左上角：媒体类型 + 进度 / 倍速 / 播单上下文
-                    Row(
+                    NearbyGlassPill(
+                        nativeContainerColor = Color.Black.copy(alpha = 0.56f),
+                        backdrop = cardBackdrop,
+                        glassContainerColor = Color.Black.copy(alpha = 0.28f),
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(14.dp)
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(Color.Black.copy(alpha = 0.56f))
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            .padding(14.dp),
                     ) {
-                        AppIcon(
-                            imageVector = nearbyMediaIcon(media),
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        val tagText = if (media.isLive) {
-                            media.mediaTypeLabel
-                        } else {
-                            val speedPart = if (media.speed != 1f) " · ${media.speed}x" else ""
-                            val queuePart = media.queue?.items?.size?.takeIf { it > 1 }?.let { " · ${it}集播单" }.orEmpty()
-                            "${media.mediaTypeLabel} · ${formatNearbyDuration(media.positionMs)}$speedPart$queuePart"
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            AppIcon(
+                                imageVector = nearbyMediaIcon(media),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            val tagText = if (media.isLive) {
+                                media.mediaTypeLabel
+                            } else {
+                                val speedPart = if (media.speed != 1f) " · ${media.speed}x" else ""
+                                val queuePart = media.queue?.items?.size?.takeIf { it > 1 }?.let { " · ${it}集播单" }.orEmpty()
+                                "${media.mediaTypeLabel} · ${formatNearbyDuration(media.positionMs)}$speedPart$queuePart"
+                            }
+                            AppText(
+                                text = tagText,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
-                        AppText(
-                            text = tagText,
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
                     }
 
                     // 底部：视频标题与对端画质/弹幕偏好提示
@@ -523,75 +556,81 @@ internal fun NearbyReceiveStageOverlay(
             // 普通视频支持接收端自由切换「画面续播」与「继续纯听」（默认跟随对端模式）
             if (media.isVideo) {
                 val pillShape = RoundedCornerShape(999.dp)
-                Row(
-                    modifier = Modifier
-                        .graphicsLayer {
-                            val p = dropProgress.value.coerceIn(0f, 1f)
-                            alpha = when (exitMode) {
-                                NearbyReceiveStageExit.None -> p
-                                NearbyReceiveStageExit.Accepting,
-                                NearbyReceiveStageExit.Rejecting -> (1f - exitProgress.value * 2f).coerceIn(0f, 1f)
-                            }
-                            translationY = if (reduceMotion) 0f else (1f - p) * 18f
+                NearbyGlassPill(
+                    nativeContainerColor = Color.White.copy(alpha = 0.14f),
+                    backdrop = stageBackdrop,
+                    shape = pillShape,
+                    glassContainerColor = Color.Black.copy(alpha = 0.28f),
+                    borderColor = Color.White.copy(alpha = 0.22f),
+                    borderWidth = 0.9.dp,
+                    blurRadius = 16.dp,
+                    modifier = Modifier.graphicsLayer {
+                        val p = dropProgress.value.coerceIn(0f, 1f)
+                        alpha = when (exitMode) {
+                            NearbyReceiveStageExit.None -> p
+                            NearbyReceiveStageExit.Accepting,
+                            NearbyReceiveStageExit.Rejecting -> (1f - exitProgress.value * 2f).coerceIn(0f, 1f)
                         }
-                        .clip(pillShape)
-                        .background(Color.White.copy(alpha = 0.14f))
-                        .border(1.dp, Color.White.copy(alpha = 0.20f), pillShape)
-                        .padding(3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        translationY = if (reduceMotion) 0f else (1f - p) * 18f
+                    },
                 ) {
-                    val selectMode: (Boolean) -> Unit = { audioOnlySelected ->
-                        if (openAsAudioOnly != audioOnlySelected) {
-                            openAsAudioOnly = audioOnlySelected
-                            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    Row(
+                        modifier = Modifier.padding(3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        val selectMode: (Boolean) -> Unit = { audioOnlySelected ->
+                            if (openAsAudioOnly != audioOnlySelected) {
+                                openAsAudioOnly = audioOnlySelected
+                                if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
                         }
-                    }
-                    Row(
-                        modifier = Modifier
-                            .clip(pillShape)
-                            .background(if (!openAsAudioOnly) accent else Color.Transparent)
-                            .clickable(enabled = exitMode == NearbyReceiveStageExit.None) { selectMode(false) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        AppIcon(
-                            imageVector = Icons.Outlined.SmartDisplay,
-                            contentDescription = null,
-                            tint = if (!openAsAudioOnly) AppContentColors.onAccent() else Color.White.copy(alpha = 0.84f),
-                            modifier = Modifier.size(14.dp),
-                        )
-                        AppText(
-                            text = "画面续播",
-                            color = if (!openAsAudioOnly) AppContentColors.onAccent() else Color.White.copy(alpha = 0.84f),
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = if (!openAsAudioOnly) FontWeight.SemiBold else FontWeight.Medium
-                            ),
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .clip(pillShape)
-                            .background(if (openAsAudioOnly) accent else Color.Transparent)
-                            .clickable(enabled = exitMode == NearbyReceiveStageExit.None) { selectMode(true) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        AppIcon(
-                            imageVector = Icons.Outlined.Headphones,
-                            contentDescription = null,
-                            tint = if (openAsAudioOnly) AppContentColors.onAccent() else Color.White.copy(alpha = 0.84f),
-                            modifier = Modifier.size(14.dp),
-                        )
-                        AppText(
-                            text = "继续纯听",
-                            color = if (openAsAudioOnly) AppContentColors.onAccent() else Color.White.copy(alpha = 0.84f),
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = if (openAsAudioOnly) FontWeight.SemiBold else FontWeight.Medium
-                            ),
-                        )
+                        Row(
+                            modifier = Modifier
+                                .clip(pillShape)
+                                .background(if (!openAsAudioOnly) accent else Color.Transparent)
+                                .clickable(enabled = exitMode == NearbyReceiveStageExit.None) { selectMode(false) }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            AppIcon(
+                                imageVector = Icons.Outlined.SmartDisplay,
+                                contentDescription = null,
+                                tint = if (!openAsAudioOnly) AppContentColors.onAccent() else Color.White.copy(alpha = 0.84f),
+                                modifier = Modifier.size(14.dp),
+                            )
+                            AppText(
+                                text = "画面续播",
+                                color = if (!openAsAudioOnly) AppContentColors.onAccent() else Color.White.copy(alpha = 0.84f),
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (!openAsAudioOnly) FontWeight.SemiBold else FontWeight.Medium
+                                ),
+                            )
+                        }
+                        Row(
+                            modifier = Modifier
+                                .clip(pillShape)
+                                .background(if (openAsAudioOnly) accent else Color.Transparent)
+                                .clickable(enabled = exitMode == NearbyReceiveStageExit.None) { selectMode(true) }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            AppIcon(
+                                imageVector = Icons.Outlined.Headphones,
+                                contentDescription = null,
+                                tint = if (openAsAudioOnly) AppContentColors.onAccent() else Color.White.copy(alpha = 0.84f),
+                                modifier = Modifier.size(14.dp),
+                            )
+                            AppText(
+                                text = "继续纯听",
+                                color = if (openAsAudioOnly) AppContentColors.onAccent() else Color.White.copy(alpha = 0.84f),
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = if (openAsAudioOnly) FontWeight.SemiBold else FontWeight.Medium
+                                ),
+                            )
+                        }
                     }
                 }
             }
@@ -606,52 +645,52 @@ internal fun NearbyReceiveStageOverlay(
                 val chipShape = RoundedCornerShape(999.dp)
                 val remoteLabel = if (remoteDanmaku == true) "弹幕开" else "弹幕关"
                 val localLabel = if (localDanmakuEnabled == true) "弹幕开" else "弹幕关"
-                Row(
-                    modifier = Modifier
-                        .graphicsLayer {
-                            val p = dropProgress.value.coerceIn(0f, 1f)
-                            alpha = when (exitMode) {
-                                NearbyReceiveStageExit.None -> p
-                                NearbyReceiveStageExit.Accepting,
-                                NearbyReceiveStageExit.Rejecting -> (1f - exitProgress.value * 2f).coerceIn(0f, 1f)
-                            }
-                            translationY = if (reduceMotion) 0f else (1f - p) * 18f
+                NearbyGlassPill(
+                    nativeContainerColor = if (syncDanmakuOnAccept) accent.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.14f),
+                    backdrop = stageBackdrop,
+                    shape = chipShape,
+                    glassContainerColor = if (syncDanmakuOnAccept) accent.copy(alpha = 0.34f) else Color.Black.copy(alpha = 0.28f),
+                    borderColor = if (syncDanmakuOnAccept) accent.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.22f),
+                    borderWidth = 0.9.dp,
+                    blurRadius = 16.dp,
+                    modifier = Modifier.graphicsLayer {
+                        val p = dropProgress.value.coerceIn(0f, 1f)
+                        alpha = when (exitMode) {
+                            NearbyReceiveStageExit.None -> p
+                            NearbyReceiveStageExit.Accepting,
+                            NearbyReceiveStageExit.Rejecting -> (1f - exitProgress.value * 2f).coerceIn(0f, 1f)
                         }
-                        .clip(chipShape)
-                        .background(
-                            if (syncDanmakuOnAccept) accent.copy(alpha = 0.28f)
-                            else Color.White.copy(alpha = 0.14f)
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = if (syncDanmakuOnAccept) accent.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.22f),
-                            shape = chipShape,
-                        )
-                        .clickable(enabled = exitMode == NearbyReceiveStageExit.None) {
-                            syncDanmakuOnAccept = !syncDanmakuOnAccept
-                            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        }
-                        .padding(horizontal = 14.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        translationY = if (reduceMotion) 0f else (1f - p) * 18f
+                    },
                 ) {
-                    AppIcon(
-                        imageVector = if (syncDanmakuOnAccept) Icons.Outlined.Check else Icons.Outlined.Subtitles,
-                        contentDescription = null,
-                        tint = if (syncDanmakuOnAccept) accent else Color.White.copy(alpha = 0.9f),
-                        modifier = Modifier.size(15.dp),
-                    )
-                    AppText(
-                        text = if (syncDanmakuOnAccept) {
-                            "接续时将同步为「$remoteLabel」"
-                        } else {
-                            "对端$remoteLabel（本机$localLabel）· 点此同步"
-                        },
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(
+                        modifier = Modifier
+                            .clickable(enabled = exitMode == NearbyReceiveStageExit.None) {
+                                syncDanmakuOnAccept = !syncDanmakuOnAccept
+                                if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        AppIcon(
+                            imageVector = if (syncDanmakuOnAccept) Icons.Outlined.Check else Icons.Outlined.Subtitles,
+                            contentDescription = null,
+                            tint = if (syncDanmakuOnAccept) accent else Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(15.dp),
+                        )
+                        AppText(
+                            text = if (syncDanmakuOnAccept) {
+                                "接续时将同步为「$remoteLabel」"
+                            } else {
+                                "对端$remoteLabel（本机$localLabel）· 点此同步"
+                            },
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
 
@@ -673,20 +712,24 @@ internal fun NearbyReceiveStageOverlay(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                AppIconButton(
-                    onClick = { triggerReject() },
-                    enabled = exitMode == NearbyReceiveStageExit.None,
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(Color.White.copy(alpha = 0.16f)),
+                NearbyGlassPill(
+                    nativeContainerColor = Color.White.copy(alpha = 0.16f),
+                    backdrop = stageBackdrop,
+                    glassContainerColor = Color.White.copy(alpha = 0.14f),
+                    modifier = Modifier.size(46.dp),
                 ) {
-                    AppIcon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = "暂不接收",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp),
-                    )
+                    AppIconButton(
+                        onClick = { triggerReject() },
+                        enabled = exitMode == NearbyReceiveStageExit.None,
+                        modifier = Modifier.matchParentSize(),
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = "暂不接收",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
                 Spacer(Modifier.size(0.dp))
                 AppPrimaryButton(

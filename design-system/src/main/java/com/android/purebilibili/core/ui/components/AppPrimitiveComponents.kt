@@ -326,7 +326,15 @@ fun AppSnackbarHost(
     SnackbarHost(
         hostState = hostState,
         modifier = modifier,
-    )
+    ) { data ->
+        Snackbar(
+            snackbarData = data,
+            containerColor = com.android.purebilibili.core.ui.AppSurfaceTokens.surfaceContainerHigh(),
+            contentColor = AppContentColors.primaryText(),
+            actionColor = AppContentColors.accent(),
+            dismissActionContentColor = AppContentColors.secondaryText(),
+        )
+    }
 }
 
 private val MaterialTabHorizontalTextPadding = 16.dp

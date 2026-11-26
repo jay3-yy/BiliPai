@@ -170,34 +170,35 @@ internal fun NearbyDevicesPanel(
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
                             color = AppContentColors.primaryText(),
                         )
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(999.dp))
-                                .background(
-                                    if (state.receiving) accent.copy(alpha = 0.14f)
-                                    else AppSurfaceTokens.surfaceContainerHighest()
-                                )
-                                .clickable {
-                                    deviceNameDraft = state.localDeviceName
-                                    editingDeviceName = !editingDeviceName
-                                }
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        NearbyGlassPill(
+                            nativeContainerColor = if (state.receiving) accent.copy(alpha = 0.14f)
+                            else AppSurfaceTokens.surfaceContainerHighest(),
+                            glassContainerColor = if (state.receiving) accent.copy(alpha = 0.16f) else null,
                         ) {
-                            AppText(
-                                text = state.localDeviceName,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                color = if (state.receiving) accent else AppContentColors.secondaryText(),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            AppIcon(
-                                imageVector = Icons.Outlined.Edit,
-                                contentDescription = "修改本机名称",
-                                tint = if (state.receiving) accent else AppContentColors.secondaryText(),
-                                modifier = Modifier.size(12.dp),
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .clickable {
+                                        deviceNameDraft = state.localDeviceName
+                                        editingDeviceName = !editingDeviceName
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                AppText(
+                                    text = state.localDeviceName,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                    color = if (state.receiving) accent else AppContentColors.secondaryText(),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                AppIcon(
+                                    imageVector = Icons.Outlined.Edit,
+                                    contentDescription = "修改本机名称",
+                                    tint = if (state.receiving) accent else AppContentColors.secondaryText(),
+                                    modifier = Modifier.size(12.dp),
+                                )
+                            }
                         }
                     }
                     AnimatedContent(
@@ -232,9 +233,8 @@ internal fun NearbyDevicesPanel(
                 enter = if (reduceMotion) fadeIn(continuityTween(0)) else expandVertically(continuityTween(180)) + fadeIn(continuityTween(160)),
                 exit = if (reduceMotion) fadeOut(continuityTween(0)) else shrinkVertically(continuityTween(160)) + fadeOut(continuityTween(120)),
             ) {
-                AppSurface(
-                    shape = AppShapes.container(ContainerLevel.Card),
-                    color = AppSurfaceTokens.surfaceContainer(),
+                NearbySheetCardSurface(
+                    nativeColor = AppSurfaceTokens.surfaceContainer(),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
@@ -317,9 +317,8 @@ internal fun NearbyDevicesPanel(
                         }
                     }
                 } else if (state.receiving) {
-                    AppSurface(
-                        shape = AppShapes.container(ContainerLevel.Card),
-                        color = AppSurfaceTokens.surfaceContainer(),
+                    NearbySheetCardSurface(
+                        nativeColor = AppSurfaceTokens.surfaceContainer(),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Column(
@@ -342,9 +341,8 @@ internal fun NearbyDevicesPanel(
 
                 // 3. 接收行为偏好：受信任设备推送自动接续
                 if (state.receiving || sortedPeers.isNotEmpty()) {
-                    AppSurface(
-                        shape = AppShapes.container(ContainerLevel.Card),
-                        color = AppSurfaceTokens.surfaceContainer(),
+                    NearbySheetCardSurface(
+                        nativeColor = AppSurfaceTokens.surfaceContainer(),
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Row(
@@ -418,9 +416,9 @@ internal fun NearbyDevicesPanel(
                         }
 
                         discoveredUnpaired.forEach { peer ->
-                            AppSurface(
-                                shape = AppShapes.container(ContainerLevel.Card),
-                                color = AppSurfaceTokens.surfaceContainerHigh(),
+                            NearbySheetCardSurface(
+                                nativeColor = AppSurfaceTokens.surfaceContainerHigh(),
+                                elevated = true,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 Row(
@@ -471,9 +469,8 @@ internal fun NearbyDevicesPanel(
                         }
 
                         // 二维码 / 配对码手动配对折叠区
-                        AppSurface(
-                            shape = AppShapes.container(ContainerLevel.Card),
-                            color = AppSurfaceTokens.surfaceContainer(),
+                        NearbySheetCardSurface(
+                            nativeColor = AppSurfaceTokens.surfaceContainer(),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Column(
@@ -618,16 +615,14 @@ private fun NearbySectionHeader(
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
             color = AppContentColors.secondaryText(),
         )
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .background(AppSurfaceTokens.surfaceContainerHighest())
-                .padding(horizontal = 6.dp, vertical = 1.dp),
+        NearbyGlassPill(
+            nativeContainerColor = AppSurfaceTokens.surfaceContainerHighest(),
         ) {
             AppText(
                 text = badge,
                 style = MaterialTheme.typography.labelSmall,
                 color = AppContentColors.secondaryText(),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
             )
         }
     }
@@ -666,9 +661,10 @@ private fun NearbyDeviceTransferCard(
         label = "nearbyDeviceConnectedTint",
     )
 
-    AppSurface(
+    NearbySheetCardSurface(
+        nativeColor = baseContainer,
         shape = cardShape,
-        color = baseContainer,
+        elevated = true,
         modifier = Modifier
             .fillMaxWidth()
             .then(
@@ -810,9 +806,9 @@ private fun NearbyDeviceTransferCard(
             if (remotePlayback != null) {
                 val remoteMedia = remotePlayback.video
                 val estPos = estimateNearbyPlaybackPositionMs(remoteMedia, System.currentTimeMillis())
-                AppSurface(
+                NearbySheetCardSurface(
+                    nativeColor = AppSurfaceTokens.surfaceContainer(),
                     shape = RoundedCornerShape(12.dp),
-                    color = AppSurfaceTokens.surfaceContainer(),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(

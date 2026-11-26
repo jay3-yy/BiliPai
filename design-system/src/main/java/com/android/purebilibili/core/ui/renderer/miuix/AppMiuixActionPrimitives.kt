@@ -1,6 +1,7 @@
 package com.android.purebilibili.core.ui.renderer.miuix
 
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -198,11 +199,13 @@ internal fun AppMiuixSnackbar(
     action: (@Composable () -> Unit)?,
     content: @Composable () -> Unit,
 ) {
-    val colors = MiuixSnackbarDefaults.snackbarColors()
-    AppMiuixSnackbarContainer(modifier = modifier, containerColor = colors.containerColor) {
+    // 跟随当前深浅色主题，避免暗黑模式下 Miuix 默认反色容器刺眼发白。
+    val containerColor = AppSurfaceTokens.surfaceContainerHigh()
+    val contentColor = AppContentColors.primaryText()
+    AppMiuixSnackbarContainer(modifier = modifier, containerColor = containerColor) {
         CompositionLocalProvider(
-            MiuixLocalContentColor provides colors.contentColor,
-            androidx.compose.material3.LocalContentColor provides colors.contentColor,
+            MiuixLocalContentColor provides contentColor,
+            androidx.compose.material3.LocalContentColor provides contentColor,
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -234,8 +237,13 @@ internal fun AppMiuixMessageSnackbar(
     onDismiss: (() -> Unit)?,
     modifier: Modifier,
 ) {
-    val colors = MiuixSnackbarDefaults.snackbarColors()
-    AppMiuixSnackbarContainer(modifier = modifier, containerColor = colors.containerColor) {
+    // 跟随当前深浅色主题，避免暗黑模式下 Miuix 默认反色容器刺眼发白。
+    val containerColor = AppSurfaceTokens.surfaceContainerHigh()
+    val contentColor = AppContentColors.primaryText()
+    val actionContainerColor = AppContentColors.accent()
+    val actionContentColor = AppContentColors.onAccent()
+    val dismissActionContentColor = AppContentColors.secondaryText()
+    AppMiuixSnackbarContainer(modifier = modifier, containerColor = containerColor) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -244,7 +252,7 @@ internal fun AppMiuixMessageSnackbar(
         ) {
             MiuixText(
                 text = message,
-                color = colors.contentColor,
+                color = contentColor,
                 style = MiuixTheme.textStyles.body2,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -259,8 +267,8 @@ internal fun AppMiuixMessageSnackbar(
                     minWidth = 26.dp,
                     minHeight = 26.dp,
                     colors = MiuixButtonDefaults.textButtonColorsPrimary(
-                        color = colors.actionContainerColor,
-                        textColor = colors.actionContentColor,
+                        color = actionContainerColor,
+                        textColor = actionContentColor,
                     ),
                     insideMargin = MiuixSnackbarDefaults.ActionInsideMargin,
                     textStyle = MiuixTheme.textStyles.button,
@@ -270,7 +278,7 @@ internal fun AppMiuixMessageSnackbar(
                 MiuixIcon(
                     imageVector = MiuixIcons.Basic.Close,
                     contentDescription = "关闭",
-                    tint = colors.dismissActionContentColor,
+                    tint = dismissActionContentColor,
                     modifier = Modifier
                         .padding(start = AppSpacingTokens.Small)
                         .size(20.dp)
