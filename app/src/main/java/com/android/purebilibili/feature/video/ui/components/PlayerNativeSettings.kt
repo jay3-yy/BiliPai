@@ -180,6 +180,12 @@ internal fun PlayerSettingsRow(
         "加载字幕" -> Icons.Outlined.FileOpen
         "播放信息" -> Icons.Outlined.Info
         "手势说明与开关" -> Icons.Outlined.TouchApp
+        "左右滑动" -> Icons.Outlined.SwapHoriz
+        "左侧上下滑动" -> Icons.Outlined.LightMode
+        "右侧上下滑动" -> Icons.Outlined.VolumeUp
+        "长按画面" -> Icons.Outlined.Speed
+        "双指缩放 / 调速" -> Icons.Outlined.Fullscreen
+        "底边上滑" -> Icons.Outlined.ExpandLess
         "举报" -> Icons.Outlined.ErrorOutline
         FullscreenActionCountSettings.TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ic_settings_action_counts_24)
         com.android.purebilibili.core.store.FullscreenTopBarSettings.TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ms_widgets_24)
@@ -189,7 +195,10 @@ internal fun PlayerSettingsRow(
         PLAYER_QUALITY_PLACEMENT_TITLE -> rememberAppQualityIcon()
         PLAYER_SPEED_PLACEMENT_TITLE, "播放倍速" -> rememberAppSpeedIcon()
         "返回" -> Icons.Outlined.ArrowBack
-        else -> Icons.Outlined.Settings
+        else -> when {
+            title.startsWith("长按倍速滑动调节") -> Icons.Outlined.Tune
+            else -> Icons.Outlined.Settings
+        }
     }
     val nativeMiuix = isMiuixNonGlassEnabled()
     val iconTint = if (nativeMiuix) AppContentColors.secondaryText() else MaterialTheme.colorScheme.onSurfaceVariant

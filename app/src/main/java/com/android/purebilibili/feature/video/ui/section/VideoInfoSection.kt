@@ -884,11 +884,6 @@ fun VideoTitleWithDesc(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                videoBadges.forEach { badge ->
-                    VideoDetailBadgeChip(
-                        text = badge,
-                    )
-                }
                 if (showDeclarationRows) {
                     if (argueMsg.isNotBlank()) {
                         VideoArgueMsgRow(argueMsg = argueMsg, modifier = Modifier.align(Alignment.CenterVertically))
@@ -899,6 +894,11 @@ fun VideoTitleWithDesc(
                             modifier = Modifier.align(Alignment.CenterVertically),
                         )
                     }
+                }
+                videoBadges.forEach { badge ->
+                    VideoDetailBadgeChip(
+                        text = badge,
+                    )
                 }
                 honorChips.forEach { (_, text, jumpUrl) ->
                     VideoHonorChip(
