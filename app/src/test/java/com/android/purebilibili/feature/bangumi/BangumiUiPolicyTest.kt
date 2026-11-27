@@ -156,6 +156,19 @@ class BangumiUiPolicyTest {
     }
 
     @Test
+    fun `episode page resolution preserves active episode across sort direction toggles`() {
+        // 120 episodes, sourceIndex = 10 (11th episode): ascending page 0, descending orderedIndex 109 -> page 2
+        assertEquals(0, resolveBangumiEpisodePageForOrder(120, sourceIndex = 10, episodesPerPage = 50, descending = false))
+        assertEquals(2, resolveBangumiEpisodePageForOrder(120, sourceIndex = 10, episodesPerPage = 50, descending = true))
+        // sourceIndex = 115 (116th episode): ascending page 2, descending orderedIndex 4 -> page 0
+        assertEquals(2, resolveBangumiEpisodePageForOrder(120, sourceIndex = 115, episodesPerPage = 50, descending = false))
+        assertEquals(0, resolveBangumiEpisodePageForOrder(120, sourceIndex = 115, episodesPerPage = 50, descending = true))
+        // Invalid or empty falls back cleanly to 0
+        assertEquals(0, resolveBangumiEpisodePageForOrder(0, sourceIndex = 0, episodesPerPage = 50, descending = true))
+        assertEquals(0, resolveBangumiEpisodePageForOrder(120, sourceIndex = -1, episodesPerPage = 50, descending = true))
+    }
+
+    @Test
     fun `toggle orientation on ordinary phone exits to portrait when fullscreen`() {
         assertEquals(
             android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,

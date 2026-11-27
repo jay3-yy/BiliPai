@@ -3496,78 +3496,20 @@ fun AppNavigation(
             Box(modifier = Modifier.fillMaxSize().then(imagePreviewPageMotion.backdropModifier)) {
             // 账号弹层必须在同窗宿主内组合，才能取得玻璃容器和菜单锚点的 presenter。
             if (sidebarAccountSwitcherVisible) {
-                AccountSwitchDialog(
-                    accounts = sidebarAccounts,
-                    activeAccountMid = sidebarActiveAccountMid,
-                    playbackAccountMid = sidebarPlaybackAccountMid,
-                    purposeAccountMids = sidebarAccountSnapshot?.purposeAccountMids,
-                    onSetPurpose = { purpose, mid ->
-                        coroutineScope.launch(Dispatchers.IO) {
-                            val updated = AccountSessionStore.setPurposeAccountMid(context, purpose, mid)
-                            withContext(Dispatchers.Main.immediate) {
-                                if (updated) {
-                                    sidebarAccountSessionGeneration += 1
-                                    accountSessionRefreshGeneration += 1
-                                    com.android.purebilibili.data.repository.VideoRepository.clearVideoDetailCaches()
-                                    homeViewModel.refresh()
-                                    Toast.makeText(context, "账号用途已更新，下次请求生效", Toast.LENGTH_SHORT).show()
-                                } else Toast.makeText(context, "账号不可用，请重新登录后再试", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    },
+                AppNavigationSidebarAccountSwitchDialogHost(
+                    context = context,
+                    coroutineScope = coroutineScope,
+                    snapshot = sidebarAccountSnapshot,
+                    homeViewModel = homeViewModel,
                     onDismiss = { sidebarAccountSwitcherVisible = false },
                     onAddAccount = {
                         sidebarAccountSwitcherVisible = false
                         pushNavigation3Key(BiliPaiNavKey.Login)
                     },
-                    onSwitch = { mid ->
-                        coroutineScope.launch(Dispatchers.IO) {
-                            val switched = AccountSessionStore.activateAccount(context, mid)
-                            withContext(Dispatchers.Main.immediate) {
-                                if (!switched) {
-                                    Toast.makeText(context, "切换账号失败", Toast.LENGTH_SHORT).show()
-                                    return@withContext
-                                }
-                                sidebarAccountSessionGeneration += 1
-                                accountSessionRefreshGeneration += 1
-                                homeViewModel.refresh()
-                                sidebarAccountSwitcherVisible = false
-                                Toast.makeText(context, "已切换账号", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    },
-                    onSetPlayback = { mid ->
-                        coroutineScope.launch(Dispatchers.IO) {
-                            val updated = AccountSessionStore.setPlaybackAccountMid(context, mid)
-                            withContext(Dispatchers.Main.immediate) {
-                                if (updated) {
-                                    sidebarAccountSessionGeneration += 1
-                                } else {
-                                    Toast.makeText(
-                                        context,
-                                        "播放账号不可用，请重新登录后再试",
-                                        Toast.LENGTH_SHORT,
-                                    ).show()
-                                }
-                            }
-                        }
-                    },
-                    onRemove = { mid ->
-                        if (mid == sidebarActiveAccountMid) {
-                            Toast.makeText(context, "请先切换到其他账号后再移除当前账号", Toast.LENGTH_SHORT)
-                                .show()
-                        } else {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                val removed = AccountSessionStore.removeAccount(context, mid)
-                                withContext(Dispatchers.Main.immediate) {
-                                    if (removed) {
-                                        sidebarAccountSessionGeneration += 1
-                                    } else {
-                                        Toast.makeText(context, "移除账号失败", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }
-                        }
+                    onSidebarSessionUpdated = { sidebarAccountSessionGeneration += 1 },
+                    onAccountActivated = {
+                        sidebarAccountSessionGeneration += 1
+                        accountSessionRefreshGeneration += 1
                     },
                 )
             }
@@ -4127,16 +4069,6 @@ fun AppNavigation(
                             }
                         },
                         onUserClick = { mid -> pushNavigation3Key(BiliPaiNavKey.Space(mid)) }
-                    )
-                }
-
-                @Composable
-                fun SettingsTabletEntry(key: BiliPaiNavKey, content: @Composable () -> Unit) {
-                    SettingsTabletNavEntryShell(
-                        key = key,
-                        onSystemBack = { performSystemBackAction() },
-                        onPushKey = { pushNavigation3Key(it) },
-                        content = content,
                     )
                 }
 
@@ -5266,315 +5198,6 @@ fun AppNavigation(
                 }
 
                 @Composable
-                fun RenderOnboardingEntryContent(key: BiliPaiNavKey) {
-                    com.android.purebilibili.feature.onboarding.OnboardingScreen(
-                        onBack = { performSystemBackAction() },
-                    )
-                }
-
-                @Composable
-                fun RenderSettingsEntryContent(key: BiliPaiNavKey, isBottomPagerHosted: Boolean) {
-                    SettingsTabletEntry(key) {
-                        SettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBack = { performSystemBackAction() },
-                            onOpenSourceLicensesClick = { pushNavigation3Key(BiliPaiNavKey.OpenSourceLicenses) },
-                            onAppearanceClick = { pushNavigation3Key(BiliPaiNavKey.AppearanceSettings) },
-                            onHomeClick = { pushNavigation3Key(BiliPaiNavKey.HomeSettings) },
-                            onPlaybackClick = { pushNavigation3Key(BiliPaiNavKey.PlaybackSettings) },
-                            onPermissionClick = { pushNavigation3Key(BiliPaiNavKey.PermissionSettings) },
-                            onSpacePrivacyClick = { pushNavigation3Key(BiliPaiNavKey.SpacePrivacySettings) },
-                            onLoginActivityClick = { pushNavigation3Key(BiliPaiNavKey.LoginActivitySettings) },
-                            onMessageNotificationClick = { pushNavigation3Key(BiliPaiNavKey.MessageNotificationSettings) },
-                            onPluginsClick = { pushNavigation3Key(BiliPaiNavKey.PluginsSettings()) },
-                            onSettingsShareClick = { pushNavigation3Key(BiliPaiNavKey.SettingsShare) },
-                            onWebDavBackupClick = { pushNavigation3Key(BiliPaiNavKey.WebDavBackup) },
-                            onNavigateToBottomBarSettings = { pushNavigation3Key(BiliPaiNavKey.BottomBarSettings) },
-                            onTipsClick = { pushNavigation3Key(BiliPaiNavKey.TipsSettings) },
-                            onKeyboardShortcutsClick = { pushNavigation3Key(BiliPaiNavKey.KeyboardShortcutsSettings) },
-                            onProcessMemoryClick = { pushNavigation3Key(BiliPaiNavKey.ProcessMemory) },
-                            onPerformanceHistoryClick = { pushNavigation3Key(BiliPaiNavKey.PerformanceHistory) },
-                            onReplayOnboardingClick = { pushNavigation3Target(BiliPaiNavKey.Onboarding) },
-                            onCategoryClick = { category ->
-                                pushNavigation3Key(resolveSettingsCategoryNavKey(category))
-                            },
-                            onSearchOpen = { pushNavigation3Key(BiliPaiNavKey.SettingsSearch) },
-                            forceSinglePaneContent = true,
-                            rootEntranceEnabled = !isBottomPagerHosted,
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderSettingsCategoryEntryContent(key: BiliPaiNavKey) {
-                    val categoryKey = key as BiliPaiNavKey.SettingsCategory
-                    SettingsTabletEntry(key) {
-                        SettingsCategoryScreen(
-                            category = categoryKey.category,
-                            viewModel = settingsViewModel,
-                            onBack = { performSystemBackAction() },
-                            onSettingsHome = {
-                                val rootIndex = navigation3BackStack.indexOfLast { it == BiliPaiNavKey.Settings }
-                                if (rootIndex >= 0) {
-                                    replaceNavigation3BackStack(navigation3BackStack.take(rootIndex + 1))
-                                } else {
-                                    val categoryIndex = navigation3BackStack.indexOfFirst { it is BiliPaiNavKey.SettingsCategory }
-                                    val prefix = navigation3BackStack.take(categoryIndex.coerceAtLeast(1))
-                                    replaceNavigation3BackStack(prefix + BiliPaiNavKey.Settings)
-                                }
-                            },
-                            onOpenSourceLicensesClick = { pushNavigation3Key(BiliPaiNavKey.OpenSourceLicenses) },
-                            onAppearanceClick = { pushNavigation3Key(BiliPaiNavKey.AppearanceSettings) },
-                            onHomeClick = { pushNavigation3Key(BiliPaiNavKey.HomeSettings) },
-                            onPlaybackClick = { pushNavigation3Key(BiliPaiNavKey.PlaybackSettings) },
-                            onPermissionClick = { pushNavigation3Key(BiliPaiNavKey.PermissionSettings) },
-                            onSpacePrivacyClick = { pushNavigation3Key(BiliPaiNavKey.SpacePrivacySettings) },
-                            onLoginActivityClick = { pushNavigation3Key(BiliPaiNavKey.LoginActivitySettings) },
-                            onMessageNotificationClick = { pushNavigation3Key(BiliPaiNavKey.MessageNotificationSettings) },
-                            onPluginsClick = { pushNavigation3Key(BiliPaiNavKey.PluginsSettings()) },
-                            onSettingsShareClick = { pushNavigation3Key(BiliPaiNavKey.SettingsShare) },
-                            onWebDavBackupClick = { pushNavigation3Key(BiliPaiNavKey.WebDavBackup) },
-                            onNavigateToBottomBarSettings = { pushNavigation3Key(BiliPaiNavKey.BottomBarSettings) },
-                            onTipsClick = { pushNavigation3Key(BiliPaiNavKey.TipsSettings) },
-                            onKeyboardShortcutsClick = { pushNavigation3Key(BiliPaiNavKey.KeyboardShortcutsSettings) },
-                            onProcessMemoryClick = { pushNavigation3Key(BiliPaiNavKey.ProcessMemory) },
-                            onPerformanceHistoryClick = { pushNavigation3Key(BiliPaiNavKey.PerformanceHistory) },
-                            onReplayOnboardingClick = { pushNavigation3Target(BiliPaiNavKey.Onboarding) },
-                            onCategoryClick = { category ->
-                                pushNavigation3Key(resolveSettingsCategoryNavKey(category))
-                            },
-                            onSearchOpen = { pushNavigation3Key(BiliPaiNavKey.SettingsSearch) },
-                            forceSinglePaneContent = true,
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderSettingsSearchEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        SettingsSearchScreen(
-                            viewModel = settingsViewModel,
-                            onBack = { performSystemBackAction() },
-                            onCategoryClick = { category ->
-                                pushNavigation3Key(resolveSettingsCategoryNavKey(category))
-                            },
-                            onSearchResultClick = { result ->
-                                resolveSettingsSearchNavigation(result)?.let { navKey ->
-                                    pushNavigation3Key(navKey)
-                                }
-                            },
-                            mainHazeState = mainHazeState,
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderOpenSourceLicensesEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.OpenSourceLicensesScreen(
-                            onBack = { performSystemBackAction() }
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderAppearanceSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        AppearanceSettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBack = { performSystemBackAction() },
-                            onNavigateToIconSettings = { pushNavigation3Key(BiliPaiNavKey.IconSettings) },
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderHomeSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.HomeSettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBack = { performSystemBackAction() },
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderIconSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.IconSettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBack = { performSystemBackAction() }
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderAnimationSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.AnimationSettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBack = { performSystemBackAction() },
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderPlaybackSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        PlaybackSettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBack = { performSystemBackAction() },
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderPermissionSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.PermissionSettingsScreen(
-                            onBack = { performSystemBackAction() }
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderSpacePrivacySettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.SpacePrivacySettingsScreen(
-                            onBack = { performSystemBackAction() }
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderLoginActivitySettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.LoginActivitySettingsScreen(
-                            onBack = { performSystemBackAction() }
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderMessageNotificationSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.MessageNotificationSettingsScreen(
-                            onBack = { performSystemBackAction() },
-                            onCustomPushClick = { pushNavigation3Key(BiliPaiNavKey.CustomPushSettings) },
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderCustomPushSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.CustomPushSettingsScreen(
-                            onBack = { performSystemBackAction() },
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderPluginsSettingsEntryContent(key: BiliPaiNavKey.PluginsSettings) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.PluginsScreen(
-                            onBack = { performSystemBackAction() },
-                            initialImportUrl = key.importUrl,
-                            onNavigate = { pushNavigation3Key(it) },
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderJsPluginContentEntryContent(key: BiliPaiNavKey) {
-                    val jsPluginKey = key as BiliPaiNavKey.JsPluginContent
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.plugin.js.BiliPaiJsPluginContentScreen(
-                            pluginId = jsPluginKey.pluginId,
-                            onBack = { performSystemBackAction() },
-                            onPlayMedia = { launchId ->
-                                pushNavigation3Key(BiliPaiNavKey.ExternalMedia(launchId))
-                            }
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderExternalMediaEntryContent(key: BiliPaiNavKey) {
-                    val mediaKey = key as BiliPaiNavKey.ExternalMedia
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.plugin.js.ExternalMediaPlayerScreen(
-                            launchId = mediaKey.launchId,
-                            onBack = { performSystemBackAction() }
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderBottomBarSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.BottomBarSettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBack = { performSystemBackAction() }
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderSettingsShareEntryContent(key: BiliPaiNavKey) {
-                    val settingsShareViewModel: SettingsShareViewModel = viewModel(
-                        factory = remember(application) { SettingsShareViewModelFactory(application) }
-                    )
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.share.SettingsShareScreen(
-                            onBack = { performSystemBackAction() },
-                            viewModel = settingsShareViewModel
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderWebDavBackupEntryContent(key: BiliPaiNavKey) {
-                    val webDavBackupViewModel: WebDavBackupViewModel = viewModel(
-                        factory = remember(application) { WebDavBackupViewModelFactory(application) }
-                    )
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.webdav.WebDavBackupScreen(
-                            onBack = { performSystemBackAction() },
-                            viewModel = webDavBackupViewModel
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderTipsSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.TipsSettingsScreen(
-                            onBack = { performSystemBackAction() },
-                            onNavigate = { targetKey -> pushNavigation3Key(targetKey) },
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderKeyboardShortcutsSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.KeyboardShortcutsSettingsScreen(
-                            onBack = { performSystemBackAction() }
-                        )
-                    }
-                }
-
-                @Composable
-                fun RenderGamepadControlSettingsEntryContent(key: BiliPaiNavKey) {
-                    SettingsTabletEntry(key) {
-                        com.android.purebilibili.feature.settings.GamepadControlSettingsScreen(
-                            onBack = { performSystemBackAction() }
-                        )
-                    }
-                }
-
-                @Composable
                 fun RenderAicuQueryEntryContent(key: BiliPaiNavKey) {
                     val aicuKey = key as BiliPaiNavKey.AicuQuery
                     com.android.purebilibili.feature.aicu.AicuRoute(
@@ -6668,7 +6291,8 @@ fun AppNavigation(
                     isBottomPagerPageVisibleDuringNavigation: Boolean = false,
                     isBottomPagerHosted: Boolean = false,
                 ) {
-                    when (resolveBiliPaiNavEntryContentRole(key)) {
+                    val contentRole = resolveBiliPaiNavEntryContentRole(key)
+                    when (contentRole) {
                         BiliPaiNavEntryContentRole.MAIN_HOST -> {
                             val entranceReady = com.android.purebilibili.core.ui.animation.LocalAppNavigationEntranceReady.current
                             DisposableEffect(entranceReady) {
@@ -6822,82 +6446,50 @@ fun AppNavigation(
                             RenderProfileEntryContent(key, isBottomPagerPageActive, isBottomPagerHosted)
                         BiliPaiNavEntryContentRole.VIDEO_DETAIL ->
                             RenderVideoDetailEntryContent(key)
-                        BiliPaiNavEntryContentRole.ONBOARDING ->
-                            RenderOnboardingEntryContent(key)
-                        BiliPaiNavEntryContentRole.SETTINGS ->
-                            RenderSettingsEntryContent(key, isBottomPagerHosted)
-                        BiliPaiNavEntryContentRole.SETTINGS_CATEGORY ->
-                            RenderSettingsCategoryEntryContent(key)
-                        BiliPaiNavEntryContentRole.PROCESS_MEMORY ->
-                            SettingsTabletEntry(key) {
-                                com.android.purebilibili.feature.settings.ProcessMemoryScreen(
-                                    onBack = { performSystemBackAction() }
-                                )
-                            }
-                        BiliPaiNavEntryContentRole.PERFORMANCE_HISTORY ->
-                            SettingsTabletEntry(key) {
-                                com.android.purebilibili.feature.settings.PerformanceHistoryScreen(
-                                    onBack = { performSystemBackAction() }
-                                )
-                            }
-                        BiliPaiNavEntryContentRole.SETTINGS_SEARCH ->
-                            RenderSettingsSearchEntryContent(key)
-                        BiliPaiNavEntryContentRole.OPEN_SOURCE_LICENSES ->
-                            RenderOpenSourceLicensesEntryContent(key)
-                        BiliPaiNavEntryContentRole.APPEARANCE_SETTINGS ->
-                            RenderAppearanceSettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.HOME_SETTINGS ->
-                            RenderHomeSettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.ICON_SETTINGS ->
-                            RenderIconSettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.ANIMATION_SETTINGS ->
-                            RenderAnimationSettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.PLAYBACK_SETTINGS ->
-                            RenderPlaybackSettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.PERMISSION_SETTINGS ->
-                            RenderPermissionSettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.SPACE_PRIVACY_SETTINGS ->
-                            RenderSpacePrivacySettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.LOGIN_ACTIVITY_SETTINGS ->
-                            RenderLoginActivitySettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.MESSAGE_NOTIFICATION_SETTINGS ->
-                            RenderMessageNotificationSettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.CUSTOM_PUSH_SETTINGS ->
-                            RenderCustomPushSettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.PLUGINS_SETTINGS ->
-                            RenderPluginsSettingsEntryContent(key as BiliPaiNavKey.PluginsSettings)
-                        BiliPaiNavEntryContentRole.PLUGIN_CENTER_DETAIL ->
-                            SettingsTabletEntry(key) {
-                                com.android.purebilibili.feature.settings.PluginCenterDetailScreen(
-                                    key = key,
-                                    onBack = { performSystemBackAction() },
-                                    onOpenFilterHistory = { pushNavigation3Key(BiliPaiNavKey.ContentFilterHistory) },
-                                )
-                            }
-                        BiliPaiNavEntryContentRole.CONTENT_FILTER_HISTORY ->
-                            SettingsTabletEntry(key) {
-                                com.android.purebilibili.feature.settings.screen.ContentFilterHistoryScreen(
-                                    onBack = { performSystemBackAction() },
-                                    onVideoClick = { bvid -> navigateToVideoInNavigation3(bvid, 0L, "") },
-                                    onDynamicClick = { dynamicId -> pushNavigation3Key(BiliPaiNavKey.DynamicDetail(dynamicId)) },
-                                )
-                            }
-                        BiliPaiNavEntryContentRole.JS_PLUGIN_CONTENT ->
-                            RenderJsPluginContentEntryContent(key)
-                        BiliPaiNavEntryContentRole.EXTERNAL_MEDIA ->
-                            RenderExternalMediaEntryContent(key)
-                        BiliPaiNavEntryContentRole.BOTTOM_BAR_SETTINGS ->
-                            RenderBottomBarSettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.SETTINGS_SHARE ->
-                            RenderSettingsShareEntryContent(key)
-                        BiliPaiNavEntryContentRole.WEB_DAV_BACKUP ->
-                            RenderWebDavBackupEntryContent(key)
-                        BiliPaiNavEntryContentRole.TIPS_SETTINGS ->
-                            RenderTipsSettingsEntryContent(key)
-                        BiliPaiNavEntryContentRole.KEYBOARD_SHORTCUTS_SETTINGS ->
-                            RenderKeyboardShortcutsSettingsEntryContent(key)
+                        BiliPaiNavEntryContentRole.ONBOARDING,
+                        BiliPaiNavEntryContentRole.SETTINGS,
+                        BiliPaiNavEntryContentRole.SETTINGS_CATEGORY,
+                        BiliPaiNavEntryContentRole.PROCESS_MEMORY,
+                        BiliPaiNavEntryContentRole.PERFORMANCE_HISTORY,
+                        BiliPaiNavEntryContentRole.SETTINGS_SEARCH,
+                        BiliPaiNavEntryContentRole.OPEN_SOURCE_LICENSES,
+                        BiliPaiNavEntryContentRole.APPEARANCE_SETTINGS,
+                        BiliPaiNavEntryContentRole.HOME_SETTINGS,
+                        BiliPaiNavEntryContentRole.ICON_SETTINGS,
+                        BiliPaiNavEntryContentRole.ANIMATION_SETTINGS,
+                        BiliPaiNavEntryContentRole.PLAYBACK_SETTINGS,
+                        BiliPaiNavEntryContentRole.PERMISSION_SETTINGS,
+                        BiliPaiNavEntryContentRole.SPACE_PRIVACY_SETTINGS,
+                        BiliPaiNavEntryContentRole.LOGIN_ACTIVITY_SETTINGS,
+                        BiliPaiNavEntryContentRole.MESSAGE_NOTIFICATION_SETTINGS,
+                        BiliPaiNavEntryContentRole.CUSTOM_PUSH_SETTINGS,
+                        BiliPaiNavEntryContentRole.PLUGINS_SETTINGS,
+                        BiliPaiNavEntryContentRole.PLUGIN_CENTER_DETAIL,
+                        BiliPaiNavEntryContentRole.CONTENT_FILTER_HISTORY,
+                        BiliPaiNavEntryContentRole.JS_PLUGIN_CONTENT,
+                        BiliPaiNavEntryContentRole.EXTERNAL_MEDIA,
+                        BiliPaiNavEntryContentRole.BOTTOM_BAR_SETTINGS,
+                        BiliPaiNavEntryContentRole.SETTINGS_SHARE,
+                        BiliPaiNavEntryContentRole.WEB_DAV_BACKUP,
+                        BiliPaiNavEntryContentRole.TIPS_SETTINGS,
+                        BiliPaiNavEntryContentRole.KEYBOARD_SHORTCUTS_SETTINGS,
                         BiliPaiNavEntryContentRole.GAMEPAD_CONTROL_SETTINGS ->
-                            RenderGamepadControlSettingsEntryContent(key)
+                            RenderAppSettingsNavigationDestination(
+                                key = key,
+                                role = contentRole,
+                                isBottomPagerHosted = isBottomPagerHosted,
+                                settingsViewModelProvider = { settingsViewModel },
+                                application = application,
+                                mainHazeState = mainHazeState,
+                                navigation3BackStack = navigation3BackStack,
+                                onReplaceBackStack = ::replaceNavigation3BackStack,
+                                onSystemBack = performSystemBackAction,
+                                onPushKey = { pushNavigation3Key(it) },
+                                onPushTarget = { pushNavigation3Target(it) },
+                                onNavigateToVideo = { bvid, cid, coverUrl ->
+                                    navigateToVideoInNavigation3(bvid, cid, coverUrl)
+                                },
+                            )
                         BiliPaiNavEntryContentRole.AICU_QUERY ->
                             RenderAicuQueryEntryContent(key)
                         BiliPaiNavEntryContentRole.WATCH_LATER ->
@@ -7211,433 +6803,110 @@ fun AppNavigation(
                 LocalSettingsContainerOwner provides nowPlayingContainerOwner,
             ) {
             if (bottomBarCanMount) {
-                val bottomBarModifier = Modifier
-                    .then(bottomBarAlignment)
-                    .zIndex(1f)
-                    .then(
-                        if (companionFeedWidth != null && companionSessionVisible) {
-                            // 双栏共用同一内容宽度；玻璃与原生底栏都留在列表面板内。
-                            Modifier.layout { measurable, constraints ->
-                                val feedWidth = (companionContentWidth.roundToPx() *
-                                    companionPaneState.measuredFeedFraction(companionContentWidth.value))
-                                    .toInt().coerceAtMost(constraints.maxWidth)
-                                val placeable = measurable.measure(
-                                    constraints.copy(minWidth = feedWidth, maxWidth = feedWidth),
-                                )
-                                layout(constraints.maxWidth, placeable.height) {
-                                    if (companionPaneState.mode != CompanionPaneMode.Video) {
-                                        placeable.placeRelative(
-                                            (constraints.maxWidth - companionContentWidth.roundToPx()).coerceAtLeast(0),
-                                            0,
-                                        )
-                                    }
-                                }
-                            }
-                        } else Modifier,
-                    )
-                    .then(
-                        if (driveBottomBarByProgress && !sharedNowPlayingTransitionVisible) {
-                            Modifier.videoCardTransitionChromeReveal(
-                                revealProvider = {
-                                    resolveVideoCardTransitionChromeReveal(
-                                        videoCardTransitionClock.depthProgress(),
-                                    )
-                                },
-                                slideDown = true,
-                            )
-                        } else {
-                            Modifier
-                        },
-                    )
-
-                Box(modifier = bottomBarModifier) {
-                    BottomBarMatchedDockVisibility(
-                        visibleState = bottomBarVisibilityState,
-                        edge = BottomBarMatchedDockEdge.BOTTOM,
-                        // 普通视频返回只保留滑入和淡入；玻璃与原生共用，其他显隐沿用默认缩放。
-                        animateScale = !navigation3ReturnSession.isReturningFromDetail,
-                        enterFadeDurationMillis = navMotionSpec.slowFadeDurationMillis,
-                        exitFadeDurationMillis = navMotionSpec.fastFadeDurationMillis
-                    ) {
-                        // The dock may remain mounted at zero reveal during a card handoff.
-                        // Gate visual sampling explicitly instead of relying on viewport bounds.
-                        CompositionLocalProvider(
-                            com.android.purebilibili.core.ui.LocalVisualWorkAllowed provides
-                                (finalBottomBarVisible && !driveBottomBarByProgress),
-                        ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                        val dockAudioContent: LinkedDockNowPlayingSlot? =
-                            if (showAudioNowPlayingInDock && audioNowPlayingItem != null && audioNowPlayingCover != null) {
-                                { audioModifier, dockMergeProgress, iconOnlyProgress, surfaceMergeProgress,
-                                    compactClick, layoutStable ->
-                                    val playbackManager = miniPlayerManager ?: MiniPlayerManager.getInstance(context)
-                                    AudioNowPlayingBar(
-                                        state = AudioNowPlayingBarState(
-                                            bvid = audioNowPlayingItem.bvid,
-                                            title = audioNowPlayingItem.title,
-                                            artist = audioNowPlayingItem.owner,
-                                            artistAvatarUrl = audioNowPlayingItem.ownerFace,
-                                            cover = audioNowPlayingCover,
-                                            isPlaying = playbackManager.isPlaying,
-                                            playbackSpeed = playbackManager.player?.playbackParameters?.speed ?: 1f
-                                        ),
-                                        onCompactClick = compactClick,
-                                        isLayoutStable = layoutStable && bottomBarVisibilityState.isIdle &&
-                                            !driveBottomBarByProgress,
-                                        pauseArtworkRotation = pauseNowPlayingArtworkRotation,
-                                        showDeleteButton = audioNowPlayingBarDeleteButton.value,
-                                        sourceRoute = nowPlayingSourceRoute,
-                                        handoff = audioNowPlayingHandoff,
-                                        onExpand = { hasRecordedSource ->
-                                            val expandRoute = resolveAudioNowPlayingBarExpandRoute(
-                                                opensAudioMode = audioNowPlayingBarOpensAudioMode,
-                                                bvid = audioNowPlayingItem.bvid,
-                                                cid = audioNowPlayingItem.cid,
-                                                coverUrl = audioNowPlayingItem.cover,
-                                                title = audioNowPlayingItem.title,
-                                            )
-                                            if (audioNowPlayingBarOpensAudioMode) {
-                                                navigateToSystemCardWindowOrPush(
-                                                    legacyRouteToBiliPaiNavKey(expandRoute),
-                                                    useRecordedCardSource = hasRecordedSource,
-                                                )
-                                            } else {
-                                                navigateToVideoRouteInNavigation3(
-                                                    route = expandRoute,
-                                                    sourceRoute = nowPlayingSourceRoute,
-                                                    useRecordedCardSource = hasRecordedSource,
-                                                )
-                                            }
-                                        },
-                                        onPlayPause = {
-                                            if (!playbackManager.isActive || !playbackManager.togglePlayPause()) {
-                                                pushNavigation3Target(
-                                                    BiliPaiNavKey.AudioMode(
-                                                        sourceBvid = audioNowPlayingItem.bvid,
-                                                        sourceCid = audioNowPlayingItem.cid
-                                                    )
-                                                )
-                                            }
-                                        },
-                                        onSkipNext = { playbackManager.playNext() },
-                                        onSkipPrevious = { playbackManager.playPrevious() },
-                                        onCancelPlayback = { playbackManager.pausePlayback() },
-                                        onDismiss = {
-                                            playbackManager.pausePlayback()
-                                            AudioNowPlayingSession.dismiss()
-                                        },
-                                        expandDestinationLabel = if (audioNowPlayingBarOpensAudioMode) {
-                                            "听视频"
-                                        } else {
-                                            "视频详情页"
-                                        },
-                                        glassEnabled = effectiveHomeSettings.nowPlayingGlassEnabled,
-                                        blurEnabled = isBottomBarBlurEnabled,
-                                        hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
-                                        miuixBackdrop = bottomBarBackdrop,
-                                        liquidGlassTuning = liquidGlassRenderConfig.tuning,
-                                        liftAboveBottomBar = false,
-                                        consumeNavigationBarsPadding = false,
-                                        dockHosted = isBottomBarFloating,
-                                        dockMergeProgress = dockMergeProgress,
-                                        surfaceMergeProgress = surfaceMergeProgress,
-                                        iconOnlyProgress = iconOnlyProgress,
-                                        modifier = audioModifier
-                                    )
-                                }
-                            } else null
-                        if (!isBottomBarFloating) {
-                            dockAudioContent?.invoke(Modifier, { 0f }, { 0f }, { 0f }, null, true)
-                        }
-                        if (isBottomBarFloating) {
-                            val isBookPosture = appWindowAdaptiveInfo.posture == com.android.purebilibili.core.util.AppFoldPosture.Book
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .then(
-                                        if (isBookPosture) {
-                                            Modifier.padding(start = 24.dp)
-                                        } else {
-                                            Modifier
-                                        }
-                                    ),
-                                contentAlignment = if (isBookPosture) Alignment.CenterStart else Alignment.Center
-                            ) {
-                                FrostedBottomBar(
-                                    nowPlayingContent = dockAudioContent,
-                                    currentItem = currentBottomNavItem,
-                                    onItemClick = handleNavItemClick,
-                                    onHomeDoubleTap = {
-                                        homeScrollChannel.trySend(
-                                            com.android.purebilibili.feature.home.HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH
-                                        )
-                                    },
-                                    onDynamicDoubleTap = {
-                                        dynamicScrollChannel.trySend(
-                                            DynamicScrollRequest.SCROLL_TO_TOP_AND_REFRESH
-                                        )
-                                    },
-                                    onSearchClick = { requestSearchFromBottomBar() },
-                                    onSearchKeywordSubmit = submitBottomBarSearchKeyword,
-                                    searchLaunchKey = bottomBarSearchLaunchKey,
-                                    hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
-                                    isFloating = true,
-                                    labelMode = bottomBarLabelMode,
-                                    visibleItems = visibleBottomBarItems,
-                                    itemColorIndices = bottomBarItemColors,
-                                    itemLabels = bottomBarItemLabels,
-                                    dynamicUnreadCount = dynamicUnreadDisplay,
-                                    homeSettings = bottomBarHomeSettings,
-                                    miuixBackdrop = bottomBarBackdrop,
-                                    motionTier = com.android.purebilibili.core.ui.adaptive.MotionTier.Normal,
-                                    isTransitionRunning = bottomPagerRenderBudget.isTransitionRunning,
-                                    // 底栏是独立的常驻材质层。栏目切换时保持液态玻璃渲染树，
-                                    // 避免先卸载折射效果、页面落定后再等待 backdrop 重新捕获。
-                                    forceLowBlurBudget = false,
-                                    isFeedScrollInProgress = homeFeedScrollInProgressState.value,
-                                    collapseLinkedDock = collapseLinkedPlaybackDock,
-                                    indicatorPositionProvider =
-                                        mainBottomPagerState.indicatorPositionProvider,
-                                    isPagerScrollInProgressProvider =
-                                        mainBottomPagerState.scrollInProgressProvider,
-                                    isPagerDraggingProvider = bottomPagerDraggingProvider,
-                                    pagerTargetPositionProvider = mainBottomPagerState.targetPositionProvider,
-                                    isPagerNavigatingProvider = mainBottomPagerState.programmaticNavigationProvider,
-                                    uiSkinDecoration = bottomBarUiSkinDecoration,
-                                    linkedDockPhase = linkedDockPhase,
-                                    onLinkedDockPhaseChange = { linkedDockPhase = it },
-                                    isTopLevelDestination = currentNavigation3Key == BiliPaiNavKey.MainHost,
-                                    isSearchSelected = isBottomBarSearchSelected,
-                                    // 共享过渡驱动的开关（点条进详情/返回落位）瞬时切换小横条
-                                    // presence，morph 是唯一几何时间轴；仅会话起止播放动画。
-                                    animateNowPlayingPresence = !driveBottomBarByProgress,
-                                    onToggleSidebar = if (windowSizeClass.shouldUseSideNavigation) {
-                                        {
-                                            coroutineScope.launch {
-                                                SettingsManager.setTabletUseSidebar(context, true)
-                                            }
-                                        }
-                                    } else {
-                                        null
-                                    }
-                                )
-                            }
-                        } else {
-                            FrostedBottomBar(
-                                currentItem = currentBottomNavItem,
-                                onItemClick = handleNavItemClick,
-                                onHomeDoubleTap = {
-                                    homeScrollChannel.trySend(
-                                        com.android.purebilibili.feature.home.HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH
-                                    )
-                                },
-                                onDynamicDoubleTap = {
-                                    dynamicScrollChannel.trySend(
-                                        DynamicScrollRequest.SCROLL_TO_TOP_AND_REFRESH
-                                    )
-                                },
-                                onSearchClick = { requestSearchFromBottomBar() },
-                                onSearchKeywordSubmit = submitBottomBarSearchKeyword,
-                                searchLaunchKey = bottomBarSearchLaunchKey,
-                                hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
-                                isFloating = false,
-                                labelMode = bottomBarLabelMode,
-                                visibleItems = visibleBottomBarItems,
-                                itemColorIndices = bottomBarItemColors,
-                                itemLabels = bottomBarItemLabels,
-                                dynamicUnreadCount = dynamicUnreadDisplay,
-                                homeSettings = bottomBarHomeSettings,
-                                miuixBackdrop = bottomBarBackdrop,
-                                motionTier = com.android.purebilibili.core.ui.adaptive.MotionTier.Normal,
-                                isTransitionRunning = bottomPagerRenderBudget.isTransitionRunning,
-                                // 固定底栏同样保持材质连续，切页预算只作用于页面内容。
-                                forceLowBlurBudget = false,
-                                isFeedScrollInProgress = homeFeedScrollInProgressState.value,
-                                collapseLinkedDock = collapseLinkedPlaybackDock,
-                                indicatorPositionProvider =
-                                    mainBottomPagerState.indicatorPositionProvider,
-                                isPagerScrollInProgressProvider =
-                                    mainBottomPagerState.scrollInProgressProvider,
-                                isPagerDraggingProvider = bottomPagerDraggingProvider,
-                                pagerTargetPositionProvider = mainBottomPagerState.targetPositionProvider,
-                                isPagerNavigatingProvider = mainBottomPagerState.programmaticNavigationProvider,
-                                uiSkinDecoration = bottomBarUiSkinDecoration,
-                                linkedDockPhase = linkedDockPhase,
-                                onLinkedDockPhaseChange = { linkedDockPhase = it },
-                                isTopLevelDestination = currentNavigation3Key == BiliPaiNavKey.MainHost,
-                                isSearchSelected = isBottomBarSearchSelected,
-                                animateNowPlayingPresence = !driveBottomBarByProgress,
-                                onToggleSidebar = if (windowSizeClass.shouldUseSideNavigation) {
-                                    {
-                                        coroutineScope.launch {
-                                            SettingsManager.setTabletUseSidebar(context, true)
-                                        }
-                                    }
-                                } else {
-                                    null
-                                }
-                            )
-                        }
-                        }
-                        }
-                    }
-                }
-            } else if (audioNowPlayingItem != null && audioNowPlayingCover != null) {
-                val playbackManager = miniPlayerManager ?: MiniPlayerManager.getInstance(context)
-                // 听视频标题横条自动沉浸：听视频页 + 播放中静置 5 秒隐藏，点把柄恢复。
-                val immersiveBarEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getAudioNowPlayingBarImmersiveEnabled(context) }
-                    .collectAsStateWithLifecycle(initialValue = true)
-                var immersiveBarHidden by remember { mutableStateOf(false) }
-                val isOnListenVideoScreen = currentNavigation3Key is BiliPaiNavKey.AudioMode
-                LaunchedEffect(
-                    immersiveBarEnabled,
-                    isOnListenVideoScreen,
-                    playbackManager.isPlaying,
-                    audioNowPlayingItem.bvid,
-                ) {
-                    if (immersiveBarEnabled && isOnListenVideoScreen && playbackManager.isPlaying) {
-                        immersiveBarHidden = false
-                        kotlinx.coroutines.delay(5000)
-                        immersiveBarHidden = true
-                    } else {
-                        immersiveBarHidden = false
-                    }
-                }
-                val inboxChatBottomBarVisible = currentNavigation3Key == BiliPaiNavKey.Inbox && inboxConversationVisible
-                AudioNowPlayingBarPresenceHost(
-                    visible = showAudioNowPlayingIndependent &&
-                        !inboxChatBottomBarVisible &&
-                        !(immersiveBarEnabled && immersiveBarHidden),
-                    animatePresence = !driveBottomBarByProgress && !isReturningSameAudioVideo,
-                    modifier = Modifier
-                        .then(bottomBarAlignment)
-                        .zIndex(2f)
-                        .layout { measurable, constraints ->
-                            val windowWidth = constraints.maxWidth
-                            val contentWidth = navigationContentWidthPx
-                                .takeIf { it > 0 }
-                                ?.coerceAtMost(windowWidth) ?: windowWidth
-                            // 大屏独立横条沿用悬浮底栏 600dp 上限，手机保留原有宽度。
-                            val barWidth = if (isTabletLayout) {
-                                contentWidth.coerceAtMost(600.dp.roundToPx())
-                            } else {
-                                contentWidth
-                            }
-                            val placeable = measurable.measure(
-                                constraints.copy(minWidth = barWidth, maxWidth = barWidth)
-                            )
-                            layout(windowWidth, placeable.height) {
-                                placeable.placeRelative(
-                                    windowWidth - contentWidth + (contentWidth - barWidth) / 2,
-                                    0,
-                                )
-                            }
-                        },
-                ) {
-                    if (immersiveBarEnabled && immersiveBarHidden) {
-                        // 沉浸态把柄：低调的居中小胶囊，点击唤回标题横条。
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(28.dp)
-                                .clickable(
-                                    interactionSource = remember {
-                                        androidx.compose.foundation.interaction.MutableInteractionSource()
-                                    },
-                                    indication = null,
-                                ) { immersiveBarHidden = false },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .width(36.dp)
-                                    .height(4.dp)
-                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
-                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f))
-                            )
-                        }
-                    } else {
-                    // 独立横条退场仍需要玻璃；到本体退出组合才释放背景采样。
-                    if (effectiveHomeSettings.nowPlayingGlassEnabled && bottomBarBackdrop != null) {
-                        DisposableEffect(floatingBackdropDemand) {
-                            val token = Any()
-                            floatingBackdropDemand.acquire(token)
-                            onDispose { floatingBackdropDemand.release(token) }
-                        }
-                    }
-                    AudioNowPlayingBar(
-                    state = AudioNowPlayingBarState(
-                        bvid = audioNowPlayingItem.bvid,
-                        title = audioNowPlayingItem.title,
-                        artist = audioNowPlayingItem.owner,
-                        artistAvatarUrl = audioNowPlayingItem.ownerFace,
-                        cover = audioNowPlayingCover,
-                        isPlaying = playbackManager.isPlaying,
-                        playbackSpeed = playbackManager.player?.playbackParameters?.speed ?: 1f
-                    ),
-                    isLayoutStable = !transition.isRunning &&
-                        transition.currentState == transition.targetState && !driveBottomBarByProgress,
-                    pauseArtworkRotation = pauseNowPlayingArtworkRotation,
+                AppNavigationBottomBarDock(
+                    context = context,
+                    coroutineScope = coroutineScope,
+                    bottomBarAlignment = bottomBarAlignment,
+                    companionFeedWidth = companionFeedWidth,
+                    companionSessionVisible = companionSessionVisible,
+                    companionContentWidth = companionContentWidth,
+                    companionPaneState = companionPaneState,
+                    driveBottomBarByProgress = driveBottomBarByProgress,
+                    sharedNowPlayingTransitionVisible = sharedNowPlayingTransitionVisible,
+                    depthProgressProvider = { videoCardTransitionClock.depthProgress() },
+                    bottomBarVisibilityState = bottomBarVisibilityState,
+                    isReturningFromDetail = navigation3ReturnSession.isReturningFromDetail,
+                    navMotionSpec = navMotionSpec,
+                    finalBottomBarVisible = finalBottomBarVisible,
+                    showAudioNowPlayingInDock = showAudioNowPlayingInDock,
+                    audioNowPlayingItem = audioNowPlayingItem,
+                    audioNowPlayingCover = audioNowPlayingCover,
+                    miniPlayerManager = miniPlayerManager,
+                    pauseNowPlayingArtworkRotation = pauseNowPlayingArtworkRotation,
                     showDeleteButton = audioNowPlayingBarDeleteButton.value,
-                    sourceRoute = nowPlayingSourceRoute,
-                    handoff = audioNowPlayingHandoff,
-                    onExpand = { hasRecordedSource ->
-                        val expandRoute = resolveAudioNowPlayingBarExpandRoute(
-                            opensAudioMode = audioNowPlayingBarOpensAudioMode,
-                            bvid = audioNowPlayingItem.bvid,
-                            cid = audioNowPlayingItem.cid,
-                            coverUrl = audioNowPlayingItem.cover,
-                            title = audioNowPlayingItem.title,
+                    nowPlayingSourceRoute = nowPlayingSourceRoute,
+                    audioNowPlayingHandoff = audioNowPlayingHandoff,
+                    audioNowPlayingBarOpensAudioMode = audioNowPlayingBarOpensAudioMode,
+                    nowPlayingGlassEnabled = effectiveHomeSettings.nowPlayingGlassEnabled,
+                    isBottomBarBlurEnabled = isBottomBarBlurEnabled,
+                    mainHazeState = mainHazeState,
+                    bottomBarBackdrop = bottomBarBackdrop,
+                    liquidGlassRenderConfig = liquidGlassRenderConfig,
+                    isBottomBarFloating = isBottomBarFloating,
+                    isBookPosture = appWindowAdaptiveInfo.posture == com.android.purebilibili.core.util.AppFoldPosture.Book,
+                    currentBottomNavItem = currentBottomNavItem,
+                    onNavItemClick = handleNavItemClick,
+                    homeScrollChannel = homeScrollChannel,
+                    dynamicScrollChannel = dynamicScrollChannel,
+                    onSearchClick = { requestSearchFromBottomBar() },
+                    onSearchKeywordSubmit = submitBottomBarSearchKeyword,
+                    bottomBarSearchLaunchKey = bottomBarSearchLaunchKey,
+                    bottomBarLabelMode = bottomBarLabelMode,
+                    visibleBottomBarItems = visibleBottomBarItems,
+                    bottomBarItemColors = bottomBarItemColors,
+                    bottomBarItemLabels = bottomBarItemLabels,
+                    dynamicUnreadDisplay = dynamicUnreadDisplay,
+                    bottomBarHomeSettings = bottomBarHomeSettings,
+                    isPagerTransitionRunning = bottomPagerRenderBudget.isTransitionRunning,
+                    isFeedScrollInProgress = homeFeedScrollInProgressState.value,
+                    collapseLinkedPlaybackDock = collapseLinkedPlaybackDock,
+                    mainBottomPagerState = mainBottomPagerState,
+                    bottomPagerDraggingProvider = bottomPagerDraggingProvider,
+                    bottomBarUiSkinDecoration = bottomBarUiSkinDecoration,
+                    linkedDockPhase = linkedDockPhase,
+                    onLinkedDockPhaseChange = { linkedDockPhase = it },
+                    isTopLevelDestination = currentNavigation3Key == BiliPaiNavKey.MainHost,
+                    isBottomBarSearchSelected = isBottomBarSearchSelected,
+                    canToggleSidebar = windowSizeClass.shouldUseSideNavigation,
+                    onNavigateToSystemCardWindowOrPush = { key, useRecorded ->
+                        navigateToSystemCardWindowOrPush(key, useRecordedCardSource = useRecorded)
+                    },
+                    onNavigateToVideoRoute = { route, sourceRoute, useRecorded ->
+                        navigateToVideoRouteInNavigation3(
+                            route = route,
+                            sourceRoute = sourceRoute,
+                            useRecordedCardSource = useRecorded,
                         )
-                        if (audioNowPlayingBarOpensAudioMode) {
-                            navigateToSystemCardWindowOrPush(
-                                legacyRouteToBiliPaiNavKey(expandRoute),
-                                useRecordedCardSource = hasRecordedSource,
-                            )
-                        } else {
-                            navigateToVideoRouteInNavigation3(
-                                route = expandRoute,
-                                sourceRoute = nowPlayingSourceRoute,
-                                useRecordedCardSource = hasRecordedSource,
-                            )
-                        }
                     },
-                    onPlayPause = {
-                        if (!playbackManager.isActive || !playbackManager.togglePlayPause()) {
-                            pushNavigation3Target(
-                                BiliPaiNavKey.AudioMode(
-                                    sourceBvid = audioNowPlayingItem.bvid,
-                                    sourceCid = audioNowPlayingItem.cid
-                                )
-                            )
-                        }
+                    onPushTarget = { pushNavigation3Target(it) },
+                )
+            } else if (audioNowPlayingItem != null && audioNowPlayingCover != null) {
+                AppNavigationIndependentAudioNowPlayingHost(
+                    context = context,
+                    bottomBarAlignment = bottomBarAlignment,
+                    audioNowPlayingItem = audioNowPlayingItem,
+                    audioNowPlayingCover = audioNowPlayingCover,
+                    miniPlayerManager = miniPlayerManager,
+                    currentNavigation3Key = currentNavigation3Key,
+                    inboxConversationVisible = inboxConversationVisible,
+                    showAudioNowPlayingIndependent = showAudioNowPlayingIndependent,
+                    driveBottomBarByProgress = driveBottomBarByProgress,
+                    isReturningSameAudioVideo = isReturningSameAudioVideo,
+                    navigationContentWidthPx = navigationContentWidthPx,
+                    isTabletLayout = isTabletLayout,
+                    nowPlayingGlassEnabled = effectiveHomeSettings.nowPlayingGlassEnabled,
+                    bottomBarBackdrop = bottomBarBackdrop,
+                    floatingBackdropDemand = floatingBackdropDemand,
+                    pauseNowPlayingArtworkRotation = pauseNowPlayingArtworkRotation,
+                    showDeleteButton = audioNowPlayingBarDeleteButton.value,
+                    nowPlayingSourceRoute = nowPlayingSourceRoute,
+                    audioNowPlayingHandoff = audioNowPlayingHandoff,
+                    audioNowPlayingBarOpensAudioMode = audioNowPlayingBarOpensAudioMode,
+                    isBottomBarBlurEnabled = isBottomBarBlurEnabled,
+                    mainHazeState = mainHazeState,
+                    liquidGlassRenderConfig = liquidGlassRenderConfig,
+                    onNavigateToSystemCardWindowOrPush = { key, useRecorded ->
+                        navigateToSystemCardWindowOrPush(key, useRecordedCardSource = useRecorded)
                     },
-                    onSkipNext = { playbackManager.playNext() },
-                    onSkipPrevious = { playbackManager.playPrevious() },
-                    onCancelPlayback = { playbackManager.pausePlayback() },
-                    onDismiss = {
-                        playbackManager.pausePlayback()
-                        AudioNowPlayingSession.dismiss()
+                    onNavigateToVideoRoute = { route, sourceRoute, useRecorded ->
+                        navigateToVideoRouteInNavigation3(
+                            route = route,
+                            sourceRoute = sourceRoute,
+                            useRecordedCardSource = useRecorded,
+                        )
                     },
-                    expandDestinationLabel = if (audioNowPlayingBarOpensAudioMode) {
-                        "听视频"
-                    } else {
-                        "视频详情页"
-                    },
-                    glassEnabled = effectiveHomeSettings.nowPlayingGlassEnabled,
-                    blurEnabled = isBottomBarBlurEnabled,
-                    hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
-                    miuixBackdrop = bottomBarBackdrop,
-                    liquidGlassTuning = liquidGlassRenderConfig.tuning,
-                    liftAboveBottomBar = false,
-                    consumeNavigationBarsPadding = true,
-                    bottomSpacing = 16.dp,
-                    )
-                    }
-                }
+                    onPushTarget = { pushNavigation3Target(it) },
+                )
             }
 
             }

@@ -33,6 +33,8 @@ import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
@@ -41,6 +43,7 @@ import androidx.compose.foundation.lazy.items
 import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import com.android.purebilibili.core.ui.AppHapticScene
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AppAlertDialog
@@ -57,7 +60,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.util.HapticType
+import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.feature.video.ui.components.replyMenuCallbacks
 import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
@@ -404,27 +411,36 @@ fun BangumiPlayerContent(
             currentEpisodeId = currentEpisode.id,
         )
     }
+    val episodeHaptic = rememberHapticFeedback(AppHapticScene.MENUS)
     val episodeSelectionItems: LazyListScope.() -> Unit = {
         // 剧集选择
         if (!detail.episodes.isNullOrEmpty()) {
+            val allEpisodes = detail.episodes.orEmpty()
             item {
                 AppHorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                 )
 
-                // 选集标题和快速跳转
+                // 选集标题、快速跳转与全部选集入口
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     AppText(
                         text = if (usePortraitIntroduction) "合集 · 正在播放：${currentEpisode.longTitle.ifBlank { currentEpisode.title }}"
-                            else "选集 (${detail.episodes.orEmpty().size})",
-                        modifier = Modifier.weight(1f).clickable { showEpisodeSheet = true },
+                            else "选集 (${allEpisodes.size})",
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(AppShapes.container(ContainerLevel.Pill))
+                            .clickable {
+                                episodeHaptic(HapticType.LIGHT)
+                                showEpisodeSheet = true
+                            }
+                            .padding(vertical = 2.dp),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -432,11 +448,14 @@ fun BangumiPlayerContent(
                     )
 
                     // 当集数超过 50 时显示快速跳转
-                    if (detail.episodes.orEmpty().size > 50) {
+                    if (allEpisodes.size > 50) {
                         var showJumpDialog by remember { mutableStateOf(false) }
 
                         AppSurface(
-                            onClick = { showJumpDialog = true },
+                            onClick = {
+                                episodeHaptic(HapticType.LIGHT)
+                                showJumpDialog = true
+                            },
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             shape = AppShapes.container(ContainerLevel.Pill)
                         ) {
@@ -451,10 +470,11 @@ fun BangumiPlayerContent(
                         // 快速跳转对话框
                         if (showJumpDialog) {
                             EpisodeJumpDialog(
-                                totalEpisodes = detail.episodes.orEmpty().size,
+                                totalEpisodes = allEpisodes.size,
                                 onJump = { epNumber ->
-                                    val targetEpisode = detail.episodes.orEmpty().getOrNull(epNumber - 1)
+                                    val targetEpisode = allEpisodes.getOrNull(epNumber - 1)
                                     if (targetEpisode != null) {
+                                        episodeHaptic(HapticType.LIGHT)
                                         onEpisodeClick(targetEpisode)
                                     }
                                     showJumpDialog = false
@@ -463,33 +483,59 @@ fun BangumiPlayerContent(
                             )
                         }
                     }
+
+                    AppSurface(
+                        onClick = {
+                            episodeHaptic(HapticType.LIGHT)
+                            showEpisodeSheet = true
+                        },
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = AppShapes.container(ContainerLevel.Pill)
+                    ) {
+                        AppText(
+                            text = "全部${allEpisodes.size}集",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = AppContentColors.accent()
+                        )
+                    }
                 }
             }
 
             // 对于超长剧集，添加范围选择器
-            if (detail.episodes.orEmpty().size > 50) {
+            if (allEpisodes.size > 50) {
                 item {
                     val episodesPerPage = 50
-                    val totalPages = (detail.episodes.orEmpty().size + episodesPerPage - 1) / episodesPerPage
-                    val currentEpisodeIndex = detail.episodes.orEmpty().indexOfFirst { it.id == currentEpisode.id }
-                    var selectedPage by rememberSaveable(detail.seasonId, currentEpisode.id, detail.episodes.orEmpty().size) {
+                    val totalPages = (allEpisodes.size + episodesPerPage - 1) / episodesPerPage
+                    val currentEpisodeIndex = allEpisodes.indexOfFirst { it.id == currentEpisode.id }
+                    var selectedPage by rememberSaveable(detail.seasonId, currentEpisode.id, allEpisodes.size) {
                         mutableIntStateOf(currentEpisodeIndex.coerceAtLeast(0) / episodesPerPage)
+                    }
+                    val pageListState = rememberLazyListState(initialFirstVisibleItemIndex = selectedPage)
+                    LaunchedEffect(selectedPage, totalPages) {
+                        pageListState.animateScrollToItem(selectedPage.coerceIn(0, (totalPages - 1).coerceAtLeast(0)))
                     }
 
                     // 范围选择器
                     LazyRow(
+                        state = pageListState,
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(bottom = 8.dp)
                     ) {
                         items(totalPages, key = { it }) { page ->
                             val start = page * episodesPerPage + 1
-                            val end = minOf((page + 1) * episodesPerPage, detail.episodes.orEmpty().size)
+                            val end = minOf((page + 1) * episodesPerPage, allEpisodes.size)
                             val isCurrentPage = page == selectedPage
                             val selection = AppInteractionColors.miuixContentSelection()
 
                             AppSurface(
-                                onClick = { selectedPage = page },
+                                onClick = {
+                                    if (page != selectedPage) {
+                                        episodeHaptic(HapticType.LIGHT)
+                                        selectedPage = page
+                                    }
+                                },
                                 color = if (isCurrentPage) selection?.backgroundColor ?: AppContentColors.accent()
                                     else MaterialTheme.colorScheme.surfaceVariant,
                                 shape = AppShapes.container(ContainerLevel.Dialog)
@@ -507,8 +553,8 @@ fun BangumiPlayerContent(
 
                     // 当前页的剧集
                     val pageStart = selectedPage * episodesPerPage
-                    val pageEnd = minOf(pageStart + episodesPerPage, detail.episodes.orEmpty().size)
-                    val pageEpisodes = detail.episodes.orEmpty().subList(pageStart, pageEnd)
+                    val pageEnd = minOf(pageStart + episodesPerPage, allEpisodes.size)
+                    val pageEpisodes = allEpisodes.subList(pageStart, pageEnd)
 
                     BangumiEpisodeChoices(
                         episodes = pageEpisodes,
@@ -523,7 +569,7 @@ fun BangumiPlayerContent(
                 // 普通剧集列表
                 item {
                     BangumiEpisodeChoices(
-                        episodes = detail.episodes.orEmpty(),
+                        episodes = allEpisodes,
                         currentEpisodeId = currentEpisode.id,
                         isCourse = isCourse,
                         isLargeScreenLayout = isLargeScreenLayout,
@@ -1280,6 +1326,14 @@ fun EpisodeJumpDialog(
 ) {
     var inputText by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val submitJump: () -> Unit = {
+        val epNumber = inputText.toIntOrNull()
+        if (epNumber == null || epNumber < 1 || epNumber > totalEpisodes) {
+            errorMessage = "请输入 1-$totalEpisodes 之间的数字"
+        } else {
+            onJump(epNumber)
+        }
+    }
 
     AppAlertDialog(
         onDismissRequest = onDismiss,
@@ -1294,6 +1348,14 @@ fun EpisodeJumpDialog(
                     },
                     label = { AppText("集数 (1-$totalEpisodes)") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Go,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onGo = { submitJump() },
+                        onDone = { submitJump() },
+                    ),
                     isError = errorMessage != null,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1308,16 +1370,7 @@ fun EpisodeJumpDialog(
             }
         },
         confirmButton = {
-            AppTextButton(
-                onClick = {
-                    val epNumber = inputText.toIntOrNull()
-                    if (epNumber == null || epNumber < 1 || epNumber > totalEpisodes) {
-                        errorMessage = "请输入 1-$totalEpisodes 之间的数字"
-                    } else {
-                        onJump(epNumber)
-                    }
-                }
-            ) {
+            AppTextButton(onClick = submitJump) {
                 AppText("跳转")
             }
         },

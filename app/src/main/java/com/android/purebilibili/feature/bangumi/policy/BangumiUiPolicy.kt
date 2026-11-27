@@ -136,6 +136,19 @@ internal fun <T> orderBangumiEpisodes(episodes: List<T>, descending: Boolean): L
     return if (descending) episodes.asReversed() else episodes
 }
 
+internal fun resolveBangumiEpisodePageForOrder(
+    episodeCount: Int,
+    sourceIndex: Int,
+    episodesPerPage: Int,
+    descending: Boolean,
+): Int {
+    if (episodeCount <= 0 || episodesPerPage <= 0 || sourceIndex !in 0 until episodeCount) {
+        return 0
+    }
+    val orderedIndex = if (descending) episodeCount - 1 - sourceIndex else sourceIndex
+    return orderedIndex / episodesPerPage
+}
+
 internal fun resolveBangumiEpisodePreviewWindow(
     episodeCount: Int,
     selectedPage: Int,

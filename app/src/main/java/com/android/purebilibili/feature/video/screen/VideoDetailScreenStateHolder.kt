@@ -2961,8 +2961,10 @@ internal fun VideoDetailScreenStateHolder(
             adaptiveInfo = videoTransitionAdaptiveInfo,
         )
     }
-    var lastPhoneAutoRotateLandscapeAppliedAtMs by remember { mutableStateOf<Long?>(null) }
-    var lastPhoneAutoRotatePortraitAppliedAtMs by remember { mutableStateOf<Long?>(null) }
+    val lastPhoneAutoRotateLandscapeAppliedAtMsState = remember { mutableStateOf<Long?>(null) }
+    val lastPhoneAutoRotatePortraitAppliedAtMsState = remember { mutableStateOf<Long?>(null) }
+    var lastPhoneAutoRotateLandscapeAppliedAtMs by lastPhoneAutoRotateLandscapeAppliedAtMsState
+    var lastPhoneAutoRotatePortraitAppliedAtMs by lastPhoneAutoRotatePortraitAppliedAtMsState
 
     LaunchedEffect(
         autoRotateEnabled,
@@ -3030,163 +3032,33 @@ internal fun VideoDetailScreenStateHolder(
         )
     }
 
-    LaunchedEffect(
-        autoRotateEnabled,
-        systemAutoRotateEnabled,
-        isFullscreenMode,
-        orientationPolicyDevice,
-        isOrientationDrivenFullscreen,
-        fullscreenMode,
-        manualPortraitHoldActive,
-        isActivityInMultiWindowMode,
-        isPipMode,
-        isPortraitFullscreen,
-        displayContext,
-        isFullscreenPlayerLocked,
-        orientationRequestsAllowed,
-        userRequestedFullscreen,
-    ) {
-        if (!orientationRequestsAllowed || isFullscreenPlayerLocked) {
-            lastPhoneAutoRotateLandscapeAppliedAtMs = null
-            lastPhoneAutoRotatePortraitAppliedAtMs = null
-            return@LaunchedEffect
-        }
-        if (!shouldObservePhoneAutoRotate(
-                autoRotateEnabled = sensorAutoRotateEnabled,
-                isCompactDevice = orientationPolicyDevice,
-                isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
-                fullscreenMode = fullscreenMode,
-                manualPortraitHoldActive = manualPortraitHoldActive,
-                isInMultiWindowMode = isActivityInMultiWindowMode,
-                isInPictureInPictureMode = isPipMode,
-                isPortraitFullscreen = isPortraitFullscreen,
-                observeWhenAutoRotateDisabled = displayContext.isFoldableCoverWindow,
-                isFullscreenMode = isFullscreenMode,
-                manualFullscreenRequested = userRequestedFullscreen,
-                systemAutoRotateEnabled = systemAutoRotateEnabled,
-            )
-        ) {
-            lastPhoneAutoRotateLandscapeAppliedAtMs = null
-            lastPhoneAutoRotatePortraitAppliedAtMs = null
-        }
-    }
-
-    DisposableEffect(
-        activity,
-        autoRotateEnabled,
-        systemAutoRotateEnabled,
-        isFullscreenMode,
-        fullscreenMode,
-        useTabletLayout,
-        orientationPolicyDevice,
-        isOrientationDrivenFullscreen,
-        manualPortraitHoldActive,
-        isActivityInMultiWindowMode,
-        isPipMode,
-        isPortraitFullscreen,
-        displayContext,
-        isFullscreenPlayerLocked,
-        orientationRequestsAllowed,
-        userRequestedFullscreen,
-        landscapeHoldEnabled,
-        rotationSensitivity,
-    ) {
-        val hostActivity = activity
-        if (
-            !orientationRequestsAllowed || hostActivity == null ||
-            isFullscreenPlayerLocked ||
-            !shouldObservePhoneAutoRotate(
-                autoRotateEnabled = sensorAutoRotateEnabled,
-                isCompactDevice = orientationPolicyDevice,
-                isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
-                fullscreenMode = fullscreenMode,
-                manualPortraitHoldActive = manualPortraitHoldActive,
-                isInMultiWindowMode = isActivityInMultiWindowMode,
-                isInPictureInPictureMode = isPipMode,
-                isPortraitFullscreen = isPortraitFullscreen,
-                observeWhenAutoRotateDisabled = displayContext.isFoldableCoverWindow,
-                isFullscreenMode = isFullscreenMode,
-                manualFullscreenRequested = userRequestedFullscreen,
-                systemAutoRotateEnabled = systemAutoRotateEnabled,
-            ) ||
-            !isOrientationDrivenFullscreen
-        ) {
-            return@DisposableEffect onDispose {}
-        }
-
-        val orientationListener = object : OrientationEventListener(context) {
-            override fun onOrientationChanged(orientation: Int) {
-                if (!latestOrientationRequestsAllowed.value) return
-                if (manualPortraitHoldActive) {
-                    if (shouldReleasePhoneManualPortraitHold(orientation)) {
-                        manualPortraitHoldActive = false
-                    }
-                    return
-                }
-                // 关闭自动切换时仅允许手动全屏跟随左右横屏；旧配置中的横屏状态
-                // 不能重新触发横屏请求，与上面的竖屏锁定策略保持一致。
-                if (!sensorAutoRotateEnabled && !userRequestedFullscreen) return
-                val isCurrentlyLandscape =
-                    hostActivity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-                val targetOrientation = resolvePhoneAutoRotateRequestedOrientation(
-                    orientationDegrees = orientation,
-                    isCurrentlyLandscape = isCurrentlyLandscape,
-                    landscapeHoldEnabled = landscapeHoldEnabled,
-                    portraitSnapDegrees = rotationSensitivity.thresholds.portraitSnap,
-                    landscapeEnterMinDegrees = rotationSensitivity.thresholds.landscapeEnterMin,
-                    landscapeEnterMaxDegrees = rotationSensitivity.thresholds.landscapeEnterMax,
-                    landscapeKeepMinDegrees = rotationSensitivity.thresholds.landscapeKeepMin,
-                    landscapeKeepMaxDegrees = rotationSensitivity.thresholds.landscapeKeepMax,
-                    useExactLandscapeSide = orientationPolicyDevice,
-                    // A manual fullscreen press can happen while the device is still upright.
-                    // Wait for one physical landscape observation before allowing the sensor
-                    // to treat portrait as an explicit rotate-back gesture.
-                    allowPortraitTransitions = shouldAllowPhoneSensorPortraitTransition(
-                        autoRotateEnabled = sensorAutoRotateEnabled,
-                        manualFullscreenRequested = userRequestedFullscreen,
-                    ),
-                )
-                val nowMs = SystemClock.elapsedRealtime()
-                val targetToApply = resolvePhoneAutoRotateTargetToApply(
-                    candidateOrientation = targetOrientation,
-                    lastLandscapeAppliedAtMs = lastPhoneAutoRotateLandscapeAppliedAtMs,
-                    nowMs = nowMs,
-                    lastPortraitAppliedAtMs = lastPhoneAutoRotatePortraitAppliedAtMs,
-                ) ?: return
-                hostActivity.applyPlayerRequestedOrientation(
-                    requestedOrientation = targetToApply,
-                    displayContext = displayContext,
-                )
-                if (targetToApply == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) {
-                    userRequestedFullscreen = false
-                    lastPhoneAutoRotatePortraitAppliedAtMs = nowMs
-                    lastPhoneAutoRotateLandscapeAppliedAtMs = null
-                } else if (isLandscapeRequestedOrientation(targetToApply)) {
-                    if (shouldReleaseManualFullscreenRequestAfterSensorTarget(
-                            manualFullscreenRequested = userRequestedFullscreen,
-                            sensorTargetOrientation = targetToApply,
-                            autoRotateEnabled = sensorAutoRotateEnabled,
-                        )
-                    ) {
-                        userRequestedFullscreen = false
-                    }
-                    lastPhoneAutoRotateLandscapeAppliedAtMs = nowMs
-                    lastPhoneAutoRotatePortraitAppliedAtMs = null
-                }
-            }
-        }
-
-        if (orientationListener.canDetectOrientation()) {
-            orientationListener.enable()
-        }
-
-        onDispose {
-            orientationListener.disable()
-            // Fullscreen/configuration changes can immediately register a new listener.
-            // Keep the settle guard across that handoff; the effect above clears it
-            // when orientation observation actually stops.
-        }
-    }
+    VideoDetailPhoneAutoRotateEffects(
+        context = context,
+        activity = activity,
+        autoRotateEnabled = autoRotateEnabled,
+        sensorAutoRotateEnabled = sensorAutoRotateEnabled,
+        systemAutoRotateEnabled = systemAutoRotateEnabled,
+        isFullscreenMode = isFullscreenMode,
+        fullscreenMode = fullscreenMode,
+        useTabletLayout = useTabletLayout,
+        orientationPolicyDevice = orientationPolicyDevice,
+        isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
+        manualPortraitHoldActive = manualPortraitHoldActive,
+        onReleaseManualPortraitHold = { manualPortraitHoldActive = false },
+        isActivityInMultiWindowMode = isActivityInMultiWindowMode,
+        isPipMode = isPipMode,
+        isPortraitFullscreen = isPortraitFullscreen,
+        displayContext = displayContext,
+        isFullscreenPlayerLocked = isFullscreenPlayerLocked,
+        orientationRequestsAllowed = orientationRequestsAllowed,
+        latestOrientationRequestsAllowed = latestOrientationRequestsAllowed,
+        userRequestedFullscreen = userRequestedFullscreen,
+        onClearUserRequestedFullscreen = { userRequestedFullscreen = false },
+        landscapeHoldEnabled = landscapeHoldEnabled,
+        rotationSensitivity = rotationSensitivity,
+        lastLandscapeAppliedAtMsState = lastPhoneAutoRotateLandscapeAppliedAtMsState,
+        lastPortraitAppliedAtMsState = lastPhoneAutoRotatePortraitAppliedAtMsState,
+    )
     val portraitExperienceEnabled = shouldEnablePortraitExperience()
     val useOfficialInlinePortraitDetailExperience = shouldUseOfficialInlinePortraitDetailExperience(
         useTabletLayout = useTabletLayout,
@@ -4153,90 +4025,26 @@ internal fun VideoDetailScreenStateHolder(
                 }
                 val success = landscapeCommentContent
                 if (landscapeCommentPanelVisible && success != null) {
-                    VideoDetailCommentStateScope(commentStateHandle, subReplyStateHandle) { commentState, subReplyState ->
-                        LandscapeCommentPanel(
-                            info = success.info, listState = landscapeCommentListState,
-                            replies = commentState.replies, replyCount = commentState.replyCount,
-                            emoteMap = success.emoteMap, isRepliesLoading = commentState.isRepliesLoading,
-                            isRepliesRefreshing = commentState.isRepliesRefreshing,
-                            repliesError = commentState.repliesError,
-                            isRepliesEnd = commentState.isRepliesEnd, videoTags = success.videoTags,
-                            paginationPage = commentState.nextPage,
-                            pinnedReplyIds = commentState.pinnedReplyIds,
-                            voteCard = commentState.voteCard,
-                            pageControl = commentState.pageControl,
-                            sortMode = commentState.sortMode,
-                            currentMid = commentState.currentMid, showUpFlag = commentState.showUpFlag,
-                            showIdentityDecorations = commentMemberDecorationsEnabled,
-                            dissolvingIds = commentState.dissolvingIds, likedComments = commentState.likedComments,
-                            onSortModeChange = commentActions.setSortMode,
-                            onUpClick = navigateToUserSpaceFromVideo,
-                            onSubReplyClick = commentActions.openSubReply,
-                            onRootCommentClick = playbackActions.openRootCommentComposer,
-                            onCommentReplyClick = playbackActions.replyTo, onLoadMoreReplies = commentActions.loadComments,
-                            onRefreshReplies = commentActions.refreshComments,
-                            onDeleteComment = commentActions.deleteComment, onDissolveStart = commentActions.startDissolve,
-                            onCommentLike = commentActions.likeComment,
-                            onCommentHate = commentActions.hateComment,
-                            hatedComments = commentState.hatedComments,
-                            onCommentUrlClick = openCommentUrl,
-                            onReportComment = commentActions.reportComment,
-                            onToggleTopComment = commentActions.toggleTopComment,
-                            onCheckCommentFraud = commentActions.checkCommentFraud,
-                            onTimestampClick = { position -> seekPlayerFromUserAction(playerState.player, position) },
-                            onDismiss = {
-                                commentActions.closeSubReply()
-                                landscapeCommentPanelVisible = false
-                            },
-                            onSwitchSide = { landscapeCommentPanelOnLeft = !landscapeCommentPanelOnLeft },
-                            isOnLeft = landscapeCommentPanelOnLeft,
-                            closeProgress = landscapeCommentCloseProgress,
-                            drawerWidth = com.android.purebilibili.feature.video.ui.overlay
-                                .resolveLandscapeEndDrawerLayoutPolicy(configuration.screenWidthDp)
-                                .drawerWidthDp.dp,
-                            threadContent = if (subReplyState.visible) {
-                                { onImagePreview ->
-                                    VideoInlineSubReplyDetailContent(
-                                        state = subReplyState,
-                                        commentState = commentState,
-                                        emoteMap = success.emoteMap,
-                                        maxTimestampMs = success.videoDurationMs.takeIf { it > 0L },
-                                        onLoadMore = commentActions.loadMoreSubReplies,
-                                        onRefresh = commentActions.refreshSubReplies,
-                                        onSortModeChange = commentActions.setSubReplySortMode,
-                                        onDismiss = commentActions.closeSubReply,
-                                        onRootCommentClick = playbackActions.openRootCommentComposer,
-                                        onTimestampClick = { positionMs ->
-                                            seekPlayerFromUserAction(playerState.player, positionMs)
-                                            commentActions.closeSubReply()
-                                        },
-                                        onImagePreview = onImagePreview,
-                                        onReplyClick = playbackActions.replyTo,
-                                        onConversationClick = commentActions.openSubReplyConversation,
-                                        onConversationBack = commentActions.closeSubReplyConversation,
-                                        onDissolveStart = commentActions.startSubDissolve,
-                                        onDeleteComment = commentActions.deleteSubComment,
-                                        onCheckCommentFraud = commentActions.checkCommentFraud,
-                                        onCommentLike = commentActions.likeComment,
-                                        onCommentHate = commentActions.hateComment,
-                                        onReportComment = commentActions.reportComment,
-                                        onToggleTopComment = commentActions.toggleTopComment,
-                                        onUrlClick = openCommentUrl,
-                                        showIdentityDecorations = commentMemberDecorationsEnabled,
-                                        onAvatarClick = { mid ->
-                                            mid.toLongOrNull()?.let(navigateToUserSpaceFromVideo) ?: Unit
-                                        },
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                }
-                            } else {
-                                null
-                            },
-                            modifier = Modifier
-                                .align(if (landscapeCommentPanelOnLeft) Alignment.CenterStart else Alignment.CenterEnd)
-                                .fillMaxHeight(),
-                        )
-                    }
+                    VideoDetailLandscapeCommentPanelHost(
+                        success = success,
+                        playerState = playerState,
+                        commentStateHandle = commentStateHandle,
+                        subReplyStateHandle = subReplyStateHandle,
+                        landscapeCommentListState = landscapeCommentListState,
+                        commentMemberDecorationsEnabled = commentMemberDecorationsEnabled,
+                        commentActions = commentActions,
+                        playbackActions = playbackActions,
+                        navigateToUserSpaceFromVideo = navigateToUserSpaceFromVideo,
+                        openCommentUrl = openCommentUrl,
+                        isOnLeft = landscapeCommentPanelOnLeft,
+                        closeProgress = landscapeCommentCloseProgress,
+                        screenWidthDp = configuration.screenWidthDp,
+                        onDismiss = {
+                            commentActions.closeSubReply()
+                            landscapeCommentPanelVisible = false
+                        },
+                        onSwitchSide = { landscapeCommentPanelOnLeft = !landscapeCommentPanelOnLeft },
+                    )
                 }
 
             } else {
@@ -4315,85 +4123,8 @@ internal fun VideoDetailScreenStateHolder(
                     }
                     //  📐 [大屏适配] 根据设备类型选择布局
                     if (useTabletLayout) {
-                        if (appWindowAdaptiveInfo.shouldAvoidHinge) {
-                            // 半开折痕和展开后的实体铰链都按实际安全区域切分。
-                            TabletVideoLayout(
-                                playerState = playerState,
-                                uiState = uiState,
-                                detailContentState = detailContentState,
-                                commentStateHandle = commentStateHandle,
-                                engagementState = engagementState,
-                                subReplyStateHandle = subReplyStateHandle,
-                                downloadProgress = downloadProgress,
-                                commentMemberDecorationsEnabled = commentMemberDecorationsEnabled,
-                                playbackActions = playbackActions,
-                                engagementActions = engagementActions,
-                                commentActions = commentActions,
-                                configuration = configuration,
-                                isVerticalVideo = isVerticalVideo,
-                                sleepTimerMinutes = sleepTimerMinutes,
-                                viewPoints = viewPoints,
-                                pbpProgressData = visiblePbpProgressData,
-                                bvid = bvid,
-                                danmakuManager = sharedDanmakuManager,
-                                coverUrl = coverUrl,
-                                onBack = handlePlayerBack,
-                                onUpClick = navigateToUserSpaceFromVideo,
-                                onNavigateToAudioMode = {
-                                    presentationState.markNavigatingToAudioMode()
-                                    onNavigateToAudioMode()
-                                },
-                                onToggleFullscreen = { toggleFullscreen() },
-                                onPortraitFullscreen = {
-                                    if (allowStandalonePortraitExperience) {
-                                        if (!isPortraitFullscreen) {
-                                            enterPortraitFullscreen()
-                                        } else {
-                                            presentationState.setPortraitFullscreen(false)
-                                        }
-                                    }
-                                },
-                                isInPipMode = isPipMode,
-                                onPipClick = handlePipClick,
-                                isPortraitFullscreen = isPortraitFullscreen,
-                                onHomeClick = {
-                                    handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = true))
-                                },
-                                currentCodec = codecPreference,
-                                onCodecChange = { viewModel.setVideoCodec(it) },
-                                currentSecondCodec = secondCodecPreference,
-                                onSecondCodecChange = { viewModel.setVideoSecondCodec(it) },
-                                currentAudioQuality = audioQualityPreference,
-                                onAudioQualityChange = { viewModel.setAudioQuality(it) },
-                                transitionEnabled = detailChildTransitionEnabled,
-                                onRelatedVideoClick = navigateToRelatedVideo,
-                                onBgmClick = onBgmClick,
-                                showUpBadge = homeUpBadgesVisible,
-                                onSearchKeywordClick = navigateToSearchKeywordFromVideo,
-                                onOpenBilibiliLink = onOpenBilibiliLink,
-                                currentPlayMode = currentPlayMode,
-                                onPlayModeClick = {
-                                    com.android.purebilibili.feature.video.player.PlaylistManager.togglePlayMode()
-                                },
-                                forceCoverOnlyOnReturn = forceCoverOnlyForLiveSafeReturn,
-                                predictiveBackCancelRecoveryGeneration = predictiveBackCancelRecoveryGeneration,
-                                liveSurfaceCardTransitionEnabled = liveSurfaceCardTransitionEnabled,
-                                isPlayerSurfaceReady = isPlayerSurfaceReady,
-                                // 两种材质共用首次挂载阶段；不改变原有分栏尺寸与样式。
-                                primaryContentReady = isTransitionFinished,
-                                commentsContentReady = entryCommentsReady,
-                                relatedContentReady = entryRelatedReady,
-                                videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
-                                videoNoteEnabled = videoNoteEnabled,
-                                videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
-                                externalQueueTitle = externalPlaylistQueueTitle,
-                                externalQueueContent = tabletExternalQueueContent,
-                                playerContent = continuousPlayerSlot,
-                                transitionChromeAlphaProvider = videoCardDetailChromeAlphaProvider,
-                                wallpaperCardBackingAlpha = wallpaperCardBackingAlpha,
-                            )
-                        } else {
-                            LargeScreenVideoLayout(
+                        VideoDetailTabletLayoutHost(
+                            shouldAvoidHinge = appWindowAdaptiveInfo.shouldAvoidHinge,
                             playerState = playerState,
                             uiState = uiState,
                             detailContentState = detailContentState,
@@ -4415,12 +4146,11 @@ internal fun VideoDetailScreenStateHolder(
                             coverUrl = coverUrl,
                             onBack = handlePlayerBack,
                             onUpClick = navigateToUserSpaceFromVideo,
-                            onBgmClick = onBgmClick,
                             onNavigateToAudioMode = {
                                 presentationState.markNavigatingToAudioMode()
                                 onNavigateToAudioMode()
                             },
-                            onToggleFullscreen = { toggleFullscreen() },  // 📺 平板全屏切换
+                            onToggleFullscreen = { toggleFullscreen() },
                             onPortraitFullscreen = {
                                 if (allowStandalonePortraitExperience) {
                                     if (!isPortraitFullscreen) {
@@ -4436,21 +4166,19 @@ internal fun VideoDetailScreenStateHolder(
                             onHomeClick = {
                                 handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = true))
                             },
-
-                            transitionEnabled = detailChildTransitionEnabled,
                             currentCodec = codecPreference,
                             onCodecChange = { viewModel.setVideoCodec(it) },
                             currentSecondCodec = secondCodecPreference,
                             onSecondCodecChange = { viewModel.setVideoSecondCodec(it) },
                             currentAudioQuality = audioQualityPreference,
                             onAudioQualityChange = { viewModel.setAudioQuality(it) },
+                            transitionEnabled = detailChildTransitionEnabled,
                             onRelatedVideoClick = navigateToRelatedVideo,
+                            onBgmClick = onBgmClick,
                             showUpBadge = homeUpBadgesVisible,
                             onSearchKeywordClick = navigateToSearchKeywordFromVideo,
                             onOpenBilibiliLink = onOpenBilibiliLink,
-                            // 🔁 [新增] 播放模式
                             currentPlayMode = currentPlayMode,
-                            onPlayModeClick = { com.android.purebilibili.feature.video.player.PlaylistManager.togglePlayMode() },
                             forceCoverOnlyOnReturn = forceCoverOnlyForLiveSafeReturn,
                             predictiveBackCancelRecoveryGeneration = predictiveBackCancelRecoveryGeneration,
                             liveSurfaceCardTransitionEnabled = liveSurfaceCardTransitionEnabled,
@@ -4466,8 +4194,7 @@ internal fun VideoDetailScreenStateHolder(
                             playerContent = continuousPlayerSlot,
                             transitionChromeAlphaProvider = videoCardDetailChromeAlphaProvider,
                             wallpaperCardBackingAlpha = wallpaperCardBackingAlpha,
-                            )
-                        }
+                        )
                     } else {
                         // 📱 手机竖屏：原有单列布局
                         // 详情页的系统栏显隐策略先于系统 inset 回调生效，几何使用稳定高度。
@@ -5917,134 +5644,11 @@ internal fun VideoDetailScreenStateHolder(
                                         } // End of Success block
 
                                         uiState is VideoPlaybackUiState.Error -> {
-                                            val errorState = uiState as VideoPlaybackUiState.Error
-                                            Box(
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Column(
-                                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                                    modifier = Modifier.padding(32.dp)
-                                                ) {
-                                                    //  根据错误类型显示不同图标
-                                                    AppText(
-                                                        text = when (errorState.error) {
-                                                            is com.android.purebilibili.data.model.VideoLoadError.NetworkError -> "📡"
-                                                            is com.android.purebilibili.data.model.VideoLoadError.VideoNotFound -> "🔍"
-                                                            is com.android.purebilibili.data.model.VideoLoadError.RegionRestricted -> "🌐"
-                                                            is com.android.purebilibili.data.model.VideoLoadError.RateLimited -> "⏳"
-                                                            is com.android.purebilibili.data.model.VideoLoadError.GlobalCooldown -> ""
-                                                            is com.android.purebilibili.data.model.VideoLoadError.PlayUrlEmpty -> "⚡"
-                                                            else -> ""
-                                                        },
-                                                        style = MaterialTheme.typography.displayMedium
-                                                    )
-                                                    Spacer(Modifier.height(16.dp))
-                                                    AppText(
-                                                        text = errorState.msg,
-                                                        color = AppContentColors.primaryText(),
-                                                        style = MaterialTheme.typography.titleMedium,
-                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                    )
-
-                                                    //  针对风控错误显示额外建议
-                                                    when (errorState.error) {
-                                                        is com.android.purebilibili.data.model.VideoLoadError.GlobalCooldown,
-                                                        is com.android.purebilibili.data.model.VideoLoadError.PlayUrlEmpty -> {
-                                                            Spacer(Modifier.height(8.dp))
-                                                            AppText(
-                                                                text = " 建议：切换 WiFi/移动数据 或 清除缓存后重试",
-                                                                color = AppContentColors.secondaryText(),
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                            )
-                                                        }
-                                                        is com.android.purebilibili.data.model.VideoLoadError.RateLimited -> {
-                                                            Spacer(Modifier.height(8.dp))
-                                                            AppText(
-                                                                text = " 该视频可能暂时不可用，请尝试其他视频",
-                                                                color = AppContentColors.secondaryText(),
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                            )
-                                                        }
-                                                        else -> {}
-                                                    }
-
-                                                    //  只有可重试的错误才显示重试按钮（或者风控错误允许强制重试）
-                                                    val showRetryButton = errorState.canRetry ||
-                                                        errorState.error is com.android.purebilibili.data.model.VideoLoadError.RateLimited ||
-                                                        errorState.error is com.android.purebilibili.data.model.VideoLoadError.PlayUrlEmpty
-                                                    if (showRetryButton) {
-                                                        Spacer(Modifier.height(24.dp))
-                                                        AppButton(
-                                                            onClick = { viewModel.retry() },
-                                                            colors = ButtonDefaults.buttonColors(
-                                                                containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
-
-                                                                contentColor = resolveFilledButtonContentColor(MaterialTheme.colorScheme)
-                                                            )
-                                                        ) {
-                                                            AppText(
-                                                                text = when (errorState.error) {
-                                                                    is com.android.purebilibili.data.model.VideoLoadError.RateLimited -> "强制重试"
-                                                                    is com.android.purebilibili.data.model.VideoLoadError.GlobalCooldown -> "清除冷却并重试"
-                                                                    else -> "重试"
-                                                                }
-                                                            )
-                                                        }
-                                                    }
-
-                                                    //  🎬 [引导] 大会员受限时，提示用已保存的大会员账号播放
-                                                    val isVipRequiredError =
-                                                        errorState.error is com.android.purebilibili.data.model.VideoLoadError.VipRequired ||
-                                                            (errorState.error as? com.android.purebilibili.data.model.VideoLoadError.ApiError)?.code == -10403 ||
-                                                            (errorState.error as? com.android.purebilibili.data.model.VideoLoadError.UnknownError)
-                                                                ?.throwable?.message?.contains("大会员") == true
-                                                    if (isVipRequiredError) {
-                                                        val vipPlaybackCandidates = remember(errorState.error) {
-                                                            val currentPlaybackMid = com.android.purebilibili.core.network.NetworkModule
-                                                                .playbackAccount()?.mid
-                                                            com.android.purebilibili.core.store.AccountSessionStore
-                                                                .getAccounts(context)
-                                                                .filter { account ->
-                                                                    account.isVip &&
-                                                                        account.sessData.isNotBlank() &&
-                                                                        account.mid != currentPlaybackMid
-                                                                }
-                                                        }
-                                                        val vipCandidate = vipPlaybackCandidates.firstOrNull()
-                                                        if (vipCandidate != null) {
-                                                            Spacer(Modifier.height(16.dp))
-                                                            AppButton(
-                                                                onClick = {
-                                                                    com.android.purebilibili.core.store.AccountSessionStore
-                                                                        .setPlaybackAccountMid(context, vipCandidate.mid)
-                                                                    android.widget.Toast.makeText(
-                                                                        context,
-                                                                        "已使用「${vipCandidate.name.ifBlank { "UID ${vipCandidate.mid}" }}」的大会员播放",
-                                                                        android.widget.Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                    viewModel.retry()
-                                                                },
-                                                                colors = ButtonDefaults.buttonColors(
-                                                                    containerColor = MaterialTheme.colorScheme.tertiary
-                                                                )
-                                                            ) {
-                                                                AppText("使用「${vipCandidate.name.ifBlank { "UID ${vipCandidate.mid}" }}」的大会员播放")
-                                                            }
-                                                            Spacer(Modifier.height(8.dp))
-                                                            AppText(
-                                                                text = "可在「我的 - 账号与播放」中更换播放账号",
-                                                                color = AppContentColors.secondaryText(),
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                            )
-                                                        }
-                                                    }
-                                            }
+                                            VideoDetailErrorContent(
+                                                errorState = uiState as VideoPlaybackUiState.Error,
+                                                onRetry = { viewModel.retry() },
+                                            )
                                         }
-                                    }
                                 }
                                 }
                             }
