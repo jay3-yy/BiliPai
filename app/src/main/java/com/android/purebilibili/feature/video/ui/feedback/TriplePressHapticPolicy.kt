@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video.ui.feedback
 
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import com.android.purebilibili.core.ui.AppRichHapticPattern
 import kotlinx.coroutines.delay
 
 /**
@@ -54,6 +55,23 @@ internal class TriplePressHapticCadenceTracker(
             return TriplePressHapticCue.ChargeTick
         }
         return null
+    }
+}
+
+internal fun resolveTripleChargeRichPattern(progress: Float): AppRichHapticPattern = when {
+    progress < 0.45f -> AppRichHapticPattern.TRIPLE_CHARGE_LOW
+    progress < 0.75f -> AppRichHapticPattern.TRIPLE_CHARGE_MID
+    else -> AppRichHapticPattern.TRIPLE_CHARGE_HIGH
+}
+
+internal fun performTriplePressRichHapticCue(
+    richHaptics: (AppRichHapticPattern) -> Unit,
+    cue: TriplePressHapticCue,
+    progress: Float,
+) {
+    when (cue) {
+        TriplePressHapticCue.ChargeTick -> richHaptics(resolveTripleChargeRichPattern(progress))
+        TriplePressHapticCue.Complete -> richHaptics(AppRichHapticPattern.TRIPLE_COMPLETE)
     }
 }
 

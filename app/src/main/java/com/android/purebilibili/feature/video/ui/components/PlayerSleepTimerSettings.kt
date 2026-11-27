@@ -5,21 +5,19 @@ import com.android.purebilibili.core.ui.components.AppSwitch as Switch
 import com.android.purebilibili.core.ui.components.AppFilterChip as FilterChip
 import com.android.purebilibili.core.ui.components.AppText as Text
 import com.android.purebilibili.core.ui.components.AppIcon as Icon
+import com.android.purebilibili.core.ui.components.AppListItem
+import com.android.purebilibili.core.ui.components.AppNumberPicker
 import com.android.purebilibili.core.ui.AppAlertDialog as AlertDialog
 
-import android.widget.NumberPicker
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Done
-import androidx.compose.material3.*
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.feature.audio.player.isCurrentlyLateNightForSleepSuggestion
@@ -44,7 +42,7 @@ internal fun PlayerSleepTimerSettings(
     val isLateNight = remember { isCurrentlyLateNightForSleepSuggestion() }
     var custom by remember { mutableStateOf(false) }
     val presets = remember(minutes) { resolvePlayerSleepTimerPresets(minutes) }
-    Text("定时关闭", Modifier.fillMaxWidth().padding(16.dp), fontSize = 14.sp)
+    Text("定时关闭", Modifier.fillMaxWidth().padding(16.dp), style = MaterialTheme.typography.titleSmall)
     if (isLateNight && onWaitForCurrentVideoEndChange != null && !waitForCurrentVideoEnd) {
         LateNightSleepSuggestionCard(
             onEnableAfterCurrent = {
@@ -55,8 +53,8 @@ internal fun PlayerSleepTimerSettings(
         )
     }
     presets.forEach { value ->
-        ListItem(
-            headlineContent = { Text(if (value == 0) "禁用" else "$value 分钟", fontSize = 14.sp) },
+        AppListItem(
+            headlineContent = { Text(if (value == 0) "禁用" else "$value 分钟", style = MaterialTheme.typography.bodyMedium) },
             trailingContent = { if ((minutes ?: 0) == value) Icon(Icons.Outlined.Done, null, tint = MaterialTheme.colorScheme.primary) },
             modifier = Modifier.fillMaxWidth().clickable {
                 onMinutesChange(value.takeIf { it > 0 }); onPresetSelected()
@@ -65,8 +63,8 @@ internal fun PlayerSleepTimerSettings(
     }
     PlayerSettingsRow("自定义") { custom = true }
     onWaitForCurrentVideoEndChange?.let { change ->
-        ListItem(
-            headlineContent = { Text("播放完当前视频", fontSize = 14.sp) },
+        AppListItem(
+            headlineContent = { Text("播放完当前视频", style = MaterialTheme.typography.bodyMedium) },
             supportingContent = { Text("开启后无需倒计时；播完当前视频再执行下方操作", style = MaterialTheme.typography.bodySmall) },
             trailingContent = { Switch(waitForCurrentVideoEnd, change) },
         )
@@ -92,28 +90,40 @@ internal fun PlayerSleepTimerSettings(
         }
     }
     if (custom) {
-        var hours by remember { mutableIntStateOf((minutes ?: 0) / 60) }
-        var remainder by remember { mutableIntStateOf((minutes ?: 0) % 60) }
+        var hours by remember { mutableIntStateOf(((minutes ?: 0) / 60).coerceIn(0, 24)) }
+        var remainder by remember { mutableIntStateOf(((minutes ?: 0) % 60).coerceIn(0, 59)) }
         AlertDialog(
             onDismissRequest = { custom = false },
             modifier = Modifier.width(320.dp),
-            title = { Text("自定义") },
+            title = { Text("自定义定时") },
             text = {
-                Row(Modifier.fillMaxWidth().height(200.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                    AndroidView(
-                        factory = { context -> NumberPicker(context).apply { minValue = 0; maxValue = 24; value = hours; setOnValueChangedListener { _, _, value -> hours = value } } },
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    AppNumberPicker(
+                        value = hours,
+                        onValueChange = { hours = it },
+                        modifier = Modifier.weight(1f),
+                        range = 0..24,
+                        label = "小时",
                     )
-                    Text("小时")
-                    AndroidView(
-                        factory = { context -> NumberPicker(context).apply { minValue = 0; maxValue = 59; value = remainder; setOnValueChangedListener { _, _, value -> remainder = value } } },
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    AppNumberPicker(
+                        value = remainder,
+                        onValueChange = { remainder = it },
+                        modifier = Modifier.weight(1f),
+                        range = 0..59,
+                        label = "分钟",
                     )
-                    Text("分钟")
                 }
             },
             dismissButton = { TextButton({ custom = false }) { Text("取消") } },
-            confirmButton = { TextButton({ custom = false; onMinutesChange((hours * 60 + remainder).takeIf { it > 0 }) }) { Text("确认") } },
+            confirmButton = {
+                TextButton({
+                    custom = false
+                    onMinutesChange((hours * 60 + remainder).takeIf { it > 0 })
+                }) { Text("确认") }
+            },
         )
     }
 }

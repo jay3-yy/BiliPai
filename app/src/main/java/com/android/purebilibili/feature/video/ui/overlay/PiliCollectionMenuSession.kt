@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.core.util.HapticType
 
 import android.widget.Toast
@@ -83,7 +85,7 @@ fun rememberPiliCollectionMenuSession(
                             Toast.makeText(context, if (it) "已订阅合集" else "已取消订阅合集", Toast.LENGTH_SHORT).show()
                         }.onFailure {
                             if (identity != TokenManager.accountIdentity.value) return@onFailure
-                            Toast.makeText(context, it.message ?: "合集订阅操作失败", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, it.toUserFriendlyMessage("合集订阅操作失败"), Toast.LENGTH_LONG).show()
                         }
                 } finally {
                     if (identity == TokenManager.accountIdentity.value) {

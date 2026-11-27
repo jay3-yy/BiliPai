@@ -1,6 +1,8 @@
 // 文件路径: feature/video/VideoPlayerSection.kt
 package com.android.purebilibili.feature.video.ui.section
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.core.plugin.BuiltinPluginIds
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -896,9 +898,6 @@ private fun VideoPlayerSectionContent(
     var pendingPostcardHintDraft by remember(bvid) {
         mutableStateOf<com.android.purebilibili.feature.video.postcard.VideoPostcardDraft?>(null)
     }
-    var activePostcardSheetDraft by remember(bvid) {
-        mutableStateOf<com.android.purebilibili.feature.video.postcard.VideoPostcardDraft?>(null)
-    }
     val localDensity = LocalDensity.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
@@ -1004,6 +1003,18 @@ private fun VideoPlayerSectionContent(
     }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val settingsScope = rememberCoroutineScope()
+    val playerSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val showPlayerFeedback: (String) -> Unit = { feedbackMessage ->
+        if (feedbackMessage.isNotBlank()) {
+            settingsScope.launch {
+                playerSnackbarHostState.currentSnackbarData?.dismiss()
+                playerSnackbarHostState.showSnackbar(
+                    message = feedbackMessage,
+                    duration = androidx.compose.material3.SnackbarDuration.Short,
+                )
+            }
+        }
+    }
 
     val playerInsightMode by remember(context) {
         com.android.purebilibili.core.store.SettingsManager.getPlayerInsightMode(context)
@@ -1238,15 +1249,12 @@ private fun VideoPlayerSectionContent(
         )
     }
     val hasShownHiResCompatHint = hiResCompatHintShownPersisted || hasShownHiResCompatHintLocally
-    val longPressSpeedLockHintShownPersisted = playerInteractionSettings.longPressSpeedLockHintShown
     var hasShownLongPressSpeedLockHintLocally by remember {
         mutableStateOf(
             com.android.purebilibili.core.store.SettingsManager
                 .getLongPressSpeedLockHintShownSync(context)
         )
     }
-    val hasShownLongPressSpeedLockHint =
-        longPressSpeedLockHintShownPersisted || hasShownLongPressSpeedLockHintLocally
     var showLongPressSpeedLockHint by remember { mutableStateOf(false) }
     var longPressSpeedLockHintGeneration by remember { mutableIntStateOf(0) }
     var hasAutoEnteredFullscreen by remember(bvid) { mutableStateOf(false) }
@@ -2096,7 +2104,10 @@ private fun VideoPlayerSectionContent(
             nowMs = android.os.SystemClock.elapsedRealtime(),
         )
         applyLongPressPlaybackParameters(startDecision.targetPlaybackParameters)
-        if (!longPressSpeedLockEnabled && !hasShownLongPressSpeedLockHint) {
+        // 手势监听会跨重组继续运行，开始长按时读取当前的提示状态。
+        if (!longPressSpeedLockEnabled && !hasShownLongPressSpeedLockHintLocally &&
+            !playerInteractionSettings.longPressSpeedLockHintShown
+        ) {
             hasShownLongPressSpeedLockHintLocally = true
             showLongPressSpeedLockHint = true
             longPressSpeedLockHintGeneration += 1
@@ -2113,11 +2124,7 @@ private fun VideoPlayerSectionContent(
             )
         ) {
             hasShownHiResCompatHintLocally = true
-            Toast.makeText(
-                context,
-                "当前音源已降低长按倍速，以降低失真",
-                Toast.LENGTH_SHORT
-            ).show()
+            showPlayerFeedback("当前音源已降低长按倍速，以降低失真")
             settingsScope.launch {
                 com.android.purebilibili.core.store.SettingsManager
                     .setHiResLongPressCompatHintShown(context, true)
@@ -2158,11 +2165,7 @@ private fun VideoPlayerSectionContent(
         longPressSpeedStartX = -1f
         longPressSpeedStartY = -1f
         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-        Toast.makeText(
-            context,
-            "已解除倍速锁定",
-            Toast.LENGTH_SHORT
-        ).show()
+        showPlayerFeedback("已解除倍速锁定")
         com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
             "🔓 LongPress unlocked: speed ${originalPlaybackParameters.speed}x"
         }
@@ -2345,7 +2348,7 @@ private fun VideoPlayerSectionContent(
                     settingsScope.launch {
                         SettingsManager.setDanmakuEnabled(context, newState)
                     }
-                    Toast.makeText(context, if (newState) "弹幕已开启" else "弹幕已关闭", Toast.LENGTH_SHORT).show()
+                    showPlayerFeedback(if (newState) "弹幕已开启" else "弹幕已关闭")
                 }
                 com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.ToggleFullscreen -> {
                     latestGamepadToggleFullscreen()
@@ -2359,7 +2362,7 @@ private fun VideoPlayerSectionContent(
                 com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.ToggleScreenLock -> {
                     isScreenLocked = !isScreenLocked
                     showControls = true
-                    Toast.makeText(context, if (isScreenLocked) "屏幕已锁定" else "屏幕已解锁", Toast.LENGTH_SHORT).show()
+                    showPlayerFeedback(if (isScreenLocked) "屏幕已锁定" else "屏幕已解锁")
                 }
                 com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.PreviousPart -> {
                     val pages = (latestGamepadUiState as? VideoPlaybackUiState.Success)?.info?.pages.orEmpty()
@@ -2367,9 +2370,9 @@ private fun VideoPlayerSectionContent(
                     val currentIndex = pages.indexOfFirst { it.cid == currentCid }
                     if (currentIndex > 0) {
                         latestGamepadPageSelect(pages[currentIndex - 1].page)
-                        Toast.makeText(context, "切换至上一分P", Toast.LENGTH_SHORT).show()
+                        showPlayerFeedback("切换至上一分P")
                     } else {
-                        Toast.makeText(context, "已经是第一分P了", Toast.LENGTH_SHORT).show()
+                        showPlayerFeedback("已经是第一分P了")
                     }
                 }
                 com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.NextPart -> {
@@ -2378,9 +2381,9 @@ private fun VideoPlayerSectionContent(
                     val currentIndex = pages.indexOfFirst { it.cid == currentCid }
                     if (currentIndex in 0 until pages.lastIndex) {
                         latestGamepadPageSelect(pages[currentIndex + 1].page)
-                        Toast.makeText(context, "切换至下一分P", Toast.LENGTH_SHORT).show()
+                        showPlayerFeedback("切换至下一分P")
                     } else {
-                        Toast.makeText(context, "已经是最后一分P了", Toast.LENGTH_SHORT).show()
+                        showPlayerFeedback("已经是最后一分P了")
                     }
                 }
                 com.android.purebilibili.core.input.gamepad.GamepadPlayerAction.ToggleControls -> {
@@ -2505,7 +2508,7 @@ private fun VideoPlayerSectionContent(
                         settingsScope.launch {
                             SettingsManager.setDanmakuEnabled(context, newState)
                         }
-                        Toast.makeText(context, if (newState) "弹幕已开启" else "弹幕已关闭", Toast.LENGTH_SHORT).show()
+                        showPlayerFeedback(if (newState) "弹幕已开启" else "弹幕已关闭")
                         true
                     }
                     PlayerKeyAction.ToggleLike -> {
@@ -2539,7 +2542,7 @@ private fun VideoPlayerSectionContent(
                     PlayerKeyAction.ToggleScreenLock -> {
                         isScreenLocked = !isScreenLocked
                         showControls = true
-                        Toast.makeText(context, if (isScreenLocked) "屏幕已锁定" else "屏幕已解锁", Toast.LENGTH_SHORT).show()
+                        showPlayerFeedback(if (isScreenLocked) "屏幕已锁定" else "屏幕已解锁")
                         true
                     }
                     PlayerKeyAction.PreviousPart -> {
@@ -2548,9 +2551,9 @@ private fun VideoPlayerSectionContent(
                         val currentIndex = pages.indexOfFirst { it.cid == currentCid }
                         if (currentIndex > 0) {
                             onPageSelect(pages[currentIndex - 1].page)
-                            Toast.makeText(context, "切换至上一分P", Toast.LENGTH_SHORT).show()
+                            showPlayerFeedback("切换至上一分P")
                         } else {
-                            Toast.makeText(context, "已经是第一分P了", Toast.LENGTH_SHORT).show()
+                            showPlayerFeedback("已经是第一分P了")
                         }
                         true
                     }
@@ -2560,15 +2563,15 @@ private fun VideoPlayerSectionContent(
                         val currentIndex = pages.indexOfFirst { it.cid == currentCid }
                         if (currentIndex in 0 until pages.lastIndex) {
                             onPageSelect(pages[currentIndex + 1].page)
-                            Toast.makeText(context, "切换至下一分P", Toast.LENGTH_SHORT).show()
+                            showPlayerFeedback("切换至下一分P")
                         } else {
-                            Toast.makeText(context, "已经是最后一分P了", Toast.LENGTH_SHORT).show()
+                            showPlayerFeedback("已经是最后一分P了")
                         }
                         true
                     }
                     is PlayerKeyAction.SetSpeed -> {
                         applyExplicitPlaybackSpeedChange(action.speed)
-                        Toast.makeText(context, "${action.speed}x 倍速", Toast.LENGTH_SHORT).show()
+                        showPlayerFeedback("${action.speed}x 倍速")
                         true
                     }
                 }
@@ -3079,11 +3082,7 @@ private fun VideoPlayerSectionContent(
                                         applyLongPressPlaybackParameters(originalPlaybackParameters.withSpeed(speed))
                                     }
                                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    Toast.makeText(
-                                        context,
-                                        "已锁定 ${formatLongPressSpeedLabel(effectiveLongPressSpeed)}",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                    showPlayerFeedback("已锁定 ${formatLongPressSpeedLabel(effectiveLongPressSpeed)}")
                                 }
                                 change.consume()
                                 return@detectEdgeSafeDragGestures
@@ -3428,11 +3427,7 @@ private fun VideoPlayerSectionContent(
                                 applyLongPressPlaybackParameters(originalPlaybackParameters.withSpeed(speed))
                             }
                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                            Toast.makeText(
-                                context,
-                                "已锁定 ${formatLongPressSpeedLabel(effectiveLongPressSpeed)}",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                            showPlayerFeedback("已锁定 ${formatLongPressSpeedLabel(effectiveLongPressSpeed)}")
                         }
                         change.consume()
                     }
@@ -5167,6 +5162,11 @@ private fun VideoPlayerSectionContent(
         pipNoDanmakuEnabled = pipNoDanmakuEnabled,
         hostLifecycleStarted = hostLifecycleStarted
     )
+    val (hdrPresentation, hdrDanmakuComposeRenderEffect) = rememberVideoHdrPresentationEffect(
+        requiresHdrSurface = requiresHdrSurface,
+        showControls = showControls,
+        shouldShowDanmakuLayer = shouldShowDanmakuLayer,
+    )
     val hotBarCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid ?: 0L
     val canShowHotBar = danmakuHotBarEnabled && shouldShowDanmakuLayer
     val canSendHotBarDanmaku = canShowHotBar && !isInPipMode &&
@@ -5254,6 +5254,7 @@ private fun VideoPlayerSectionContent(
                     viewport = viewport,
                     useFullscreenTextSize = useFullscreenDanmakuBaseline,
                     renderingPaused = !shouldShowDanmakuLayer || !danmakuRenderWorkActive,
+                    brightnessFactor = hdrPresentation.danmakuBrightnessFactor,
                     modifier = Modifier.fillMaxSize(),
                 )
                 // Above the passive renderer, below BAS links and interactive command danmaku.
@@ -5266,7 +5267,11 @@ private fun VideoPlayerSectionContent(
                     fontScale = danmakuFontScale,
                     fontWeight = danmakuFontWeight,
                     renderingPaused = !shouldShowDanmakuLayer || !danmakuRenderWorkActive,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            renderEffect = hdrDanmakuComposeRenderEffect
+                        }
                 )
                 com.android.purebilibili.feature.video.ui.overlay.BasDanmakuOverlay(
                     items = basDanmakuList,
@@ -5276,7 +5281,11 @@ private fun VideoPlayerSectionContent(
                     fontScale = danmakuFontScale,
                     fontWeight = danmakuFontWeight,
                     renderingPaused = !shouldShowDanmakuLayer || !danmakuRenderWorkActive,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            renderEffect = hdrDanmakuComposeRenderEffect
+                        }
                 )
                 // 控件测量前使用共享高度种子，避免玻璃切换引起互动弹幕避让跳变。
                 val commandControlsReservePx = measuredBottomControlsHeightPx.takeIf { it > 0 }
@@ -5304,11 +5313,7 @@ private fun VideoPlayerSectionContent(
                             } else ""
                         }
                         if (targetBvid.isBlank()) {
-                            android.widget.Toast.makeText(
-                                context,
-                                "关联视频信息缺失，无法跳转",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                            showPlayerFeedback("关联视频信息缺失，无法跳转")
                         } else {
                             pendingCommandLinkItem = item
                         }
@@ -5321,11 +5326,7 @@ private fun VideoPlayerSectionContent(
                                 item.voteId.toLongOrNull() == null || gradeScore == null
                             ) {
                                 commandState.endSubmission(item.id)
-                                android.widget.Toast.makeText(
-                                    context,
-                                    if (success == null) "打分失败：播放信息不可用" else "打分失败：缺少有效打分信息",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
+                                showPlayerFeedback(if (success == null) "打分失败：播放信息不可用" else "打分失败：缺少有效打分信息")
                             } else {
                                 // Enter the finally block even if this UI scope is already cancelled.
                                 settingsScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
@@ -5348,27 +5349,19 @@ private fun VideoPlayerSectionContent(
                                             )
                                             summary.onSuccess { commandState.updateGradeSummary(item.id, it) }
                                                 .onFailure {
-                                                    android.widget.Toast.makeText(
-                                                        context,
-                                                        "打分成功，统计暂不可用",
-                                                        android.widget.Toast.LENGTH_SHORT
-                                                    ).show()
+                                                    showPlayerFeedback("打分成功，统计暂不可用")
                                                 }
                                         } else {
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                result.exceptionOrNull()?.message ?: "打分失败",
-                                                android.widget.Toast.LENGTH_SHORT
-                                            ).show()
+                                            showPlayerFeedback(
+                                                result.exceptionOrNull()?.toUserFriendlyMessage("打分失败") ?: "打分失败"
+                                            )
                                         }
                                     } catch (e: kotlinx.coroutines.CancellationException) {
                                         throw e
                                     } catch (e: Exception) {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            if (accepted) "打分成功，统计暂不可用" else e.message ?: "打分失败",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
+                                        showPlayerFeedback(
+                                            if (accepted) "打分成功，统计暂不可用" else e.toUserFriendlyMessage("打分失败")
+                                        )
                                     } finally {
                                         // This only releases pending work; an accepted score remains confirmed.
                                         commandState.endSubmission(item.id)
@@ -5379,11 +5372,7 @@ private fun VideoPlayerSectionContent(
                             val voteId = item.voteId.toLongOrNull()
                             if (success == null || voteId == null) {
                                 commandState.endSubmission(item.id)
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "投票失败：缺少有效投票信息",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
+                                showPlayerFeedback("投票失败：缺少有效投票信息")
                             } else {
                                 settingsScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                                     try {
@@ -5393,11 +5382,7 @@ private fun VideoPlayerSectionContent(
                                         )
                                         result.onSuccess { commandState.completeVoteSubmission(item, option) }
                                             .onFailure {
-                                                android.widget.Toast.makeText(
-                                                    context,
-                                                    it.message ?: "投票失败",
-                                                    android.widget.Toast.LENGTH_SHORT
-                                                ).show()
+                                                showPlayerFeedback(it.toUserFriendlyMessage("投票失败"))
                                             }
                                     } finally {
                                         commandState.endSubmission(item.id)
@@ -5469,11 +5454,7 @@ private fun VideoPlayerSectionContent(
                                         send(message) { result ->
                                             sendingHotDanmaku = false
                                             result.onFailure {
-                                                Toast.makeText(
-                                                    context,
-                                                    it.message ?: hotDanmakuSendFailureMessage,
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
+                                                showPlayerFeedback(it.toUserFriendlyMessage(hotDanmakuSendFailureMessage))
                                             }
                                         }
                                     }
@@ -6265,7 +6246,7 @@ private fun VideoPlayerSectionContent(
                     onExportDanmaku = { format ->
                         val (exportCid, items) = danmakuManager.snapshotExportableDanmaku()
                         if (items.isEmpty()) {
-                            Toast.makeText(context, "当前暂无可导出的弹幕", Toast.LENGTH_SHORT).show()
+                            showPlayerFeedback("当前暂无可导出的弹幕")
                         } else {
                             val title = uiState.info.title.ifBlank { bvid }
                             scope.launch {
@@ -6284,9 +6265,9 @@ private fun VideoPlayerSectionContent(
                                     content = content,
                                 )
                                 result.onSuccess { path ->
-                                    Toast.makeText(context, "已导出 ${items.size} 条弹幕至 $path", Toast.LENGTH_LONG).show()
+                                    showPlayerFeedback("已导出 ${items.size} 条弹幕至 $path")
                                 }.onFailure { error ->
-                                    Toast.makeText(context, "导出弹幕失败：${error.message ?: "未知错误"}", Toast.LENGTH_SHORT).show()
+                                    showPlayerFeedback("导出弹幕失败：${error.toUserFriendlyMessage("未知错误")}")
                                 }
                             }
                         }
@@ -6308,12 +6289,12 @@ private fun VideoPlayerSectionContent(
                     onReloadVideo = onReloadVideo,
                     onFlipHorizontal = {
                         if (navigationHdrSurfaceRequired) {
-                            Toast.makeText(context, "HDR 原色输出不支持画面翻转，请先切换至普通画质", Toast.LENGTH_SHORT).show()
+                            showPlayerFeedback("HDR 原色输出不支持画面翻转，请先切换至普通画质")
                         } else isFlippedHorizontal = !isFlippedHorizontal
                     },
                     onFlipVertical = {
                         if (navigationHdrSurfaceRequired) {
-                            Toast.makeText(context, "HDR 原色输出不支持画面翻转，请先切换至普通画质", Toast.LENGTH_SHORT).show()
+                            showPlayerFeedback("HDR 原色输出不支持画面翻转，请先切换至普通画质")
                         } else isFlippedVertical = !isFlippedVertical
                     },
                     onVideoScaleChange = { nextScale ->
@@ -6422,7 +6403,7 @@ private fun VideoPlayerSectionContent(
                     onCaptureScreenshot = {
                         val playerView = playerViewRef
                         if (playerView == null) {
-                            Toast.makeText(context, "截图失败：播放器未就绪", Toast.LENGTH_SHORT).show()
+                            showPlayerFeedback("截图失败：播放器未就绪")
                         } else {
                             captureScreenshot(
                                 playerView,
@@ -6522,30 +6503,12 @@ private fun VideoPlayerSectionContent(
                 onCancel = onSponsorContributionCancel,
             )
 
-            com.android.purebilibili.feature.video.postcard.PostcardCaptureHintPill(
-                draft = pendingPostcardHintDraft,
-                onOpenPostcard = { draft ->
-                    pendingPostcardHintDraft = null
-                    activePostcardSheetDraft = draft
-                },
-                onShareRawImage = { uri ->
-                    pendingPostcardHintDraft = null
-                    try {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                            type = "image/png"
-                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                            clipData = android.content.ClipData.newRawUri("视频截图", uri)
-                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(android.content.Intent.createChooser(intent, "分享视频截图"))
-                    } catch (_: Exception) {
-                        Toast.makeText(context, "无法打开分享，请稍后重试", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                onDismiss = { pendingPostcardHintDraft = null },
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(bottom = 58.dp, start = 14.dp),
+            VideoPlayerFrameCaptureHost(
+                bvid = bvid,
+                pendingPostcardHintDraft = pendingPostcardHintDraft,
+                onClearPendingHint = { pendingPostcardHintDraft = null },
+                onSavePostcardToNote = actions.onSavePostcardToNote,
+                showPlayerFeedback = showPlayerFeedback,
             )
 
             com.android.purebilibili.feature.video.ui.components.SleepTimerGoodnightOverlay(
@@ -6559,14 +6522,6 @@ private fun VideoPlayerSectionContent(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 14.dp),
             )
-
-            activePostcardSheetDraft?.let { postcardDraft ->
-                com.android.purebilibili.feature.video.postcard.VideoPostcardSheet(
-                    draft = postcardDraft,
-                    onDismiss = { activePostcardSheetDraft = null },
-                    onSaveToPrivateNote = actions.onSavePostcardToNote,
-                )
-            }
 
             if (showDanmakuPoolSheet) {
                 VideoPlayerDanmakuPoolHost(
@@ -6597,10 +6552,136 @@ private fun VideoPlayerSectionContent(
     ) {
         if (isScreenLocked) {
             showControls = true
-            Toast.makeText(context, "请先解锁屏幕", Toast.LENGTH_SHORT).show()
+            showPlayerFeedback("请先解锁屏幕")
         } else {
             onBack()
         }
     }
+    if (!isInPipMode) {
+        com.android.purebilibili.core.ui.components.AppSnackbarHost(
+            hostState = playerSnackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .then(if (isFullscreen) Modifier.navigationBarsPadding() else Modifier)
+                .padding(bottom = if (isFullscreen) 24.dp else 12.dp),
+        )
+    }
+    }
+}
+
+@Composable
+private fun rememberVideoHdrPresentationEffect(
+    requiresHdrSurface: Boolean,
+    showControls: Boolean,
+    shouldShowDanmakuLayer: Boolean,
+): Pair<
+    com.android.purebilibili.feature.video.playback.policy.VideoHdrPresentationState,
+    androidx.compose.ui.graphics.RenderEffect?,
+    > {
+    val hdrPresentation = remember(requiresHdrSurface, showControls, shouldShowDanmakuLayer) {
+        com.android.purebilibili.feature.video.playback.policy.resolveVideoHdrPresentationState(
+            isHdrContent = requiresHdrSurface,
+            controlsVisible = showControls,
+            danmakuVisible = shouldShowDanmakuLayer,
+        )
+    }
+    val hdrDanmakuComposeRenderEffect = remember(hdrPresentation.danmakuBrightnessFactor) {
+        com.android.purebilibili.feature.video.playback.policy.createDanmakuBrightnessRenderEffect(
+            hdrPresentation.danmakuBrightnessFactor
+        )
+    }
+    val hdrHostActivity = LocalActivity.current
+    LaunchedEffect(hdrHostActivity, hdrPresentation.desiredHdrHeadroom) {
+        val window = hdrHostActivity?.window
+        if (window != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            window.desiredHdrHeadroom = hdrPresentation.desiredHdrHeadroom
+        }
+    }
+    DisposableEffect(hdrHostActivity) {
+        onDispose {
+            val window = hdrHostActivity?.window
+            if (window != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                window.desiredHdrHeadroom = 0f
+            }
+        }
+    }
+    return hdrPresentation to hdrDanmakuComposeRenderEffect
+}
+
+@Composable
+private fun BoxScope.VideoPlayerFrameCaptureHost(
+    bvid: String,
+    pendingPostcardHintDraft: com.android.purebilibili.feature.video.postcard.VideoPostcardDraft?,
+    onClearPendingHint: () -> Unit,
+    onSavePostcardToNote: ((String, String, Long) -> Unit)?,
+    showPlayerFeedback: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    var activePostcardSheetDraft by remember(bvid) {
+        mutableStateOf<com.android.purebilibili.feature.video.postcard.VideoPostcardDraft?>(null)
+    }
+    var activeFrameOcrDraft by remember(bvid) {
+        mutableStateOf<com.android.purebilibili.feature.video.postcard.VideoPostcardDraft?>(null)
+    }
+    var activeFrameAnnotationDraft by remember(bvid) {
+        mutableStateOf<com.android.purebilibili.feature.video.postcard.VideoPostcardDraft?>(null)
+    }
+
+    com.android.purebilibili.feature.video.postcard.PostcardCaptureHintPill(
+        draft = pendingPostcardHintDraft,
+        onOpenPostcard = { draft ->
+            onClearPendingHint()
+            activePostcardSheetDraft = draft
+        },
+        onExtractText = { draft ->
+            onClearPendingHint()
+            activeFrameOcrDraft = draft
+        },
+        onAnnotateFrame = { draft ->
+            onClearPendingHint()
+            activeFrameAnnotationDraft = draft
+        },
+        onShareRawImage = { uri ->
+            onClearPendingHint()
+            try {
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    clipData = android.content.ClipData.newRawUri("视频截图", uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(android.content.Intent.createChooser(intent, "分享视频截图"))
+            } catch (_: Exception) {
+                showPlayerFeedback("无法打开分享，请稍后重试")
+            }
+        },
+        onDismiss = onClearPendingHint,
+        modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(bottom = 58.dp, start = 14.dp),
+    )
+
+    activePostcardSheetDraft?.let { postcardDraft ->
+        com.android.purebilibili.feature.video.postcard.VideoPostcardSheet(
+            draft = postcardDraft,
+            onDismiss = { activePostcardSheetDraft = null },
+            onSaveToPrivateNote = onSavePostcardToNote,
+        )
+    }
+
+    activeFrameOcrDraft?.let { ocrDraft ->
+        com.android.purebilibili.feature.video.ocr.VideoFrameOcrSheet(
+            draft = ocrDraft,
+            onDismiss = { activeFrameOcrDraft = null },
+            onInsertIntoNote = onSavePostcardToNote,
+        )
+    }
+
+    activeFrameAnnotationDraft?.let { annotationDraft ->
+        com.android.purebilibili.feature.video.annotation.VideoFrameAnnotationSheet(
+            draft = annotationDraft,
+            onDismiss = { activeFrameAnnotationDraft = null },
+            onSaveToPrivateNote = onSavePostcardToNote,
+        )
     }
 }

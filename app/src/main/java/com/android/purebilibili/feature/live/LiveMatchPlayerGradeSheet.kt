@@ -111,18 +111,33 @@ internal fun LiveMatchPlayerGradeSheet(
                     }
                 }
                 item {
-                    when {
-                        comments.loading -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { AppCircularProgressIndicator() }
-                        comments.error != null -> Column {
-                            AppText(comments.error, color = AppContentColors.secondaryText())
-                            AppTextButton(onClick = { onLoadComments(comments.mode, comments.items.isNotEmpty()) }) { AppText("重试") }
+                    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                        when {
+                            comments.loading -> AppCircularProgressIndicator()
+                            comments.error != null -> AppErrorState(
+                                title = "加载失败",
+                                message = comments.error,
+                                presentation = AppContentStatePresentation.INLINE,
+                                primaryAction = AppContentStateAction("重试") { onLoadComments(comments.mode, comments.items.isNotEmpty()) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            comments.items.isEmpty() -> AppEmptyState(
+                                title = "暂无该选手的评分评论",
+                                presentation = AppContentStatePresentation.INLINE,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            !comments.end -> AppTextButton(onClick = { onLoadComments(comments.mode, true) }) { AppText("加载更多") }
+                            else -> AppText("已显示全部评分评论", color = AppContentColors.secondaryText())
                         }
-                        comments.items.isEmpty() -> AppText("暂无该选手的评分评论", color = AppContentColors.secondaryText())
-                        !comments.end -> AppTextButton(onClick = { onLoadComments(comments.mode, true) }) { AppText("加载更多") }
-                        else -> AppText("已显示全部评分评论", color = AppContentColors.secondaryText())
                     }
                 }
-            } else item { AppText("本局暂未开放选手评分评论", color = AppContentColors.secondaryText()) }
+            } else item {
+                AppEmptyState(
+                    title = "本局暂未开放选手评分评论",
+                    presentation = AppContentStatePresentation.INLINE,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }

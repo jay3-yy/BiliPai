@@ -35,11 +35,17 @@ import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AppModalBottomSheet
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
+import com.android.purebilibili.core.ui.components.AppContentStateAction
+import com.android.purebilibili.core.ui.components.AppContentStatePresentation
+import com.android.purebilibili.core.ui.components.AppEmptyState
+import com.android.purebilibili.core.ui.components.AppErrorState
 import com.android.purebilibili.core.ui.components.AppLazyColumn
 import com.android.purebilibili.core.ui.components.AppRadioButton
 import com.android.purebilibili.core.ui.components.AppSwitchPreference
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.util.toUserFriendlyMessage
 import com.android.purebilibili.data.repository.LiveMedalVisibility
 import com.android.purebilibili.data.repository.LiveMedalVisibilityOption
 import com.android.purebilibili.data.repository.LiveRepository
@@ -89,7 +95,7 @@ internal fun rememberLiveRoomMedalControl(
                                 onApplied()
                                 LiveRepository.getLiveRoomMedal(userId, anchorId).onSuccess { status = it }
                             }
-                            .onFailure { Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show() }
+                            .onFailure { Toast.makeText(context, it.toUserFriendlyMessage("佩戴状态更新失败"), Toast.LENGTH_SHORT).show() }
                         updating = false
                     }
                 }
@@ -223,9 +229,19 @@ private fun LiveRoomMedalPanel(
                     item(key = "live_medal_more") {
                         Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
                             when {
-                                error != null -> AppTextButton(onClick = ::load) { AppText("${error.orEmpty()} · 重试") }
-                                loading || hasMore -> AppText("加载中…")
-                                entries.isEmpty() -> AppText("暂无粉丝勋章")
+                                error != null -> AppErrorState(
+                                    title = "加载失败",
+                                    message = error,
+                                    presentation = AppContentStatePresentation.INLINE,
+                                    primaryAction = AppContentStateAction("重试", ::load),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                loading || hasMore -> AppCircularProgressIndicator()
+                                entries.isEmpty() -> AppEmptyState(
+                                    title = "暂无粉丝勋章",
+                                    presentation = AppContentStatePresentation.INLINE,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
                         }
                     }
@@ -272,7 +288,7 @@ private fun LiveMedalVisibilitySettings(onBack: () -> Unit) {
         error = null
         LiveRepository.getLiveMedalVisibility()
             .onSuccess { settings = it }
-            .onFailure { error = it.message ?: "读取勋章展示设置失败" }
+            .onFailure { error = it.toUserFriendlyMessage("读取勋章展示设置失败") }
     }
 
     fun save(option: LiveMedalVisibilityOption, enabled: Boolean, updated: LiveMedalVisibility) {
@@ -281,7 +297,7 @@ private fun LiveMedalVisibilitySettings(onBack: () -> Unit) {
         scope.launch {
             LiveRepository.setLiveMedalVisibility(option, enabled)
                 .onSuccess { settings = updated }
-                .onFailure { Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show() }
+                .onFailure { Toast.makeText(context, it.toUserFriendlyMessage("保存失败，请重试"), Toast.LENGTH_SHORT).show() }
             saving = false
         }
     }
@@ -297,8 +313,19 @@ private fun LiveMedalVisibilitySettings(onBack: () -> Unit) {
         }
         val current = settings
         when {
-            error != null -> AppTextButton(onClick = { loadAttempt++ }) { AppText("${error.orEmpty()} · 重试") }
-            current == null -> AppText("加载中…", modifier = Modifier.padding(16.dp))
+            error != null -> AppErrorState(
+                title = "加载失败",
+                message = error,
+                presentation = AppContentStatePresentation.INLINE,
+                primaryAction = AppContentStateAction("重试") { loadAttempt++ },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            current == null -> Box(
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppCircularProgressIndicator()
+            }
             else -> {
                 AppSwitchPreference(
                     title = "个人空间公开显示佩戴的粉丝勋章",

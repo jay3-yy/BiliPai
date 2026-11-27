@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -317,6 +318,8 @@ internal fun VideoSettingsPanel(
     onSaveCover: () -> Unit = {},
     onCaptureScreenshot: () -> Unit = {},
     onDownloadAudio: () -> Unit = {},
+    onOpenClipStudio: (() -> Unit)? = null,
+    onOpenInAdjacentWindow: (() -> Unit)? = null,
 
     onWatchLater: (() -> Unit)? = null,
     onShowNotes: (() -> Unit)? = null,
@@ -337,6 +340,10 @@ internal fun VideoSettingsPanel(
     playerVolume: Float = 1f,
     onPlayerVolumeChange: ((Float) -> Unit)? = null,
     playerVolumeUnavailableReason: String? = null,
+    audioEffectPreset: com.android.purebilibili.core.player.audio.PlayerAudioEffectPreset =
+        com.android.purebilibili.core.player.audio.PlayerAudioEffectPreset.OFF,
+    onAudioEffectPresetChange: ((com.android.purebilibili.core.player.audio.PlayerAudioEffectPreset) -> Unit)? = null,
+    spatialAudioBadge: String? = null,
     isBackgroundPlaybackEnabled: Boolean = false,
     onBackgroundPlaybackChange: ((Boolean) -> Unit)? = null,
     availableCodecIds: List<String> = emptyList(),
@@ -452,17 +459,81 @@ internal fun VideoSettingsPanel(
 
     if (showPlayerVolumeDialog && onPlayerVolumeChange != null) {
         var draftVolume by remember { mutableFloatStateOf(playerVolume.coerceIn(1f, 3f)) }
+        var draftPreset by remember { mutableStateOf(audioEffectPreset) }
         AlertDialog(
             onDismissRequest = { showPlayerVolumeDialog = false },
-            title = { Text("播放器音量") },
+            title = { Text("播放器音量与音效") },
             text = {
-                Column {
-                    Text("${(draftVolume * 100).toInt()}%")
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (!spatialAudioBadge.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                        ) {
+                            Text(
+                                text = spatialAudioBadge,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            )
+                        }
+                    }
+                    Text("音量增益 ${(draftVolume * 100).toInt()}%")
                     Slider(draftVolume, { draftVolume = it }, valueRange = 1f..3f, steps = 39)
+                    if (onAudioEffectPresetChange != null) {
+                        Text(
+                            text = "硬件音效（DynamicsProcessing）",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        com.android.purebilibili.core.player.audio.PlayerAudioEffectPreset.entries.forEach { preset ->
+                            val selected = draftPreset == preset
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (selected) MaterialTheme.colorScheme.primaryContainer
+                                        else Color.Transparent
+                                    )
+                                    .clickable { draftPreset = preset }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = preset.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                    )
+                                    Text(
+                                        text = preset.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                RadioButton(
+                                    selected = selected,
+                                    onClick = { draftPreset = preset },
+                                )
+                            }
+                        }
+                    }
                 }
             },
             dismissButton = { TextButton({ showPlayerVolumeDialog = false }) { Text("取消") } },
-            confirmButton = { TextButton({ onPlayerVolumeChange(draftVolume); showPlayerVolumeDialog = false }) { Text("确认") } },
+            confirmButton = {
+                TextButton({
+                    onPlayerVolumeChange(draftVolume)
+                    onAudioEffectPresetChange?.invoke(draftPreset)
+                    showPlayerVolumeDialog = false
+                }) { Text("确认") }
+            },
         )
     }
     PlayerNativeSettingsHost(
@@ -536,8 +607,19 @@ internal fun VideoSettingsPanel(
                     ) { page = "enhancement" }
                 }
                 if (onPlayerVolumeChange != null) {
+                    val audioSummary = buildList {
+                        add("${(playerVolume * 100).toInt()}%")
+                        if (onAudioEffectPresetChange != null &&
+                            audioEffectPreset != com.android.purebilibili.core.player.audio.PlayerAudioEffectPreset.OFF
+                        ) {
+                            add(audioEffectPreset.label)
+                        }
+                        if (!spatialAudioBadge.isNullOrBlank()) {
+                            add(spatialAudioBadge)
+                        }
+                    }.joinToString(" · ")
                     put(VOLUME) {
-                        PlayerSettingsRow(VOLUME.title, "${(playerVolume * 100).toInt()}%") { showPlayerVolumeDialog = true }
+                        PlayerSettingsRow(VOLUME.title, audioSummary) { showPlayerVolumeDialog = true }
                     }
                 } else if (playerVolumeUnavailableReason != null) {
                     put(VOLUME) { PlayerSettingsRow(VOLUME.title, playerVolumeUnavailableReason, onClick = null) }
@@ -1033,6 +1115,22 @@ internal fun VideoSettingsPanel(
                             onClick = { dismissWithAction(onDownloadAudio) },
                             policy = actionPolicy
                         )
+                        if (onOpenClipStudio != null) {
+                            SettingsActionPill(
+                                icon = Icons.Outlined.PlayCircle,
+                                label = "截取片段",
+                                onClick = { dismissWithAction(onOpenClipStudio) },
+                                policy = actionPolicy
+                            )
+                        }
+                        if (onOpenInAdjacentWindow != null) {
+                            SettingsActionPill(
+                                icon = Icons.Outlined.PlayCircle,
+                                label = "并排新窗口",
+                                onClick = { dismissWithAction(onOpenInAdjacentWindow) },
+                                policy = actionPolicy
+                            )
+                        }
                     }
                 }
                 SettingsDivider()

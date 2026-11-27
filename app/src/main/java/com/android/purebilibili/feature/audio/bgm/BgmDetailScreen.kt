@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.android.purebilibili.core.ui.common.AppSelectionContainer as SelectionContainer
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -340,7 +342,15 @@ private fun BgmInfoCard(
                     }
                     detail.artistsList.forEach { artist ->
                         AppTextButton(onClick = { if (artist.mid > 0) onUserClick(artist.mid) else copy(artist.name) }, contentPadding = PaddingValues(0.dp), modifier = Modifier.heightIn(min = 48.dp)) {
-                            if (artist.face.isNotBlank()) AsyncImage(FormatUtils.fixImageUrl(artist.face), null, modifier = Modifier.size(24.dp))
+                            if (artist.face.isNotBlank()) {
+                                AsyncImage(
+                                    model = FormatUtils.fixImageUrl(artist.face),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(24.dp).clip(CircleShape),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                            }
                             AppText("${artist.identity}：${artist.name}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -381,7 +391,11 @@ private fun BgmInfoCard(
 private fun BgmVideos(detail: BgmDetailData, videos: List<BgmRecommendVideo>, onVideoClick: (String, Long, String) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier) {
         AppText("${detail.musicTitle} · 共${videos.size}条视频", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(16.dp))
-        if (videos.isEmpty()) AppText("暂无使用这首音乐的视频", modifier = Modifier.padding(24.dp))
+        if (videos.isEmpty()) AppEmptyState(
+            title = "暂无使用这首音乐的视频",
+            presentation = AppContentStatePresentation.INLINE,
+            modifier = Modifier.fillMaxWidth(),
+        )
         else BoxWithConstraints(modifier = Modifier.weight(1f)) {
             val density = androidx.compose.ui.platform.LocalDensity.current
             val columns = with(density) {

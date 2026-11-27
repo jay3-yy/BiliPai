@@ -81,6 +81,8 @@ import kotlinx.coroutines.launch
 internal fun PostcardCaptureHintPill(
     draft: VideoPostcardDraft?,
     onOpenPostcard: (VideoPostcardDraft) -> Unit,
+    onExtractText: ((VideoPostcardDraft) -> Unit)? = null,
+    onAnnotateFrame: ((VideoPostcardDraft) -> Unit)? = null,
     onShareRawImage: (Uri) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -133,6 +135,31 @@ internal fun PostcardCaptureHintPill(
                         modifier = Modifier.size(16.dp),
                     )
                     AppText(" 台词明信片")
+                }
+                if (onExtractText != null) {
+                    AppTextButton(
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onExtractText(active)
+                        },
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.EditNote,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        AppText(" 识字")
+                    }
+                }
+                if (onAnnotateFrame != null) {
+                    AppTextButton(
+                        onClick = {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onAnnotateFrame(active)
+                        },
+                    ) {
+                        AppText("批注")
+                    }
                 }
                 AppIconButton(
                     onClick = { onShareRawImage(active.imageUri) },

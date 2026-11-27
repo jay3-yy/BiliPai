@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +51,11 @@ fun rememberPiliSponsorMenuSession(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            Toast.makeText(context, "读取空降助手设置失败: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                context,
+                error.toUserFriendlyMessage("读取空降助手设置失败"),
+                Toast.LENGTH_LONG,
+            ).show()
             latestOnConfigFailure()
         }
     }
@@ -75,7 +81,11 @@ fun rememberPiliSponsorMenuSession(
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
-                    Toast.makeText(context, "$failure: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        context,
+                        error.toUserFriendlyMessage(failure),
+                        Toast.LENGTH_LONG,
+                    ).show()
                 }
             }
         }

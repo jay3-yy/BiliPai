@@ -111,6 +111,142 @@ class CdnPlaybackDataSourceTest {
     }
 
     @Test
+    fun `canceling delegate transport interrupts enqueued OkHttpDataSource while waiting for headers`() {
+        val callEnqueued = CountDownLatch(1)
+        val canceledCount = AtomicInteger(0)
+        val cancelableFactory = com.android.purebilibili.core.player.CancelableCallFactory(
+            Call.Factory { request ->
+                FakeCall(
+                    request = request,
+                    responder = null,
+                    queued = callEnqueued,
+                    onCancel = { canceledCount.incrementAndGet() },
+                )
+            }
+        )
+        val okHttpSource = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(cancelableFactory)
+            .createDataSource()
+        val source = CdnPlaybackDataSource(
+            upstream = okHttpSource,
+            background = true,
+            onCancelDelegate = cancelableFactory::cancelAll,
+        )
+        val finished = CountDownLatch(1)
+        val openThread = thread(isDaemon = true) {
+            try {
+                source.open(DataSpec.Builder().setUri(Uri.parse(url)).setLength(128_000L).build())
+            } catch (_: IOException) {
+                // Expected cancellation while OkHttpDataSource.open() waits for response headers.
+            } finally {
+                finished.countDown()
+            }
+        }
+        try {
+            assertTrue(callEnqueued.await(2, TimeUnit.SECONDS))
+            source.cancelPendingRequests()
+            assertTrue(finished.await(2, TimeUnit.SECONDS))
+            assertEquals(1, canceledCount.get())
+        } finally {
+            source.close()
+            openThread.join(2_000)
+        }
+    }
+
+    @Test
+    fun `canceling delegate transport interrupts enqueued OkHttpDataSource while body read is stalled`() {
+        val bodyReadStarted = CountDownLatch(1)
+        val bodyCanceled = CountDownLatch(1)
+        val canceledCount = AtomicInteger(0)
+        val stalledBody = object : ResponseBody() {
+            override fun contentType(): MediaType? = null
+            override fun contentLength(): Long = 128_000L
+            override fun source(): BufferedSource = object : okio.Source {
+                override fun read(sink: okio.Buffer, byteCount: Long): Long {
+                    bodyReadStarted.countDown()
+                    assertTrue(bodyCanceled.await(2, TimeUnit.SECONDS))
+                    throw IOException("Canceled during body read")
+                }
+                override fun timeout(): Timeout = Timeout.NONE
+                override fun close() {
+                    bodyCanceled.countDown()
+                }
+            }.buffer()
+        }
+        val cancelableFactory = com.android.purebilibili.core.player.CancelableCallFactory(
+            Call.Factory { request ->
+                FakeCall(
+                    request = request,
+                    responder = { req ->
+                        Response.Builder()
+                            .request(req)
+                            .protocol(Protocol.HTTP_1_1)
+                            .code(200)
+                            .message("OK")
+                            .body(stalledBody)
+                            .build()
+                    },
+                    onCancel = {
+                        canceledCount.incrementAndGet()
+                        bodyCanceled.countDown()
+                    },
+                )
+            }
+        )
+        val okHttpSource = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(cancelableFactory)
+            .createDataSource()
+        val source = CdnPlaybackDataSource(
+            upstream = okHttpSource,
+            background = true,
+            onCancelDelegate = cancelableFactory::cancelAll,
+        )
+        val finished = CountDownLatch(1)
+        val readThread = thread(isDaemon = true) {
+            try {
+                source.open(DataSpec.Builder().setUri(Uri.parse(url)).setLength(128_000L).build())
+                source.read(ByteArray(4_096), 0, 4_096)
+            } catch (_: IOException) {
+                // Expected cancellation while reading stalled response body after onResponse().
+            } finally {
+                finished.countDown()
+            }
+        }
+        try {
+            assertTrue(bodyReadStarted.await(2, TimeUnit.SECONDS))
+            source.cancelPendingRequests()
+            assertTrue(finished.await(2, TimeUnit.SECONDS))
+            assertEquals(1, canceledCount.get())
+        } finally {
+            source.close()
+            readThread.join(2_000)
+        }
+    }
+
+    @Test
+    fun `cancelable call factory cancels safely under concurrent registration and removal`() {
+        val canceledCalls = AtomicInteger(0)
+        val cancelableFactory = com.android.purebilibili.core.player.CancelableCallFactory(
+            Call.Factory { request ->
+                FakeCall(
+                    request = request,
+                    responder = null,
+                    onCancel = { canceledCalls.incrementAndGet() },
+                )
+            }
+        )
+        val request = Request.Builder().url(url).build()
+        val first = cancelableFactory.newCall(request)
+        // 并发移除单个元素后再 cancelAll，验证不会触发 toList() 的 NoSuchElementException。
+        first.cancel()
+        cancelableFactory.cancelAll()
+        assertEquals(1, canceledCalls.get())
+
+        // cancelAll 之后新注册的 Call 仍会被立即取消，不漏取消。
+        val late = cancelableFactory.newCall(request)
+        assertTrue(late.isCanceled())
+        assertEquals(2, canceledCalls.get())
+    }
+
+    @Test
     fun `streaming delivery returns head piece before trailing piece finishes`() {
         val trailingGate = CountDownLatch(1)
         val uri = Uri.parse(url)

@@ -92,7 +92,7 @@ class VideoComposerDraftStateTest {
         assertTrue(state.sessionId > cancelledSession)
         assertSame(rootDraft, state.drafts[commentComposerDraftKey(null)])
         assertSame(replyDraft, state.drafts[11L])
-        assertEquals(listOf(image), state.drafts[0L]?.imageUris)
+        assertEquals(listOf(image), state.drafts[0L]?.imageUris?.toList())
         assertEquals(true, state.drafts[0L]?.syncToDynamic)
     }
 
@@ -249,7 +249,7 @@ class VideoComposerDraftStateTest {
 
             assertSame(draft, viewModel.composerDrafts.value.comments.drafts[0L])
             assertEquals(" keep spacing ", draft?.text)
-            assertEquals(listOf(image), draft?.imageUris)
+            assertEquals(listOf(image), draft?.imageUris?.toList())
             assertEquals(true, draft?.syncToDynamic)
             assertEquals(-1L, viewModel.composerDrafts.value.comments.completedSessionId)
             assertTrue(viewModel.showCommentDialog.value)

@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.video.playback.policy
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.player.PlaybackMediaCache
 import com.android.purebilibili.core.player.buildPlaybackCacheKey
@@ -73,11 +72,13 @@ internal suspend fun prefetchEntryPlaybackHead(
         "Referer" to "https://www.bilibili.com",
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     )
-    val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-        .setDefaultRequestProperties(headers)
     coroutineScope {
         targets.map { target ->
             async(Dispatchers.IO) {
+                val (upstreamFactory, cancelUpstream) = PlaybackMediaCache.buildCancelableOkHttpDataSourceFactory(
+                    callFactory = NetworkModule.playbackOkHttpClient,
+                    defaultRequestProperties = headers,
+                )
                 try {
                     PlaybackMediaCache.prefetchRange(
                         context = context.applicationContext,
@@ -86,6 +87,7 @@ internal suspend fun prefetchEntryPlaybackHead(
                         cacheKey = target.cacheKey,
                         position = 0L,
                         length = target.lengthBytes,
+                        onCancelUpstream = cancelUpstream,
                     )
                 } catch (cancelled: CancellationException) {
                     throw cancelled

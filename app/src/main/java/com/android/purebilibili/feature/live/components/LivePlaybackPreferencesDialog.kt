@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.live.components
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -42,7 +44,7 @@ internal fun LivePlaybackPreferencesDialog(onDismiss: () -> Unit, onQualityChang
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                Toast.makeText(context, error.message ?: "保存失败，请重试", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, error.toUserFriendlyMessage("保存失败，请重试"), Toast.LENGTH_SHORT).show()
             } finally { saving = false }
         }
     }

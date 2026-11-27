@@ -2,6 +2,8 @@
 
 package com.android.purebilibili.feature.bangumi
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.core.util.animateScrollToTop
 
 import android.widget.Toast
@@ -153,7 +155,7 @@ fun BangumiReviewScreen(
             },
             onFailure = { error ->
                 if (items.isEmpty()) errorMessage = error.message ?: "点评加载失败"
-                else Toast.makeText(context, error.message ?: "点评刷新失败", Toast.LENGTH_SHORT).show()
+                else Toast.makeText(context, error.toUserFriendlyMessage("点评刷新失败"), Toast.LENGTH_SHORT).show()
             },
         )
         loading = false
@@ -219,7 +221,7 @@ fun BangumiReviewScreen(
                             ))
                         }
                     }
-                }.onFailure { Toast.makeText(context, it.message ?: "操作失败", Toast.LENGTH_SHORT).show() }
+                }.onFailure { Toast.makeText(context, it.toUserFriendlyMessage("操作失败"), Toast.LENGTH_SHORT).show() }
             busyReviews = busyReviews - item.review_id
         }
     }
@@ -369,13 +371,20 @@ fun BangumiReviewScreen(
                                 }
                             }
                             errorMessage != null && items.isEmpty() -> item {
-                                Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    AppText(errorMessage.orEmpty())
-                                    AppTextButton(onClick = { reload() }) { AppText("重试") }
-                                }
+                                AppErrorState(
+                                    title = "加载失败",
+                                    message = errorMessage,
+                                    presentation = AppContentStatePresentation.INLINE,
+                                    primaryAction = AppContentStateAction("重试") { reload() },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
                             items.isEmpty() -> item {
-                                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { AppText("还没有点评") }
+                                AppEmptyState(
+                                    title = "还没有点评",
+                                    presentation = AppContentStatePresentation.INLINE,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
                             else -> items(items, key = { it.review_id.takeIf { id -> id > 0L } ?: it.article_id }) { item ->
                                 BangumiReviewCard(
@@ -462,7 +471,7 @@ fun BangumiReviewScreen(
                             if (reviewType == BangumiReviewType.SHORT) reload()
                         },
                         onFailure = { error ->
-                            Toast.makeText(context, error.message ?: "操作失败", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, error.toUserFriendlyMessage("操作失败"), Toast.LENGTH_SHORT).show()
                         }
                     )
                     submittingReview = false
@@ -488,7 +497,7 @@ fun BangumiReviewScreen(
                                     reviewCount = reviewCount?.minus(1)
                                 }
                             }
-                            .onFailure { Toast.makeText(context, it.message ?: "删除失败", Toast.LENGTH_SHORT).show() }
+                            .onFailure { Toast.makeText(context, it.toUserFriendlyMessage("删除失败"), Toast.LENGTH_SHORT).show() }
                         busyReviews = busyReviews - review.review_id
                     }
                 }) { AppText("删除") }

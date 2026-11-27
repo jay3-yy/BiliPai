@@ -27,6 +27,7 @@ import com.android.purebilibili.data.repository.ActionRepository
 import com.android.purebilibili.data.repository.VideoNoteRepository
 import com.android.purebilibili.data.repository.VideoNoteSavePayload
 import com.android.purebilibili.data.repository.VideoRepository
+import com.android.purebilibili.data.repository.vipVideoQualityIds
 import com.android.purebilibili.feature.download.DownloadManager
 import com.android.purebilibili.feature.download.DownloadQualityDialog
 import com.android.purebilibili.feature.download.DownloadStreamUnavailableException
@@ -96,6 +97,7 @@ private fun rememberPiliVideoContentActionsForIdentity(
     var watchLaterBusy by remember { mutableStateOf(false) }
     var downloadBusy by remember { mutableStateOf(false) }
     var qualityOptions by remember { mutableStateOf<List<Pair<Int, String>>>(emptyList()) }
+    var vipQualityIds by remember { mutableStateOf(emptySet<Int>()) }
     var showDownload by remember { mutableStateOf(false) }
     var coverToSave by remember { mutableStateOf<String?>(null) }
     var savingCover by remember { mutableStateOf(false) }
@@ -302,6 +304,7 @@ private fun rememberPiliVideoContentActionsForIdentity(
         DownloadQualityDialog(
             title = metadata?.title ?: title,
             qualityOptions = qualityOptions,
+            vipQualityIds = vipQualityIds,
             currentQuality = qualityOptions.firstOrNull()?.first ?: 80,
             onDismiss = { showDownload = false },
             onQualitySelected = { quality, options ->
@@ -392,6 +395,7 @@ private fun rememberPiliVideoContentActionsForIdentity(
                             id to (data.acceptDescription.getOrNull(data.acceptQuality.indexOf(id)) ?: "${id}P")
                         }
                         require(qualityOptions.isNotEmpty()) { "此视频暂无可下载画质" }
+                        vipQualityIds = data.vipVideoQualityIds()
                         showDownload = true
                     } catch (error: Exception) {
                         if (error is CancellationException) throw error

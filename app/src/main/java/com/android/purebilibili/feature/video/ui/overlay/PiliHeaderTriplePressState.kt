@@ -25,7 +25,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.feature.video.ui.feedback.TriplePressHapticCadenceTracker
 import com.android.purebilibili.feature.video.ui.feedback.TriplePressHapticCue
-import com.android.purebilibili.feature.video.ui.feedback.performTriplePressHapticCue
+import com.android.purebilibili.feature.video.ui.feedback.performTriplePressRichHapticCue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -129,15 +129,28 @@ internal fun piliHeaderLikeGesture(
     val latestTriple by rememberUpdatedState(onTriple)
     val context = LocalContext.current
     val haptics = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
-    return Modifier.pointerInput(state, context, haptics) {
+    val richHaptics = com.android.purebilibili.core.ui.rememberRichHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
+    return Modifier.pointerInput(state, context, haptics, richHaptics) {
         detectTapGestures(onPress = {
             state.start(
                 hasTriple = latestHasTriple,
                 onStart = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
                 onTriple = { latestTriple() },
                 onAlreadyTripled = { Toast.makeText(context, "已完成三连", Toast.LENGTH_SHORT).show() },
-                onChargeTick = { haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) },
-                onCompleteHaptic = { performTriplePressHapticCue(haptics, TriplePressHapticCue.Complete) },
+                onChargeTick = {
+                    performTriplePressRichHapticCue(
+                        richHaptics = richHaptics,
+                        cue = TriplePressHapticCue.ChargeTick,
+                        progress = state.progress,
+                    )
+                },
+                onCompleteHaptic = {
+                    performTriplePressRichHapticCue(
+                        richHaptics = richHaptics,
+                        cue = TriplePressHapticCue.Complete,
+                        progress = 1f,
+                    )
+                },
             )
             try {
                 state.release(tapUp = tryAwaitRelease(), onLike = { latestLike() })

@@ -2,10 +2,11 @@
 
 package com.android.purebilibili.feature.video.ui.overlay
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.media.audiofx.LoudnessEnhancer
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
 import com.android.purebilibili.core.ui.AppAlertDialog as AlertDialog
@@ -85,6 +86,10 @@ data class PiliPlayerMenuSession(
     val playerVolume: Float,
     val onPlayerVolumeChange: ((Float) -> Unit)?,
     val playerVolumeUnavailableReason: String?,
+    val audioEffectPreset: com.android.purebilibili.core.player.audio.PlayerAudioEffectPreset =
+        com.android.purebilibili.core.player.audio.PlayerAudioEffectPreset.OFF,
+    val onAudioEffectPresetChange: ((com.android.purebilibili.core.player.audio.PlayerAudioEffectPreset) -> Unit)? = null,
+    val spatialAudioBadge: String? = null,
     val isBackgroundPlaybackEnabled: Boolean,
     val onBackgroundPlaybackChange: (Boolean) -> Unit,
     val onWatchLater: (() -> Unit)?,
@@ -136,6 +141,15 @@ fun rememberPiliPlayerMenuSession(
     val scope = rememberCoroutineScope()
     val amplification by remember(context) { PiliPlayerMenuStore.amplification(context) }
         .collectAsStateWithLifecycle(initialValue = 1f)
+    val audioEffectPreset by remember(context) { PiliPlayerMenuStore.audioEffectPreset(context) }
+        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.player.audio.PlayerAudioEffectPreset.OFF)
+    val spatialAudioStatus by remember(context) {
+        com.android.purebilibili.core.player.audio.SpatialAudioStatusMonitor.observe(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = remember(context) {
+            com.android.purebilibili.core.player.audio.SpatialAudioStatusMonitor.snapshot(context)
+        }
+    )
     val savedBackgroundEnabled by remember(context) { SettingsManager.getBackgroundPlaybackEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = SettingsManager.getBackgroundPlaybackEnabledSync(context))
     val backgroundManager = remember(context) { com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstance(context) }
@@ -149,12 +163,20 @@ fun rememberPiliPlayerMenuSession(
         .collectAsStateWithLifecycle<Boolean?>(initialValue = null)
     val currentIdentity by rememberUpdatedState(bvid to cid)
     var volumeAvailable by remember(player) { mutableStateOf(false) }
+    var dspPresetAvailable by remember(player) { mutableStateOf(false) }
     var volumeFailure by remember(player) { mutableStateOf<String?>("音频会话尚未就绪") }
-    var gainEffect by remember(player) { mutableStateOf<LoudnessEnhancer?>(null) }
+    val audioEffectController = remember(player) {
+        com.android.purebilibili.core.player.audio.PlayerAudioEffectController { availability ->
+            volumeAvailable = availability.volumeGainAvailable
+            dspPresetAvailable = availability.dspPresetAvailable
+            volumeFailure = availability.unavailableReason
+        }
+    }
     var playingVideoCodec by remember(player) {
         mutableStateOf(player?.currentTracks?.let(::resolvePiliSelectedVideoCodec))
     }
     val currentAmplification by rememberUpdatedState(amplification)
+    val currentAudioEffectPreset by rememberUpdatedState(audioEffectPreset)
     val storedCdnService by remember(context) { PiliPlayerMenuStore.cdnService(context) }
         .collectAsStateWithLifecycle(initialValue = PiliCdnService.AUTO.name)
     val cdnService = remember(storedCdnService) {
@@ -190,51 +212,25 @@ fun rememberPiliPlayerMenuSession(
     // 起播选线由加载链路完成，菜单挂载不再替换播放源、重复 prepare。
     // 只有用户主动选择线路时才调用 applyCdn。
 
-    // 100% 不需要音效实例；保留已保存的非默认增益，打开设置时才查询设备能力。
-    val needsGainEffect = volumeControlsVisible || amplification > 1f
+    // 100% 且原声直出时不需要音效实例；打开设置或启用任意硬件预设/增益时绑定 DSP 效果器。
+    val needsGainEffect = volumeControlsVisible ||
+        amplification > 1f ||
+        audioEffectPreset != com.android.purebilibili.core.player.audio.PlayerAudioEffectPreset.OFF
     DisposableEffect(player, needsGainEffect) {
-        fun releaseGainEffect() {
-            val oldEffect = gainEffect
-            gainEffect = null
-            if (oldEffect != null) {
-                runCatching { oldEffect.setControlStatusListener(null) }
-                runCatching { oldEffect.release() }
-            }
-        }
         fun bind(sessionId: Int) {
-            releaseGainEffect()
-            volumeAvailable = false
-            volumeFailure = "音频会话尚未就绪"
-            if (!needsGainEffect || sessionId <= 0) return
-            runCatching {
-                LoudnessEnhancer(sessionId).also { effect ->
-                    try {
-                        effect.setTargetGain(playerAmplificationMillibels(currentAmplification))
-                        effect.enabled = true
-                        check(effect.enabled && effect.hasControl()) { "音频增强效果不可用" }
-                        gainEffect = effect
-                        effect.setControlStatusListener { _, granted ->
-                            val available = resolveAudioEffectControlAvailability(
-                                currentEffect = gainEffect,
-                                callbackEffect = effect,
-                                granted = granted,
-                                readEnabled = { effect.enabled },
-                            ) ?: return@setControlStatusListener
-                            if (gainEffect !== effect) return@setControlStatusListener
-                            volumeAvailable = available
-                            volumeFailure = if (volumeAvailable) null else "播放器音频增强控制权已被其他音效占用"
-                        }
-                    } catch (error: RuntimeException) {
-                        if (gainEffect === effect) gainEffect = null
-                        runCatching { effect.setControlStatusListener(null) }
-                        runCatching { effect.release() }
-                        throw error
-                    }
-                }
-            }.onSuccess {
-                volumeAvailable = runCatching { it.enabled && it.hasControl() }.getOrDefault(false)
-                volumeFailure = if (volumeAvailable) null else "播放器音频增强控制权已被其他音效占用"
-            }.onFailure { volumeFailure = "此设备的音频会话不支持播放器音量增强" }
+            if (!needsGainEffect || sessionId <= 0) {
+                audioEffectController.release()
+                volumeAvailable = false
+                dspPresetAvailable = false
+                volumeFailure = "音频会话尚未就绪"
+                return
+            }
+            audioEffectController.bindOrUpdate(
+                sessionId = sessionId,
+                preset = currentAudioEffectPreset,
+                amplification = currentAmplification,
+                forceAttach = volumeControlsVisible,
+            )
         }
         val listener = object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) = bind(audioSessionId)
@@ -246,16 +242,19 @@ fun rememberPiliPlayerMenuSession(
         bind(player?.audioSessionId ?: 0)
         onDispose {
             player?.removeListener(listener)
-            releaseGainEffect()
+            audioEffectController.release()
         }
     }
-    LaunchedEffect(gainEffect, amplification) {
-        gainEffect?.let { effect ->
-            runCatching { effect.setTargetGain(playerAmplificationMillibels(amplification)) }
-                .onFailure {
-                    volumeAvailable = false
-                    volumeFailure = "音频增强已不可用，请重新准备播放"
-                }
+    LaunchedEffect(player, audioEffectController, amplification, audioEffectPreset, needsGainEffect) {
+        if (!needsGainEffect) return@LaunchedEffect
+        val sessionId = player?.audioSessionId ?: 0
+        if (sessionId > 0) {
+            audioEffectController.bindOrUpdate(
+                sessionId = sessionId,
+                preset = audioEffectPreset,
+                amplification = amplification,
+                forceAttach = volumeControlsVisible,
+            )
         }
     }
 
@@ -302,7 +301,7 @@ fun rememberPiliPlayerMenuSession(
                         if (replacement != null) replacement(identity.first, identity.second, editedVideo.trim(), editedAudio.trim())
                         else if (player != null) replacePiliPlayerSources(context, player, editedVideo.trim(), editedAudio.trim())
                     }.onSuccess { editUrls = false }.onFailure {
-                        Toast.makeText(context, it.message ?: "播放地址替换失败", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, it.toUserFriendlyMessage("播放地址替换失败"), Toast.LENGTH_LONG).show()
                     }
                 }) { Text("应用") }
             },
@@ -335,6 +334,11 @@ fun rememberPiliPlayerMenuSession(
             scope.launch { PiliPlayerMenuStore.setAmplification(context, normalizePlayerAmplification(value)) }
         }) else null,
         playerVolumeUnavailableReason = volumeFailure,
+        audioEffectPreset = audioEffectPreset,
+        onAudioEffectPresetChange = if (dspPresetAvailable) ({ preset ->
+            scope.launch { PiliPlayerMenuStore.setAudioEffectPreset(context, preset) }
+        }) else null,
+        spatialAudioBadge = spatialAudioStatus.formatBadge(),
         isBackgroundPlaybackEnabled = backgroundEnabled,
         onBackgroundPlaybackChange = { value ->
             backgroundSession.select(value)
@@ -371,7 +375,7 @@ fun rememberPiliPlayerMenuSession(
                 runCatching { applyCdn(selected) }.onSuccess {
                     scope.launch { PiliPlayerMenuStore.setCdnService(context, selected.name) }
                 }.onFailure {
-                    Toast.makeText(context, it.message ?: "CDN 地址替换失败", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, it.toUserFriendlyMessage("CDN 地址替换失败"), Toast.LENGTH_LONG).show()
                 }
             }
         }) else null,

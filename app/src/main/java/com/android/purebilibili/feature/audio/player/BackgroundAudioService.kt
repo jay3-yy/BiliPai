@@ -77,6 +77,8 @@ class BackgroundAudioService : MediaLibraryService() {
     private var pauseRelease: Job? = null
     private var sleepTimerJob: Job? = null
     private val sleepVolumeFadeController = PlayerVolumeFadeController()
+    private val audioEffectController = com.android.purebilibili.core.player.audio.PlayerAudioEffectController()
+    private var audioEffectPrefs = BackgroundAudioEffectPreferences()
     private var generation = 0L
     private var libraryRequestGeneration = 0L
     private var playedMs = 0L
@@ -147,6 +149,12 @@ class BackgroundAudioService : MediaLibraryService() {
                         // A temporary storage/network failure must not stop audio playback.
                     }
                 }
+            }
+        }
+        scope.launch {
+            SystemMediaPreferences.observeAudioEffectPreferences(this@BackgroundAudioService).collect { prefs ->
+                audioEffectPrefs = prefs
+                applyAudioHardwarePipeline()
             }
         }
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
@@ -467,8 +475,34 @@ class BackgroundAudioService : MediaLibraryService() {
         sleepVolumeFadeController.cancelAndRestore(player)
         val currentSnapshot = snapshot
         val timer = currentSnapshot?.sleepTimer as? PlaybackSleepTimer.Countdown
-        sleepTimerJob = if (committed && timer != null) scope.launch {
+        if (!committed || timer == null) {
+            com.android.purebilibili.core.notification.liveupdate.LiveUpdateNotificationFactory
+                .cancelSleepTimerNotification(this)
+            sleepTimerJob = null
+            return
+        }
+        sleepTimerJob = scope.launch {
             val remainingBeforeFade = (timer.deadlineMs - android.os.SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+            val deadlineEpochMs = System.currentTimeMillis() + remainingBeforeFade
+            val remainingMinutes = ((remainingBeforeFade + 59_999L) / 60_000L).toInt().coerceAtLeast(1)
+            val currentTitle = currentSnapshot.current?.title.orEmpty()
+            val launchIntent = PendingIntent.getActivity(
+                this@BackgroundAudioService,
+                43_022,
+                resolveActivePlaybackLaunchIntent(this@BackgroundAudioService, currentSnapshot.current?.bvid),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            com.android.purebilibili.core.notification.liveupdate.LiveUpdateNotificationFactory
+                .postSleepTimerNotification(
+                    context = this@BackgroundAudioService,
+                    state = com.android.purebilibili.core.notification.liveupdate.LiveUpdateSleepTimerState(
+                        title = currentTitle,
+                        deadlineEpochMs = deadlineEpochMs,
+                        remainingMinutes = remainingMinutes,
+                        fadingOut = false,
+                    ),
+                    contentIntent = launchIntent,
+                )
             val configuredFadeMs = normalizeSleepTimerFadeDurationSec(currentSnapshot.sleepTimerFadeDurationSec) * 1_000L
             val fadeWindowMs = resolveSleepTimerFadeWindowMs(
                 remainingMs = remainingBeforeFade,
@@ -484,10 +518,23 @@ class BackgroundAudioService : MediaLibraryService() {
                 fadeEnabled = activeState.sleepTimerFadeEnabled,
                 configuredFadeMs = normalizeSleepTimerFadeDurationSec(activeState.sleepTimerFadeDurationSec) * 1_000L,
             )
+            if (actualFadeMs > 0L) {
+                com.android.purebilibili.core.notification.liveupdate.LiveUpdateNotificationFactory
+                    .postSleepTimerNotification(
+                        context = this@BackgroundAudioService,
+                        state = com.android.purebilibili.core.notification.liveupdate.LiveUpdateSleepTimerState(
+                            title = activeState.current?.title.orEmpty(),
+                            deadlineEpochMs = System.currentTimeMillis() + actualFadeMs,
+                            remainingMinutes = 1,
+                            fadingOut = true,
+                        ),
+                        contentIntent = launchIntent,
+                    )
+            }
             sleepVolumeFadeController.fadeOutAndFinish(player, actualFadeMs) {
                 expireSleepCountdown(toleranceMs = 500L)
             }
-        } else null
+        }
     }
 
     private fun expireSleepCountdown(toleranceMs: Long = 0L): Boolean {
@@ -495,6 +542,8 @@ class BackgroundAudioService : MediaLibraryService() {
         val timer = state.sleepTimer as? PlaybackSleepTimer.Countdown ?: return false
         if (timer.deadlineMs - android.os.SystemClock.elapsedRealtime() > toleranceMs) return false
         snapshot = state.copy(sleepTimer = null)
+        com.android.purebilibili.core.notification.liveupdate.LiveUpdateNotificationFactory
+            .cancelSleepTimerNotification(this)
         player.pause()
         return true
     }
@@ -581,6 +630,10 @@ class BackgroundAudioService : MediaLibraryService() {
             if (snapshot != null && events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_IS_PLAYING_CHANGED,
                     Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_PLAYBACK_STATE_CHANGED)) {
                 com.android.purebilibili.feature.widget.PlaybackWidgetProvider.publish(this@BackgroundAudioService, player)
+                com.android.purebilibili.feature.tile.BackgroundAudioTileService.requestListeningState(this@BackgroundAudioService)
+            }
+            if (events.containsAny(Player.EVENT_AUDIO_SESSION_ID, Player.EVENT_PLAYBACK_PARAMETERS_CHANGED)) {
+                applyAudioHardwarePipeline()
             }
         }
 
@@ -795,14 +848,49 @@ class BackgroundAudioService : MediaLibraryService() {
             }
         } finally {
             com.android.purebilibili.feature.widget.PlaybackWidgetProvider.requestUpdate(this)
+            com.android.purebilibili.feature.tile.BackgroundAudioTileService.requestListeningState(this)
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
     }
 
+    private fun applyAudioHardwarePipeline() {
+        if (nativeReleased || !::player.isInitialized) return
+        val offloadEnabled = com.android.purebilibili.core.player.audio.shouldEnableBackgroundAudioOffload(
+            speed = player.playbackParameters.speed,
+            preset = audioEffectPrefs.preset,
+            amplification = audioEffectPrefs.amplification,
+        )
+        val offloadPrefs = androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.Builder()
+            .setAudioOffloadMode(
+                if (offloadEnabled) {
+                    androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                } else {
+                    androidx.media3.common.TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+                }
+            )
+            .setIsGaplessSupportRequired(false)
+            .setIsSpeedChangeSupportRequired(false)
+            .build()
+        val currentParams = player.trackSelectionParameters
+        if (currentParams.audioOffloadPreferences != offloadPrefs) {
+            player.trackSelectionParameters = currentParams.buildUpon()
+                .setAudioOffloadPreferences(offloadPrefs)
+                .build()
+        }
+        audioEffectController.bindOrUpdate(
+            sessionId = player.audioSessionId,
+            preset = audioEffectPrefs.preset,
+            amplification = audioEffectPrefs.amplification,
+        )
+    }
+
     private fun releaseNativeResources() {
         if (nativeReleased) return
         nativeReleased = true
+        audioEffectController.release()
+        com.android.purebilibili.core.notification.liveupdate.LiveUpdateNotificationFactory
+            .cancelSleepTimerNotification(this)
         preparing?.set(SessionResult(SessionResult.RESULT_ERROR_INVALID_STATE))
         preparing = null
         session.release()

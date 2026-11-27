@@ -12,15 +12,36 @@ import androidx.media3.datasource.cache.CacheKeyFactory
 import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.android.purebilibili.feature.plugin.CdnPlaybackDataSource
 import com.android.purebilibili.core.util.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody
+import okio.Buffer
+import okio.BufferedSource
+import okio.ForwardingSource
+import okio.buffer
 import java.io.File
+import java.io.IOException
+import java.io.InterruptedIOException
 import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 private const val TAG = "PlaybackMediaCache"
 private const val PLAYBACK_MEDIA_CACHE_DIR = "playback_media_cache"
@@ -60,6 +81,134 @@ internal fun buildPlaybackCacheKey(rawUri: String, explicitKey: String?): String
         "$scheme://$host$path"
     } else {
         rawUri
+    }
+}
+
+/**
+ * 追踪通过 Media3 [OkHttpDataSource] 发出的底层 OkHttp [Call]，涵盖等待响应头（`open()`）与
+ * 阻塞读取响应体（`read()`）全生命周期，直到响应体读取完毕（EOF）、出错或关闭才释放句柄。
+ */
+internal class CancelableCallFactory(
+    private val delegate: Call.Factory,
+) : Call.Factory {
+    private val canceled = AtomicBoolean(false)
+    private val activeCalls = ConcurrentHashMap.newKeySet<Call>()
+
+    override fun newCall(request: Request): Call {
+        val raw = delegate.newCall(request)
+        val tracked = TrackedCall(raw)
+        activeCalls.add(tracked)
+        if (canceled.get()) {
+            // 无论 cancelAll() 是否已先移除该 Call，都执行幂等取消，避免注册与取消交错时漏取消。
+            tracked.cancel()
+        }
+        return tracked
+    }
+
+    fun cancelAll() {
+        canceled.set(true)
+        // 直接迭代 ConcurrentHashMap 键集避免 toList() 在 size==1 并发删空时抛 NoSuchElementException。
+        val iterator = activeCalls.iterator()
+        while (iterator.hasNext()) {
+            val call = iterator.next()
+            iterator.remove()
+            call.cancel()
+        }
+    }
+
+    private inner class TrackedCall(
+        private val raw: Call,
+    ) : Call by raw {
+        override fun execute(): Response {
+            val response = try {
+                raw.execute()
+            } catch (error: Throwable) {
+                activeCalls.remove(this)
+                throw error
+            }
+            return wrapResponse(response)
+        }
+
+        override fun enqueue(responseCallback: Callback) {
+            raw.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    activeCalls.remove(this@TrackedCall)
+                    responseCallback.onFailure(this@TrackedCall, e)
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    val wrapped = wrapResponse(response)
+                    responseCallback.onResponse(this@TrackedCall, wrapped)
+                }
+            })
+        }
+
+        override fun cancel() {
+            activeCalls.remove(this)
+            raw.cancel()
+        }
+
+        override fun clone(): Call = this@CancelableCallFactory.newCall(raw.request())
+
+        private fun wrapResponse(response: Response): Response {
+            val trackedBody = TrackingResponseBody(response.body) {
+                activeCalls.remove(this@TrackedCall)
+            }
+            val wrapped = response.newBuilder()
+                .body(trackedBody)
+                .build()
+            if (canceled.get()) {
+                cancel()
+            }
+            return wrapped
+        }
+    }
+
+    private class TrackingResponseBody(
+        private val delegate: ResponseBody,
+        private val onReleased: () -> Unit,
+    ) : ResponseBody() {
+        private val released = AtomicBoolean(false)
+        private val trackedSource: BufferedSource by lazy {
+            object : ForwardingSource(delegate.source()) {
+                override fun read(sink: Buffer, byteCount: Long): Long = try {
+                    val read = super.read(sink, byteCount)
+                    if (read == -1L) releaseOnce()
+                    read
+                } catch (error: IOException) {
+                    releaseOnce()
+                    throw error
+                }
+
+                override fun close() {
+                    try {
+                        super.close()
+                    } finally {
+                        releaseOnce()
+                    }
+                }
+            }.buffer()
+        }
+
+        override fun contentType(): MediaType? = delegate.contentType()
+
+        override fun contentLength(): Long = delegate.contentLength()
+
+        override fun source(): BufferedSource = trackedSource
+
+        override fun close() {
+            try {
+                delegate.close()
+            } finally {
+                releaseOnce()
+            }
+        }
+
+        private fun releaseOnce() {
+            if (released.compareAndSet(false, true)) {
+                onReleased()
+            }
+        }
     }
 }
 
@@ -117,6 +266,17 @@ internal object PlaybackMediaCache {
         }
     }
 
+    /** 构造带底层 Call 取消句柄的 OkHttpDataSource.Factory，供各预取路径在取消时中断 `open()`。 */
+    fun buildCancelableOkHttpDataSourceFactory(
+        callFactory: Call.Factory,
+        defaultRequestProperties: Map<String, String>,
+    ): Pair<DataSource.Factory, () -> Unit> {
+        val cancelable = CancelableCallFactory(callFactory)
+        val factory = OkHttpDataSource.Factory(cancelable)
+            .setDefaultRequestProperties(defaultRequestProperties)
+        return factory to cancelable::cancelAll
+    }
+
     /** Caller-owned operation; cancellation closes active media requests and stops cache writes. */
     suspend fun prefetchRange(
         context: Context,
@@ -124,13 +284,18 @@ internal object PlaybackMediaCache {
         url: Uri,
         cacheKey: String,
         position: Long,
-        length: Long
+        length: Long,
+        onCancelUpstream: (() -> Unit)? = null,
     ) {
         if (length <= 0L) return
         val cache = getOrCreateCache(context) ?: return
         val activeUpstream = AtomicReference<CdnPlaybackDataSource?>()
         val cancelableFactory = DataSource.Factory {
-            CdnPlaybackDataSource(upstreamFactory.createDataSource(), background = true).also { activeUpstream.set(it) }
+            CdnPlaybackDataSource(
+                upstream = upstreamFactory.createDataSource(),
+                background = true,
+                onCancelDelegate = onCancelUpstream,
+            ).also { activeUpstream.set(it) }
         }
         val cacheDataSource = CacheDataSource.Factory()
             .setCache(cache)
@@ -149,14 +314,42 @@ internal object PlaybackMediaCache {
             null,
             null
         )
+        val cancelTransfer = {
+            writer.cancel()
+            // CacheWriter closes the data source; only cancel its transport here.
+            val upstream = activeUpstream.get()
+            if (upstream != null) upstream.cancelPendingRequests() else onCancelUpstream?.invoke()
+            Unit
+        }
         coroutineScope {
-            val reader = async(Dispatchers.IO) { writer.cache() }
+            val reader = async {
+                // Interrupt a cache lock wait within the lifetime of this worker operation.
+                try {
+                    runInterruptible(Dispatchers.IO) { writer.cache() }
+                } catch (error: InterruptedIOException) {
+                    // Media3 translates an interrupted cache wait into an I/O exception.
+                    currentCoroutineContext().ensureActive()
+                    throw error
+                }
+            }
             try {
-                reader.await()
+                // Cancel OkHttp independently, including while its response body is blocked.
+                suspendCancellableCoroutine<Unit> { continuation ->
+                    continuation.invokeOnCancellation {
+                        cancelTransfer()
+                    }
+                    reader.invokeOnCompletion { cause ->
+                        if (continuation.isActive) {
+                            if (cause == null) {
+                                continuation.resume(Unit)
+                            } else {
+                                continuation.resumeWithException(cause)
+                            }
+                        }
+                    }
+                }
             } finally {
-                writer.cancel()
-                // CacheWriter owns CacheDataSource.close(); only interrupt its active transport.
-                activeUpstream.get()?.cancelPendingRequests()
+                cancelTransfer()
             }
         }
     }

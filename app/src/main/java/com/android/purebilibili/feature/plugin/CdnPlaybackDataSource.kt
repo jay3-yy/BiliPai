@@ -41,6 +41,7 @@ internal class CdnPlaybackDataSource(
     private val background: Boolean = false,
     private val client: OkHttpClient? = null,
     private val isWifi: () -> Boolean = { NetworkModule.appContext?.let { NetworkUtils.isWifi(it) } == true },
+    private val onCancelDelegate: (() -> Unit)? = null,
 ) : BaseDataSource(true) {
     private var spec: DataSpec? = null
     private var candidates: List<String> = emptyList()
@@ -207,7 +208,12 @@ internal class CdnPlaybackDataSource(
         closed = true
         cancelCalls()
         signalWake()
-        if (delegateOpen) upstream.close()
+        val cancelDelegate = onCancelDelegate
+        if (cancelDelegate != null) {
+            cancelDelegate()
+        } else if (delegateOpen) {
+            upstream.close()
+        }
     }
 
     override fun close() {
@@ -247,6 +253,7 @@ internal class CdnPlaybackDataSource(
     }
 
     private fun openDelegate(dataSpec: DataSpec): Long {
+        if (closed) throw IOException("CDN open canceled")
         delegateHost = hostFromCdnUrl(dataSpec.uri.toString())
         delegateBytes = 0
         delegateStartedNs = System.nanoTime()

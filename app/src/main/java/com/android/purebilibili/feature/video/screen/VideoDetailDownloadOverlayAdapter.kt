@@ -254,6 +254,7 @@ internal fun VideoDetailDownloadOverlayAdapter(
             title = successForDownload.info.title,
             qualityOptions = sortedQualityOptions,
             currentQuality = highestQuality,
+            vipQualityIds = successForDownload.vipQualityIds,
             onQualitySelected = { quality, options ->
                 viewModel.downloadWithQuality(quality, options)
                 showQualitySelection = false

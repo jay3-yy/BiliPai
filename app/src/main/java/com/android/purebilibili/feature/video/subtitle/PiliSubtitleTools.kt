@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.subtitle
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.core.ui.components.AppTextButton as TextButton
 import com.android.purebilibili.core.ui.components.AppSlider as Slider
 import com.android.purebilibili.core.ui.AppAlertDialog as AlertDialog
@@ -21,6 +23,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.adaptive.ExternalSubtitleDropBridge
+import com.android.purebilibili.core.ui.adaptive.findHostActivity
+import com.android.purebilibili.core.ui.adaptive.windowDropToken
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.Player
@@ -142,7 +147,7 @@ fun rememberPiliSubtitleTools(
             session.acquiredInitialized = true
         } catch (error: Exception) {
             if (error is CancellationException) throw error
-            if (identity == currentIdentity) message(error.message ?: "字幕加载失败")
+            if (identity == currentIdentity) message(error.toUserFriendlyMessage("字幕加载失败"))
         }
     }
     LaunchedEffect(acquireNativeSubtitles, nativeControls.trackAvailable) {
@@ -176,6 +181,45 @@ fun rememberPiliSubtitleTools(
                 } finally { if (request == currentIdentity) busy = false }
             }
         }
+    }
+    val hostWindowToken = remember(context) {
+        context.findHostActivity()?.let(::windowDropToken)
+    }
+    DisposableEffect(hostWindowToken, identity) {
+        if (hostWindowToken == null || identity.bvid.isBlank() || identity.cid <= 0L) {
+            return@DisposableEffect onDispose { }
+        }
+        val unregister = ExternalSubtitleDropBridge
+            .registerHandler(hostWindowToken) { dropped ->
+                val request = currentIdentity
+                if (busy || request.bvid.isBlank() || request.cid <= 0L) {
+                    return@registerHandler false
+                }
+                busy = true
+                scope.launch {
+                    try {
+                        val track = withContext(Dispatchers.IO) {
+                            val raw = context.contentResolver.openInputStream(dropped.uri)
+                                ?.use { decodeSubtitleDocument(it.readBytes()) }
+                                ?: error("无法读取拖入的字幕文件")
+                            dropped.displayName to parseSubtitleDocument(dropped.displayName, raw)
+                        }
+                        if (subtitleDocumentResultBelongsTo(request, currentIdentity)) {
+                            session.append(track.first, track.second)
+                            currentNativeCallbacks.onEnabledChange(false)
+                            message("已加载拖入字幕：${track.first}")
+                        }
+                    } catch (error: Exception) {
+                        if (error is CancellationException) throw error
+                        if (request == currentIdentity) message(error.message ?: "拖入字幕导入失败")
+                    } finally {
+                        dropped.releasePermissions()
+                        if (request == currentIdentity) busy = false
+                    }
+                }
+                true
+            }
+        onDispose(unregister)
     }
     val writeDocument: (android.net.Uri?) -> Unit = { uri ->
         val request = exportRequest

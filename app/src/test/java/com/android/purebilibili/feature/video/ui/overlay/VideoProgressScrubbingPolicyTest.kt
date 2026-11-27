@@ -90,7 +90,7 @@ class VideoProgressScrubbingPolicyTest {
             viewPoints = listOf(ViewPoint(content = "开箱评测", from = 60, to = 120)),
             pbpRidgeSamples = listOf(
                 PbpRidgeSample(0.45f, 0.3f, PbpRidgeDensity.NORMAL),
-                PbpRidgeSample(0.50f, 0.9f, PbpRidgeDensity.PEAK),
+                PbpRidgeSample(0.50f, 0.9f, PbpRidgeDensity.HOT),
                 PbpRidgeSample(0.55f, 0.4f, PbpRidgeDensity.NORMAL),
             ),
         )
@@ -151,7 +151,7 @@ class VideoProgressScrubbingPolicyTest {
         val durationMs = 300_000L
         val peaks = listOf(
             PbpRidgeSample(0.18f, 0.3f, PbpRidgeDensity.NORMAL),
-            PbpRidgeSample(0.20f, 0.88f, PbpRidgeDensity.PEAK),
+            PbpRidgeSample(0.20f, 0.88f, PbpRidgeDensity.HOT),
             PbpRidgeSample(0.22f, 0.4f, PbpRidgeDensity.NORMAL),
         )
         val chapters = listOf(ViewPoint(content = "总结对比", from = 90, to = 150))

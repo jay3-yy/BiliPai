@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.live
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.core.ui.AppSurfaceTokens
@@ -116,7 +118,7 @@ internal fun LiveAreaScreen(
                     SettingsManager.setLiveFavoriteTags(context, snapshot, owner.mid)
                     editing = false
                     Toast.makeText(context, "设置成功", Toast.LENGTH_SHORT).show()
-                }.onFailure { Toast.makeText(context, it.message ?: "保存失败，请重试", Toast.LENGTH_SHORT).show() }
+                }.onFailure { Toast.makeText(context, it.toUserFriendlyMessage("保存失败，请重试"), Toast.LENGTH_SHORT).show() }
             } finally { if (owner == TokenManager.accountIdentity.value) saving = false }
         }
     }

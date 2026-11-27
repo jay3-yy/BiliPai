@@ -41,6 +41,9 @@ internal val LocalPlayerLevelGestureActive = compositionLocalOf { false }
 internal val LocalPlayerPageBackdrop = compositionLocalOf<Backdrop?> { null }
 
 @Composable
+internal fun currentPlayerControlBackdrop(): Backdrop? = LocalPlayerControlBackdrop.current
+
+@Composable
 internal fun PlayerControlsBackdropHost(
     enabled: Boolean,
     modifier: Modifier = Modifier,

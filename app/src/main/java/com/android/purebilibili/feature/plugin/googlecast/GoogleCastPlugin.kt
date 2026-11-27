@@ -15,7 +15,6 @@ import com.android.purebilibili.plugin.sdk.CastPluginRoute
 import com.android.purebilibili.plugin.sdk.PluginCapability
 import com.android.purebilibili.plugin.sdk.PluginCapabilityManifest
 import com.android.purebilibili.core.util.Logger
-import com.google.android.gms.cast.framework.CastContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cast
 import kotlinx.coroutines.flow.StateFlow
@@ -51,7 +50,7 @@ class GoogleCastPlugin : BuiltinPlugin, CastPluginApi {
     )
 
     override val routes: StateFlow<List<CastPluginRoute>> = GoogleCastRouteManager.routes
-    override val playbackState: StateFlow<CastPluginPlaybackState> = GoogleCastPlaybackController.playbackState
+    override val playbackState: StateFlow<CastPluginPlaybackState> = Media3CastPlaybackController.playbackState
     override val isDiscovering: StateFlow<Boolean> = GoogleCastRouteManager.isDiscovering
 
     override fun startRouteDiscovery(context: Context) {
@@ -71,40 +70,26 @@ class GoogleCastPlugin : BuiltinPlugin, CastPluginApi {
             onDiscoveryAccessRevoked()
             return Result.failure(SecurityException("请先允许本地网络权限，再连接 Google Cast 设备"))
         }
-        val result = GoogleCastMediaLoader.loadMedia(
+        return Media3CastPlaybackController.cast(
             context = context,
             routeId = route.routeId,
-            url = media.url,
-            title = media.title,
-            creator = media.creator,
-            contentType = media.contentType,
-            startPositionMs = media.startPositionMs,
-            autoplay = media.autoplay
+            deviceLabel = route.name,
+            media = media,
         )
-        if (result.isSuccess) {
-            val session = GoogleCastRouteManager.awaitCastContext(context).sessionManager.currentCastSession
-            if (session != null) {
-                GoogleCastPlaybackController.attach(
-                    session = session,
-                    title = media.title,
-                    deviceLabel = route.name
-                )
-            }
-        }
-        return result
     }
 
-    override suspend fun play(): Result<Unit> = GoogleCastPlaybackController.play()
+    override suspend fun play(): Result<Unit> = Media3CastPlaybackController.play()
 
-    override suspend fun pause(): Result<Unit> = GoogleCastPlaybackController.pause()
+    override suspend fun pause(): Result<Unit> = Media3CastPlaybackController.pause()
 
-    override suspend fun seek(positionMs: Long): Result<Unit> = GoogleCastPlaybackController.seek(positionMs)
+    override suspend fun seek(positionMs: Long): Result<Unit> = Media3CastPlaybackController.seek(positionMs)
 
     override suspend fun onEnable() {
-        Logger.d(TAG, "Google Cast plugin enabled")
+        Logger.d(TAG, "Google Cast plugin enabled (Media3 Cast 1.11.1)")
     }
 
     override suspend fun onDisable() {
+        Media3CastPlaybackController.release()
         GoogleCastPlaybackController.detach()
         GoogleCastRouteManager.stopDiscovery()
         Logger.d(TAG, "Google Cast plugin disabled")

@@ -88,6 +88,7 @@ fun VideoProgressBar(
 ) {
     var containerWidthPx by remember { mutableFloatStateOf(0f) }
     var dragTargetPositionMs by remember { mutableLongStateOf(displayPositionMs.coerceAtLeast(0L)) }
+    var hoverPositionMs by remember { mutableLongStateOf(-1L) }
     var isFineScrubbingActive by remember { mutableStateOf(false) }
     var activeSnapLabel by remember { mutableStateOf<String?>(null) }
     val scrubbingConfig = LocalVideoProgressScrubbingConfig.current
@@ -105,14 +106,20 @@ fun VideoProgressBar(
     val currentOnSeekDragStart by rememberUpdatedState(onSeekDragStart)
     val currentOnSeekDragUpdate by rememberUpdatedState(onSeekDragUpdate)
     val currentOnSeekDragCancel by rememberUpdatedState(onSeekDragCancel)
-    // 拖动进度条刻度触感：拖起轻振，跨过整秒时短振，快速滑动按 60ms 限频。
+    // 拖动进度条刻度触感：常规跨秒轻刻度，吸附章节/高能点/精细模式切换使用线性马达清晰刻度。
     val seekHaptic = rememberHapticFeedback(AppHapticScene.PLAYER_SEEK)
+    val seekRichHaptic = com.android.purebilibili.core.ui.rememberRichHapticFeedback(AppHapticScene.PLAYER_SEEK)
     val seekHapticPolicy = remember { SeekTickHapticPolicy() }
-    LaunchedEffect(displayPositionMs, isSeekScrubbing) {
+    LaunchedEffect(displayPositionMs, isSeekScrubbing, duration) {
         if (!isSeekScrubbing) {
             dragTargetPositionMs = displayPositionMs.coerceAtLeast(0L)
             isFineScrubbingActive = false
             activeSnapLabel = null
+        } else {
+            hoverPositionMs = -1L
+        }
+        if (duration <= 0L) {
+            hoverPositionMs = -1L
         }
     }
 
@@ -163,12 +170,18 @@ fun VideoProgressBar(
         if (currentChapter != null) layoutPolicy.baseHeightWithChapterDp.dp
         else layoutPolicy.baseHeightWithoutChapterDp.dp
     ) * verticalHeightScale
-    val previewImageHeightDp = if (videoshotData?.isValid == true) {
+    val isPointerHovering = !isSeekScrubbing && hoverPositionMs >= 0L && duration > 0L
+    val showSeekPreview = isSeekScrubbing || isPointerHovering
+    val previewPositionProvider: () -> Long = remember(isSeekScrubbing, activePositionProvider) {
+        { if (isSeekScrubbing) activePositionProvider() else hoverPositionMs.coerceAtLeast(0L) }
+    }
+    val previewImageHeightDp = if (showSeekPreview && videoshotData?.isValid == true) {
         resolveSeekPreviewBubbleHeightDp(
-            LocalConfiguration.current.screenWidthDp, LocalConfiguration.current.screenHeightDp,
+            screenWidthDp = LocalConfiguration.current.screenWidthDp,
+            containerHeightDp = LocalConfiguration.current.screenHeightDp,
         ).takeIf { it > 0 }
     } else null
-    val basePreviewAreaHeightDp = if (isSeekScrubbing) {
+    val basePreviewAreaHeightDp = if (showSeekPreview) {
         resolveVideoProgressPreviewAreaHeightDp(
             layoutPolicy = layoutPolicy,
             hasChapter = currentChapter != null,
@@ -179,7 +192,7 @@ fun VideoProgressBar(
         val minFilmstripHeight = if (videoshotData?.isValid == true) 96.dp else 72.dp
         maxOf(basePreviewAreaHeightDp, minFilmstripHeight)
     } else basePreviewAreaHeightDp
-    val thumbSizeDp = if (isSeekScrubbing) {
+    val thumbSizeDp = if (showSeekPreview) {
         layoutPolicy.thumbDraggingSizeDp.dp
     } else {
         layoutPolicy.thumbIdleSizeDp.dp
@@ -197,7 +210,7 @@ fun VideoProgressBar(
             .fillMaxWidth()
             .height(baseHeightDp + previewAreaHeightDp)
     ) {
-        if (isSeekScrubbing) {
+        if (showSeekPreview) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -207,18 +220,22 @@ fun VideoProgressBar(
             ) {
                 ProgressSeekPreview(
                     videoshotData = videoshotData,
-                    positionProvider = activePositionProvider,
+                    positionProvider = previewPositionProvider,
                     currentPosition = currentPosition,
                     duration = duration,
                     thumbCenterXPx = containerWidthPx * resolveProgressFraction(
-                        positionMs = activePositionProvider(),
+                        positionMs = previewPositionProvider(),
                         durationMs = duration
                     ),
                     containerWidthPx = containerWidthPx,
-                    fineScrubbingActive = isFineScrubbingActive,
-                    statusLabel = activeSnapLabel ?: if (!isFineScrubbingActive && scrubbingConfig.fineScrubbingEnabled && !horizontalSeekOnly) {
-                        "上滑进入精准时间轴"
-                    } else null,
+                    fineScrubbingActive = isSeekScrubbing && isFineScrubbingActive,
+                    statusLabel = if (isPointerHovering) {
+                        "手写笔/指针悬停预览 · 点击跳转"
+                    } else {
+                        activeSnapLabel ?: if (!isFineScrubbingActive && scrubbingConfig.fineScrubbingEnabled && !horizontalSeekOnly) {
+                            "上滑进入精准时间轴"
+                        } else null
+                    },
                 )
 
             }
@@ -230,6 +247,41 @@ fun VideoProgressBar(
                 .height(baseHeightDp)
                 .testTag("player_progress_seek_area")
                 .onSizeChanged { containerWidthPx = it.width.toFloat() }
+                .pointerInput(duration, isSeekScrubbing) {
+                    if (duration <= 0L) return@pointerInput
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: continue
+                            val isStylusOrMouse =
+                                change.type == androidx.compose.ui.input.pointer.PointerType.Stylus ||
+                                    change.type == androidx.compose.ui.input.pointer.PointerType.Mouse
+                            val hoverAllowed = com.android.purebilibili.feature.video.annotation
+                                .shouldActivatePointerHoverPreview(
+                                    isStylusOrMouse = isStylusOrMouse,
+                                    isSeekScrubbing = isSeekScrubbing,
+                                    durationMs = duration,
+                                )
+                            when (event.type) {
+                                androidx.compose.ui.input.pointer.PointerEventType.Enter,
+                                androidx.compose.ui.input.pointer.PointerEventType.Move -> {
+                                    if (hoverAllowed && !change.pressed && size.width > 0) {
+                                        hoverPositionMs = resolveSeekPositionFromTouch(
+                                            touchX = change.position.x,
+                                            containerWidthPx = size.width.toFloat(),
+                                            durationMs = duration,
+                                        )
+                                    } else if (change.pressed) {
+                                        hoverPositionMs = -1L
+                                    }
+                                }
+                                androidx.compose.ui.input.pointer.PointerEventType.Exit -> {
+                                    hoverPositionMs = -1L
+                                }
+                            }
+                        }
+                    }
+                }
                 .then(
                     if (seekGestureHost == VideoProgressBarSeekGestureHost.SharedOuterContainer) {
                         Modifier
@@ -311,7 +363,7 @@ fun VideoProgressBar(
                                             if (nextFineActive) {
                                                 fineAnchorPosMs = latestDragPositionMs
                                                 fineAnchorTouchX = change.position.x
-                                                seekHaptic(HapticType.LIGHT)
+                                                seekRichHaptic(com.android.purebilibili.core.ui.AppRichHapticPattern.SEEK_SNAP)
                                             }
                                         }
                                         val rawTargetPositionMs = if (fineActive) {
@@ -352,9 +404,9 @@ fun VideoProgressBar(
                                         dragTargetPositionMs = targetPositionMs
                                         currentOnSeekDragUpdate(targetPositionMs)
                                         if (enteredNewSnap) {
-                                            seekHaptic(HapticType.LIGHT)
+                                            seekRichHaptic(com.android.purebilibili.core.ui.AppRichHapticPattern.SEEK_SNAP)
                                         } else if (seekHapticPolicy.update(targetPositionMs, SystemClock.uptimeMillis())) {
-                                            seekHaptic(HapticType.GESTURE_STEP)
+                                            seekRichHaptic(com.android.purebilibili.core.ui.AppRichHapticPattern.SEEK_TICK)
                                         }
                                     }
                                     val endDrag: () -> Unit = {

@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.live
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -35,7 +37,7 @@ internal fun LiveFeedbackDialog(
                     Toast.makeText(context, "提交成功", Toast.LENGTH_SHORT).show()
                     onDismiss()
                 }.onFailure {
-                    Toast.makeText(context, it.message ?: "提交失败，请重试", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, it.toUserFriendlyMessage("提交失败，请重试"), Toast.LENGTH_SHORT).show()
                 }
             } finally { submitting = false }
         }

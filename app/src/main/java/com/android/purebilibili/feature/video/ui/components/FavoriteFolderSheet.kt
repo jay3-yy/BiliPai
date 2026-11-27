@@ -128,10 +128,14 @@ fun FavoriteFolderSheet(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (sidePanel) Modifier.weight(1f) else Modifier.height(140.dp)),
+                        .then(if (sidePanel) Modifier.weight(1f) else Modifier.heightIn(min = 140.dp)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    AppText("暂无收藏夹", color = AppContentColors.secondaryText())
+                    com.android.purebilibili.core.ui.components.AppEmptyState(
+                        title = "暂无收藏夹",
+                        presentation = com.android.purebilibili.core.ui.components.AppContentStatePresentation.INLINE,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             } else {
                 LazyColumn(

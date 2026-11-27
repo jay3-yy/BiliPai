@@ -1,6 +1,8 @@
 // 文件路径: feature/bangumi/BangumiPlayerScreen.kt
 package com.android.purebilibili.feature.bangumi
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.core.player.withAppVideoDecoderDiagnostics
 import com.android.purebilibili.core.player.withAppVideoDecoderPreference
 
@@ -1669,7 +1671,7 @@ fun BangumiPlayerScreen(
                                     danmakuManager.addLocalDanmaku(message, if (gradual) 16777215 else color, mode, fontSize, gradual)
                                     Toast.makeText(context, "弹幕发送成功", Toast.LENGTH_SHORT).show()
                                 }.onFailure {
-                                    Toast.makeText(context, it.message ?: "弹幕发送失败", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, it.toUserFriendlyMessage("弹幕发送失败"), Toast.LENGTH_SHORT).show()
                                 }
                         } finally { sendingDanmaku = false }
                     }

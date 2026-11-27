@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.plugin
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.android.purebilibili.core.player.PlaybackMediaCache
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -46,12 +45,15 @@ internal class CdnDashSegmentPrefetcher(
         val segments = index.segments
             .filter { it.startTimeUs >= frontierUs }
             .take(targetCount)
-        val upstreamFactory = OkHttpDataSource.Factory(client).setDefaultRequestProperties(PLAYBACK_HEADERS)
         val selectedHosts = mutableListOf<String>()
         segments.forEach { segment ->
             currentCoroutineContext().ensureActive()
             // Live transfer samples rank nodes; do not download probe bytes for every segment.
             val winner = CdnTransferRuntime.rank(request.candidates).firstOrNull() ?: return@forEach
+            val (upstreamFactory, cancelUpstream) = PlaybackMediaCache.buildCancelableOkHttpDataSourceFactory(
+                callFactory = client,
+                defaultRequestProperties = PLAYBACK_HEADERS,
+            )
             try {
                 PlaybackMediaCache.prefetchRange(
                     context = context,
@@ -59,7 +61,8 @@ internal class CdnDashSegmentPrefetcher(
                     url = Uri.parse(winner),
                     cacheKey = request.trackCacheKey,
                     position = segment.range.start,
-                    length = segment.range.length
+                    length = segment.range.length,
+                    onCancelUpstream = cancelUpstream,
                 )
                 selectedHosts += hostFromCdnUrl(winner)
             } catch (error: CancellationException) {

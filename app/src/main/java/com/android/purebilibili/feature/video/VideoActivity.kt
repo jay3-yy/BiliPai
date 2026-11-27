@@ -151,6 +151,14 @@ open class VideoActivity : FragmentActivity() {
         }
         enableEdgeToEdge()
         AppWindowSystemUiController.configureEdgeToEdgeHost(this)
+        com.android.purebilibili.core.ui.adaptive.installExternalDropTarget(this) { droppedLink ->
+            val forward = Intent(this, com.android.purebilibili.MainActivity::class.java)
+                .setAction(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_TEXT, droppedLink)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            startActivity(forward)
+        }
         val entryDisplayContext = resolveAppDisplayContext()
         val entryIsInMultiWindowOrFloatingMode = isActivityInMultiWindowOrFloatingMode(
             activity = this,
