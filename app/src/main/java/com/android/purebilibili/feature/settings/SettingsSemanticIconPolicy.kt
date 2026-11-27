@@ -362,6 +362,8 @@ internal enum class SettingsIconRole(
     FILTER_HOT_VIDEOS(R.drawable.ms_local_fire_department_24, R.drawable.ph_fire_24),
     FILTER_RANKING(R.drawable.ms_leaderboard_24, R.drawable.ph_ranking_24),
     SPONSOR_MARKER(R.drawable.ic_settings_sponsor_marker_24),
+    TELEMETRY_PRIVACY(R.drawable.ms_shield_24, R.drawable.ph_shield_24),
+    COMMENT_CHECK_HISTORY(R.drawable.ic_settings_comment_check_history_24),
     SETTINGS_ICON_GLYPHS(R.drawable.ph_shapes_24),
 }
 

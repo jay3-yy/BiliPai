@@ -29,6 +29,15 @@ class SettingsSemanticIconPolicyTest {
     }
 
     @Test
+    fun commentCheckHistory_usesDedicatedIconDistinctFromTelemetryAndPermission() {
+        val history = resolveSettingsIconResource(SettingsIconRole.COMMENT_CHECK_HISTORY)
+        assertEquals(R.drawable.ic_settings_comment_check_history_24, history)
+        assertTrue(history != resolveSettingsIconResource(SettingsIconRole.TELEMETRY_PRIVACY))
+        assertTrue(history != resolveSettingsIconResource(SettingsIconRole.PERMISSION))
+        assertTrue(history != resolveSettingsIconResource(SettingsIconRole.COMMENT_VISIBILITY_CHECK))
+    }
+
+    @Test
     fun settingsSource_hasNoLegacyComposeMaterialIconReferences() {
         val source = File("app/src/main/java/com/android/purebilibili/feature/settings")
             .walkTopDown().filter { it.isFile && it.extension == "kt" }.joinToString("\n") { it.readText() }

@@ -21,12 +21,12 @@ internal fun themeRoleOverridesFromSchemes(
     lightScheme: ColorScheme,
     darkScheme: ColorScheme,
     uiStyle: AppUiStyle = AppUiStyle.MATERIAL3,
-    @Suppress("UNUSED_PARAMETER") amoledDarkTheme: Boolean = false,
+    amoledDarkTheme: Boolean = false,
     @Suppress("UNUSED_PARAMETER") liquidGlassEnabled: Boolean = true,
 ): ThemeRoleOverrides {
     fun ColorScheme.nativeStartingScheme(dark: Boolean): ColorScheme =
         if (shouldUseNativeMiuixPalette(uiStyle)) {
-            val colors = resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(this), dark, useMonetMapping = true)
+            val colors = resolveNativeMiuixColors(this, dark, amoledDarkTheme)
             alignMaterialSurfacesWithMiuix(this, colors)
         } else this
 
@@ -225,13 +225,17 @@ internal fun resolveConfiguredMaterialScheme(
     uiStyle: AppUiStyle = AppUiStyle.MATERIAL3,
 ): ColorScheme {
     val overridden = applyThemeRoleOverrides(base, overrides, darkTheme, paletteStyle, colorSpec, colorContrast)
-    return if (seedPaletteStyle.enabled) overridden else alignLiquidAccentColorScheme(
-        scheme = overridden,
-        accent = resolveLiquidControlAccentColor(
-            source, customSeed, overridden.primary, overrides.enabled,
-            if (darkTheme) overrides.dark.controlAccentHex else overrides.light.controlAccentHex,
-        ),
-        liquidGlassEnabled = liquidGlassEnabled && uiStyle != AppUiStyle.MIUIX,
-        source = source,
+    if (seedPaletteStyle.enabled || source != Md3ColorSource.CUSTOM) return overridden
+    // Standard custom colors display the exact picked accent in both Miuix and Material 3
+    // regardless of whether liquid glass is enabled or which ColorSpec/PaletteStyle/Contrast
+    // is selected for surfaces. Advanced role overrides keep generated role pairs unless
+    // liquid glass aligns Material 3 controls to the edited control color.
+    if (overrides.enabled && !(liquidGlassEnabled && uiStyle != AppUiStyle.MIUIX)) {
+        return overridden
+    }
+    val accent = resolveLiquidControlAccentColor(
+        source, customSeed, overridden.primary, overrides.enabled,
+        if (darkTheme) overrides.dark.controlAccentHex else overrides.light.controlAccentHex,
     )
+    return alignCustomAccentColorScheme(overridden, accent)
 }

@@ -28,37 +28,58 @@ internal fun resolveAppThemeEndpointPalette(
     val configured = if (preserveGeneratedPalette) enforceSeedTextContrast(overridden) else overridden
     // Miuix 的原生控件和玻璃控件共用当前明暗模式解析后的主色。
     if (uiStyle == AppUiStyle.MIUIX) {
-        // 普通自定义色的选中容器共用主色容器；高级编辑和壁纸色板可独立指定角色。
-        val palette = if (source == Md3ColorSource.CUSTOM && !roleOverrides.enabled && !preserveGeneratedPalette) {
-            configured.copy(
-                secondaryContainer = configured.primaryContainer,
-                onSecondaryContainer = configured.onPrimaryContainer,
+        if (source == Md3ColorSource.CUSTOM && !roleOverrides.enabled && !preserveGeneratedPalette) {
+            // 普通自定义色在 Miuix 下保留原生中性画布与卡片层次（亮色 #F7F7F7 / 纯白，
+            // 深色 #121212 / AMOLED 纯黑），并将所选主色直接用于高亮与液态玻璃控件。
+            val nativeBase = resolveNativeMiuixColors(
+                configured, darkTheme, amoledDarkTheme, customRolesEnabled = false,
             )
-        } else configured
+            val accentAligned = alignCustomAccentColorScheme(
+                configured.copy(surface = nativeBase.surface),
+                customSeed,
+            )
+            val nativeMiuix = resolveNativeMiuixColors(
+                accentAligned, darkTheme, amoledDarkTheme, customRolesEnabled = false,
+            )
+            val miuix = nativeMiuix.copy(
+                secondaryContainer = nativeMiuix.primaryContainer,
+                onSecondaryContainer = nativeMiuix.onPrimaryContainer,
+            )
+            val material = alignMaterialSurfacesWithMiuix(
+                accentAligned, miuix, preserveMaterialAccentRoles = true,
+            )
+            return AppThemePalette(material, miuix, material.primary)
+        }
         val generatedMiuix = resolveMiuixColorsFromMaterialBridge(
-            createMiuixMaterialBridge(palette), darkTheme, useMonetMapping = true,
+            createMiuixMaterialBridge(configured), darkTheme, useMonetMapping = true,
         )
         val miuix = if (source == Md3ColorSource.WALLPAPER_RETONED &&
             WallpaperPaletteRole.SECONDARY in wallpaperOverrides.forMode(darkTheme)
         ) generatedMiuix.copy(secondary = configured.secondary, onSecondary = configured.onSecondary)
             else generatedMiuix
         val material = alignMaterialSurfacesWithMiuix(
-            palette, miuix, preserveMaterialAccentRoles = true,
+            configured, miuix, preserveMaterialAccentRoles = true,
         )
         return AppThemePalette(material, miuix, material.primary)
     }
-    // 非玻璃 MD3 保留 MaterialKolor / 系统动态取色生成的完整 HCT 角色（primary /
-    // primaryContainer / secondaryContainer / tertiary 分离）；液态玻璃开启时的
-    // 精准主色同步已在 resolveConfiguredMaterialScheme 的 alignLiquidAccentColorScheme 完成。
+    // 标准自定义色在 MD3 下（无论是否开启液态玻璃）均保留 Material 表面层级并直出所选原色；
+    // 扩展调色板、高级自定义与壁纸取色继续保留各自的 HCT 生成角色。
+    val materialScheme = if (
+        source == Md3ColorSource.CUSTOM && !roleOverrides.enabled && !preserveGeneratedPalette
+    ) {
+        alignCustomAccentColorScheme(configured, customSeed)
+    } else {
+        configured
+    }
     val bridgedMiuix = resolveMiuixColorsFromMaterialBridge(
-        createMiuixMaterialBridge(configured),
+        createMiuixMaterialBridge(materialScheme),
         darkTheme,
     )
     // Both hosts can contain Miuix components. Apply explicit secondary edits after
     // the bridge, while unedited secondary controls retain their neutral role.
     val miuix = if (source == Md3ColorSource.WALLPAPER_RETONED &&
         WallpaperPaletteRole.SECONDARY in wallpaperOverrides.forMode(darkTheme)
-    ) bridgedMiuix.copy(secondary = configured.secondary, onSecondary = configured.onSecondary)
+    ) bridgedMiuix.copy(secondary = materialScheme.secondary, onSecondary = materialScheme.onSecondary)
         else bridgedMiuix
-    return AppThemePalette(configured, miuix, configured.primary)
+    return AppThemePalette(materialScheme, miuix, materialScheme.primary)
 }

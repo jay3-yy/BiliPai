@@ -1026,7 +1026,7 @@ fun AppearanceSettingsContent(
                                 ) {
                                     Column {
                                         AppText(
-                                            text = "调色板决定整体配色倾向；选「标准」时可继续微调色彩风格（鲜艳度与辅助色）、色彩标准（Material 配色算法版本）与对比度（文字清晰度）。",
+                                            text = "调色板决定整体配色倾向：选「Standard」时，自定义主题色会直接保持所选原色；切换为其他调色板时，则会按对应算法重新生成整套配色。",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = AppContentColors.secondaryText(),
                                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -1165,7 +1165,7 @@ fun AppearanceSettingsContent(
                                     seedColors = displayedThemeColors,
                                     isDark = palettePreviewIsDark,
                                     paletteStyle = state.colorStyle,
-                                    colorSpec = state.colorSpec,
+                                    colorSpec = effectiveColorSpec,
                                     colorContrast = state.colorContrast,
                                     seedPaletteStyle = state.seedPaletteStyle,
                                     configuration = palettePreviewConfiguration.copy(

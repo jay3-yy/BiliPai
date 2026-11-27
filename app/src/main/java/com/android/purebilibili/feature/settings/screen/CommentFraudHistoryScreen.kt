@@ -38,6 +38,8 @@ import com.android.purebilibili.core.ui.animation.entrance
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.data.repository.CommentFraudRepository
+import com.android.purebilibili.feature.settings.SettingsIconRole
+import com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon
 import com.android.purebilibili.feature.settings.rememberSettingsVector
 import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
 import com.android.purebilibili.feature.settings.ui.settingsScrollContentPadding
@@ -204,7 +206,7 @@ fun CommentFraudHistoryScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             AppIcon(
-                                rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_24),
+                                rememberSettingsSemanticIcon(SettingsIconRole.COMMENT_CHECK_HISTORY),
                                 contentDescription = null,
                                 modifier = Modifier.size(64.dp),
                                 tint = AppContentColors.secondaryText().copy(alpha = 0.4f)

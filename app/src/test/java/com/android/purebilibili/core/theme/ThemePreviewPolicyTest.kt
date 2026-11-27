@@ -198,4 +198,61 @@ class ThemePreviewPolicyTest {
             assertNotEquals(preview.material.primary, rolePreview.material.primary)
         }
     }
+
+    @Test
+    fun standardCustomSeedStaysExactAcrossPaletteStylesWhileSeedPalettesGenerateDistinctRoles() {
+        val blue = Color(0xFF007AFF)
+        for (uiStyle in AppUiStyle.entries) {
+            for (dark in listOf(false, true)) {
+                val config = ThemePreviewConfiguration(
+                    uiStyle = uiStyle,
+                    source = Md3ColorSource.CUSTOM,
+                    liquidGlassEnabled = true,
+                )
+                val defaultPreview = resolveThemePreviewPalette(
+                    seed = blue,
+                    darkTheme = dark,
+                    style = PaletteStyle.TonalSpot,
+                    spec = ColorSpec.SpecVersion.SPEC_2025,
+                    contrast = Contrast.Default,
+                    seedStyle = SeedPaletteStyle.Standard,
+                    configuration = config,
+                )
+                val cmfPreview = resolveThemePreviewPalette(
+                    seed = blue,
+                    darkTheme = dark,
+                    style = PaletteStyle.Cmf(),
+                    spec = ColorSpec.SpecVersion.SPEC_2026,
+                    contrast = Contrast.High,
+                    seedStyle = SeedPaletteStyle.Standard,
+                    configuration = config,
+                )
+                val monochromePreview = resolveThemePreviewPalette(
+                    seed = blue,
+                    darkTheme = dark,
+                    style = PaletteStyle.TonalSpot,
+                    spec = ColorSpec.SpecVersion.SPEC_2025,
+                    contrast = Contrast.Default,
+                    seedStyle = SeedPaletteStyle.Monochrome,
+                    configuration = config,
+                )
+                val expressivePreview = resolveThemePreviewPalette(
+                    seed = blue,
+                    darkTheme = dark,
+                    style = PaletteStyle.TonalSpot,
+                    spec = ColorSpec.SpecVersion.SPEC_2025,
+                    contrast = Contrast.Default,
+                    seedStyle = SeedPaletteStyle.Expressive,
+                    configuration = config,
+                )
+                assertEquals(blue, defaultPreview.material.primary)
+                assertEquals(blue, defaultPreview.liquidAccent)
+                assertEquals(blue, cmfPreview.material.primary)
+                assertEquals(blue, cmfPreview.liquidAccent)
+                assertNotEquals(blue, monochromePreview.material.primary)
+                assertNotEquals(blue, expressivePreview.material.primary)
+                assertNotEquals(monochromePreview.material.primary, expressivePreview.material.primary)
+            }
+        }
+    }
 }

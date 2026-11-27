@@ -47,29 +47,31 @@ internal fun resolvePlaybackNotificationAccentColor(
             preserveGeneratedPalette = true,
         ).material.primary
     }
-    val generatedAccent = if (settings.md3ColorSource == Md3ColorSource.WALLPAPER_RETONED) {
+    if (settings.md3ColorSource == Md3ColorSource.WALLPAPER_RETONED) {
+        val amoled = darkTheme &&
+            settings.darkThemeStyle == com.android.purebilibili.feature.settings.DarkThemeStyle.AMOLED
         val scheme = createBiliPaiStyleColorScheme(
             seedColor = seed,
             darkTheme = darkTheme,
-            amoledDarkTheme = settings.darkThemeStyle == com.android.purebilibili.feature.settings.DarkThemeStyle.AMOLED,
+            amoledDarkTheme = amoled,
             paletteStyle = settings.colorStyle,
             colorSpec = settings.colorSpec,
             uiStyle = settings.uiStyle,
             colorContrast = settings.colorContrast,
         )
-        com.android.purebilibili.core.theme.resolveAppThemeEndpointPalette(
+        return com.android.purebilibili.core.theme.resolveAppThemeEndpointPalette(
             base = scheme,
             uiStyle = settings.uiStyle,
             source = settings.md3ColorSource,
             darkTheme = darkTheme,
-            amoledDarkTheme = settings.darkThemeStyle == com.android.purebilibili.feature.settings.DarkThemeStyle.AMOLED,
+            amoledDarkTheme = amoled,
             wallpaperOverrides = settings.wallpaperPaletteOverrides,
         ).liquidAccent
-    } else wallpaperAccent ?: seed
+    }
     return resolveLiquidControlAccentColor(
         source = settings.md3ColorSource,
         customSeed = seed,
-        generatedAccent = generatedAccent,
+        generatedAccent = wallpaperAccent ?: seed,
         roleOverridesEnabled = settings.themeRoleOverrides.enabled && settings.md3ColorSource == Md3ColorSource.CUSTOM,
         roleControlHex = if (darkTheme) settings.themeRoleOverrides.dark.controlAccentHex
             else settings.themeRoleOverrides.light.controlAccentHex,

@@ -1042,9 +1042,10 @@ fun PureBiliBiliTheme(
             colorContrast, seedPaletteStyle, md3ColorSource, customPrimaryColor, liquidGlassEnabled, uiStyle,
         )
     }
+    val preserveGeneratedPalette = seedPaletteStyle.enabled
     val lightEndpointPalette = remember(
         resolvedLightMaterialScheme, uiStyle, md3ColorSource, amoledDarkTheme,
-        wallpaperPaletteOverrides, customPrimaryColor, effectiveThemeRoleOverrides, liquidGlassEnabled, seedPaletteStyle,
+        wallpaperPaletteOverrides, customPrimaryColor, effectiveThemeRoleOverrides, liquidGlassEnabled, preserveGeneratedPalette,
     ) {
         resolveAppThemeEndpointPalette(
             base = resolvedLightMaterialScheme,
@@ -1056,12 +1057,12 @@ fun PureBiliBiliTheme(
             customSeed = customPrimaryColor,
             roleOverrides = effectiveThemeRoleOverrides,
             liquidGlassEnabled = liquidGlassEnabled,
-            preserveGeneratedPalette = seedPaletteStyle.enabled,
+            preserveGeneratedPalette = preserveGeneratedPalette,
         )
     }
     val darkEndpointPalette = remember(
         resolvedDarkMaterialScheme, uiStyle, md3ColorSource, amoledDarkTheme,
-        wallpaperPaletteOverrides, customPrimaryColor, effectiveThemeRoleOverrides, liquidGlassEnabled, seedPaletteStyle,
+        wallpaperPaletteOverrides, customPrimaryColor, effectiveThemeRoleOverrides, liquidGlassEnabled, preserveGeneratedPalette,
     ) {
         resolveAppThemeEndpointPalette(
             base = resolvedDarkMaterialScheme,
@@ -1073,7 +1074,7 @@ fun PureBiliBiliTheme(
             customSeed = customPrimaryColor,
             roleOverrides = effectiveThemeRoleOverrides,
             liquidGlassEnabled = liquidGlassEnabled,
-            preserveGeneratedPalette = seedPaletteStyle.enabled,
+            preserveGeneratedPalette = preserveGeneratedPalette,
         )
     }
     // Only immutable settings/resource endpoints enter the transition. Animated frame

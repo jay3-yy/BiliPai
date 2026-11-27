@@ -18,6 +18,13 @@ internal fun alignLiquidAccentColorScheme(
     source: Md3ColorSource,
 ): ColorScheme {
     if (!liquidGlassEnabled || source != Md3ColorSource.CUSTOM) return scheme
+    return alignCustomAccentColorScheme(scheme, accent)
+}
+
+internal fun alignCustomAccentColorScheme(
+    scheme: ColorScheme,
+    accent: Color,
+): ColorScheme {
 
     fun readableAccent(background: Color): Color {
         val target = resolveReadableForeground(background)

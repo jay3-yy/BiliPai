@@ -1493,7 +1493,7 @@ internal fun TelemetryConsentSection(
     SettingsCardGroup {
         SettingsItemAnchor(TELEMETRY_GLOBAL_SETTING_ID) {
             SettingSwitchItem(
-                icon = rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_24),
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.TELEMETRY_PRIVACY),
                 title = "遥测与数据收集",
                 subtitle = resolveGlobalTelemetrySubtitle(
                     crashTrackingEnabled = crashTrackingEnabled,
@@ -1737,7 +1737,7 @@ fun PrivacySection(
             )
             SettingsAdaptiveDivider()
             SettingClickableItem(
-                icon = rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_24),
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.COMMENT_CHECK_HISTORY),
                 title = "评论检查记录",
                 value = "查看已发评论及其显示状态",
                 onClick = onCommentFraudHistoryClick,

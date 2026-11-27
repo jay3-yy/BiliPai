@@ -73,7 +73,7 @@ fun AppCompactInputField(
                 trailingIcon = trailingIcon,
                 colors = top.yukonga.miuix.kmp.basic.TextFieldDefaults.textFieldColors(
                     backgroundColor = if (containerColor == AppSurfaceTokens.searchContainer()) {
-                        top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.secondaryContainer
+                        AppSurfaceTokens.searchContainer()
                     } else containerColor,
                 ),
             )
@@ -143,7 +143,7 @@ fun AppCompactSearchInputField(
                 onKeyboardAction = { onSearch() },
                 leadingIcon = leadingIcon,
                 colors = top.yukonga.miuix.kmp.basic.TextFieldDefaults.textFieldColors(
-                    backgroundColor = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.secondaryContainer,
+                    backgroundColor = AppSurfaceTokens.searchContainer(),
                 ),
             )
         } else {
@@ -265,7 +265,7 @@ fun AppCompactInputField(
                 trailingIcon = trailingIcon,
                 colors = top.yukonga.miuix.kmp.basic.TextFieldDefaults.textFieldColors(
                     backgroundColor = if (containerColor == AppSurfaceTokens.searchContainer()) {
-                        top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.secondaryContainer
+                        AppSurfaceTokens.searchContainer()
                     } else containerColor,
                 ),
             )

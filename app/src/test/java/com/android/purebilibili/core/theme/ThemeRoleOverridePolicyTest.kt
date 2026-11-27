@@ -75,8 +75,8 @@ class ThemeRoleOverridePolicyTest {
         val dark = darkColorScheme(background = Color.Blue, onBackground = Color.Yellow)
         for (amoled in listOf(false, true)) {
             val result = themeRoleOverridesFromSchemes(light, dark, AppUiStyle.MIUIX, amoled)
-            val nativeLight = resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(light), false, useMonetMapping = true)
-            val nativeDark = resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(dark), true, useMonetMapping = true)
+            val nativeLight = resolveNativeMiuixColors(light, false, amoled)
+            val nativeDark = resolveNativeMiuixColors(dark, true, amoled)
             assertFalse(result.enabled)
             assertEquals(formatMd3CustomColorHex(nativeLight.surface), result.light.backgroundHex)
             assertEquals(formatMd3CustomColorHex(nativeLight.onSurface), result.light.primaryTextHex)
@@ -84,6 +84,32 @@ class ThemeRoleOverridePolicyTest {
             assertEquals(formatMd3CustomColorHex(nativeDark.surface), result.dark.backgroundHex)
             assertEquals(formatMd3CustomColorHex(nativeDark.onSurface), result.dark.primaryTextHex)
             assertEquals(formatMd3CustomColorHex(nativeDark.onSurfaceVariantSummary), result.dark.secondaryTextHex)
+        }
+    }
+
+    @Test
+    fun standardCustomColor_alignsExactSeedAcrossStylesAndGlassStates() {
+        val seed = Color(0xFF007AFF)
+        for (uiStyle in AppUiStyle.entries) {
+            for (dark in listOf(false, true)) {
+                val base = if (dark) darkColorScheme(primary = Color(0xFFA8C7FA)) else lightColorScheme(primary = Color(0xFF005AC1))
+                for (glass in listOf(false, true)) {
+                    val configured = resolveConfiguredMaterialScheme(
+                        base = base,
+                        overrides = ThemeRoleOverrides(),
+                        darkTheme = dark,
+                        paletteStyle = com.materialkolor.PaletteStyle.TonalSpot,
+                        colorSpec = com.materialkolor.dynamiccolor.ColorSpec.SpecVersion.SPEC_2025,
+                        colorContrast = com.materialkolor.Contrast.Default,
+                        seedPaletteStyle = SeedPaletteStyle.Standard,
+                        source = Md3ColorSource.CUSTOM,
+                        customSeed = seed,
+                        liquidGlassEnabled = glass,
+                        uiStyle = uiStyle,
+                    )
+                    assertEquals(seed, configured.primary)
+                }
+            }
         }
     }
 

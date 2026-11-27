@@ -14,76 +14,64 @@ import kotlin.test.assertEquals
 
 class AppThemeEndpointPolicyTest {
     @Test
-    fun standardMiuixCustomColorsShareSelectionAndAccentAcrossMaterials() {
+    fun standardMiuixCustomColorsUseNativeNeutralSurfacesAndExactAccentAcrossMaterials() {
         for (dark in listOf(false, true)) {
-            for (seed in listOf(Color(0xFFF36595), Color(0xFF34C759), Color.White, Color.Black)) {
-                val base = createBiliPaiStyleColorScheme(
-                    seed, dark, false, PaletteStyle.TonalSpot, ColorSpec.SpecVersion.SPEC_2025,
-                )
-                val endpoint = resolveAppThemeEndpointPalette(
-                    base, AppUiStyle.MIUIX, Md3ColorSource.CUSTOM, dark,
-                    customSeed = seed, liquidGlassEnabled = false,
-                )
-                val glass = resolveAppThemeEndpointPalette(
-                    base, AppUiStyle.MIUIX, Md3ColorSource.CUSTOM, dark,
-                    customSeed = seed, liquidGlassEnabled = true,
-                )
-                val colors = endpoint.miuix
-                assertEquals(base.primary, colors.primary)
-                assertEquals(base.onPrimary, colors.onPrimary)
-                assertEquals(base.primaryContainer, colors.primaryContainer)
-                assertEquals(base.onPrimaryContainer, colors.onPrimaryContainer)
-                assertEquals(colors.primaryContainer, colors.secondaryContainer)
-                assertEquals(colors.onPrimaryContainer, colors.onSecondaryContainer)
-                assertEquals(base.surface, colors.surface)
-                assertEquals(base.surfaceContainer, colors.surfaceContainer)
-                assertEquals(base.outlineVariant, colors.secondary)
-                assertEquals(base.outline, colors.onSecondary)
-                assertEquals(base.primary, colors.onBackgroundVariant)
-                val disabled = opaqueCompositeOver(base.primary.copy(alpha = 0.38f), base.surface)
-                assertEquals(disabled, colors.disabledPrimary)
-                assertEquals(disabled, colors.disabledPrimaryButton)
-                assertEquals(disabled, colors.disabledPrimarySlider)
-                assertEquals(opaqueCompositeOver(base.onPrimary.copy(alpha = 0.6f), disabled), colors.disabledOnPrimaryButton)
-                assertEquals(base.primary, colors.sliderKeyPoint)
-                assertEquals(base.surfaceContainerHigh, colors.sliderKeyPointForeground)
-                assertEquals(base.primary, endpoint.material.primary)
-                assertEquals(base.onPrimary, endpoint.material.onPrimary)
-                assertEquals(colors.secondaryContainer, endpoint.material.secondaryContainer)
-                assertEquals(colors.onSecondaryContainer, endpoint.material.onSecondaryContainer)
-                assertEquals(base.primary, endpoint.liquidAccent)
-                assertEquals(endpoint.liquidAccent, glass.liquidAccent)
-                assertEquals(colors.primaryContainer, glass.miuix.primaryContainer)
-                assertEquals(colors.onPrimaryContainer, glass.miuix.onPrimaryContainer)
-                assertEquals(colors.secondaryContainer, glass.material.secondaryContainer)
-                assertEquals(colors.onSecondaryContainer, glass.material.onSecondaryContainer)
+            for (amoled in if (dark) listOf(false, true) else listOf(false)) {
+                for (seed in listOf(Color(0xFFF36595), Color(0xFF34C759), Color.White, Color.Black, Color(0xFF007AFF))) {
+                    val base = createBiliPaiStyleColorScheme(
+                        seed, dark, amoled, PaletteStyle.TonalSpot, ColorSpec.SpecVersion.SPEC_2025,
+                    )
+                    val endpoint = resolveAppThemeEndpointPalette(
+                        base, AppUiStyle.MIUIX, Md3ColorSource.CUSTOM, dark,
+                        amoledDarkTheme = amoled, customSeed = seed, liquidGlassEnabled = false,
+                    )
+                    val glass = resolveAppThemeEndpointPalette(
+                        base, AppUiStyle.MIUIX, Md3ColorSource.CUSTOM, dark,
+                        amoledDarkTheme = amoled, customSeed = seed, liquidGlassEnabled = true,
+                    )
+                    val expectedNative = resolveNativeMiuixColors(base, dark, amoled)
+                    val colors = endpoint.miuix
+                    assertEquals(seed, colors.primary)
+                    assertEquals(resolveReadableForeground(seed), colors.onPrimary)
+                    assertEquals(colors.primaryContainer, colors.secondaryContainer)
+                    assertEquals(colors.onPrimaryContainer, colors.onSecondaryContainer)
+                    assertEquals(expectedNative.surface, colors.surface)
+                    assertEquals(expectedNative.background, colors.background)
+                    assertEquals(expectedNative.surfaceContainer, colors.surfaceContainer)
+                    assertEquals(expectedNative.secondary, colors.secondary)
+                    assertEquals(expectedNative.onSecondary, colors.onSecondary)
+                    assertEquals(seed, colors.sliderKeyPointForeground)
+                    assertEquals(seed, endpoint.material.primary)
+                    assertEquals(colors.onPrimary, endpoint.material.onPrimary)
+                    assertEquals(colors.surface, endpoint.material.background)
+                    assertEquals(colors.surface, endpoint.material.surface)
+                    assertEquals(colors.surfaceContainer, endpoint.material.surfaceContainer)
+                    assertEquals(colors.secondaryContainer, endpoint.material.secondaryContainer)
+                    assertEquals(colors.onSecondaryContainer, endpoint.material.onSecondaryContainer)
+                    assertEquals(seed, endpoint.liquidAccent)
+                    assertEquals(endpoint.liquidAccent, glass.liquidAccent)
+                    assertEquals(colors.primary, glass.miuix.primary)
+                    assertEquals(colors.primaryContainer, glass.miuix.primaryContainer)
+                    assertEquals(colors.onPrimaryContainer, glass.miuix.onPrimaryContainer)
+                    assertEquals(colors.surface, glass.miuix.surface)
+                    assertEquals(colors.secondaryContainer, glass.material.secondaryContainer)
+                    assertEquals(colors.onSecondaryContainer, glass.material.onSecondaryContainer)
+                }
             }
         }
     }
 
     @Test
-    fun materialCustomSelectionPreservesOfficialMd3HctRolesWhenGlassIsOff() {
+    fun materialCustomSelectionUsesExactAccentInBothGlassStatesWhileKeepingMd3Surfaces() {
         for (dark in listOf(false, true)) {
             val seed = Color(0xFF007AFF)
             val base = createBiliPaiStyleColorScheme(
                 seed, dark, false, PaletteStyle.Expressive, ColorSpec.SpecVersion.SPEC_2025,
             )
+            val expected = alignCustomAccentColorScheme(base, seed)
             val endpoint = resolveAppThemeEndpointPalette(
                 base, AppUiStyle.MATERIAL3, Md3ColorSource.CUSTOM, dark,
                 customSeed = seed, liquidGlassEnabled = false,
-            )
-            assertEquals(base.primary, endpoint.material.primary)
-            assertEquals(base.onPrimary, endpoint.material.onPrimary)
-            assertEquals(base.primaryContainer, endpoint.material.primaryContainer)
-            assertEquals(base.onPrimaryContainer, endpoint.material.onPrimaryContainer)
-            assertEquals(base.secondaryContainer, endpoint.material.secondaryContainer)
-            assertEquals(base.onSecondaryContainer, endpoint.material.onSecondaryContainer)
-            assertEquals(base.tertiary, endpoint.material.tertiary)
-            assertTrue(
-                calculateContrastRatio(
-                    endpoint.material.onSecondaryContainer,
-                    endpoint.material.secondaryContainer,
-                ) >= ACCESSIBLE_TEXT_MIN_CONTRAST
             )
             val glassConfigured = alignLiquidAccentColorScheme(
                 scheme = base,
@@ -95,9 +83,23 @@ class AppThemeEndpointPolicyTest {
                 glassConfigured, AppUiStyle.MATERIAL3, Md3ColorSource.CUSTOM, dark,
                 customSeed = seed, liquidGlassEnabled = true,
             )
-            assertEquals(seed, glass.material.primary)
-            assertEquals(glassConfigured.secondaryContainer, glass.material.secondaryContainer)
-            assertEquals(base.surface, glass.material.surface)
+            assertEquals(seed, endpoint.material.primary)
+            assertEquals(seed, endpoint.liquidAccent)
+            assertEquals(expected.onPrimary, endpoint.material.onPrimary)
+            assertEquals(expected.primaryContainer, endpoint.material.primaryContainer)
+            assertEquals(expected.secondaryContainer, endpoint.material.secondaryContainer)
+            assertEquals(expected.onSecondaryContainer, endpoint.material.onSecondaryContainer)
+            assertEquals(base.surface, endpoint.material.surface)
+            assertEquals(base.surfaceContainer, endpoint.material.surfaceContainer)
+            assertTrue(
+                calculateContrastRatio(
+                    endpoint.material.onSecondaryContainer,
+                    endpoint.material.secondaryContainer,
+                ) >= ACCESSIBLE_TEXT_MIN_CONTRAST
+            )
+            assertEquals(endpoint.material, glass.material)
+            assertEquals(endpoint.miuix, glass.miuix)
+            assertEquals(endpoint.liquidAccent, glass.liquidAccent)
         }
     }
 
