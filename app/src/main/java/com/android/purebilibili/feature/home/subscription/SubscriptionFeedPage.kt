@@ -685,11 +685,19 @@ private fun SubscriptionFeedGrid(
             }
         }
         if (sources.isNotEmpty() && visibleItems.isEmpty() && !loading) {
-            item(span = StaggeredGridItemSpan.FullLine) {
+            item(
+                key = "subscription_feed_empty",
+                contentType = "subscription_feed_empty",
+                span = StaggeredGridItemSpan.FullLine,
+            ) {
                 AppText(if (unreadOnly) "没有未读文章" else "暂无文章，下拉后可刷新订阅。")
             }
         }
-        items(visibleItems, key = { "${it.sourceId}:${it.id}" }) { item ->
+        items(
+            items = visibleItems,
+            key = { "${it.sourceId}:${it.id}" },
+            contentType = { "subscription_feed_card" },
+        ) { item ->
             SubscriptionFeedCard(
                 item = item,
                 isRead = feedItemKey(item) in readKeys,
@@ -698,7 +706,11 @@ private fun SubscriptionFeedGrid(
                 animatedVisibilityScope = animatedVisibilityScope,
             )
         }
-        item(span = StaggeredGridItemSpan.FullLine) { Spacer(Modifier.height(28.dp)) }
+        item(
+            key = "subscription_feed_bottom_spacer",
+            contentType = "subscription_feed_bottom_spacer",
+            span = StaggeredGridItemSpan.FullLine,
+        ) { Spacer(Modifier.height(28.dp)) }
     }
 }
 

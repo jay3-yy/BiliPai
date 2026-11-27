@@ -395,6 +395,10 @@ private class CommentEmoteEditText(
             panelReadOnly = false
             showSoftInputOnFocus = true
             isCursorVisible = true
+            // 触摸本身会由原生 EditText 请求焦点并呼起键盘，提前同步 autoShowKeyboard 避免重组时二次 showSoftInput。
+            autoShowKeyboard = true
+            keyboardShowPending = false
+            removeCallbacks(showKeyboard)
             onEditingRequested?.invoke()
         }
         return super.onTouchEvent(event)

@@ -2708,18 +2708,18 @@ internal fun ReplyVideoReferenceText(
         ) + suffixInlineContent
     }
     val renderAnnotatedString = remember(annotatedString) { annotatedString.stripLinkAnnotations() }
-    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val textLayoutResultRef = remember { object { var value: TextLayoutResult? = null } }
     var showTextSelectionSheet by remember(copyText) { mutableStateOf(false) }
     val modifier = Modifier
         .replyRichTextSemantics(
             source = annotatedString,
-            layoutResultProvider = { textLayoutResult?.withSourceText(annotatedString) },
+            layoutResultProvider = { textLayoutResultRef.value?.withSourceText(annotatedString) },
         )
         .then(
             if (onUrlClick != null || suffix != null) {
                 Modifier.pointerInput(annotatedString) {
                     detectReplyLinkGestures(
-                        linkAt = { position -> textLayoutResult?.replyLinkAt(position, annotatedString) },
+                        linkAt = { position -> textLayoutResultRef.value?.replyLinkAt(position, annotatedString) },
                         onLinkClick = { link -> link.linkInteractionListener?.onClick(link) },
                         onLongPress = {
                             val action = latestOnLongPress
@@ -2743,7 +2743,7 @@ internal fun ReplyVideoReferenceText(
         color = primaryColor,
         lineHeight = lineHeight,
         maxLines = maxLines,
-        onTextLayout = { textLayoutResult = it },
+        onTextLayout = { textLayoutResultRef.value = it },
         modifier = modifier
     )
 
@@ -2883,16 +2883,17 @@ fun RichCommentText(
         buildMap {
             renderableEmoteKeys.forEach { key ->
                 val url = emoteMap[key].orEmpty()
+                val emoteRequest = ImageRequest.Builder(context)
+                    .data(url)
+                    .crossfade(true)
+                    .build()
                 put(
                     key,
                     InlineTextContent(
                         Placeholder(width = 1.4.em, height = 1.4.em, placeholderVerticalAlign = PlaceholderVerticalAlign.Center)
                     ) {
                         AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(url)
-                                .crossfade(true)
-                                .build(),
+                            model = emoteRequest,
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -2902,6 +2903,10 @@ fun RichCommentText(
             content?.urls.orEmpty().forEach { (token, richUrl) ->
                 if (hideSearchKeywords && isReplySearchKeywordUrl(token, richUrl)) return@forEach
                 val prefixIcon = richUrl.prefixIcon.takeIf { it.isNotBlank() } ?: return@forEach
+                val prefixIconRequest = ImageRequest.Builder(context)
+                    .data(FormatUtils.fixImageUrl(prefixIcon))
+                    .crossfade(true)
+                    .build()
                 put(
                     resolveReplyContentUrlPrefixInlineId(token),
                     InlineTextContent(
@@ -2912,10 +2917,7 @@ fun RichCommentText(
                         )
                     ) {
                         AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(FormatUtils.fixImageUrl(prefixIcon))
-                                .crossfade(true)
-                                .build(),
+                            model = prefixIconRequest,
                             contentDescription = null,
                             colorFilter = ColorFilter.tint(urlColor),
                             modifier = Modifier.fillMaxSize()
@@ -2948,7 +2950,7 @@ fun RichCommentText(
     val copyText = remember(text) { text.trim() }
     val renderAnnotatedString = remember(annotatedString) { annotatedString.stripLinkAnnotations() }
     var showTextSelectionSheet by remember(copyText) { mutableStateOf(false) }
-    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val textLayoutResultRef = remember { object { var value: TextLayoutResult? = null } }
 
     val content: @Composable () -> Unit = {
         // 以实际字符位置命中链接，跨行标题与内联图标共用同一跳转；
@@ -2956,11 +2958,11 @@ fun RichCommentText(
         val textModifier = Modifier
             .replyRichTextSemantics(
                 source = annotatedString,
-                layoutResultProvider = { textLayoutResult?.withSourceText(annotatedString) },
+                layoutResultProvider = { textLayoutResultRef.value?.withSourceText(annotatedString) },
             )
             .pointerInput(annotatedString) {
                 detectReplyLinkGestures(
-                    linkAt = { position -> textLayoutResult?.replyLinkAt(position, annotatedString) },
+                    linkAt = { position -> textLayoutResultRef.value?.replyLinkAt(position, annotatedString) },
                     onLinkClick = { link -> link.linkInteractionListener?.onClick(link) },
                     onLongPress = {
                         val action = latestOnLongPress
@@ -2994,7 +2996,7 @@ fun RichCommentText(
                 style = com.android.purebilibili.core.ui.appParagraphTextStyle(),
                 maxLines = maxLines,
                 onTextLayout = {
-                    textLayoutResult = it
+                    textLayoutResultRef.value = it
                     onPreviewTextLayout(it.withSourceText(annotatedString))
                 },
                 modifier = textModifier.then(previewModifier)
@@ -3708,6 +3710,8 @@ internal fun resolveChargedReplyLabel(item: ReplyItem): String? {
 }
 
 private const val COMMENT_PICTURE_MAX_RETRIES = 3
+private val COMMENT_BILIBILI_REFERER_HEADERS: NetworkHeaders =
+    NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build()
 
 @Composable
 private fun CommentPictureThumbnail(
@@ -3722,7 +3726,7 @@ private fun CommentPictureThumbnail(
             // Preserve the source cache key used by the preview's first-frame placeholder.
             .memoryCacheKey(imageUrl)
             .size(decodeSize.widthPx, decodeSize.heightPx)
-            .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
+            .httpHeaders(COMMENT_BILIBILI_REFERER_HEADERS)
             .crossfade(false)
             .build()
     }

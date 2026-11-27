@@ -65,8 +65,14 @@ object VideoCardCoverColorStore {
         surfaceCache.get(SurfaceKey(cacheKey, includeTint))
             ?: if (!includeTint) surfaceCache.get(SurfaceKey(cacheKey, true)) else null
 
-    suspend fun extractColor(context: Context, cacheKey: String, coverUrl: String): Color? =
-        extractSurface(context, cacheKey, coverUrl)?.color
+    suspend fun extractColor(context: Context, cacheKey: String, coverUrl: String): Color? {
+        if (cacheKey.isBlank()) return null
+        getCachedSurface(cacheKey, includeTint = true)?.color?.let { return it }
+        withContext(Dispatchers.IO) {
+            VideoCardCoverColorDiskCache.get(context, cacheKey)
+        }?.let { return it }
+        return extractSurface(context, cacheKey, coverUrl)?.color
+    }
 
     /**
      * 提取（或复用）封面代表色。
@@ -149,7 +155,11 @@ object VideoCardCoverColorStore {
             val bitmap = (result.image as? BitmapImage)?.bitmap ?: return null
             sample = bitmap
             val color = if (surfaceKey.includeTint) {
-                extractRepresentativeColor(bitmap) ?: return null
+                VideoCardCoverColorDiskCache.get(context, surfaceKey.cover)
+                    ?: extractRepresentativeColor(bitmap)?.also { extracted ->
+                        VideoCardCoverColorDiskCache.put(context, surfaceKey.cover, extracted)
+                    }
+                    ?: return null
             } else null
             val blurred = surfaceCache.get(SurfaceKey(surfaceKey.cover, false))?.blurredCover
                 ?: createBlurredCardImage(bitmap).asImageBitmap()

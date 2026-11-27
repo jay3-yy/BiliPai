@@ -64,8 +64,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
+import kotlin.math.roundToInt
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -194,26 +197,73 @@ fun DynamicPublishComposer(
     val focusManager = LocalFocusManager.current
     val bodyFocus = remember { FocusRequester() }
     val density = LocalDensity.current
-    val keyboardHeight = with(density) { WindowInsets.ime.getBottom(this).toDp() }
-    var lastKeyboardHeight by remember { mutableStateOf(0.dp) }
-    LaunchedEffect(keyboardHeight) {
-        if (keyboardHeight > 0.dp) lastKeyboardHeight = keyboardHeight
-    }
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val imeInsets = WindowInsets.ime
+    val navigationBarsBottomPx = WindowInsets.navigationBars.getBottom(density)
+    var currentKeyboardHeightDp by remember { mutableIntStateOf(0) }
+    var lastKeyboardHeightDp by remember { mutableIntStateOf(0) }
+    var handoffHoldHeightDp by remember { mutableIntStateOf(0) }
     val customPanelVisible = showEmotePanel || showMorePanel
+    val fallbackPanelHeightDp = if (configuration.screenWidthDp >= 600) 300 else 170
+    val panelHeightDp = maxOf(lastKeyboardHeightDp, fallbackPanelHeightDp)
+    val bottomSlotHeightDp = com.android.purebilibili.feature.video.ui.components.resolveCommentBottomSlotHeightDp(
+        showEmojiPanel = customPanelVisible,
+        emojiPanelHeightDp = panelHeightDp,
+        imeHeightDp = currentKeyboardHeightDp,
+        handoffHoldHeightDp = handoffHoldHeightDp,
+    )
     var restoreKeyboard by remember { mutableStateOf(false) }
+    LaunchedEffect(density, imeInsets, navigationBarsBottomPx) {
+        snapshotFlow {
+            with(density) {
+                (imeInsets.getBottom(density) - navigationBarsBottomPx)
+                    .coerceAtLeast(0)
+                    .toDp()
+                    .value
+                    .roundToInt()
+            }
+        }.collect { measuredHeightDp ->
+            currentKeyboardHeightDp = measuredHeightDp
+            if (!customPanelVisible && measuredHeightDp > lastKeyboardHeightDp) {
+                lastKeyboardHeightDp = measuredHeightDp
+            }
+            if (handoffHoldHeightDp > 0 && measuredHeightDp >= handoffHoldHeightDp) {
+                handoffHoldHeightDp = 0
+            }
+        }
+    }
+    LaunchedEffect(handoffHoldHeightDp, customPanelVisible) {
+        if (handoffHoldHeightDp <= 0) return@LaunchedEffect
+        if (customPanelVisible) {
+            handoffHoldHeightDp = 0
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(350L)
+        handoffHoldHeightDp = 0
+    }
+    fun closeCustomPanelForKeyboard(requestFocusAndShow: Boolean = false) {
+        if (customPanelVisible) {
+            handoffHoldHeightDp = panelHeightDp
+            showEmotePanel = false
+            showMorePanel = false
+            restoreKeyboard = requestFocusAndShow
+        }
+    }
     fun togglePanel(emote: Boolean) {
         val closing = if (emote) showEmotePanel else showMorePanel
-        showEmotePanel = !closing && emote
-        showMorePanel = !closing && !emote
-        restoreKeyboard = closing
-        if (!closing) {
+        if (closing) {
+            closeCustomPanelForKeyboard(requestFocusAndShow = true)
+        } else {
+            handoffHoldHeightDp = 0
+            restoreKeyboard = false
             focusManager.clearFocus()
             keyboard?.hide()
+            showEmotePanel = emote
+            showMorePanel = !emote
         }
     }
     LaunchedEffect(customPanelVisible, restoreKeyboard) {
-        if (customPanelVisible) keyboard?.hide()
-        else if (restoreKeyboard) {
+        if (!customPanelVisible && restoreKeyboard) {
             bodyFocus.requestFocus()
             keyboard?.show()
             restoreKeyboard = false
@@ -261,6 +311,8 @@ fun DynamicPublishComposer(
     fun requestDismiss() {
         if (submitting || savingDraft) return
         if (customPanelVisible) {
+            handoffHoldHeightDp = 0
+            restoreKeyboard = false
             showEmotePanel = false
             showMorePanel = false
             return
@@ -291,8 +343,7 @@ fun DynamicPublishComposer(
                 modifier = Modifier
                     .then(backModifier)
                     .fillMaxWidth()
-                    .fillMaxHeight()
-                    .then(if (customPanelVisible) Modifier else Modifier.imePadding()),
+                    .fillMaxHeight(),
             ) {
                 Box(
                     modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp)
@@ -362,7 +413,7 @@ fun DynamicPublishComposer(
                                 value = title,
                                 onValueChange = { if (!submitting) title = it.take(20) },
                                 modifier = Modifier.fillMaxWidth().onFocusChanged {
-                                    if (it.isFocused) { showEmotePanel = false; showMorePanel = false }
+                                    if (it.isFocused) closeCustomPanelForKeyboard()
                                 },
                                 enabled = !submitting,
                                 textStyle = MaterialTheme.typography.bodyLarge.copy(
@@ -407,7 +458,7 @@ fun DynamicPublishComposer(
                             textStyle = MaterialTheme.typography.bodyLarge.copy(color = AppContentColors.primaryText()),
                             hintColor = AppContentColors.secondaryText(),
                             cursorColor = AppContentColors.accent(),
-                            onBeginEditing = { showEmotePanel = false; showMorePanel = false },
+                            onBeginEditing = { closeCustomPanelForKeyboard() },
                             modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp).focusRequester(bodyFocus),
                         )
                         if (hasUnresolvedRichText) {
@@ -590,23 +641,22 @@ fun DynamicPublishComposer(
                     }
                 }
                 if (customPanelVisible) {
-                    BoxWithConstraints(Modifier.fillMaxWidth()) {
-                        val panelHeight = maxOf(lastKeyboardHeight, if (maxWidth >= 600.dp) 300.dp else 170.dp)
-                        if (showEmotePanel) {
-                            DynamicEmotePanel(Modifier.fillMaxWidth().height(panelHeight), enabled = !submitting) { emote ->
-                                emotes = (emotes + emote).distinct()
-                                val start = textValue.selection.min
-                                richTextIssues = replaceDynamicRichTextIssues(richTextIssues, start, textValue.selection.max, emote.length)
-                                richTokens = replaceDynamicComposerTokens(richTokens, start, textValue.selection.max, emote.length) +
-                                    DynamicPublishToken(start, start + emote.length, 9, "", emote)
-                                textValue = insertDynamicComposerToken(textValue, emote)
-                            }
-                        } else {
-                            Column(Modifier.fillMaxWidth().height(panelHeight).padding(12.dp)) {
-                                AppTextButton(onClick = { showReserveDialog = true }, enabled = !submitting) { AppText("直播预约") }
-                            }
+                    if (showEmotePanel) {
+                        DynamicEmotePanel(Modifier.fillMaxWidth().height(bottomSlotHeightDp.dp), enabled = !submitting) { emote ->
+                            emotes = (emotes + emote).distinct()
+                            val start = textValue.selection.min
+                            richTextIssues = replaceDynamicRichTextIssues(richTextIssues, start, textValue.selection.max, emote.length)
+                            richTokens = replaceDynamicComposerTokens(richTokens, start, textValue.selection.max, emote.length) +
+                                DynamicPublishToken(start, start + emote.length, 9, "", emote)
+                            textValue = insertDynamicComposerToken(textValue, emote)
+                        }
+                    } else {
+                        Column(Modifier.fillMaxWidth().height(bottomSlotHeightDp.dp).padding(12.dp)) {
+                            AppTextButton(onClick = { showReserveDialog = true }, enabled = !submitting) { AppText("直播预约") }
                         }
                     }
+                } else if (bottomSlotHeightDp > 0) {
+                    Spacer(Modifier.fillMaxWidth().height(bottomSlotHeightDp.dp))
                 }
 
             }

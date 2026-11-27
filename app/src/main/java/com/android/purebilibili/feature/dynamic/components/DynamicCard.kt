@@ -1582,10 +1582,10 @@ fun DynamicCardV2(
                                 } else {
                                     16f / 9f
                                 }
-                                val dividerRequest = remember(resolvedDividerPic.url) {
+                                val dividerRequest = remember(context, resolvedDividerPic.url) {
                                     coil3.request.ImageRequest.Builder(context)
                                         .data(resolvedDividerPic.url)
-                                        .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
+                                        .httpHeaders(DYNAMIC_BILIBILI_REFERER_HEADERS)
                                         .build()
                                 }
                                 if (expandOpusDetailImages) {
@@ -1626,10 +1626,10 @@ fun DynamicCardV2(
                                     4f / 3f
                                 }
                             }
-                            val imageRequest = remember(resolvedPic.url) {
+                            val imageRequest = remember(context, resolvedPic.url) {
                                 coil3.request.ImageRequest.Builder(context)
                                     .data(resolvedPic.url)
-                                    .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
+                                    .httpHeaders(DYNAMIC_BILIBILI_REFERER_HEADERS)
                                     .build()
                             }
                             if (expandOpusDetailImages) {
@@ -1744,16 +1744,12 @@ fun DynamicCardV2(
                         } else {
                             4f / 3f
                         }
-                        val imageRequest = remember(pic.url) {
+                        val imageRequest = remember(context, pic.url) {
                             val cacheKey = resolveImagePreviewPlaceholderCacheKey(pic.url) ?: pic.url
                             coil3.request.ImageRequest.Builder(context)
                                 .data(pic.url)
                                 .memoryCacheKey(cacheKey)
-                                .httpHeaders(
-                                    NetworkHeaders.Builder()
-                                        .set("Referer", "https://www.bilibili.com/")
-                                        .build()
-                                )
+                                .httpHeaders(DYNAMIC_BILIBILI_REFERER_HEADERS)
                                 .build()
                         }
                         PageAwareAsyncImage(
@@ -2179,11 +2175,15 @@ fun DynamicCardV2(
                     if (foldUsers.isNotEmpty()) {
                         Box(modifier = Modifier.height(22.dp)) {
                             foldUsers.forEachIndexed { index, user ->
-                                PageAwareAsyncImage(
-                                    model = coil3.request.ImageRequest.Builder(LocalContext.current)
+                                val foldFaceContext = LocalContext.current
+                                val foldFaceRequest = remember(foldFaceContext, user.face) {
+                                    coil3.request.ImageRequest.Builder(foldFaceContext)
                                         .data(user.face.let { if (it.startsWith("http://")) it.replace("http://", "https://") else it })
                                         .crossfade(true)
-                                        .build(),
+                                        .build()
+                                }
+                                PageAwareAsyncImage(
+                                    model = foldFaceRequest,
                                     contentDescription = null,
                                     modifier = Modifier
                                         .offset(x = (index * 14).dp)
@@ -2489,48 +2489,64 @@ fun RichTextContent(
     val primaryColor = AppContentColors.accent()
     val textColor = AppContentColors.primaryText()
     // 原生链接分发：BasicText 在 Text 内部处理 LinkAnnotation 点击，不再依赖
-    // 外层 pointerInput 查表，与划选/卡片长按不再竞争。每次组合重建 dispatch
-    // 闭包以捕获最新回调，并作为 remember key 同步重建富文本。
-    val dispatchDynamicLink: (String) -> Unit = { payload ->
-        dispatchDynamicRichTextLinkPayload(
-            payload = payload,
-            context = context,
-            uriHandler = uriHandler,
-            scope = scope,
-            onUserClick = onUserClick,
-            onVoteClick = onVoteClick,
-            onTopicClick = onTopicClick,
-            onTopicKeywordClick = onTopicKeywordClick,
-            onVideoClick = onVideoClick,
-            onDynamicDetailClick = onDynamicDetailClick,
-            onBangumiClick = onBangumiClick,
-            onArticleClick = onArticleClick,
-            onLiveClick = onLiveClick,
-            onMusicClick = onMusicClick,
-            onLinkClick = onLinkClick,
-        )
+    // 外层 pointerInput 查表，与划选/卡片长按不再竞争。通过 rememberUpdatedState
+    // 持有最新回调并保持 LinkInteractionListener 实例稳定，避免每次重组重建富文本与文本重排。
+    val latestLinkHandler by rememberUpdatedState<(String) -> Unit> { payload ->
+        val tap = onTextTap
+        if (tap != null) {
+            tap()
+        } else {
+            dispatchDynamicRichTextLinkPayload(
+                payload = payload,
+                context = context,
+                uriHandler = uriHandler,
+                scope = scope,
+                onUserClick = onUserClick,
+                onVoteClick = onVoteClick,
+                onTopicClick = onTopicClick,
+                onTopicKeywordClick = onTopicKeywordClick,
+                onVideoClick = onVideoClick,
+                onDynamicDetailClick = onDynamicDetailClick,
+                onBangumiClick = onBangumiClick,
+                onArticleClick = onArticleClick,
+                onLiveClick = onLiveClick,
+                onMusicClick = onMusicClick,
+                onLinkClick = onLinkClick,
+            )
+        }
     }
-    val richText = remember(desc, primaryColor, textColor, catalogEmoteMap, extraEmoteUrlMap, dispatchDynamicLink, collapseWebLinks) {
+    val linkListener = remember {
+        LinkInteractionListener { link ->
+            latestLinkHandler((link as LinkAnnotation.Clickable).tag)
+        }
+    }
+    val richText = remember(desc, primaryColor, textColor, catalogEmoteMap, extraEmoteUrlMap, collapseWebLinks, linkListener) {
+        val mergedEmoteMap = if (extraEmoteUrlMap.isEmpty()) {
+            catalogEmoteMap
+        } else {
+            buildMap(catalogEmoteMap.size + extraEmoteUrlMap.size) {
+                putAll(catalogEmoteMap)
+                putAll(extraEmoteUrlMap)
+            }
+        }
         buildDynamicRichText(
             desc = desc,
             primaryColor = primaryColor,
             textColor = textColor,
-            extraEmoteUrlMap = buildMap {
-                putAll(catalogEmoteMap)
-                putAll(extraEmoteUrlMap)
-            },
-            linkListener = LinkInteractionListener { link ->
-                if (onTextTap != null) onTextTap()
-                else dispatchDynamicLink((link as LinkAnnotation.Clickable).tag)
-            },
+            extraEmoteUrlMap = mergedEmoteMap,
+            linkListener = linkListener,
             collapseWebLinks = collapseWebLinks,
         )
     }
     val annotatedText = richText.annotatedString
 
-    // 仅对实际用到的表情 id 建 InlineContent，避免整包表情占内存
-    val inlineContent = remember(richText.emojiUrlById) {
+    // 仅对实际用到的表情 id 建 InlineContent，并提前缓存 ImageRequest，避免每次重组重建请求
+    val inlineContent = remember(context, richText.emojiUrlById) {
         richText.emojiUrlById.mapValues { (_, iconUrl) ->
+            val emoteRequest = coil3.request.ImageRequest.Builder(context)
+                .data(iconUrl)
+                .crossfade(true)
+                .build()
             InlineTextContent(
                 Placeholder(
                     width = 1.4.em,
@@ -2539,10 +2555,7 @@ fun RichTextContent(
                 )
             ) {
                 PageAwareAsyncImage(
-                    model = coil3.request.ImageRequest.Builder(LocalContext.current)
-                        .data(iconUrl)
-                        .crossfade(true)
-                        .build(),
+                    model = emoteRequest,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -2845,14 +2858,18 @@ private fun DynamicAuthorFace(
     faceSize: Dp,
     modifier: Modifier = Modifier,
 ) {
-    val normalizedFace = faceUrl.let { if (it.startsWith("http://")) it.replace("http://", "https://") else it }
+    val context = LocalContext.current
+    val faceRequest = remember(context, faceUrl) {
+        val normalizedFace = if (faceUrl.startsWith("http://")) faceUrl.replace("http://", "https://") else faceUrl
+        coil3.request.ImageRequest.Builder(context)
+            .data(normalizedFace)
+            .crossfade(true)
+            .build()
+    }
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Box(modifier = Modifier.size(faceSize)) {
             PageAwareAsyncImage(
-                model = coil3.request.ImageRequest.Builder(LocalContext.current)
-                    .data(normalizedFace)
-                    .crossfade(true)
-                    .build(),
+                model = faceRequest,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -2970,13 +2987,17 @@ fun DynamicCardCompact(
 
         // 封面缩略图（如果有视频）
         content?.major?.archive?.let { archive ->
+            val coverContext = LocalContext.current
+            val compactCoverRequest = remember(coverContext, archive.cover) {
+                coil3.request.ImageRequest.Builder(coverContext)
+                    .data(archive.cover.let { if (it.startsWith("http://")) it.replace("http://", "https://") else it })
+                    .crossfade(true)
+                    .build()
+            }
             Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
             PageAwareAsyncImage(
                 dimInDarkTheme = true,
-                model = coil3.request.ImageRequest.Builder(LocalContext.current)
-                    .data(archive.cover.let { if (it.startsWith("http://")) it.replace("http://", "https://") else it })
-                    .crossfade(true)
-                    .build(),
+                model = compactCoverRequest,
                 contentDescription = null,
                 modifier = Modifier
                     .size(width = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.DoubleExtraLarge, height = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Micro)
@@ -2986,3 +3007,6 @@ fun DynamicCardCompact(
         }
     }
 }
+
+private val DYNAMIC_BILIBILI_REFERER_HEADERS: NetworkHeaders =
+    NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build()

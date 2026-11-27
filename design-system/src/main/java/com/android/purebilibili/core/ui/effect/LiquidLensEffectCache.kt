@@ -13,9 +13,18 @@ private val lensEffectCaches = ThreadLocal.withInitial {
     WeakHashMap<BackdropEffectScope, MutableMap<Float, BackdropRenderEffectCache>>()
 }
 
+private val fusedLensEffectCaches = ThreadLocal.withInitial {
+    WeakHashMap<BackdropEffectScope, MutableMap<Float, BackdropRenderEffectCache>>()
+}
+
 internal fun BackdropEffectScope.liquidLensEffectCache(): BackdropRenderEffectCache {
     val levels = lensEffectCaches.get().getOrPut(this) { mutableMapOf() }
     return levels.getOrPut(downscaleFactor) { BackdropRenderEffectCache(15) }
+}
+
+internal fun BackdropEffectScope.fusedLiquidLensEffectCache(): BackdropRenderEffectCache {
+    val levels = fusedLensEffectCaches.get().getOrPut(this) { mutableMapOf() }
+    return levels.getOrPut(downscaleFactor) { BackdropRenderEffectCache(12) }
 }
 
 /** 缓存单个参数化效果及其上游合成链，不缓存画面；由各效果所有者独立持有。 */

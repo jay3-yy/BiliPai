@@ -143,6 +143,9 @@ internal fun groupPlayerEpisodeEntries(entries: List<PlayerEpisodeMenuEntry>): L
     return groups
 }
 
+private val EPISODE_PUBDATE_DATE_FORMATTER: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
+
 /** 剧集行元数据：发布日期 · 播放 · 弹幕；无任何已知信息时返回 null。 */
 internal fun buildPlayerEpisodeMetadataText(
     pubdateSeconds: Long,
@@ -153,7 +156,7 @@ internal fun buildPlayerEpisodeMetadataText(
         if (pubdateSeconds > 0L) {
             add(java.time.Instant.ofEpochSecond(pubdateSeconds)
                 .atZone(java.time.ZoneId.systemDefault())
-                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")))
+                .format(EPISODE_PUBDATE_DATE_FORMATTER))
         }
         if (viewCount != null && viewCount >= 0L) {
             add(com.android.purebilibili.core.util.FormatUtils.formatStat(viewCount) + "播放")

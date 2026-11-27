@@ -198,6 +198,30 @@ internal fun resolveCommentEmojiPanelHeightDp(
         .coerceIn(0, availableHeightDp.coerceAtLeast(0))
 }
 
+/**
+ * 底部键盘/表情共享槽位高度：
+ * - 表情面板开启时取 `max(表情面板高度, 当前 IME 高度)`，键盘收起动画期间输入栏不抖动；
+ * - 表情面板切回键盘时在 `handoffHoldHeightDp > 0` 期间锁住原高度，待 IME 升起接管后再释放，
+ *   避免表情面板卸载瞬间输入栏先坠底再被键盘二次顶起。
+ */
+internal fun resolveCommentBottomSlotHeightDp(
+    showEmojiPanel: Boolean,
+    emojiPanelHeightDp: Int,
+    imeHeightDp: Int,
+    handoffHoldHeightDp: Int,
+): Int {
+    val safeIme = imeHeightDp.coerceAtLeast(0)
+    val safeEmoji = emojiPanelHeightDp.coerceAtLeast(0)
+    val safeHold = handoffHoldHeightDp.coerceAtLeast(0)
+    return when {
+        showEmojiPanel -> maxOf(safeEmoji, safeIme)
+        safeHold > 0 -> maxOf(safeHold, safeIme)
+        else -> safeIme
+    }
+}
+
+private const val COMMENT_EMOJI_TO_IME_HANDOFF_TIMEOUT_MS = 350L
+
 internal fun resolveCommentProgressInsertText(positionMs: Long): String {
     return " ${FormatUtils.formatDuration(positionMs.coerceAtLeast(0L))} "
 }
@@ -297,6 +321,8 @@ fun CommentInputDialog(
         )
     ) { mutableStateOf(initialImageUris) }
     var lastKeyboardHeightDp by remember(configuration.orientation) { mutableIntStateOf(0) }
+    var currentKeyboardHeightDp by remember(configuration.orientation) { mutableIntStateOf(0) }
+    var handoffHoldHeightDp by remember(draftKey, configuration.orientation) { mutableIntStateOf(0) }
     var inputWasVisible by rememberSaveable { mutableStateOf(false) }
     var restoredDraftKey by rememberSaveable { mutableStateOf<String?>(null) }
     var inputExpanded by rememberSaveable { mutableStateOf(false) }
@@ -317,6 +343,7 @@ fun CommentInputDialog(
     }
     val dismissDialog: () -> Unit = {
         if (visible && !dismissRequested) {
+            handoffHoldHeightDp = 0
             keyboardController?.hide()
             focusManager.clearFocus(force = true)
             dismissRequested = true
@@ -385,6 +412,7 @@ fun CommentInputDialog(
         textFieldValue = commentDraftTextFieldValue(initialText)
         isForwardToDynamic = initialSyncToDynamic
         showEmojiPanel = false
+        handoffHoldHeightDp = 0
         showMentionPanel = false
         mentionSearchText = ""
         selectedImageUris = if (allowImageAttachment) initialImageUris else emptyList()
@@ -415,8 +443,7 @@ fun CommentInputDialog(
             val density = LocalDensity.current
             val navigationBarsBottomPx = WindowInsets.navigationBars.getBottom(density)
             val imeInsets = WindowInsets.ime
-            LaunchedEffect(density, imeInsets, navigationBarsBottomPx, showEmojiPanel) {
-                if (showEmojiPanel) return@LaunchedEffect
+            LaunchedEffect(density, imeInsets, navigationBarsBottomPx) {
                 snapshotFlow {
                     with(density) {
                         (imeInsets.getBottom(density) - navigationBarsBottomPx)
@@ -425,11 +452,24 @@ fun CommentInputDialog(
                             .value
                             .roundToInt()
                     }
-                }.collect { currentKeyboardHeightDp ->
-                    if (currentKeyboardHeightDp > lastKeyboardHeightDp) {
-                        lastKeyboardHeightDp = currentKeyboardHeightDp
+                }.collect { measuredHeightDp ->
+                    currentKeyboardHeightDp = measuredHeightDp
+                    if (!showEmojiPanel && measuredHeightDp > lastKeyboardHeightDp) {
+                        lastKeyboardHeightDp = measuredHeightDp
+                    }
+                    if (handoffHoldHeightDp > 0 && measuredHeightDp >= handoffHoldHeightDp) {
+                        handoffHoldHeightDp = 0
                     }
                 }
+            }
+            LaunchedEffect(handoffHoldHeightDp, showEmojiPanel, inputActive) {
+                if (handoffHoldHeightDp <= 0) return@LaunchedEffect
+                if (showEmojiPanel || !inputActive) {
+                    handoffHoldHeightDp = 0
+                    return@LaunchedEffect
+                }
+                kotlinx.coroutines.delay(COMMENT_EMOJI_TO_IME_HANDOFF_TIMEOUT_MS)
+                handoffHoldHeightDp = 0
             }
             val availablePanelHeightDp = configuration.screenHeightDp -
                 layoutPolicy.inputBoxMaxHeightDp -
@@ -448,8 +488,21 @@ fun CommentInputDialog(
                 keyboardHeightDp = lastKeyboardHeightDp,
                 availableHeightDp = availablePanelHeightDp,
             )
-            LaunchedEffect(showEmojiPanel, inputActive, canInputComment, draftKey) {
-                if (!shouldAutoShowCommentKeyboard(inputActive, canInputComment, showEmojiPanel)) {
+            val bottomSlotHeightDp = resolveCommentBottomSlotHeightDp(
+                showEmojiPanel = showEmojiPanel,
+                emojiPanelHeightDp = emojiPanelHeightDp,
+                imeHeightDp = currentKeyboardHeightDp,
+                handoffHoldHeightDp = handoffHoldHeightDp,
+            )
+            fun closeEmojiPanelForKeyboard() {
+                if (showEmojiPanel) {
+                    handoffHoldHeightDp = emojiPanelHeightDp
+                    showEmojiPanel = false
+                }
+            }
+            LaunchedEffect(inputActive, canInputComment, draftKey) {
+                if (!inputActive || !canInputComment) {
+                    handoffHoldHeightDp = 0
                     keyboardController?.hide()
                     focusManager.clearFocus(force = true)
                 }
@@ -462,11 +515,10 @@ fun CommentInputDialog(
             }
             // 统一输入弹层宿主：半开折叠时弹层整体收进铰链安全区，避免输入控件跨缝；
             // 平铺窗口时点击空白处关闭、底部对齐，宽窗口由 widthIn 限宽并水平居中。
-            // 表情面板替代键盘时不再避让 IME，避免双重底部空隙。
+            // 底部 IME 与表情面板共用同一底部槽位（bottomSlotHeightDp），切换时不再硬切 imePadding 导致二次收起展开。
             HingeSafeInputOverlayHost(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (showEmojiPanel) Modifier else Modifier.imePadding())
                     .then(if (inputExpanded) Modifier.statusBarsPadding() else Modifier),
                 onDismissRequest = dismissDialog,
             ) {
@@ -534,7 +586,7 @@ fun CommentInputDialog(
                                             canInputComment && !isSending,
                                             showEmojiPanel,
                                         ),
-                                        onBeginEditing = { showEmojiPanel = false },
+                                        onBeginEditing = { closeEmojiPanelForKeyboard() },
                                         hint = inputHint.ifBlank { "进来唠会嗑呗~" }.let { resolvedHint ->
                                             if (replyToName != null) "回复 @$replyToName: $resolvedHint" else resolvedHint
                                         },
@@ -696,13 +748,15 @@ fun CommentInputDialog(
                                     // 图标栏: 表情 @ 图片
                                     AppIconButton(
                                         onClick = {
-                                            val opening = !showEmojiPanel
-                                            if (opening) {
+                                            if (!showEmojiPanel) {
+                                                handoffHoldHeightDp = 0
                                                 focusManager.clearFocus(force = true)
                                                 keyboardController?.hide()
                                                 showMentionPanel = false
+                                                showEmojiPanel = true
+                                            } else {
+                                                closeEmojiPanelForKeyboard()
                                             }
-                                            showEmojiPanel = opening
                                         },
                                         enabled = canInputComment && !isSending,
                                         modifier = Modifier.size(layoutPolicy.toolbarToolButtonSizeDp.dp)
@@ -718,7 +772,7 @@ fun CommentInputDialog(
                                     AppIconButton(
                                         onClick = {
                                             insertTextAtCursor("@")
-                                            showEmojiPanel = false
+                                            closeEmojiPanelForKeyboard()
                                             showMentionPanel = true
                                             mentionSearchText = ""
                                             onMentionSearchQueryChange("")
@@ -738,7 +792,7 @@ fun CommentInputDialog(
                                         AppIconButton(
                                             onClick = {
                                                 insertTextAtCursor(resolveCommentProgressInsertText(currentVideoPositionMsProvider()))
-                                                showEmojiPanel = false
+                                                closeEmojiPanelForKeyboard()
                                                 showMentionPanel = false
                                             },
                                             enabled = canInputComment && !isSending,
@@ -859,7 +913,7 @@ fun CommentInputDialog(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(emojiPanelHeightDp.dp)
+                                        .height(bottomSlotHeightDp.dp)
                                         .testTag("comment_emote_panel")
                                         .padding(top = 8.dp)
                                 ) {
@@ -995,6 +1049,12 @@ fun CommentInputDialog(
                                         }
                                     }
                                 }
+                            } else if (bottomSlotHeightDp > 0) {
+                                Spacer(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(bottomSlotHeightDp.dp)
+                                )
                             }
                         }
                         // 浮层兄弟节点：绘制在内容之上，40dp 触控区不参与 Column 的宽高测量。

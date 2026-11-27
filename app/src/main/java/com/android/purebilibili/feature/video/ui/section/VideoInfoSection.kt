@@ -1360,13 +1360,15 @@ fun UpInfoSection(
 
                 if (showInlineOwnerIdentity) {
                     if (info.owner.face.isNotBlank()) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(FormatUtils.fixImageUrl(
-                                    info.owner.face
-                                ))
+                        val ownerFaceContext = LocalContext.current
+                        val ownerFaceRequest = remember(ownerFaceContext, info.owner.face) {
+                            ImageRequest.Builder(ownerFaceContext)
+                                .data(FormatUtils.fixImageUrl(info.owner.face))
                                 .crossfade(false)
-                                .build(),
+                                .build()
+                        }
+                        AsyncImage(
+                            model = ownerFaceRequest,
                             contentDescription = "UP主头像",
                             modifier = Modifier
                                 .padding(horizontal = 2.dp)
@@ -1685,14 +1687,16 @@ private fun CreatorTeamMemberChip(
             modifier = memberControl.modifier,
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val staffFaceContext = LocalContext.current
+            val staffFaceRequest = remember(staffFaceContext, member.face) {
+                ImageRequest.Builder(staffFaceContext)
+                    .data(FormatUtils.fixImageUrl(member.face))
+                    .crossfade(false)
+                    .build()
+            }
             Box(modifier = Modifier.size(36.dp)) {
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(FormatUtils.fixImageUrl(
-                            member.face
-                        ))
-                        .crossfade(false)
-                        .build(),
+                    model = staffFaceRequest,
                     contentDescription = "${member.name} 头像",
                     modifier = Modifier
                         .fillMaxSize()
@@ -1949,11 +1953,14 @@ fun BgmInfoRow(
                     modifier = Modifier.size(if (coverSize >= 32.dp) 18.dp else 13.dp),
                 )
                 if (resolvedCover.isNotBlank()) {
-                    AsyncImage(
-                        model = coil3.request.ImageRequest.Builder(context)
+                    val bgmCoverRequest = remember(context, resolvedCover) {
+                        coil3.request.ImageRequest.Builder(context)
                             .data(resolvedCover)
                             .crossfade(true)
-                            .build(),
+                            .build()
+                    }
+                    AsyncImage(
+                        model = bgmCoverRequest,
                         contentDescription = title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),

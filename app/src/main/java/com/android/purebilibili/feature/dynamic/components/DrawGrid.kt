@@ -205,11 +205,15 @@ private fun DrawGridImage(
         contentAlignment = Alignment.Center
     ) {
         if (imageUrl.isNotEmpty()) {
-            val imageRequest = remember(context, imageUrl) {
+            val decodeSize = remember(displayCount) {
+                resolveDynamicGridDecodeSize(displayCount = displayCount)
+            }
+            val imageRequest = remember(context, imageUrl, decodeSize) {
                 coil3.request.ImageRequest.Builder(context)
                     .data(imageUrl)
                     // Reuse this exact source identity as the preview's placeholder key.
                     .memoryCacheKey(imageUrl)
+                    .size(decodeSize.widthPx, decodeSize.heightPx)
                     .httpHeaders(DRAW_GRID_BILIBILI_REFERER_HEADERS)
                     // The Hero flight is the only transition; don't fade the source
                     // again if its list item is recreated while the preview is open.

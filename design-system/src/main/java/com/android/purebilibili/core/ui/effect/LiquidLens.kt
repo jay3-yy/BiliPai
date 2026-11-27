@@ -10,6 +10,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.fastCoerceAtMost
+import com.android.purebilibili.core.ui.adaptive.DeviceThermalBudgetState
+import com.android.purebilibili.core.ui.adaptive.DeviceThermalTier
 import top.yukonga.miuix.kmp.blur.BackdropEffectScope
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.runtimeShaderEffect
@@ -79,14 +81,24 @@ fun BackdropEffectScope.lens(
     // A moving overflow band can cross zero on every spring/velocity reversal.
     // Keep the same shader and let its mask reach zero continuously instead of
     // replacing the whole effect chain at the track boundary.
+    // 设备温热或省电态下自动将 7-tap 光谱色散降阶为 3-tap RGB 色散，纹理带宽直降 57%。
     val dispersionEnabled = chromaticAberration > 0f
-    val shaderString =
-        if (dispersionEnabled) {
-            ROUNDED_RECT_REFRACTION_WITH_DISPERSION_SHADER
-        } else {
-            ROUNDED_RECT_REFRACTION_SHADER
-        }
-    val key = if (dispersionEnabled) "LiquidGlassLensDispersion" else "LiquidGlassLens"
+    val useFastDispersion = dispersionEnabled && DeviceThermalBudgetState.tier != DeviceThermalTier.NORMAL
+    val shaderString = when {
+        !dispersionEnabled -> ROUNDED_RECT_REFRACTION_SHADER
+        useFastDispersion -> ROUNDED_RECT_REFRACTION_WITH_FAST_DISPERSION_SHADER
+        else -> ROUNDED_RECT_REFRACTION_WITH_DISPERSION_SHADER
+    }
+    val key = when {
+        !dispersionEnabled -> "LiquidGlassLens"
+        useFastDispersion -> "LiquidGlassLensFastDispersion"
+        else -> "LiquidGlassLensDispersion"
+    }
+    val dispersionMode = when {
+        !dispersionEnabled -> 0f
+        useFastDispersion -> 2f
+        else -> 1f
+    }
 
     val sf = downscaleFactor
     if (chromaticEdgeBand != null) {
@@ -127,7 +139,7 @@ fun BackdropEffectScope.lens(
     cache[11] = horizontalBand
     cache[12] = chromaticAberration
     cache[13] = edgeBand
-    cache[14] = if (dispersionEnabled) 1f else 0f
+    cache[14] = dispersionMode
     if (cache.needsUpdate) {
         val input = renderEffect
         try {
@@ -321,5 +333,58 @@ half4 main(float2 coord) {
     color.a += purple.a / 7.0;
 
     return color;
+}
+"""
+
+private const val ROUNDED_RECT_REFRACTION_WITH_FAST_DISPERSION_SHADER = """
+uniform shader content;
+
+uniform float2 size;
+uniform float2 offset;
+uniform float4 cornerRadii;
+uniform float refractionHeight;
+uniform float refractionAmount;
+uniform float depthEffect;
+uniform float chromaticAberration;
+uniform float chromaticEdgeBand;
+uniform float chromaticBandHorizontal;
+
+$ROUNDED_RECT_SDF
+
+float circleMap(float x) {
+    return 1.0 - sqrt(1.0 - x * x);
+}
+
+half4 main(float2 coord) {
+    float2 halfSize = size * 0.5;
+    float2 centeredCoord = (coord + offset) - halfSize;
+    float radius = radiusAt(centeredCoord, cornerRadii);
+
+    float sd = sdRoundedRect(centeredCoord, halfSize, radius);
+    if (-sd >= refractionHeight) {
+        return content.eval(coord);
+    }
+    sd = min(sd, 0.0);
+
+    float d = circleMap(1.0 - -sd / refractionHeight) * refractionAmount;
+    float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));
+    float2 grad = refractionGradient(centeredCoord, halfSize, gradRadius, depthEffect);
+
+    float2 refractedCoord = coord + d * grad;
+    float dispersionWeight = (centeredCoord.x * centeredCoord.y) / (halfSize.x * halfSize.y);
+    if (chromaticEdgeBand >= 0.0) {
+        float edgeDistance = chromaticBandHorizontal > 0.5
+            ? halfSize.x - abs(centeredCoord.x)
+            : halfSize.y - abs(centeredCoord.y);
+        float feather = 1.0;
+        dispersionWeight = 1.0 - smoothstep(chromaticEdgeBand - feather, chromaticEdgeBand, edgeDistance);
+        if (dispersionWeight <= 0.0) return content.eval(refractedCoord);
+    }
+    float2 dispersedCoord = d * grad * (chromaticAberration * dispersionWeight);
+
+    half4 red = content.eval(refractedCoord + dispersedCoord);
+    half4 green = content.eval(refractedCoord);
+    half4 blue = content.eval(refractedCoord - dispersedCoord);
+    return half4(red.r, green.g, blue.b, (red.a + green.a + blue.a) / 3.0);
 }
 """

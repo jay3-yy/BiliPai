@@ -511,7 +511,7 @@ internal fun PlayerPanelMediaRow(title: String, cover: String, durationSeconds: 
                 modifier = if (episodePresentation) Modifier.weight(1f) else Modifier)
             if (episodePresentation && episodePubdate > 0L) {
                 Text(java.time.Instant.ofEpochSecond(episodePubdate).atZone(java.time.ZoneId.systemDefault())
-                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")),
+                    .format(EPISODE_PUBDATE_TIME_FORMATTER),
                     fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
             if (episodePresentation && episodeViewCount != null && episodeViewCount >= 0L) {
@@ -532,3 +532,6 @@ internal fun PlayerPanelMediaRow(title: String, cover: String, durationSeconds: 
         }
     }
 }
+
+private val EPISODE_PUBDATE_TIME_FORMATTER: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")

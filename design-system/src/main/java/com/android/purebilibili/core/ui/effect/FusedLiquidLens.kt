@@ -238,22 +238,47 @@ fun BackdropEffectScope.fusedCapsulesLens(
     val scaledPadding = padding / sf
     val scaledRefractionH = effectiveRefractionHeight / sf
     val scaledRefractionAmt = refractionAmount / sf
+    val safeChromaticAberration = chromaticAberration.coerceAtLeast(0f)
 
-    runtimeShaderEffect(
-        key = "FusedLiquidCapsulesLens",
-        shaderString = FUSED_CAPSULES_REFRACTION_SHADER,
-        uniformShaderName = "content",
-    ) {
-        setFloatUniform("leftCenter", scaledLeftW * 0.5f, scaledLeftCy)
-        setFloatUniform("leftHalfSize", scaledLeftW * 0.5f, scaledLeftH * 0.5f)
-        setFloatUniform("rightCenter", scaledRightLeft + scaledRightW * 0.5f, scaledRightCy)
-        setFloatUniform("rightHalfSize", scaledRightW * 0.5f, scaledRightH * 0.5f)
-        setFloatUniform("offset", -scaledPadding, -scaledPadding)
-        setFloatUniform("smoothK", scaledK)
-        setFloatUniform("refractionHeight", scaledRefractionH)
-        setFloatUniform("refractionAmount", -scaledRefractionAmt)
-        setFloatUniform("chromaticAberration", chromaticAberration.coerceAtLeast(0f))
+    // 缓存融合镜片参数；仅背景滚动而不改变胶囊几何或光学参数时复用效果对象。
+    val cache = fusedLiquidLensEffectCache()
+    cache[0] = scaledLeftW
+    cache[1] = scaledLeftH
+    cache[2] = scaledLeftCy
+    cache[3] = scaledRightLeft
+    cache[4] = scaledRightW
+    cache[5] = scaledRightH
+    cache[6] = scaledRightCy
+    cache[7] = scaledPadding
+    cache[8] = scaledK
+    cache[9] = scaledRefractionH
+    cache[10] = scaledRefractionAmt
+    cache[11] = safeChromaticAberration
+    if (cache.needsUpdate) {
+        val input = renderEffect
+        try {
+            renderEffect = null
+            runtimeShaderEffect(
+                key = "FusedLiquidCapsulesLens",
+                shaderString = FUSED_CAPSULES_REFRACTION_SHADER,
+                uniformShaderName = "content",
+            ) {
+                setFloatUniform("leftCenter", scaledLeftW * 0.5f, scaledLeftCy)
+                setFloatUniform("leftHalfSize", scaledLeftW * 0.5f, scaledLeftH * 0.5f)
+                setFloatUniform("rightCenter", scaledRightLeft + scaledRightW * 0.5f, scaledRightCy)
+                setFloatUniform("rightHalfSize", scaledRightW * 0.5f, scaledRightH * 0.5f)
+                setFloatUniform("offset", -scaledPadding, -scaledPadding)
+                setFloatUniform("smoothK", scaledK)
+                setFloatUniform("refractionHeight", scaledRefractionH)
+                setFloatUniform("refractionAmount", -scaledRefractionAmt)
+                setFloatUniform("chromaticAberration", safeChromaticAberration)
+            }
+            cache.store(renderEffect)
+        } finally {
+            renderEffect = input
+        }
     }
+    cache.applyTo(this)
 }
 
 private const val FUSED_CAPSULES_REFRACTION_SHADER = """
@@ -274,18 +299,19 @@ float sdCapsule(float2 p, float2 center, float2 halfSize) {
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 
-float sdFused(float2 p) {
-    float a = sdCapsule(p, leftCenter, leftHalfSize);
-    float b = sdCapsule(p, rightCenter, rightHalfSize);
-    float h = clamp(0.5 + 0.5 * (b - a) / smoothK, 0.0, 1.0);
-    return mix(b, a, h) - smoothK * h * (1.0 - h);
-}
-
-float2 gradFused(float2 p) {
-    float eps = 0.75;
-    float dx = sdFused(p + float2(eps, 0.0)) - sdFused(p - float2(eps, 0.0));
-    float dy = sdFused(p + float2(0.0, eps)) - sdFused(p - float2(0.0, eps));
-    return float2(dx, dy);
+float2 gradSdCapsule(float2 p, float2 center, float2 halfSize) {
+    float2 d = p - center;
+    float r = min(halfSize.x, halfSize.y);
+    float2 q = abs(d) - (halfSize - float2(r));
+    if (q.x > 0.0 || q.y > 0.0) {
+        float2 m = max(q, 0.0);
+        float ml = length(m);
+        if (ml > 1e-4) {
+            return sign(d) * (m / ml);
+        }
+    }
+    float blend = smoothstep(-1.0, 1.0, q.x - q.y);
+    return sign(d) * normalize(float2(blend, 1.0 - blend));
 }
 
 float circleMap(float x) {
@@ -294,12 +320,25 @@ float circleMap(float x) {
 
 half4 main(float2 coord) {
     float2 p = coord + offset;
-    float sd = sdFused(p);
+    float a = sdCapsule(p, leftCenter, leftHalfSize);
+    float b = sdCapsule(p, rightCenter, rightHalfSize);
+    float h = clamp(0.5 + 0.5 * (b - a) / smoothK, 0.0, 1.0);
+    float sd = mix(b, a, h) - smoothK * h * (1.0 - h);
     if (-sd >= refractionHeight) {
         return content.eval(coord);
     }
     float d = min(sd, 0.0);
-    float2 g = gradFused(p);
+    // Polynomial smooth-min 解析梯度：对 h 的偏导项精确抵消为 0，
+    // 梯度等于 h * grad(a) + (1 - h) * grad(b)，替代原先 4 点有限差分（8 次 SDF）。
+    float2 g;
+    if (h <= 0.0) {
+        g = gradSdCapsule(p, rightCenter, rightHalfSize);
+    } else if (h >= 1.0) {
+        g = gradSdCapsule(p, leftCenter, leftHalfSize);
+    } else {
+        g = h * gradSdCapsule(p, leftCenter, leftHalfSize)
+            + (1.0 - h) * gradSdCapsule(p, rightCenter, rightHalfSize);
+    }
     float len = length(g);
     if (len < 1e-4) {
         return content.eval(coord);
@@ -317,7 +356,7 @@ half4 main(float2 coord) {
     float2 shift = normal * disp;
     half r = content.eval(baseCoord + shift).r;
     half4 centerSample = content.eval(baseCoord);
-    half b = content.eval(baseCoord - shift).b;
-    return half4(r, centerSample.g, b, centerSample.a);
+    half bSample = content.eval(baseCoord - shift).b;
+    return half4(r, centerSample.g, bSample, centerSample.a);
 }
 """

@@ -156,6 +156,13 @@ private fun EmoteGridItem(
     emote: EmoteItem,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val emoteRequest = remember(context, emote.url) {
+        ImageRequest.Builder(context)
+            .data(emote.url)
+            .crossfade(true)
+            .build()
+    }
     Box(
         modifier = Modifier
             .aspectRatio(1f)
@@ -165,10 +172,7 @@ private fun EmoteGridItem(
         contentAlignment = Alignment.Center
     ) {
         AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(emote.url)
-                .crossfade(true)
-                .build(),
+            model = emoteRequest,
             contentDescription = emote.text,
             modifier = Modifier.fillMaxSize()
         )

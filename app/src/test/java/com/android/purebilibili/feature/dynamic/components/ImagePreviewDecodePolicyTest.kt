@@ -24,6 +24,16 @@ class ImagePreviewDecodePolicyTest {
     }
 
     @Test
+    fun dynamicGrid_usesSmallerDecodeBudgetForMultiImageThanSingleImage() {
+        val singleSize = resolveDynamicGridDecodeSize(displayCount = 1)
+        val multiSize = resolveDynamicGridDecodeSize(displayCount = 4)
+
+        assertEquals(ImageDecodeSize(widthPx = 1280, heightPx = 1280), singleSize)
+        assertEquals(ImageDecodeSize(widthPx = 768, heightPx = 768), multiSize)
+        assertTrue(estimateArgb8888ByteCount(multiSize) < estimateArgb8888ByteCount(singleSize))
+    }
+
+    @Test
     fun originalQuality_staysBelowCanvasBitmapLimit() {
         val previewSize = resolveImageDecodeSize(ImageDecodeTarget.FULLSCREEN_PREVIEW)
         val originalSize = resolveImageDecodeSize(ImageDecodeTarget.ORIGINAL_QUALITY)

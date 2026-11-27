@@ -123,10 +123,10 @@ fun VideoCardLarge(
     val coverBoundsRef = remember { object { var value: LayoutCoordinates? = null } }
     val infoBoundsRef = remember { object { var value: LayoutCoordinates? = null } }
     val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(sourceIdentity)
-    val stationaryCoverRequest = remember(coverUrl) {
+    val stationaryCoverRequest = remember(context, coverUrl) {
         ImageRequest.Builder(context)
             .data(coverUrl)
-            .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
+            .httpHeaders(DYNAMIC_VIDEO_CARD_REFERER_HEADERS)
             .crossfade(false)
             .memoryCacheKey(coverUrl)
             .diskCacheKey(coverUrl)
@@ -466,3 +466,6 @@ private fun normalizeDynamicCoverUrl(rawCover: String): String {
         else -> ""
     }
 }
+
+private val DYNAMIC_VIDEO_CARD_REFERER_HEADERS: NetworkHeaders =
+    NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build()

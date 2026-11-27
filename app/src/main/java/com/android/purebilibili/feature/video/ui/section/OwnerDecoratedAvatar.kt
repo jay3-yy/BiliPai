@@ -54,12 +54,23 @@ fun OwnerDecoratedAvatar(
     val faceFraction = if (hasPendant) 0.72f else 1f
     val officialType = card?.officialType ?: fallbackOfficialType
     val vipStatus = card?.vipStatus ?: fallbackVipStatus
+    val context = LocalContext.current
+    val faceRequest = remember(context, displayFace) {
+        ImageRequest.Builder(context)
+            .data(FormatUtils.fixImageUrl(displayFace))
+            .crossfade(false)
+            .build()
+    }
+    val pendantRequest = remember(context, pendantUrl) {
+        if (pendantUrl.isBlank()) null
+        else ImageRequest.Builder(context)
+            .data(FormatUtils.fixImageUrl(pendantUrl))
+            .crossfade(false)
+            .build()
+    }
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(FormatUtils.fixImageUrl(displayFace))
-                .crossfade(false)
-                .build(),
+            model = faceRequest,
             contentDescription = contentDescription,
             modifier = faceModifier
                 .fillMaxSize(faceFraction)
@@ -67,12 +78,9 @@ fun OwnerDecoratedAvatar(
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentScale = ContentScale.Crop,
         )
-        if (hasPendant) {
+        if (pendantRequest != null) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(pendantUrl))
-                    .crossfade(false)
-                    .build(),
+                model = pendantRequest,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit,

@@ -177,7 +177,7 @@ private fun DynamicLiveRoomCard(
                     }
                     ImageRequest.Builder(context)
                         .data(url)
-                        .httpHeaders(NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build())
+                        .httpHeaders(LIVE_CARD_BILIBILI_REFERER_HEADERS)
                         .crossfade(true)
                         .build()
                 }
@@ -250,3 +250,6 @@ private fun DynamicLiveBadge(modifier: Modifier = Modifier) {
         fontWeight = FontWeight.Bold,
     )
 }
+
+private val LIVE_CARD_BILIBILI_REFERER_HEADERS: NetworkHeaders =
+    NetworkHeaders.Builder().set("Referer", "https://www.bilibili.com/").build()

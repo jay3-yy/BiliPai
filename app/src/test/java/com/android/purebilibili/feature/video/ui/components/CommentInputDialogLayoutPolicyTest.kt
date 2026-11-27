@@ -52,6 +52,50 @@ class CommentInputDialogLayoutPolicyTest {
     }
 
     @Test
+    fun bottomSlot_holdsHeightDuringEmojiToKeyboardHandoffAndTracksImeOtherwise() {
+        // 常规键盘态：直接跟随 IME 高度
+        assertEquals(
+            310,
+            resolveCommentBottomSlotHeightDp(
+                showEmojiPanel = false,
+                emojiPanelHeightDp = 310,
+                imeHeightDp = 310,
+                handoffHoldHeightDp = 0,
+            ),
+        )
+        // 键盘 -> 表情面板过渡：IME 尚未收完时取两者较大值，不出现高度塌陷或双重叠加
+        assertEquals(
+            320,
+            resolveCommentBottomSlotHeightDp(
+                showEmojiPanel = true,
+                emojiPanelHeightDp = 300,
+                imeHeightDp = 320,
+                handoffHoldHeightDp = 0,
+            ),
+        )
+        // 表情面板 -> 键盘过渡：IME 刚启动仍为 0 时锁住原表情面板高度，防止先坠底再二次顶起
+        assertEquals(
+            300,
+            resolveCommentBottomSlotHeightDp(
+                showEmojiPanel = false,
+                emojiPanelHeightDp = 300,
+                imeHeightDp = 0,
+                handoffHoldHeightDp = 300,
+            ),
+        )
+        // IME 升起超过或达到锁定高度后无缝由 IME 接管
+        assertEquals(
+            312,
+            resolveCommentBottomSlotHeightDp(
+                showEmojiPanel = false,
+                emojiPanelHeightDp = 300,
+                imeHeightDp = 312,
+                handoffHoldHeightDp = 300,
+            ),
+        )
+    }
+
+    @Test
     fun progressInsertText_wrapsFormattedPlaybackTimeWithSpaces() {
         assertEquals(" 01:05 ", resolveCommentProgressInsertText(65_000L))
         assertEquals(" 00:00 ", resolveCommentProgressInsertText(-1L))
