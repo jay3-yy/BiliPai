@@ -1888,6 +1888,8 @@ private fun InlineBgmSection(
 
     BgmInfoRow(
         title = headerText,
+        coverUrl = leadSong.resolvedCoverUrl,
+        coverSize = 22.dp,
         showChevron = bgmList.size > 1,
         onClick = {
             if (bgmList.size == 1) onBgmClick(leadSong) else showPickerSheet = true
@@ -1910,9 +1912,16 @@ private fun InlineBgmSection(
 fun BgmInfoRow(
     title: String,
     subtitle: String? = null,
+    coverUrl: String = "",
+    coverSize: androidx.compose.ui.unit.Dp = 22.dp,
     showChevron: Boolean = false,
     onClick: () -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val resolvedCover = remember(coverUrl) {
+        coverUrl.trim().takeIf { it.isNotBlank() }?.let { FormatUtils.fixImageUrl(it) }.orEmpty()
+    }
+    val coverShape = RoundedCornerShape(if (coverSize >= 32.dp) 8.dp else 5.dp)
     AppSurface(
         color = AppContentColors.accent().copy(alpha = 0.08f),
         shape = com.android.purebilibili.core.ui.AppShapes.container(
@@ -1926,13 +1935,32 @@ fun BgmInfoRow(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppIcon(
-                imageVector = Icons.Outlined.MusicNote,
-                contentDescription = "BGM",
-                tint = AppContentColors.accent().copy(alpha = 0.85f),
-                modifier = Modifier.size(14.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(coverSize)
+                    .clip(coverShape)
+                    .background(AppContentColors.accent().copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppIcon(
+                    imageVector = Icons.Outlined.MusicNote,
+                    contentDescription = "BGM",
+                    tint = AppContentColors.accent().copy(alpha = 0.85f),
+                    modifier = Modifier.size(if (coverSize >= 32.dp) 18.dp else 13.dp),
+                )
+                if (resolvedCover.isNotBlank()) {
+                    AsyncImage(
+                        model = coil3.request.ImageRequest.Builder(context)
+                            .data(resolvedCover)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 AppText(
                     text = title,
@@ -1973,6 +2001,26 @@ private fun BgmListPickerSheet(
     onDismiss: () -> Unit,
     onBgmClick: (BgmInfo) -> Unit,
 ) {
+    var resolvedCovers by remember(bgmList.map(BgmInfo::musicId)) {
+        mutableStateOf<Map<String, String>>(emptyMap())
+    }
+    LaunchedEffect(bgmList) {
+        val missingIds = bgmList
+            .filter { it.resolvedCoverUrl.isBlank() && it.musicId.isNotBlank() }
+            .map { it.musicId }
+            .distinct()
+        for (musicId in missingIds) {
+            val cover = com.android.purebilibili.data.repository.ViewGrpcRepository
+                .getBgmDetail(musicId = musicId)
+                .getOrNull()
+                ?.mvCover
+                ?.trim()
+                .orEmpty()
+            if (cover.isNotBlank()) {
+                resolvedCovers = resolvedCovers + (musicId to cover)
+            }
+        }
+    }
     com.android.purebilibili.core.ui.AppModalBottomSheet(
         onDismissRequest = onDismiss,
     ) {
@@ -2000,9 +2048,12 @@ private fun BgmListPickerSheet(
                     key = { index, bgm -> "${index}:${bgm.musicId.ifBlank { bgm.musicTitle }}" },
                 ) { _, bgm ->
                     val displayTitle = bgm.musicTitle.removePrefix("发现").trim().ifBlank { "未知音乐" }
+                    val itemCoverUrl = bgm.resolvedCoverUrl.ifBlank { resolvedCovers[bgm.musicId].orEmpty() }
                     BgmInfoRow(
                         title = displayTitle,
                         subtitle = bgm.actor.takeIf { it.isNotBlank() },
+                        coverUrl = itemCoverUrl,
+                        coverSize = 38.dp,
                         showChevron = true,
                         onClick = { onBgmClick(bgm) },
                     )

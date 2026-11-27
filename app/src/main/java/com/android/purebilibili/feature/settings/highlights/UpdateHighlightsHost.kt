@@ -288,6 +288,7 @@ internal fun UpdateHighlightsHost(
     }
 
     val accentColor = AppContentColors.accent()
+    val displayVersionName = remember { formatDisplayVersionName(BuildConfig.VERSION_NAME) }
     val maxScrollHeight = (LocalConfiguration.current.screenHeightDp * 0.56f).dp
 
     AppModalBottomSheet(onDismissRequest = ::dismiss) {
@@ -320,9 +321,9 @@ internal fun UpdateHighlightsHost(
                         )
                         AppText(
                             text = if (manualOpen) {
-                                "v${BuildConfig.VERSION_NAME} 更新要点"
+                                "v$displayVersionName 更新要点"
                             } else {
-                                "新版本已就绪 · v${BuildConfig.VERSION_NAME}"
+                                "新版本已就绪 · v$displayVersionName"
                             },
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -334,7 +335,7 @@ internal fun UpdateHighlightsHost(
                     text = if (manualOpen) {
                         "本次更新内容"
                     } else {
-                        "已更新至 v${BuildConfig.VERSION_NAME}"
+                        "已更新至 v$displayVersionName"
                     },
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,

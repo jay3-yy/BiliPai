@@ -216,8 +216,8 @@ internal val updateHighlightCatalog = listOf(
         actionLabel = "播放设置",
     ),
     UpdateHighlight(
-        id = "decoder_weak_network_620",
-        introducedVersionCode = 620,
+        id = "decoder_weak_network_621",
+        introducedVersionCode = 621,
         title = "软硬解提速与弱网一键降级",
         description = "优化硬解识别与软解择优排序；视频、番剧、直播与竖屏卡顿或软解过载时，支持一键切硬解、降画质或切线路。",
         action = UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS,
@@ -226,8 +226,8 @@ internal val updateHighlightCatalog = listOf(
         icon = UpdateHighlightIcon.SPEED,
     ),
     UpdateHighlight(
-        id = "video_tools_ocr_clip_620",
-        introducedVersionCode = 620,
+        id = "video_tools_ocr_clip_621",
+        introducedVersionCode = 621,
         title = "画面识字、批注与片段剪辑",
         description = "暂停看片时可直接识别画面文字、在画面上涂鸦批注，或截取精彩片段保存到本地。",
         action = UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS,
@@ -236,8 +236,8 @@ internal val updateHighlightCatalog = listOf(
         icon = UpdateHighlightIcon.CONTENT_CUT,
     ),
     UpdateHighlight(
-        id = "cast_output_switcher_620",
-        introducedVersionCode = 620,
+        id = "cast_output_switcher_621",
+        introducedVersionCode = 621,
         title = "投屏与输出设备切换升级",
         description = "接入系统媒体输出切换器并升级投屏控制，在手机、音箱与电视之间流转播放更顺手。",
         action = UpdateHighlightAction.OPEN_PLUGINS_SETTINGS,
@@ -246,8 +246,8 @@ internal val updateHighlightCatalog = listOf(
         icon = UpdateHighlightIcon.CAST,
     ),
     UpdateHighlight(
-        id = "widgets_tiles_wear_620",
-        introducedVersionCode = 620,
+        id = "widgets_tiles_wear_621",
+        introducedVersionCode = 621,
         title = "追番微件、快捷磁贴与手表协同",
         description = "新增稍后再看与追番桌面小组件、下拉快捷磁贴，并带来 Wear OS 手表端伴侣控制。",
         action = UpdateHighlightAction.OPEN_HOME_SETTINGS,
@@ -256,8 +256,8 @@ internal val updateHighlightCatalog = listOf(
         icon = UpdateHighlightIcon.WIDGETS,
     ),
     UpdateHighlight(
-        id = "hdr_multitask_haptics_620",
-        introducedVersionCode = 620,
+        id = "hdr_multitask_haptics_621",
+        introducedVersionCode = 621,
         title = "Ultra HDR 预览、多窗口拖放与触感升级",
         description = "支持动态图 Ultra HDR 呈现、大屏多窗口与跨应用拖放，以及更细腻的交互触感反馈。",
         action = UpdateHighlightAction.OPEN_APPEARANCE_SETTINGS,
@@ -266,10 +266,10 @@ internal val updateHighlightCatalog = listOf(
         icon = UpdateHighlightIcon.AUTO_FIX_HIGH,
     ),
     UpdateHighlight(
-        id = "cache_clean_polish_620",
-        introducedVersionCode = 620,
+        id = "cache_clean_polish_621",
+        introducedVersionCode = 621,
         title = "全新缓存清理动效与细节打磨",
-        description = "重绘缓存清理环形进度与动效，同步优化图片清晰度策略、网络解析及更新弹窗触达。",
+        description = "重绘缓存清理环形进度与动效，发现音乐新增封面显示，并优化图片清晰度策略与更新弹窗体验。",
         action = UpdateHighlightAction.OPEN_SETTINGS,
         badge = "存储体验",
         actionLabel = "前往设置",
@@ -320,6 +320,12 @@ internal fun resolveAutomaticReleaseHighlights(
     it.id in pendingIds &&
         canPreviewUpdateHighlight(it, settings) &&
         !isUpdateHighlightAlreadyEnabled(it, settings)
+}
+
+/** 去掉 `-debug` / `-dev` / `-smooth` 等构建变体后缀，返回面向用户的纯净展示版本号。 */
+internal fun formatDisplayVersionName(versionName: String): String {
+    val trimmed = versionName.trim()
+    return trimmed.substringBefore('-').ifBlank { trimmed }
 }
 
 internal fun isHomeRouteForAutomaticHighlights(

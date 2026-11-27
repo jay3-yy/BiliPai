@@ -78,8 +78,14 @@ data class BgmInfo(
     val jumpUrl: String = "",
     val actor: String = "",
     @SerialName("cover_url")
-    val coverUrl: String = ""
-)
+    val coverUrl: String = "",
+    val cover: String = "",
+    @SerialName("mv_cover")
+    val mvCover: String = ""
+) {
+    val resolvedCoverUrl: String
+        get() = coverUrl.ifBlank { cover }.ifBlank { mvCover }
+}
 
 @Serializable
 data class BgmMultipleMusicResponse(
