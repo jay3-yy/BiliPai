@@ -2795,6 +2795,24 @@ fun AppNavigation(
                 },
                 onRoute = { pushNavigation3Route(it) },
                 onPopularFeed = { target ->
+                    if (navigation3BackStack.firstOrNull() != BiliPaiNavKey.MainHost) {
+                        val popularLink = buildString {
+                            append("bilibili://popular/")
+                            append(target.subCategoryKey)
+                            target.weeklyNumber?.takeIf { it > 0 }?.let { append("?number=$it") }
+                        }
+                        context.startActivity(
+                            android.content.Intent(context, com.android.purebilibili.MainActivity::class.java).apply {
+                                addFlags(
+                                    android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                        android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                )
+                                putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE, popularLink)
+                            }
+                        )
+                        context.findActivity()?.finish()
+                        return@onPopularFeed
+                    }
                     // 热门榜单(排行榜/入站必刷/综合热门):切回首页 POPULAR
                     // 子分类的原生 feed,并弹回主宿主,与底栏点首页一致。
                     // 注意顺序:先切子分类(同步写状态),再切大类(其状态更新在协程中,
@@ -2980,7 +2998,11 @@ fun AppNavigation(
         LaunchedEffect(pendingNavigationRoute) {
             pendingNavigationRoute?.let { route ->
                 // 系统入口不使用站内点击防抖或已经记录的卡片来源。
-                if (!requestBottomPagerPageForRoute(route)) {
+                if (route.startsWith("bilibili://", ignoreCase = true) ||
+                    route.startsWith("bili://", ignoreCase = true)
+                ) {
+                    openBilibiliLinkInNavigation3(route)
+                } else if (!requestBottomPagerPageForRoute(route)) {
                     latestPushNavigation3Key.value(legacyRouteToBiliPaiNavKey(route), null)
                 }
                 onPendingNavigationRouteConsumed(route)

@@ -827,10 +827,11 @@ private fun SearchKeywordCell(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val hasTrailing = item.iconUrl != null || item.showLiveBadge || !item.subtitle.isNullOrBlank()
     Row(
         modifier = modifier
             .appActionClickable(onClick = onClick)
-            .padding(vertical = 5.dp, horizontal = 2.dp),
+            .padding(vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AppText(
@@ -838,27 +839,30 @@ private fun SearchKeywordCell(
             modifier = Modifier.weight(1f, fill = false),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp)
         )
-        Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
-        when {
-            item.iconUrl != null -> AsyncImage(
-                model = item.iconUrl,
-                contentDescription = null,
-                modifier = Modifier.size(width = 20.dp, height = 15.dp)
-            )
-            item.showLiveBadge -> SearchKeywordBadge(
-                text = "直播中",
-                containerColor = AppContentColors.error(),
-                contentColor = MaterialTheme.colorScheme.onError
-            )
-            !item.subtitle.isNullOrBlank() -> AppText(
-                text = item.subtitle,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.outline,
-                style = MaterialTheme.typography.bodyMedium
-            )
+        if (hasTrailing) {
+            Spacer(modifier = Modifier.width(3.dp))
+            when {
+                item.iconUrl != null -> AsyncImage(
+                    model = item.iconUrl,
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.height(14.dp).widthIn(max = 20.dp)
+                )
+                item.showLiveBadge -> SearchKeywordBadge(
+                    text = "直播中",
+                    containerColor = AppContentColors.error(),
+                    contentColor = MaterialTheme.colorScheme.onError
+                )
+                !item.subtitle.isNullOrBlank() -> AppText(
+                    text = item.subtitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.outline,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp)
+                )
+            }
         }
     }
 }
