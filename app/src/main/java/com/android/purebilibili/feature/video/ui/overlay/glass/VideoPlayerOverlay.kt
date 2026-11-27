@@ -1846,6 +1846,49 @@ private fun VideoPlayerOverlayContent(
             }
         }
 
+        var softwareOverloadBannerVisible by remember(bvid, cid) { mutableStateOf(false) }
+        com.android.purebilibili.feature.video.ui.overlay.SoftwareDecodeOverloadOverlayHost(
+            bvid = bvid,
+            cid = cid,
+            debugInfo = debugInfo,
+            currentQuality = currentQuality,
+            qualityIds = qualityIds,
+            qualityLabels = qualityLabels,
+            switchableQualityIds = switchableQualityIds,
+            isScreenLocked = isScreenLocked,
+            suppressTransientOverlays = suppressTransientOverlaysForTransition,
+            onQualitySelected = onQualitySelected,
+            onReloadVideo = actions.onReloadVideo,
+            onVisibilityChanged = { softwareOverloadBannerVisible = it },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(
+                    top = overlayVisualPolicy.statsTopPaddingDp.dp,
+                    start = 12.dp,
+                    end = 12.dp,
+                ),
+        )
+        com.android.purebilibili.feature.video.ui.overlay.WeakNetworkDegradeOverlayHost(
+            player = player,
+            mediaKey = "$bvid:$cid",
+            currentQuality = currentQuality,
+            qualityIds = qualityIds,
+            qualityLabels = qualityLabels,
+            switchableQualityIds = switchableQualityIds,
+            isScreenLocked = isScreenLocked,
+            suppressTransientOverlays = suppressTransientOverlaysForTransition,
+            suppressedByHigherPriorityBanner = softwareOverloadBannerVisible,
+            isBufferingSuppressed = isSeekScrubbing || isQualitySwitching,
+            onSelectLowerQuality = { target -> onQualitySelected(target.index) },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(
+                    top = overlayVisualPolicy.statsTopPaddingDp.dp,
+                    start = 12.dp,
+                    end = 12.dp,
+                ),
+        )
+
         val showInsightHud = shouldShowPlaybackInsightHud(
             mode = insightMode,
             hasMeasuredData = debugRows.isNotEmpty(),

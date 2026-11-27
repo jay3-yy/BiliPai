@@ -42,4 +42,31 @@ class VideoDecoderPreferenceTest {
             { error("Video classification must not run for audio") })
         assertSame(audio, result)
     }
+
+    @Test fun `software decoders prioritize dav1d then c2 android over legacy omx google`() {
+        val omx = Decoder("OMX.google.av1.decoder", software = true)
+        val libgav1 = Decoder("c2.android.av1.decoder", software = true)
+        val dav1d = Decoder("c2.android.av1-dav1d.decoder", software = true)
+        val otherSw = Decoder("vendor.sw.av1.decoder", software = true)
+
+        val swPreferred = orderVideoDecoders(
+            mimeType = "video/av01",
+            decoders = listOf(hardware1, omx, otherSw, libgav1, dav1d, hardware2),
+            preferHardware = false,
+            isHardware = { it.hardware },
+            isSoftware = { it.software },
+            decoderName = { it.name },
+        )
+        assertEquals(listOf(dav1d, libgav1, otherSw, omx, hardware1, hardware2), swPreferred)
+
+        val hwPreferred = orderVideoDecoders(
+            mimeType = "video/av01",
+            decoders = listOf(omx, hardware2, libgav1, hardware1, dav1d),
+            preferHardware = true,
+            isHardware = { it.hardware },
+            isSoftware = { it.software },
+            decoderName = { it.name },
+        )
+        assertEquals(listOf(hardware2, hardware1, dav1d, libgav1, omx), hwPreferred)
+    }
 }

@@ -463,8 +463,7 @@ internal suspend fun prefetchPortraitPlaybackHead(
     // 头部预取是纯加速项：蜂窝网络下跳过，滑动多页累积的流量不小。
     if (!com.android.purebilibili.core.util.NetworkUtils.isWifi(context)) return
     coroutineScope {
-        val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-            .setDefaultRequestProperties(buildPortraitPlaybackHttpHeaders())
+        val headers = buildPortraitPlaybackHttpHeaders()
         buildList {
             add(streamUrls.videoUrl to PORTRAIT_VIDEO_HEAD_PREFETCH_BYTES)
             streamUrls.audioUrl?.takeIf { it.isNotBlank() }?.let { audioUrl ->
@@ -472,6 +471,10 @@ internal suspend fun prefetchPortraitPlaybackHead(
             }
         }.map { (url, length) ->
             async(Dispatchers.IO) {
+                val (upstreamFactory, cancelUpstream) = PlaybackMediaCache.buildCancelableOkHttpDataSourceFactory(
+                    callFactory = NetworkModule.playbackOkHttpClient,
+                    defaultRequestProperties = headers,
+                )
                 val uri = Uri.parse(url)
                 PlaybackMediaCache.prefetchRange(
                     context = context.applicationContext,
@@ -479,7 +482,8 @@ internal suspend fun prefetchPortraitPlaybackHead(
                     url = uri,
                     cacheKey = buildPlaybackCacheKey(uri = uri, explicitKey = null),
                     position = 0L,
-                    length = length
+                    length = length,
+                    onCancelUpstream = cancelUpstream,
                 )
             }
         }.awaitAll()

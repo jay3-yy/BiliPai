@@ -33,7 +33,27 @@ data class VideoDecoderDiagnosticState(
     val kind: VideoDecoderKind = VideoDecoderKind.UNKNOWN,
     val preference: String = "未知",
     val fallbackReason: String = "正在准备视频解码",
+    val droppedFrames: Int = 0,
+    val dropRateWarning: String = "",
 )
+
+private const val DROPPED_FRAMES_WARNING_COUNT = 30
+private const val DROPPED_FRAMES_WINDOW_MS = 4_000L
+private const val DROPPED_FRAMES_MIN_FPS = 5.0
+
+internal fun resolveDroppedFramesWarning(
+    kind: VideoDecoderKind,
+    droppedFrames: Int,
+    elapsedMs: Long,
+): String {
+    if (droppedFrames < DROPPED_FRAMES_WARNING_COUNT) return ""
+    if (elapsedMs > 0L && droppedFrames * 1000.0 / elapsedMs < DROPPED_FRAMES_MIN_FPS) return ""
+    return if (kind == VideoDecoderKind.SOFTWARE) {
+        "软件解码负载较高（近期掉帧 ${droppedFrames} 帧），建议开启硬件解码或降低画质/帧率。"
+    } else {
+        "视频渲染出现持续掉帧（近期掉帧 ${droppedFrames} 帧），可尝试降低画质、帧率或倍速。"
+    }
+}
 
 internal fun decoderSelectionReason(preferHardware: Boolean, kind: VideoDecoderKind, failures: List<String>): String {
     if (failures.isNotEmpty()) return "原解码器启动失败，已换用其他解码器。\n错误详情：${failures.joinToString("；")}"
@@ -70,6 +90,8 @@ object VideoDecoderDiagnostics {
         entry.attached = true
         val state = entry.state
         val failures = ArrayDeque<String>()
+        var windowDroppedFrames = 0
+        var windowElapsedMs = 0L
         player.addAnalyticsListener(object : AnalyticsListener {
             override fun onVideoCodecError(eventTime: AnalyticsListener.EventTime, videoCodecError: Exception) {
                 if (videoCodecError is DecoderInitializationException) {
@@ -86,18 +108,73 @@ object VideoDecoderDiagnostics {
                 initializedTimestampMs: Long, initializationDurationMs: Long) {
                 val kind = VideoDecoderCapabilities.kind(decoderName)
                 val reason = decoderSelectionReason(preferHardware, kind, failures.toList())
+                windowDroppedFrames = 0
+                windowElapsedMs = 0L
                 state.update { current ->
-                    VideoDecoderDiagnosticState(decoderName, kind, current.preference, reason)
+                    VideoDecoderDiagnosticState(
+                        decoderName = decoderName,
+                        kind = kind,
+                        preference = current.preference,
+                        fallbackReason = reason,
+                        droppedFrames = 0,
+                        dropRateWarning = "",
+                    )
                 }
                 failures.clear()
             }
+            override fun onDroppedVideoFrames(
+                eventTime: AnalyticsListener.EventTime,
+                droppedFrames: Int,
+                elapsedMs: Long,
+            ) {
+                if (droppedFrames <= 0) return
+                val safeElapsedMs = elapsedMs.coerceAtLeast(0L)
+                if (windowElapsedMs + safeElapsedMs > DROPPED_FRAMES_WINDOW_MS) {
+                    windowDroppedFrames = droppedFrames
+                    windowElapsedMs = safeElapsedMs
+                } else {
+                    windowDroppedFrames += droppedFrames
+                    windowElapsedMs += safeElapsedMs
+                }
+                val currentWindowDropped = windowDroppedFrames
+                val currentWindowElapsed = windowElapsedMs
+                state.update { current ->
+                    val warning = resolveDroppedFramesWarning(
+                        kind = current.kind,
+                        droppedFrames = currentWindowDropped,
+                        elapsedMs = currentWindowElapsed,
+                    )
+                    current.copy(
+                        droppedFrames = current.droppedFrames + droppedFrames,
+                        dropRateWarning = warning.ifBlank { current.dropRateWarning },
+                    )
+                }
+            }
             override fun onVideoDecoderReleased(eventTime: AnalyticsListener.EventTime, decoderName: String) {
-                state.update { it.copy(decoderName = "", kind = VideoDecoderKind.UNKNOWN, fallbackReason = "当前未使用解码器，等待重新启动。") }
+                windowDroppedFrames = 0
+                windowElapsedMs = 0L
+                state.update {
+                    it.copy(
+                        decoderName = "",
+                        kind = VideoDecoderKind.UNKNOWN,
+                        fallbackReason = "当前未使用解码器，等待重新启动。",
+                        droppedFrames = 0,
+                        dropRateWarning = "",
+                    )
+                }
             }
             override fun onMediaItemTransition(eventTime: AnalyticsListener.EventTime, mediaItem: MediaItem?, reason: Int) {
                 if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) return
                 failures.clear()
-                state.update { it.copy(fallbackReason = if (it.decoderName.isBlank()) "正在准备视频解码" else "继续使用当前解码器，未记录到本视频的解码器切换。") }
+                windowDroppedFrames = 0
+                windowElapsedMs = 0L
+                state.update {
+                    it.copy(
+                        fallbackReason = if (it.decoderName.isBlank()) "正在准备视频解码" else "继续使用当前解码器，未记录到本视频的解码器切换。",
+                        droppedFrames = 0,
+                        dropRateWarning = "",
+                    )
+                }
             }
         })
         return player

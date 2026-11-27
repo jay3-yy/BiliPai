@@ -1031,6 +1031,60 @@ fun BangumiPlayerView(
             onShowMessage = onShowMessage
         )
 
+        if (!features.isInPipMode) {
+            val decoderState by remember(exoPlayer) {
+                com.android.purebilibili.core.player.VideoDecoderDiagnostics.observe(exoPlayer)
+            }.collectAsStateWithLifecycle()
+            val effectiveBangumiDebugInfo = remember(debugInfo, decoderState) {
+                debugInfo.copy(
+                    videoDecoder = decoderState.decoderName.ifBlank { debugInfo.videoDecoder },
+                    videoDecoderType = decoderState.kind.label,
+                    videoDecoderPreference = decoderState.preference,
+                    videoDecoderFallbackReason = decoderState.fallbackReason,
+                    videoDecoderDropWarning = decoderState.dropRateWarning,
+                )
+            }
+            var bangumiSoftwareOverloadVisible by remember(seasonId, epId, cid) { mutableStateOf(false) }
+            val bangumiBannerTopPadding = if (isFullscreen) 56.dp else 44.dp
+            val bangumiUseGlass = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.playerGlassEnabled &&
+                com.android.purebilibili.feature.video.ui.overlay.LocalPlayerPageBackdrop.current != null
+            com.android.purebilibili.feature.video.ui.overlay.SoftwareDecodeOverloadOverlayHost(
+                bvid = bvid.ifBlank { "bangumi:$seasonId:$epId" },
+                cid = cid.takeIf { it > 0L } ?: epId,
+                debugInfo = effectiveBangumiDebugInfo,
+                currentQuality = currentQuality,
+                qualityIds = acceptQuality,
+                qualityLabels = acceptDescription,
+                switchableQualityIds = emptyList(),
+                isScreenLocked = isScreenLocked,
+                suppressTransientOverlays = false,
+                onQualitySelected = { index ->
+                    acceptQuality.getOrNull(index)?.let(onQualityChange)
+                },
+                onReloadVideo = onReloadVideo,
+                useGlass = bangumiUseGlass,
+                onVisibilityChanged = { bangumiSoftwareOverloadVisible = it },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = bangumiBannerTopPadding, start = 12.dp, end = 12.dp),
+            )
+            com.android.purebilibili.feature.video.ui.overlay.WeakNetworkDegradeOverlayHost(
+                player = exoPlayer,
+                mediaKey = "bangumi:$seasonId:$epId:$cid",
+                currentQuality = currentQuality,
+                qualityIds = acceptQuality,
+                qualityLabels = acceptDescription,
+                isScreenLocked = isScreenLocked,
+                suppressedByHigherPriorityBanner = bangumiSoftwareOverloadVisible,
+                isBufferingSuppressed = gestureMode == BangumiGestureMode.Seek,
+                onSelectLowerQuality = { target -> onQualityChange(target.qualityId) },
+                useGlass = bangumiUseGlass,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = bangumiBannerTopPadding, start = 12.dp, end = 12.dp),
+            )
+        }
+
         }
         // 空降助手跳过按钮 (位置调整到进度条上方)
         SponsorSkipButton(

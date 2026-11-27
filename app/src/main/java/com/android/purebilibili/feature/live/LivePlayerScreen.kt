@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.live
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.core.player.withAppVideoDecoderDiagnostics
 import com.android.purebilibili.core.player.withAppVideoDecoderPreference
 
@@ -279,6 +281,18 @@ private fun LiveRoomScreen(
     val displayContext = hingeAdaptiveInfo.displayContext
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
+    val liveSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val showLiveFeedback: (String) -> Unit = { feedbackMessage ->
+        if (feedbackMessage.isNotBlank()) {
+            coroutineScope.launch {
+                liveSnackbarHostState.currentSnackbarData?.dismiss()
+                liveSnackbarHostState.showSnackbar(
+                    message = feedbackMessage,
+                    duration = androidx.compose.material3.SnackbarDuration.Short,
+                )
+            }
+        }
+    }
     val liveKeyboardFocusRequester = remember { FocusRequester() }
 
     // Shared Element Transition Scopes
@@ -311,7 +325,7 @@ private fun LiveRoomScreen(
     var showStreamSourceSheet by remember { mutableStateOf(false) }
     fun openDanmakuInput(showEmoticons: Boolean = false) {
         if (siteId == "bilibili" && !canInteractWithRoom) {
-            Toast.makeText(context, "账号未登录", Toast.LENGTH_SHORT).show()
+            showLiveFeedback("账号未登录")
             return
         }
         showEmoticonSheet = showEmoticons
@@ -537,7 +551,7 @@ private fun LiveRoomScreen(
     fun captureLiveScreenshot() {
         val playerView = playerViewRef
         if (playerView == null) {
-            Toast.makeText(context, "截图失败：播放器未就绪", Toast.LENGTH_SHORT).show()
+            showLiveFeedback("截图失败：播放器未就绪")
         } else {
             captureAndShareScreenshot(playerView, 0, 0, liveRoomTitle)
         }
@@ -547,7 +561,7 @@ private fun LiveRoomScreen(
         val liveUrl = "https://live.bilibili.com/$roomId"
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("直播间链接", liveUrl))
-        Toast.makeText(context, "已复制直播间链接", Toast.LENGTH_SHORT).show()
+        showLiveFeedback("已复制直播间链接")
     }
 
     fun shareLiveUrl() {
@@ -567,13 +581,13 @@ private fun LiveRoomScreen(
 
     fun openBlockSettings() {
         if (canInteractWithRoom) showBlockDialog = true
-        else Toast.makeText(context, "账号未登录", Toast.LENGTH_SHORT).show()
+        else showLiveFeedback("账号未登录")
     }
 
     fun openRedPocket(info: LiveRedPocketInfo) {
         val url = info.h5Url
         if (url.isBlank()) {
-            Toast.makeText(context, "红包入口暂不可用", Toast.LENGTH_SHORT).show()
+            showLiveFeedback("红包入口暂不可用")
             return
         }
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -594,7 +608,7 @@ private fun LiveRoomScreen(
                 .filter { it.isNotBlank() }
                 .joinToString(separator = "\n")
             SettingsManager.setDanmakuBlockRulesRaw(context, nextRaw, scope)
-            Toast.makeText(context, "已加入屏蔽词", Toast.LENGTH_SHORT).show()
+            showLiveFeedback("已加入屏蔽词")
         }
     }
 
@@ -619,14 +633,14 @@ private fun LiveRoomScreen(
         }
         isPipRequested = false
         miniPlayerManager.updatePlaybackRoutePipRequest(false)
-        Toast.makeText(context, "无法进入画中画", Toast.LENGTH_SHORT).show()
+        showLiveFeedback("无法进入画中画")
     }
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
                 is LivePlayerEvent.Toast -> {
-                    Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
+                    showLiveFeedback(event.message)
                 }
                 is LivePlayerEvent.DanmakuSent -> {
                     if (danmakuDraft.text.trim() == event.message) {
@@ -701,7 +715,7 @@ private fun LiveRoomScreen(
         val newValue = !backgroundPlaybackEnabled
         backgroundSession.select(newValue)
         coroutineScope.launch { backgroundSession.saveIfRemembered(context, newValue) }
-        Toast.makeText(context, if (newValue) "已开启后台播放" else "已关闭后台播放", Toast.LENGTH_SHORT).show()
+        showLiveFeedback(if (newValue) "已开启后台播放" else "已关闭后台播放")
     }
     com.android.purebilibili.feature.video.screen.VideoDetailKeepScreenOnEffect(
         window = activity?.window,
@@ -818,7 +832,7 @@ private fun LiveRoomScreen(
             miniPlayerManager.markLeavingByNavigation(forceStop = true)
             activity?.finishAffinity()
         } else {
-            Toast.makeText(context, "定时结束，已暂停直播", Toast.LENGTH_SHORT).show()
+            showLiveFeedback("定时结束，已暂停直播")
         }
     }
 
@@ -1174,7 +1188,7 @@ private fun LiveRoomScreen(
     }
     val onSuperChatReport: (LiveDanmakuItem) -> Unit = { item ->
         if (canInteractWithRoom) reportTarget = item
-        else Toast.makeText(context, "账号未登录", Toast.LENGTH_SHORT).show()
+        else showLiveFeedback("账号未登录")
     }
 
     val superChatStrip: @Composable (Modifier) -> Unit = { modifier ->
@@ -1324,7 +1338,7 @@ private fun LiveRoomScreen(
                     onUserClick = onUserClick,
                     onReport = { item ->
                         if (canInteractWithRoom) reportTarget = item
-                        else Toast.makeText(context, "请先登录", Toast.LENGTH_SHORT).show()
+                        else showLiveFeedback("请先登录")
                     },
                     isFullscreen = isFullscreen,
                     displayArea = liveDanmakuDisplayArea,
@@ -1459,6 +1473,32 @@ private fun LiveRoomScreen(
                     ),
                     bottomControlsBottomPadding = 0.dp,
                 )
+                if (!isLiveAudioOnly && successState != null) {
+                    val liveQualityIds = remember(successState.qualityList) {
+                        successState.qualityList.map { it.qn }
+                    }
+                    val liveQualityLabels = remember(successState.qualityList) {
+                        successState.qualityList.map { it.desc }
+                    }
+                    com.android.purebilibili.feature.video.ui.overlay.WeakNetworkDegradeOverlayHost(
+                        player = exoPlayer,
+                        mediaKey = "live:$siteId:$roomId",
+                        currentQuality = successState.currentQuality,
+                        qualityIds = liveQualityIds,
+                        qualityLabels = liveQualityLabels,
+                        onSelectLowerQuality = { target -> viewModel.changeQuality(target.qualityId) },
+                        secondaryActionLabel = "切换线路",
+                        onSecondaryAction = { showStreamSourceSheet = true },
+                        useGlass = livePageGlassSupported,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(
+                                top = if (isFullscreen) 56.dp else 44.dp,
+                                start = 12.dp,
+                                end = 12.dp,
+                            ),
+                    )
+                }
             }
 
             if (showFullscreenSuperChat && isLandscape && liveDanmakuInteractionEnabled) {
@@ -1561,7 +1601,7 @@ private fun LiveRoomScreen(
             selectedPage = selectedInteractionTab,
             showPageIndicator = liveSuperChatEnabled && liveSuperChatPanelEnabled,
             canLike = canInteractWithRoom,
-            onLikeUnavailable = { Toast.makeText(context, "账号未登录", Toast.LENGTH_SHORT).show() },
+            onLikeUnavailable = { showLiveFeedback("账号未登录") },
             medalContent = medalContent,
         )
     }
@@ -1874,7 +1914,7 @@ private fun LiveRoomScreen(
                         throw cancelled
                     } catch (error: Exception) {
                         if (pendingLiveDanmakuStyles[option] == value) pendingLiveDanmakuStyles.remove(option)
-                        Toast.makeText(context, "弹幕设置保存失败，请重试", Toast.LENGTH_SHORT).show()
+                        showLiveFeedback("弹幕设置保存失败，请重试")
                     }
                 }
             },
@@ -2006,7 +2046,7 @@ private fun LiveRoomScreen(
                 } else {
                     "${minutes}分钟后暂停直播"
                 }
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                showLiveFeedback(message)
             },
             onDismiss = { showShutdownTimerDialog = false }
         )
@@ -2053,7 +2093,7 @@ private fun LiveRoomScreen(
             authorId = anchorInfo.uid,
             onDismiss = { showShareMessageSheet = false },
             onResult = { success, message ->
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                showLiveFeedback(message)
             },
         )
     }
@@ -2087,7 +2127,7 @@ private fun LiveRoomScreen(
                         val maxLength = successState?.danmakuPermission?.maxLength?.takeIf { it > 0 } ?: 40
                         insertLiveTextEmoticon(danmakuDraft, item, maxLength)
                             .onSuccess { danmakuDraft = it }
-                            .onFailure { Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show() }
+                            .onFailure { showLiveFeedback(it.toUserFriendlyMessage("插入表情失败")) }
                     },
                     onSendEmoticon = viewModel::sendEmoticon,
                 )
@@ -2112,10 +2152,19 @@ private fun LiveRoomScreen(
         } else {
             // 无候选时直接关闭并提示
             LaunchedEffect(Unit) {
-                Toast.makeText(context, "暂无可用线路", Toast.LENGTH_SHORT).show()
+                showLiveFeedback("暂无可用线路")
                 showStreamSourceSheet = false
             }
         }
+    }
+    if (!pipPresentation) {
+        com.android.purebilibili.core.ui.components.AppSnackbarHost(
+            hostState = liveSnackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp),
+        )
     }
     }
 }

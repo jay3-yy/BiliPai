@@ -96,7 +96,10 @@ internal class PortraitWifiPreloadQueue(
             }.getOrNull() ?: return
             val streams = withContext(Dispatchers.Default) {
                 resolvePortraitPlaybackStreamUrls(
-                    data, quality, requestedAudioQuality = audioQuality, playbackSpeed = speed,
+                    data, quality,
+                    isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(context),
+                    isAv1Supported = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(context),
+                    requestedAudioQuality = audioQuality, playbackSpeed = speed,
                     preferCodec = preferCodec, secondPreferCodec = secondPreferCodec,
                     videoTrackFilter = { VideoTrackCapabilities.filterForPlayback(context, it) },
                 )

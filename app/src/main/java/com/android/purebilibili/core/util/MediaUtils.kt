@@ -9,7 +9,20 @@ import android.os.Build
 import android.view.Display
 import androidx.media3.common.MimeTypes
 import androidx.media3.decoder.ffmpeg.FfmpegLibrary
+import com.android.purebilibili.core.store.PlayerSettingsCache
 import java.util.concurrent.ConcurrentHashMap
+
+internal fun isHardwareVideoDecoderInfo(
+    codecName: String,
+    sdkInt: Int = Build.VERSION.SDK_INT,
+    isHardwareAcceleratedApi29: Boolean = false,
+): Boolean {
+    if (sdkInt >= Build.VERSION_CODES.Q) return isHardwareAcceleratedApi29
+    val lower = codecName.lowercase()
+    return !lower.startsWith("omx.google.") &&
+        !lower.startsWith("c2.android.") &&
+        !lower.startsWith("omx.ffmpeg.")
+}
 
 object MediaUtils {
     // 解码器探测结果缓存：codecInfos 在进程生命周期内不变，避免每次切画质都重新枚举
@@ -22,12 +35,43 @@ object MediaUtils {
     }
 
     /**
+     * Check if hardware-accelerated HEVC (H.265) decoder is supported
+     */
+    fun isHardwareHevcSupported(): Boolean {
+        return hasHardwareDecoder("video/hevc")
+    }
+
+    /**
      * Check if AV1 decoder is supported
      */
     fun isAv1Supported(): Boolean {
         // AV1 support is limited on older devices
         return hasDecoder("video/av01")
     }
+
+    /**
+     * Check if hardware-accelerated AV1 decoder is supported
+     */
+    fun isHardwareAv1Supported(): Boolean {
+        return hasHardwareDecoder("video/av01")
+    }
+
+    /** 硬件优先模式下仅把具备硬解能力的编码视为推荐支持，软件优先模式允许软件解码。 */
+    fun isHevcSupportedForPlayback(preferHardware: Boolean): Boolean =
+        if (preferHardware) isHardwareHevcSupported() else isHevcSupported()
+
+    fun isHevcSupportedForPlayback(context: Context?): Boolean =
+        isHevcSupportedForPlayback(
+            preferHardware = context?.let { PlayerSettingsCache.isHwDecodeEnabled(it) } ?: true,
+        )
+
+    fun isAv1SupportedForPlayback(preferHardware: Boolean): Boolean =
+        if (preferHardware) isHardwareAv1Supported() else isAv1Supported()
+
+    fun isAv1SupportedForPlayback(context: Context?): Boolean =
+        isAv1SupportedForPlayback(
+            preferHardware = context?.let { PlayerSettingsCache.isHwDecodeEnabled(it) } ?: true,
+        )
 
     /** 检查平台或应用内置 FFmpeg 是否能够解码 E-AC-3/JOC 音轨。 */
     fun isDolbyAtmosAudioSupported(): Boolean {
@@ -140,17 +184,33 @@ object MediaUtils {
 
     private fun hasDecoder(mimeType: String): Boolean {
         decoderSupportCache[mimeType]?.let { return it }
-        val supported = queryDecoderSupport(mimeType)
+        val supported = queryDecoderSupport(mimeType, requireHardware = false)
         decoderSupportCache[mimeType] = supported
         return supported
     }
 
-    private fun queryDecoderSupport(mimeType: String): Boolean {
+    private fun hasHardwareDecoder(mimeType: String): Boolean {
+        val cacheKey = "hw:$mimeType"
+        decoderSupportCache[cacheKey]?.let { return it }
+        val supported = queryDecoderSupport(mimeType, requireHardware = true)
+        decoderSupportCache[cacheKey] = supported
+        return supported
+    }
+
+    private fun queryDecoderSupport(mimeType: String, requireHardware: Boolean): Boolean {
         try {
             val list = MediaCodecList(MediaCodecList.REGULAR_CODECS)
             val codecs = list.codecInfos
             for (codec in codecs) {
                 if (codec.isEncoder) continue
+                if (requireHardware) {
+                    val isHardware = isHardwareVideoDecoderInfo(
+                        codecName = codec.name,
+                        sdkInt = Build.VERSION.SDK_INT,
+                        isHardwareAcceleratedApi29 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && codec.isHardwareAccelerated,
+                    )
+                    if (!isHardware) continue
+                }
                 val types = codec.supportedTypes
                 for (type in types) {
                     if (type.equals(mimeType, ignoreCase = true)) {
@@ -159,7 +219,7 @@ object MediaUtils {
                 }
             }
         } catch (e: Exception) {
-            Logger.e("MediaUtils", "Failed to check decoder support for $mimeType", e)
+            Logger.e("MediaUtils", "Failed to check decoder support for $mimeType (requireHardware=$requireHardware)", e)
         }
         return false
     }

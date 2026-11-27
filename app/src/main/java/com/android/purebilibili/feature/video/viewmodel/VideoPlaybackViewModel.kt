@@ -693,7 +693,8 @@ sealed class VideoPlaybackUiState {
         val ownerFollowerCount: Int? = null,
         val ownerVideoCount: Int? = null,
         // SponsorBlock 空降片段生成的标题徽标（如“赞助/恰饭”），空串表示不展示
-        val sponsorVideoLabel: String = ""
+        val sponsorVideoLabel: String = "",
+        val vipQualityIds: Set<Int> = emptySet(),
     ) : VideoPlaybackUiState() {
         val cdnCount: Int get() = allVideoUrls.size.coerceAtLeast(1)
         val currentCdnLabel: String get() = "线路${currentCdnIndex + 1}"
@@ -1645,9 +1646,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             sessionBlockedCodecs = sessionBlockedCodecs
         )
         val videoSecondCodecPreference = _videoSecondCodecPreference.value
-        val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
+        val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(appContext)
         val isAv1Supported = resolveEffectiveAv1Support(
-            deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+            deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(appContext),
             sessionBlockedCodecs = sessionBlockedCodecs
         )
         val currentPlaybackSpeed = exoPlayer?.playbackParameters?.speed ?: 1.0f
@@ -1728,6 +1729,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 currentCdnIndex = 0,
                 qualityIds = result.qualityIds.ifEmpty { latest.qualityIds },
                 qualityLabels = result.qualityLabels.ifEmpty { latest.qualityLabels },
+                vipQualityIds = if (result.qualityIds.isEmpty()) latest.vipQualityIds else result.vipQualityIds,
                 switchableQualityIds = result.switchableQualityIds.ifEmpty { latest.switchableQualityIds }
             )
         }
@@ -3718,7 +3720,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 val (isAv1Supported, isHdrSupported, isDolbyVisionSupported) = withContext(Dispatchers.Default) {
                     Triple(
                         resolveEffectiveAv1Support(
-                            deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+                            deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(capabilityContext),
                             sessionBlockedCodecs = sessionBlockedCodecs,
                         ),
                         com.android.purebilibili.core.util.MediaUtils.isHdrSupported(capabilityContext),
@@ -4003,6 +4005,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             adaptiveDashSource = cdnSelection.adaptiveDashSource,
                             qualityIds = result.qualityIds,
                             qualityLabels = result.qualityLabels,
+                            vipQualityIds = result.vipQualityIds,
                             switchableQualityIds = result.switchableQualityIds,
                             cachedDashVideos = result.cachedDashVideos,
                             cachedDashAudios = result.cachedDashAudios,
@@ -4359,8 +4362,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
         val videoCodecPreference = _videoCodecPreference.value
         val videoSecondCodecPreference = _videoSecondCodecPreference.value
-        val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
-        val isAv1Supported = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
+        val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(appContext)
+        val isAv1Supported = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(appContext)
         val audioQualityPreference = current.requestedAudioQuality
         val hdrPlaybackQualityMode = PlaybackQualityMode.LOCKED(125)
 
@@ -4423,6 +4426,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 audioFallbackReason = selection.audioFallbackReason,
                 qualityIds = selection.qualityIds,
                 qualityLabels = selection.qualityLabels,
+                vipQualityIds = selection.vipQualityIds,
                 switchableQualityIds = selection.switchableQualityIds,
                 wasFallback = false,
                 currentPos = currentPos,
@@ -4755,9 +4759,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         val fallbackCodec = resolveNextVideoCodecFallback(
             failedCodec = failedCodec,
             secondaryCodecPreference = secondaryCodecPreference,
-            isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
+            isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(appContext),
             isAv1Supported = resolveEffectiveAv1Support(
-                deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+                deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(appContext),
                 sessionBlockedCodecs = sessionBlockedCodecs
             )
         ) ?: run {
@@ -8393,9 +8397,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     sessionBlockedCodecs = sessionBlockedCodecs
                 )
                 val videoSecondCodecPreference = _videoSecondCodecPreference.value
-                val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
+                val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(appContext)
                 val isAv1Supported = resolveEffectiveAv1Support(
-                    deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+                    deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(appContext),
                     sessionBlockedCodecs = sessionBlockedCodecs
                 )
 
@@ -8464,6 +8468,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             audioFallbackReason = result.audioFallbackReason,
                             qualityIds = result.qualityIds,
                             qualityLabels = result.qualityLabels,
+                            vipQualityIds = result.vipQualityIds,
                             switchableQualityIds = result.switchableQualityIds,
                             wasFallback = result.wasFallback,
                             currentPos = currentPos,
@@ -8590,9 +8595,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         )
                     } ?: -1
                     
-                    val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
+                    val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(appContext)
                     val isAv1Supported = resolveEffectiveAv1Support(
-                        deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+                        deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(appContext),
                         sessionBlockedCodecs = sessionBlockedCodecs
                     )
                     
@@ -8671,6 +8676,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                                 adaptiveDashSource = cdnSelection.adaptiveDashSource,
                                 qualityIds = selection.qualityIds,
                                 qualityLabels = selection.qualityLabels,
+                                vipQualityIds = selection.vipQualityIds,
                                 switchableQualityIds = selection.switchableQualityIds,
                                 cachedDashVideos = selection.cachedDashVideos,
                                 cachedDashAudios = selection.cachedDashAudios,
@@ -8930,9 +8936,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             } ?: AVC_CODEC_KEY
             val audioQualityPreference = current.requestedAudioQuality
 
-            val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
+            val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(appContext)
             val isAv1Supported = resolveEffectiveAv1Support(
-                deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+                deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(appContext),
                 sessionBlockedCodecs = sessionBlockedCodecs
             )
 
@@ -8982,6 +8988,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     videoDurationMs = playUrlData.timelength.coerceAtLeast(0L),
                     qualityIds = selection.qualityIds,
                     qualityLabels = selection.qualityLabels,
+                    vipQualityIds = selection.vipQualityIds,
                     switchableQualityIds = selection.switchableQualityIds,
                     cachedDashVideos = selection.cachedDashVideos,
                     cachedDashAudios = selection.cachedDashAudios,
@@ -10067,6 +10074,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         val audioFallbackReason: AudioFallbackReason? = null,
         val qualityIds: List<Int>,
         val qualityLabels: List<String>,
+        val vipQualityIds: Set<Int>,
         val switchableQualityIds: List<Int>,
         val wasFallback: Boolean = false,
         val currentPos: Long,
@@ -10672,6 +10680,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 pendingPlaybackTransitionPositionMs = payload.currentPos,
                 qualityIds = payload.qualityIds.ifEmpty { latest.qualityIds },
                 qualityLabels = payload.qualityLabels.ifEmpty { latest.qualityLabels },
+                vipQualityIds = if (payload.qualityIds.isEmpty()) latest.vipQualityIds else payload.vipQualityIds,
                 switchableQualityIds = payload.switchableQualityIds
                     .ifEmpty { latest.switchableQualityIds },
                 cachedDashVideos = payload.cachedDashVideos,

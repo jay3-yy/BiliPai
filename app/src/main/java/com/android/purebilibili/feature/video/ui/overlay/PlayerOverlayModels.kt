@@ -20,6 +20,7 @@ data class PlaybackDebugInfo(
     val videoDecoderType: String = "",
     val videoDecoderPreference: String = "",
     val videoDecoderFallbackReason: String = "",
+    val videoDecoderDropWarning: String = "",
     val audioDecoder: String = "",
     val playbackState: String = "",
     val playWhenReady: String = "",
@@ -129,6 +130,7 @@ internal fun resolvePlaybackDebugRows(
         DebugStatRow("Video decoder type", info.videoDecoderType),
         DebugStatRow("Video decoder preference", info.videoDecoderPreference),
         DebugStatRow("解码方式说明", info.videoDecoderFallbackReason),
+        DebugStatRow("掉帧诊断", info.videoDecoderDropWarning),
         DebugStatRow("Audio decoder", info.audioDecoder),
         DebugStatRow("Playback state", info.playbackState),
         DebugStatRow("Play when ready", info.playWhenReady),
@@ -173,6 +175,7 @@ internal fun resolvePlaybackInsightPresentation(
     val rows = resolvePlaybackDebugRows(info)
     val (level, statusText) = when {
         rows.isEmpty() -> PlaybackInsightLevel.UNAVAILABLE to "等待播放器数据"
+        info.videoDecoderDropWarning.isNotBlank() -> PlaybackInsightLevel.ATTENTION to info.videoDecoderDropWarning
         droppedFrames > 0 -> PlaybackInsightLevel.ATTENTION to "已记录 $droppedFrames 个掉帧"
         usesSoftwareVideoDecoder -> PlaybackInsightLevel.ATTENTION to "当前使用软件视频解码"
         else -> PlaybackInsightLevel.LIVE to "实时数据"
@@ -195,6 +198,7 @@ internal fun resolvePlaybackInsightPresentation(
             DebugStatRow("实际解码类型", info.videoDecoderType),
             DebugStatRow("创建时解码偏好", info.videoDecoderPreference),
             DebugStatRow("解码方式说明", info.videoDecoderFallbackReason),
+            DebugStatRow("掉帧诊断", info.videoDecoderDropWarning),
             DebugStatRow("掉帧", info.droppedFrames)
         ),
         PlaybackInsightSection.AUDIO to listOf(

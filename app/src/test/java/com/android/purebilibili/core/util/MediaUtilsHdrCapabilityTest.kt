@@ -43,4 +43,13 @@ class MediaUtilsHdrCapabilityTest {
             )
         )
     }
+
+    @Test
+    fun `isHardwareVideoDecoderInfo uses api29 flag when available and name heuristic on api28`() {
+        assertTrue(isHardwareVideoDecoderInfo("c2.qti.av1.decoder", sdkInt = 29, isHardwareAcceleratedApi29 = true))
+        assertFalse(isHardwareVideoDecoderInfo("c2.qti.av1.decoder", sdkInt = 29, isHardwareAcceleratedApi29 = false))
+        assertFalse(isHardwareVideoDecoderInfo("c2.android.av1-dav1d.decoder", sdkInt = 28))
+        assertFalse(isHardwareVideoDecoderInfo("OMX.google.hevc.decoder", sdkInt = 28))
+        assertTrue(isHardwareVideoDecoderInfo("OMX.qcom.video.decoder.hevc", sdkInt = 28))
+    }
 }

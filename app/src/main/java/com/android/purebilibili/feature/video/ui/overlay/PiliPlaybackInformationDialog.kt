@@ -62,6 +62,7 @@ internal fun PiliPlaybackInformationDialog(
         videoDecoderType = decoder.kind.label,
         videoDecoderPreference = decoder.preference,
         videoDecoderFallbackReason = decoder.fallbackReason,
+        videoDecoderDropWarning = decoder.dropRateWarning,
     ) else debugInfo
     val rows = remember(player, playerRevision, effectiveDebugInfo, videoUrl, audioUrl) {
         playbackInformationRows(player, effectiveDebugInfo, videoUrl, audioUrl)
@@ -144,6 +145,7 @@ private fun playbackInformationRows(
         debugInfo?.videoDecoderType?.takeIf { it.isNotBlank() }?.let { row("实际解码类型", it) }
         debugInfo?.videoDecoderPreference?.takeIf { it.isNotBlank() }?.let { row("创建时解码偏好", it) }
         debugInfo?.videoDecoderFallbackReason?.takeIf { it.isNotBlank() }?.let { row("解码方式说明", it) }
+        debugInfo?.videoDecoderDropWarning?.takeIf { it.isNotBlank() }?.let { row("掉帧诊断", it) }
         debugInfo?.audioDecoder?.takeIf { it.isNotBlank() }?.let { row("Audio decoder", it) }
         player?.playerError?.let { row("Player error", "${it.errorCodeName}: ${it.message.orEmpty()}") }
     }

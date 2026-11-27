@@ -567,7 +567,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
      * 不支持时回退 avc1 保证可解码。
      */
     private fun resolveBangumiPreferredCodec(isCourse: Boolean = isCourseMode): String =
-        if (isCourse) "avc1" else if (MediaUtils.isHevcSupported()) "hev1" else "avc1"
+        if (isCourse) "avc1" else if (MediaUtils.isHevcSupportedForPlayback(NetworkModule.appContext)) "hev1" else "avc1"
 
     /**
      * 与普通视频共用网络默认画质、自动最高画质及账号权限策略。
@@ -697,7 +697,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 val video = dash.getBestVideo(
                     targetQuality,
                     preferCodec = resolveBangumiPreferredCodec(isCourse),
-                    isHevcSupported = MediaUtils.isHevcSupported()
+                    isHevcSupported = MediaUtils.isHevcSupportedForPlayback(NetworkModule.appContext)
                 )
                 selectedQuality = video?.id ?: playData.quality
                 val audio = audioSelection?.selected?.track

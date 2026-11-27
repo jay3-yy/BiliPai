@@ -103,4 +103,44 @@ class VideoTrackCapabilitiesTest {
         assertEquals(VideoTrackDecoderSupport(supported = true, hardware = false, software = true), third)
         VideoTrackCapabilities.clearCacheForTest()
     }
+
+    @Test
+    fun supportCacheEvictsLeastRecentlyUsedEntriesInsteadOfClearingAll() {
+        VideoTrackCapabilities.clearCacheForTest()
+        val hotTrack = track(80, "hev1.hot").copy(width = 1920, height = 1080, frameRate = "30")
+        val coldTrack = track(80, "hev1.cold").copy(width = 1920, height = 1080, frameRate = "30")
+        var hotQueries = 0
+        var coldQueries = 0
+
+        VideoTrackCapabilities.getOrQuerySupport(hotTrack) {
+            hotQueries += 1
+            hardware
+        }
+        VideoTrackCapabilities.getOrQuerySupport(coldTrack) {
+            coldQueries += 1
+            hardware
+        }
+        // 访问 hotTrack，使 coldTrack 成为最久未使用条目
+        VideoTrackCapabilities.getOrQuerySupport(hotTrack) {
+            hotQueries += 1
+            hardware
+        }
+        for (index in 0 until VideoTrackCapabilities.MAX_CACHE_ENTRIES - 1) {
+            val filler = track(80, "avc1.$index").copy(width = 1280, height = 720, frameRate = "30")
+            VideoTrackCapabilities.getOrQuerySupport(filler) { hardware }
+        }
+
+        VideoTrackCapabilities.getOrQuerySupport(hotTrack) {
+            hotQueries += 1
+            hardware
+        }
+        VideoTrackCapabilities.getOrQuerySupport(coldTrack) {
+            coldQueries += 1
+            hardware
+        }
+
+        assertEquals(1, hotQueries)
+        assertEquals(2, coldQueries)
+        VideoTrackCapabilities.clearCacheForTest()
+    }
 }

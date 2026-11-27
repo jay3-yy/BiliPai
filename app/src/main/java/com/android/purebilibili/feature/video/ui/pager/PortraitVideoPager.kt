@@ -5,6 +5,9 @@
 
 package com.android.purebilibili.feature.video.ui.pager
 
+import androidx.compose.foundation.layout.navigationBarsPadding
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.feature.download.downloadAudioBackupUrls
 import com.android.purebilibili.core.player.withAppVideoDecoderDiagnostics
 import com.android.purebilibili.core.player.withAppVideoDecoderPreference
@@ -1506,6 +1509,8 @@ fun PortraitVideoPager(
                             resolvePortraitPlaybackStreamUrls(
                                 playData = playData,
                                 targetQuality = targetQuality,
+                                isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(context),
+                                isAv1Supported = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(context),
                                 requestedAudioQuality = targetAudioQuality,
                                 playbackSpeed = selectionSpeed,
                                 preferCodec = targetCodec,
@@ -1818,6 +1823,8 @@ fun PortraitVideoPager(
                             val streamUrls = resolvePortraitPlaybackStreamUrls(
                                 playData = playData,
                                 targetQuality = targetQuality,
+                                isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(context),
+                                isAv1Supported = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(context),
                                 requestedAudioQuality = portraitRequestedAudioQuality,
                                 preferCodec = portraitPreferredCodec,
                                 secondPreferCodec = portraitSecondPreferredCodec,
@@ -2473,6 +2480,18 @@ private fun VideoPageItem(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
+    val portraitSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val showPortraitFeedback: (String) -> Unit = { feedbackMessage ->
+        if (feedbackMessage.isNotBlank()) {
+            scope.launch {
+                portraitSnackbarHostState.currentSnackbarData?.dismiss()
+                portraitSnackbarHostState.showSnackbar(
+                    message = feedbackMessage,
+                    duration = androidx.compose.material3.SnackbarDuration.Short,
+                )
+            }
+        }
+    }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     var portraitPageInViewport by remember { mutableStateOf(false) }
     val portraitVisualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive() &&
@@ -4097,9 +4116,7 @@ private fun VideoPageItem(
                 onToggleVisible = null,
                 onEnterCleanScreen = {
                     onPortraitCleanScreenChange(true)
-                    android.widget.Toast.makeText(
-                        context, "已清屏，轻触画面或返回恢复操作栏", android.widget.Toast.LENGTH_SHORT,
-                    ).show()
+                    showPortraitFeedback("已清屏，轻触画面或返回恢复操作栏")
                 },
                 onOpenVideoDetails = { showDetailSheet = true },
                 onOpenAuthorPreview = portraitDetailInfo?.takeIf { it.owner.mid > 0L }?.let {
@@ -4132,23 +4149,15 @@ private fun VideoPageItem(
                                     exoPlayer.videoSize.width, exoPlayer.videoSize.height
                                 )).build()
                             if (!hostActivity.enterPictureInPictureMode(params)) {
-                                android.widget.Toast.makeText(
-                                    context, "无法进入画中画，请检查系统权限", android.widget.Toast.LENGTH_SHORT
-                                ).show()
+                                showPortraitFeedback("无法进入画中画，请检查系统权限")
                             }
                         } catch (_: IllegalStateException) {
-                            android.widget.Toast.makeText(
-                                context, "暂时无法进入画中画", android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                            showPortraitFeedback("暂时无法进入画中画")
                         } catch (_: IllegalArgumentException) {
-                            android.widget.Toast.makeText(
-                                context, "设备不支持当前画中画参数", android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                            showPortraitFeedback("设备不支持当前画中画参数")
                         }
                     } else {
-                        android.widget.Toast.makeText(
-                            context, "设备不支持画中画", android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                        showPortraitFeedback("设备不支持画中画")
                     }
                 },
                 onLockToggle = {
@@ -4157,21 +4166,19 @@ private fun VideoPageItem(
                 },
                 onFlipHorizontal = {
                     if (surfaceHdrRequired) {
-                        android.widget.Toast.makeText(context, "HDR 原色输出不支持画面翻转，请先切换至普通画质", android.widget.Toast.LENGTH_SHORT).show()
+                        showPortraitFeedback("HDR 原色输出不支持画面翻转，请先切换至普通画质")
                     } else portraitFlippedHorizontal = !portraitFlippedHorizontal
                 },
                 onFlipVertical = {
                     if (surfaceHdrRequired) {
-                        android.widget.Toast.makeText(context, "HDR 原色输出不支持画面翻转，请先切换至普通画质", android.widget.Toast.LENGTH_SHORT).show()
+                        showPortraitFeedback("HDR 原色输出不支持画面翻转，请先切换至普通画质")
                     } else portraitFlippedVertical = !portraitFlippedVertical
                 },
                 onAudioOnlyToggle = onAudioOnlyToggle,
                 onCaptureScreenshot = {
                     val playerView = playerViewRef
                     if (playerView == null) {
-                        android.widget.Toast.makeText(
-                            context, "截图失败：播放器未就绪", android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                        showPortraitFeedback("截图失败：播放器未就绪")
                     } else {
                         capturePortraitScreenshot(
                             playerView,
@@ -4202,17 +4209,12 @@ private fun VideoPageItem(
                     scope.launch {
                         val saved = com.android.purebilibili.feature.download.DownloadManager
                             .saveImageToGallery(context, cover, title)
-                        android.widget.Toast.makeText(
-                            context, if (saved) "封面已保存到相册" else "保存失败",
-                            android.widget.Toast.LENGTH_SHORT,
-                        ).show()
+                        showPortraitFeedback(if (saved) "封面已保存到相册" else "保存失败")
                     }
                 },
                 onDownloadAudio = {
                     if (audioUrl.isBlank()) {
-                        android.widget.Toast.makeText(
-                            context, "无法获取音频地址", android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                        showPortraitFeedback("无法获取音频地址")
                     } else {
                         viewModel.enqueueAudioDownload(
                             com.android.purebilibili.feature.download.DownloadTask(
@@ -4299,17 +4301,11 @@ private fun VideoPageItem(
                 onDanmakuToggle = toggleDanmaku,
                 onDanmakuInputClick = {
                     when {
-                        !isLoggedIn -> android.widget.Toast.makeText(
-                            context, "请先登录", android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                        !isLoggedIn -> showPortraitFeedback("请先登录")
                         com.android.purebilibili.data.repository.DanmakuRepository.isDanmakuServerDisabled(snapshotCid) ->
-                            android.widget.Toast.makeText(
-                                context, "UP主已关闭弹幕", android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                            showPortraitFeedback("UP主已关闭弹幕")
                         isCurrentPage && snapshotCid > 0L -> portraitComposerVisible = true
-                        else -> android.widget.Toast.makeText(
-                            context, "视频未加载", android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                        else -> showPortraitFeedback("视频未加载")
                     }
                 },
                 onDismissDanmakuComposer = { portraitComposerVisible = false },
@@ -4359,13 +4355,9 @@ private fun VideoPageItem(
                                             fontSize = fontSize, isVipGradualColor = gradual,
                                         )
                                     }
-                                    android.widget.Toast.makeText(
-                                        context, "发送成功", android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                                    showPortraitFeedback("发送成功")
                                 }.onFailure { error ->
-                                    android.widget.Toast.makeText(
-                                        context, error.message ?: "发送失败", android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                                    showPortraitFeedback(error.toUserFriendlyMessage("发送失败"))
                                 }
                             } finally {
                                 portraitComposerSending = false
@@ -4458,6 +4450,60 @@ private fun VideoPageItem(
             com.android.purebilibili.feature.video.ui.overlay.VideoPlayerOverlay(
                 state = portraitOverlayState,
                 actions = portraitOverlayActions,
+            )
+            val portraitDecoderState by remember(exoPlayer) {
+                com.android.purebilibili.core.player.VideoDecoderDiagnostics.observe(exoPlayer)
+            }.collectAsStateWithLifecycle()
+            val portraitDebugInfo = remember(portraitDecoderState) {
+                com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo(
+                    videoDecoder = portraitDecoderState.decoderName,
+                    videoDecoderType = portraitDecoderState.kind.label,
+                    videoDecoderPreference = portraitDecoderState.preference,
+                    videoDecoderFallbackReason = portraitDecoderState.fallbackReason,
+                    videoDecoderDropWarning = portraitDecoderState.dropRateWarning,
+                )
+            }
+            val portraitQualityLabels = remember(availableQualityIds) {
+                resolvePortraitQualityMenuLabels(availableQualityIds)
+            }
+            var portraitSoftwareOverloadVisible by remember(bvid, snapshotCid) { mutableStateOf(false) }
+            val portraitBannerUseGlass = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.playerGlassEnabled &&
+                com.android.purebilibili.feature.video.ui.overlay.LocalPlayerPageBackdrop.current != null
+            val portraitBannerModifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(top = 56.dp, start = 12.dp, end = 12.dp)
+            com.android.purebilibili.feature.video.ui.overlay.SoftwareDecodeOverloadOverlayHost(
+                bvid = bvid,
+                cid = snapshotCid,
+                debugInfo = portraitDebugInfo,
+                currentQuality = selectedQualityId,
+                qualityIds = availableQualityIds,
+                qualityLabels = portraitQualityLabels,
+                switchableQualityIds = switchableQualityIds,
+                isScreenLocked = portraitScreenLocked,
+                suppressTransientOverlays = false,
+                onQualitySelected = { index ->
+                    availableQualityIds.getOrNull(index)?.let(onQualitySelected)
+                },
+                onReloadVideo = onReloadPlayback,
+                useGlass = portraitBannerUseGlass,
+                onVisibilityChanged = { portraitSoftwareOverloadVisible = it },
+                modifier = portraitBannerModifier,
+            )
+            com.android.purebilibili.feature.video.ui.overlay.WeakNetworkDegradeOverlayHost(
+                player = exoPlayer,
+                mediaKey = "portrait:$bvid:$snapshotCid",
+                currentQuality = selectedQualityId,
+                qualityIds = availableQualityIds,
+                qualityLabels = portraitQualityLabels,
+                switchableQualityIds = switchableQualityIds,
+                isScreenLocked = portraitScreenLocked,
+                suppressedByHigherPriorityBanner = portraitSoftwareOverloadVisible,
+                isBufferingSuppressed = seekSliderMoving,
+                onSelectLowerQuality = { target -> onQualitySelected(target.qualityId) },
+                useGlass = portraitBannerUseGlass,
+                modifier = portraitBannerModifier,
             )
         }
     }
@@ -4687,6 +4733,13 @@ private fun VideoPageItem(
                 },
             )
         }
+        com.android.purebilibili.core.ui.components.AppSnackbarHost(
+            hostState = portraitSnackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+        )
     }
 }
 

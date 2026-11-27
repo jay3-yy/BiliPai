@@ -69,11 +69,17 @@ data class SharedPlaybackState(
 )
 
 /** Owned by a screen/service. Caller owns loading coroutines, ticker, and close(). */
-class SharedPlaybackSession(context: Context) : AutoCloseable {
+class SharedPlaybackSession(
+    context: Context,
+    private val preferHardware: Boolean = true,
+) : AutoCloseable {
     private val appContext = context.applicationContext
     private val mutableState = MutableStateFlow(SharedPlaybackState())
     val state = mutableState.asStateFlow()
-    val player: ExoPlayer = ExoPlayer.Builder(appContext, DefaultRenderersFactory(appContext).withVideoDecoderPreference(preferHardware = true)).build().apply {
+    val player: ExoPlayer = ExoPlayer.Builder(
+        appContext,
+        DefaultRenderersFactory(appContext).withVideoDecoderPreference(preferHardware = preferHardware),
+    ).build().let { VideoDecoderDiagnostics.attach(it, preferHardware) }.apply {
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
         setHandleAudioBecomingNoisy(true)
     }
@@ -216,8 +222,8 @@ class SharedPlaybackSession(context: Context) : AutoCloseable {
             decoderMimeTypes.contains(mime) && (!decoderFallback || mime == MimeTypes.VIDEO_H264)
         }) }
         val rawVideo = supported?.getBestVideo(quality, preferCodec = "avc1", secondPreferCodec = "hev1",
-            isHevcSupported = decoderMimeTypes.contains(MimeTypes.VIDEO_H265),
-            isAv1Supported = decoderMimeTypes.contains(MimeTypes.VIDEO_AV1))
+            isHevcSupported = supportsCodecForPreference(MimeTypes.VIDEO_H265),
+            isAv1Supported = supportsCodecForPreference(MimeTypes.VIDEO_AV1))
         val rawAudio = dash?.getBestAudio(if (audioFallback) -1 else audioQuality)
         val videoUrls = listOfNotNull(rawVideo?.baseUrl) + rawVideo?.backupUrl.orEmpty()
         val audioUrls = listOfNotNull(rawAudio?.baseUrl) + rawAudio?.backupUrl.orEmpty()
@@ -311,6 +317,26 @@ class SharedPlaybackSession(context: Context) : AutoCloseable {
                 .filterNot { it.isEncoder }.flatMap { it.supportedTypes.toList() }.toSet()
         }.getOrDefault(setOf(MimeTypes.VIDEO_H264))
     }
+
+    private val hardwareDecoderMimeTypes by lazy {
+        runCatching {
+            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+                .filterNot { it.isEncoder }
+                .filter { codec ->
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        codec.isHardwareAccelerated
+                    } else {
+                        val lower = codec.name.lowercase()
+                        !lower.startsWith("omx.google.") && !lower.startsWith("c2.android.") && !lower.startsWith("omx.ffmpeg.")
+                    }
+                }
+                .flatMap { it.supportedTypes.toList() }
+                .toSet()
+        }.getOrDefault(emptySet())
+    }
+
+    private fun supportsCodecForPreference(mimeType: String): Boolean =
+        if (preferHardware) hardwareDecoderMimeTypes.contains(mimeType) else decoderMimeTypes.contains(mimeType)
 
     fun togglePlayPause() {
         if (closed) return

@@ -9,7 +9,7 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import com.android.purebilibili.core.store.PlayerSettingsCache
 import com.android.purebilibili.data.model.response.DashVideo
-import java.util.concurrent.ConcurrentHashMap
+import java.util.LinkedHashMap
 
 internal data class VideoTrackDecoderSupport(
     val supported: Boolean,
@@ -69,25 +69,37 @@ internal fun buildVideoTrackCapabilityFormat(track: DashVideo): Format {
 }
 
 internal object VideoTrackCapabilities {
-    private const val MAX_CACHE_ENTRIES = 256
-    private val supportCache = ConcurrentHashMap<VideoTrackCapabilityCacheKey, VideoTrackDecoderSupport>()
+    internal const val MAX_CACHE_ENTRIES = 256
+    private val cacheLock = Any()
+    private val supportCache = object : LinkedHashMap<VideoTrackCapabilityCacheKey, VideoTrackDecoderSupport>(
+        MAX_CACHE_ENTRIES + 1,
+        0.75f,
+        true,
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<VideoTrackCapabilityCacheKey, VideoTrackDecoderSupport>?,
+        ): Boolean = size > MAX_CACHE_ENTRIES
+    }
 
     internal fun getOrQuerySupport(
         track: DashVideo,
         query: (DashVideo) -> VideoTrackDecoderSupport,
     ): VideoTrackDecoderSupport {
         val key = resolveVideoTrackCapabilityCacheKey(track)
-        supportCache[key]?.let { return it }
-        val resolved = query(track)
-        if (supportCache.size >= MAX_CACHE_ENTRIES) {
-            supportCache.clear()
+        synchronized(cacheLock) {
+            supportCache[key]?.let { return it }
         }
-        supportCache[key] = resolved
+        val resolved = query(track)
+        synchronized(cacheLock) {
+            supportCache[key] = resolved
+        }
         return resolved
     }
 
     internal fun clearCacheForTest() {
-        supportCache.clear()
+        synchronized(cacheLock) {
+            supportCache.clear()
+        }
     }
 
     fun filterForPlayback(context: Context, tracks: List<DashVideo>): List<DashVideo> {

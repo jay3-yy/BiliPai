@@ -22,4 +22,17 @@ class VideoDecoderDiagnosticsTest {
         assertTrue(reason.contains("原解码器启动失败，已换用其他解码器"))
         assertTrue(reason.contains("vendor-a · error-code"))
     }
+
+    @Test fun `dropped frames warning distinguishes software overload from low drop rates`() {
+        assertEquals("", resolveDroppedFramesWarning(VideoDecoderKind.SOFTWARE, droppedFrames = 12, elapsedMs = 1_000L))
+        assertEquals("", resolveDroppedFramesWarning(VideoDecoderKind.SOFTWARE, droppedFrames = 30, elapsedMs = 20_000L))
+
+        val softwareWarning = resolveDroppedFramesWarning(VideoDecoderKind.SOFTWARE, droppedFrames = 36, elapsedMs = 2_000L)
+        assertTrue(softwareWarning.contains("软件解码负载较高"))
+        assertTrue(softwareWarning.contains("36"))
+
+        val hardwareWarning = resolveDroppedFramesWarning(VideoDecoderKind.HARDWARE, droppedFrames = 36, elapsedMs = 2_000L)
+        assertTrue(hardwareWarning.contains("持续掉帧"))
+        assertFalse(hardwareWarning.contains("软件解码"))
+    }
 }

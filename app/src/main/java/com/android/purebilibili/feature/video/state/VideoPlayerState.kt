@@ -588,6 +588,7 @@ class VideoPlayerState(
             videoDecoderType = decoder.kind.label,
             videoDecoderPreference = decoder.preference,
             videoDecoderFallbackReason = decoder.fallbackReason,
+            videoDecoderDropWarning = decoder.dropRateWarning,
         )
     }.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(0), _debugInfo.value)
     /** 当前解码视频格式，供需要严格旁路 HDR 的输出效果使用。 */
