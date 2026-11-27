@@ -2,6 +2,7 @@ package com.android.purebilibili.core.ui.performance
 
 import androidx.metrics.performance.FrameData
 import androidx.metrics.performance.StateInfo
+import com.android.purebilibili.core.ui.adaptive.DeviceThermalTier
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.adaptive.RUNTIME_VISUAL_GUARD_DOWNGRADE_COOLDOWN_MS
 import kotlin.test.Test
@@ -352,6 +353,25 @@ class RuntimeVisualGuardTrackerTest {
         // 只清惩罚历史，不覆盖组合根注入的设备基线档位。
         assertEquals(MotionTier.Reduced, tracker.decision.value.effectiveMotionTier)
         assertFalse(tracker.decision.value.downgraded)
+    }
+
+    @Test
+    fun thermalTierProactivelyTightensAndRecoversWithoutPollutingJankHistory() {
+        val tracker = RuntimeVisualGuardTracker(baseTier = MotionTier.Enhanced)
+
+        tracker.setThermalTier(DeviceThermalTier.ELEVATED)
+        assertTrue(tracker.decision.value.forceLowBlurBudget)
+        assertEquals(MotionTier.Enhanced, tracker.decision.value.effectiveMotionTier)
+
+        tracker.setThermalTier(DeviceThermalTier.CRITICAL)
+        assertTrue(tracker.decision.value.forceLowBlurBudget)
+        assertTrue(tracker.decision.value.downgraded)
+        assertEquals(MotionTier.Reduced, tracker.decision.value.effectiveMotionTier)
+
+        tracker.setThermalTier(DeviceThermalTier.NORMAL)
+        assertFalse(tracker.decision.value.forceLowBlurBudget)
+        assertFalse(tracker.decision.value.downgraded)
+        assertEquals(MotionTier.Enhanced, tracker.decision.value.effectiveMotionTier)
     }
 
     private fun RuntimeVisualGuardTracker.finishWindow(

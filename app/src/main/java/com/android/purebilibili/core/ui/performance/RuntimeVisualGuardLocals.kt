@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.adaptive.MotionTier
@@ -43,6 +44,11 @@ internal fun ProvideRuntimeVisualGuard(
     guardEnabled: Boolean = LocalAppThemeConfig.current.runtimeVisualGuardEnabled,
     content: @Composable () -> Unit,
 ) {
+    val context = LocalContext.current
+    LaunchedEffect(context) {
+        DeviceThermalMonitor.ensureStarted(context)
+    }
+
     // 设备基线档位只能在拿到 window metrics 之后才知道，而 Tracker 是进程单例、
     // 在 Activity 之前就已加载。放在组合根注入还能让折叠屏展开/分屏自动跟随。
     LaunchedEffect(widthSizeClass, guardEnabled) {

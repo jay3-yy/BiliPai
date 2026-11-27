@@ -24,8 +24,13 @@ internal object QuadRenderUtils {
         }
 
     fun draw(program: Int) {
-        val positionHandle = GLES30.glGetAttribLocation(program, "aPosition")
-        val texCoordHandle = GLES30.glGetAttribLocation(program, "aTexCoord")
+        draw(
+            positionHandle = GLES30.glGetAttribLocation(program, "aPosition"),
+            texCoordHandle = GLES30.glGetAttribLocation(program, "aTexCoord"),
+        )
+    }
+
+    fun draw(positionHandle: Int, texCoordHandle: Int) {
         vertices.position(0)
         GLES30.glVertexAttribPointer(positionHandle, 2, GLES30.GL_FLOAT, false, 16, vertices)
         GLES30.glEnableVertexAttribArray(positionHandle)

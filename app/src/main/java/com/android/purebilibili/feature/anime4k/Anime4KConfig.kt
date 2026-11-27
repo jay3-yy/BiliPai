@@ -1,8 +1,10 @@
 package com.android.purebilibili.feature.anime4k
 
+import com.android.purebilibili.core.ui.adaptive.DeviceThermalTier
 import com.android.purebilibili.plugin.sdk.Anime4KConfig
 import com.android.purebilibili.plugin.sdk.Anime4KPreset
 import com.android.purebilibili.plugin.sdk.DEFAULT_FSR_SHARPNESS
+import com.android.purebilibili.plugin.sdk.VideoEnhancementAlgorithm
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -147,4 +149,30 @@ fun resolveAnime4KInputSize(
     val clampScale = glMaxTextureSize.toFloat() / longEdge.toFloat()
     return (inputWidth * clampScale).roundToInt().coerceAtLeast(1) to
         (inputHeight * clampScale).roundToInt().coerceAtLeast(1)
+}
+
+/**
+ * 按设备散热与省电档位平滑收敛实际执行的画质增强管线，不改写用户的持久化设置：
+ * - [DeviceThermalTier.NORMAL]：完全按用户设定执行；
+ * - [DeviceThermalTier.ELEVATED]：将高负载 QUALITY（15+ Pass VL CNN）温和降为 FAST（效率链）；
+ * - [DeviceThermalTier.CRITICAL]：进一步降为 2-Pass FSR 1.0，避免过热撞墙导致系统锁帧或降亮度。
+ */
+fun resolveThermallyAdjustedEnhancement(
+    config: Anime4KConfig,
+    thermalTier: DeviceThermalTier,
+): Anime4KConfig = when (thermalTier) {
+    DeviceThermalTier.NORMAL -> config
+    DeviceThermalTier.ELEVATED -> if (
+        config.algorithm == VideoEnhancementAlgorithm.ANIME4K &&
+        config.preset == Anime4KPreset.QUALITY
+    ) {
+        config.copy(preset = Anime4KPreset.FAST)
+    } else {
+        config
+    }
+    DeviceThermalTier.CRITICAL -> if (config.algorithm == VideoEnhancementAlgorithm.ANIME4K) {
+        config.copy(algorithm = VideoEnhancementAlgorithm.FSR_1_0)
+    } else {
+        config
+    }
 }

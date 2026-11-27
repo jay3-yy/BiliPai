@@ -1,8 +1,10 @@
 package com.android.purebilibili.core.ui.performance
 
 import androidx.metrics.performance.FrameData
+import com.android.purebilibili.core.ui.adaptive.DeviceThermalTier
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.adaptive.RuntimeVisualGuardDecision
+import com.android.purebilibili.core.ui.adaptive.applyThermalTierToVisualGuardDecision
 import com.android.purebilibili.core.ui.adaptive.isRuntimeVisualGuardHighJankWindow
 import com.android.purebilibili.core.ui.adaptive.isRuntimeVisualGuardTrackedStateKey
 import com.android.purebilibili.core.ui.adaptive.mergeRuntimeVisualGuardDecisions
@@ -31,6 +33,9 @@ internal class RuntimeVisualGuardTracker(
 
     @Volatile
     private var enabled: Boolean = enabled
+
+    @Volatile
+    private var thermalTier: DeviceThermalTier = DeviceThermalTier.NORMAL
 
     private val _decision = MutableStateFlow(normalDecision())
     val decision: StateFlow<RuntimeVisualGuardDecision> = _decision.asStateFlow()
@@ -76,6 +81,13 @@ internal class RuntimeVisualGuardTracker(
         } else {
             publish(nowMs = null)
         }
+    }
+
+    /** 主动同步设备散热/省电档位，在撞热墙掉帧前先行收敛模糊与高耗电特效预算。 */
+    fun setThermalTier(tier: DeviceThermalTier) {
+        if (thermalTier == tier) return
+        thermalTier = tier
+        publish(nowMs = null)
     }
 
     /** 仅切换会话所有权并清空采样窗口，保留降级记账（给需要跨会话保持降级的调用方）。 */
@@ -299,7 +311,12 @@ internal class RuntimeVisualGuardTracker(
                 nextLastDowngradeAtMs = window.lastDowngradeAtMs,
             )
         }
-        _decision.value = mergeRuntimeVisualGuardDecisions(perSignal, baseTier)
+        val merged = mergeRuntimeVisualGuardDecisions(perSignal, baseTier)
+        _decision.value = applyThermalTierToVisualGuardDecision(
+            jankDecision = merged,
+            thermalTier = thermalTier,
+            enabled = enabled,
+        )
     }
 
     private fun normalDecision() = RuntimeVisualGuardDecision(

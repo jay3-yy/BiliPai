@@ -59,13 +59,17 @@ class Anime4KGLSurfaceView @JvmOverloads constructor(
         requestRender()
     }
 
+    fun updateTargetFrameRateHz(frameRateHz: Float) {
+        queueEvent { pipelineRenderer.setTargetFrameRateHz(frameRateHz) }
+    }
+
     override fun onResume() {
         super.onResume()
         queueEvent { pipelineRenderer.ensureInputSurface() }
     }
 
     override fun onPause() {
-        queueEvent { pipelineRenderer.releaseInputSurface() }
+        queueEvent { pipelineRenderer.onHostPaused() }
         super.onPause()
     }
 
