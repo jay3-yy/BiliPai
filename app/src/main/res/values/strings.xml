@@ -268,7 +268,7 @@
     <string name="settings_category_storage_title">下载与备份</string>
     <string name="settings_category_storage_summary">保存位置、缓存、设置分享和 WebDAV 备份</string>
     <string name="settings_category_plugins_title">插件中心</string>
-    <string name="settings_category_plugins_summary">插件、装扮和扩展工坊</string>
+    <string name="settings_category_plugins_summary">插件、装扮和已安装扩展</string>
     <string name="settings_category_gamepad_title">手柄控制</string>
     <string name="settings_category_gamepad_summary">Xbox / PlayStation / Switch 手柄适配、提示栏与自定义键位</string>
     <string name="settings_category_support_title">帮助与关于</string>
@@ -1143,4 +1143,24 @@
     <string name="sub_reply_style_summary">树状按回复关系缩进并连线，可展开或收起分支</string>
     <string name="sub_reply_style_tree">YouTube 树状</string>
     <string name="sub_reply_style_classic">B 站经典</string>
+    <string name="qs_tile_audio_label">听视频续播</string>
+    <string name="qs_tile_audio_playing">正在播放</string>
+    <string name="qs_tile_audio_empty">暂无续播队列</string>
+    <string name="qs_tile_audio_locked">隐私验证已开启</string>
+    <string name="qs_tile_incognito_label">BiliPai 无痕</string>
+    <string name="qs_tile_state_on">已开启</string>
+    <string name="qs_tile_state_off">已关闭</string>
+    <string name="notification_channel_live_updates_name">实时活动状态</string>
+    <string name="notification_channel_live_updates_desc">在状态栏与锁屏实时胶囊中显示下载进度与睡眠定时</string>
+    <string name="live_update_downloading_fallback">下载中…</string>
+    <string name="live_update_sleep_timer_title">听视频睡眠定时</string>
+    <string name="live_update_sleep_timer_fading">即将淡出停止</string>
+    <string name="media_route2_provider_label">BiliPai 投屏与设备接力</string>
+    <string name="app_functions_description">通过系统 AI 助手搜索 B 站内容、打开稍后再看、续播听视频与查询今日追番</string>
+    <string name="watchlater_bangumi_widget_name">稍后再看与今日追番</string>
+    <string name="watchlater_bangumi_widget_description">在桌面或锁屏快速浏览稍后再看与今日番剧更新，点击直达播放</string>
+    <string name="watchlater_bangumi_widget_tab_later">稍后再看</string>
+    <string name="watchlater_bangumi_widget_tab_bangumi">今日追番</string>
+    <string name="watchlater_bangumi_widget_refresh">刷新小组件</string>
+    <string name="watchlater_bangumi_widget_loading">正在读取列表…</string>
 </resources>

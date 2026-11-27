@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appfunctions>
+    <appfunction>
+        <id>com.android.purebilibili.search_content</id>
+        <enabledByDefault>true</enabledByDefault>
+        <schemaCategory>media</schemaCategory>
+        <schemaName>searchContent</schemaName>
+        <schemaVersion>1</schemaVersion>
+        <scope>global</scope>
+    </appfunction>
+    <appfunction>
+        <id>com.android.purebilibili.open_watch_later</id>
+        <enabledByDefault>true</enabledByDefault>
+        <schemaCategory>media</schemaCategory>
+        <schemaName>openWatchLater</schemaName>
+        <schemaVersion>1</schemaVersion>
+        <scope>global</scope>
+    </appfunction>
+    <appfunction>
+        <id>com.android.purebilibili.resume_background_audio</id>
+        <enabledByDefault>true</enabledByDefault>
+        <schemaCategory>media</schemaCategory>
+        <schemaName>resumeBackgroundAudio</schemaName>
+        <schemaVersion>1</schemaVersion>
+        <scope>global</scope>
+    </appfunction>
+    <appfunction>
+        <id>com.android.purebilibili.query_today_bangumi</id>
+        <enabledByDefault>true</enabledByDefault>
+        <schemaCategory>media</schemaCategory>
+        <schemaName>queryTodayBangumi</schemaName>
+        <schemaVersion>1</schemaVersion>
+        <scope>global</scope>
+    </appfunction>
+</appfunctions>

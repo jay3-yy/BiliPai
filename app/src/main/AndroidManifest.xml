@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- 📸 Android 14+ 系统截屏回调（仅触发应用内带水印分享浮层，无需存储权限） -->
     <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -98,6 +100,13 @@
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/keepsake_mood_widget_info" />
+        </receiver>
+        <receiver android:name=".feature.widget.WatchLaterBangumiWidgetProvider" android:exported="false"
+            android:label="@string/watchlater_bangumi_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/watchlater_bangumi_widget_info" />
         </receiver>
 
 
@@ -1271,6 +1280,71 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
                 <action android:name="androidx.media3.session.MediaLibraryService" />
                 <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".feature.tile.BackgroundAudioTileService"
+            android:process=":playback"
+            android:exported="true"
+            android:icon="@drawable/ms_headphones_24"
+            android:label="@string/qs_tile_audio_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
+        <service
+            android:name=".feature.tile.IncognitoModeTileService"
+            android:exported="true"
+            android:icon="@drawable/ms_visibility_off_24"
+            android:label="@string/qs_tile_incognito_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
+        <service
+            android:name=".feature.cast.BiliPaiMediaRoute2ProviderService"
+            android:exported="true"
+            android:label="@string/media_route2_provider_label"
+            android:permission="android.permission.BIND_MEDIA_ROUTE_PROVIDER_SERVICE">
+            <intent-filter>
+                <action android:name="android.media.MediaRoute2ProviderService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".feature.appfunctions.BiliPaiAppFunctionService"
+            android:exported="true"
+            android:label="@string/app_functions_description"
+            android:permission="android.permission.BIND_APP_FUNCTION_SERVICE"
+            tools:targetApi="36">
+            <property
+                android:name="android.app.appfunctions"
+                android:value="bilipai_app_functions.xml" />
+            <intent-filter>
+                <action android:name="android.app.appfunctions.AppFunctionService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".feature.wear.BiliPaiWearableListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/bilipai/wear" />
             </intent-filter>
         </service>
 

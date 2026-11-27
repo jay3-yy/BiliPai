@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="160dp"
+    android:minResizeWidth="220dp"
+    android:minResizeHeight="128dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:updatePeriodMillis="0"
+    android:resizeMode="horizontal|vertical"
+    android:initialLayout="@layout/widget_watchlater_bangumi"
+    android:previewLayout="@layout/widget_watchlater_bangumi"
+    android:description="@string/watchlater_bangumi_widget_description"
+    android:widgetCategory="home_screen|keyguard" />

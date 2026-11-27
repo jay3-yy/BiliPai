@@ -2,6 +2,8 @@
 
 package com.android.purebilibili.feature.widget
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -140,7 +142,7 @@ class PlaybackWidgetProvider : AppWidgetProvider() {
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 Logger.w("PlaybackWidget", "Widget operation failed", error)
-                Toast.makeText(appContext, error.message ?: appContext.getString(R.string.playback_widget_error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(appContext, error.toUserFriendlyMessage(appContext.getString(R.string.playback_widget_error)), Toast.LENGTH_SHORT).show()
             } finally { pending.finish(); scope.cancel() }
         }
     }

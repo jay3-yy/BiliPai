@@ -19,4 +19,9 @@
     <external-path
         name="external_downloads"
         path="Download/BiliPai/" />
+
+    <!-- Android 8-9 切片导出分享目录 -->
+    <external-files-path
+        name="exported_clips"
+        path="Movies/Clips/" />
 </paths>

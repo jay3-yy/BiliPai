@@ -265,7 +265,7 @@
     <string name="settings_category_storage_title">Downloads &amp; Backup</string>
     <string name="settings_category_storage_summary">Save locations, cache, settings sharing, and WebDAV backup</string>
     <string name="settings_category_plugins_title">Plugins</string>
-    <string name="settings_category_plugins_summary">Install and manage plugins, skins, and .bpx extensions</string>
+    <string name="settings_category_plugins_summary">Manage plugins, skins, and installed extensions</string>
     <string name="settings_category_gamepad_title">Gamepad Control</string>
     <string name="settings_category_gamepad_summary">Xbox, PlayStation &amp; Switch controllers, HUD toggle, and custom bindings</string>
     <string name="settings_category_support_title">Help &amp; About</string>
@@ -1141,4 +1141,24 @@
     <string name="sub_reply_style_summary">Tree view groups replies with indentation and connectors. Branches can be expanded or collapsed.</string>
     <string name="sub_reply_style_tree">YouTube tree</string>
     <string name="sub_reply_style_classic">Bilibili classic</string>
+    <string name="qs_tile_audio_label">Resume Audio</string>
+    <string name="qs_tile_audio_playing">Playing</string>
+    <string name="qs_tile_audio_empty">No recent queue</string>
+    <string name="qs_tile_audio_locked">Privacy lock enabled</string>
+    <string name="qs_tile_incognito_label">BiliPai Incognito</string>
+    <string name="qs_tile_state_on">On</string>
+    <string name="qs_tile_state_off">Off</string>
+    <string name="notification_channel_live_updates_name">Live Updates</string>
+    <string name="notification_channel_live_updates_desc">Shows download progress and sleep timer countdowns in status bar pills and lock screen cards</string>
+    <string name="live_update_downloading_fallback">Downloading…</string>
+    <string name="live_update_sleep_timer_title">Audio Sleep Timer</string>
+    <string name="live_update_sleep_timer_fading">Fading out to stop</string>
+    <string name="media_route2_provider_label">BiliPai Cast &amp; Handoff</string>
+    <string name="app_functions_description">Search Bilibili, open Watch Later, resume audio playback, and query today\'s anime schedule via system AI</string>
+    <string name="watchlater_bangumi_widget_name">Watch Later &amp; Anime</string>
+    <string name="watchlater_bangumi_widget_description">Browse your Watch Later queue and today\'s anime updates directly from home or lock screen</string>
+    <string name="watchlater_bangumi_widget_tab_later">Watch Later</string>
+    <string name="watchlater_bangumi_widget_tab_bangumi">Today\'s Anime</string>
+    <string name="watchlater_bangumi_widget_refresh">Refresh widget</string>
+    <string name="watchlater_bangumi_widget_loading">Loading list…</string>
 </resources>

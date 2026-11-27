@@ -4,6 +4,7 @@ import android.app.NotificationManager
 
 internal const val MEDIA_PLAYBACK_NOTIFICATION_CHANNEL_ID = "media_playback_channel"
 internal const val DOWNLOAD_NOTIFICATION_CHANNEL_ID = "download_channel"
+internal const val LIVE_UPDATE_NOTIFICATION_CHANNEL_ID = "live_update_channel"
 internal const val SPONSOR_BLOCK_NOTIFICATION_CHANNEL_ID = "sponsor_block_channel"
 internal const val JSON_PLUGIN_STATS_NOTIFICATION_CHANNEL_ID = "json_plugin_stats_channel"
 internal const val MESSAGE_NOTIFICATION_CHANNEL_ID = "message_notification_channel"
@@ -37,6 +38,14 @@ internal fun resolveAppNotificationChannels(): List<AppNotificationChannelSpec> 
             name = "下载任务",
             description = "显示后台下载进度",
             importance = NotificationManager.IMPORTANCE_LOW
+        ),
+        AppNotificationChannelSpec(
+            id = LIVE_UPDATE_NOTIFICATION_CHANNEL_ID,
+            name = "实时活动状态",
+            description = "在状态栏与锁屏实时胶囊中显示下载进度与睡眠定时",
+            importance = NotificationManager.IMPORTANCE_DEFAULT,
+            showBadge = false,
+            silent = true
         ),
         AppNotificationChannelSpec(
             id = SPONSOR_BLOCK_NOTIFICATION_CHANNEL_ID,

@@ -22,6 +22,7 @@ import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 import kotlin.math.abs
 
 private const val DRAG_SHARE_TITLE_MAX_LENGTH = 48
+internal val INTERNAL_EXTERNAL_DRAG_LOCAL_STATE = Any()
 
 internal fun buildVideoDragShareText(
     bvid: String,
@@ -100,7 +101,12 @@ internal fun Modifier.adaptiveExternalTextDragSource(
                         density = view.resources.displayMetrics.density,
                         text = currentPreviewTitleProvider().ifBlank { shareText },
                     )
-                    view.startDragAndDrop(clipData, shadow, null, View.DRAG_FLAG_GLOBAL)
+                    view.startDragAndDrop(
+                        clipData,
+                        shadow,
+                        INTERNAL_EXTERNAL_DRAG_LOCAL_STATE,
+                        View.DRAG_FLAG_GLOBAL,
+                    )
                     break
                 }
             }

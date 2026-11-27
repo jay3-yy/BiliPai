@@ -196,4 +196,24 @@
     <string name="sub_reply_style_summary">樹狀依回覆關係縮排並連線，可展開或收合分支</string>
     <string name="sub_reply_style_tree">YouTube 樹狀</string>
     <string name="sub_reply_style_classic">B 站經典</string>
+    <string name="qs_tile_audio_label">聽影片續播</string>
+    <string name="qs_tile_audio_playing">正在播放</string>
+    <string name="qs_tile_audio_empty">暫無續播佇列</string>
+    <string name="qs_tile_audio_locked">隱私驗證已開啟</string>
+    <string name="qs_tile_incognito_label">BiliPai 無痕</string>
+    <string name="qs_tile_state_on">已開啟</string>
+    <string name="qs_tile_state_off">已關閉</string>
+    <string name="notification_channel_live_updates_name">即時活動狀態</string>
+    <string name="notification_channel_live_updates_desc">在狀態列與鎖定畫面即時膠囊中顯示下載進度與睡眠定時</string>
+    <string name="live_update_downloading_fallback">下載中…</string>
+    <string name="live_update_sleep_timer_title">聽影片睡眠定時</string>
+    <string name="live_update_sleep_timer_fading">即將淡出停止</string>
+    <string name="media_route2_provider_label">BiliPai 投屏與裝置接力</string>
+    <string name="app_functions_description">透過系統 AI 助理搜尋 B 站內容、開啟稍後再看、續播聽影片與查詢今日追番</string>
+    <string name="watchlater_bangumi_widget_name">稍後再看與今日追番</string>
+    <string name="watchlater_bangumi_widget_description">在桌面或鎖定畫面快速瀏覽稍後再看與今日番劇更新，點擊直達播放</string>
+    <string name="watchlater_bangumi_widget_tab_later">稍後再看</string>
+    <string name="watchlater_bangumi_widget_tab_bangumi">今日追番</string>
+    <string name="watchlater_bangumi_widget_refresh">重新整理小工具</string>
+    <string name="watchlater_bangumi_widget_loading">正在讀取清單…</string>
 </resources>
