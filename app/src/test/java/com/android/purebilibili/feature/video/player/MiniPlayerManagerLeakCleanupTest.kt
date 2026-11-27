@@ -117,6 +117,27 @@ class MiniPlayerManagerLeakCleanupTest {
     }
 
     @Test
+    fun closingVideoDetailKeepsTheVideoOutputAlreadyOwnedByTheMiniPlayer() {
+        mockkStatic(ContextCompat::class)
+        every { ContextCompat.registerReceiver(any(), any(), any(), any()) } returns null
+        val manager = newMiniPlayerManager(mockContext())
+        val player = mockk<ExoPlayer>(relaxed = true)
+        every { player.playWhenReady } returns true
+        externalPlayerState(manager).value = player
+        try {
+            manager.retainPlayerForPage(player)
+            manager.isMiniMode = true
+            manager.releasePlayerFromPage(player)
+
+            assertSame(player, manager.player)
+            verify(exactly = 0) { player.clearVideoSurface() }
+        } finally {
+            externalPlayerState(manager).value = null
+            manager.release()
+        }
+    }
+
+    @Test
     fun pausedListeningBarDropsBuffersAfterTheLastDetailPageAndCanResume() {
         mockkStatic(ContextCompat::class)
         every { ContextCompat.registerReceiver(any(), any(), any(), any()) } returns null

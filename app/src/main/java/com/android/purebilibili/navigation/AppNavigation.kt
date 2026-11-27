@@ -2811,28 +2811,28 @@ fun AppNavigation(
                             }
                         )
                         context.findActivity()?.finish()
-                        return@onPopularFeed
-                    }
-                    // 热门榜单(排行榜/入站必刷/综合热门):切回首页 POPULAR
-                    // 子分类的原生 feed,并弹回主宿主,与底栏点首页一致。
-                    // 注意顺序:先切子分类(同步写状态),再切大类(其状态更新在协程中,
-                    // 若后切子分类,switchCategory 捕获的旧快照会把子分类覆盖回去)。
-                    val homeIndex = visibleBottomBarItems.indexOf(BottomNavItem.HOME)
-                    if (homeIndex >= 0) {
-                        switchMainBottomPagerPage(homeIndex)
-                    }
-                    homeViewModel.switchPopularSubCategory(
-                        when (target.subCategoryKey) {
-                            "weekly" -> PopularSubCategory.WEEKLY
-                            "rank" -> PopularSubCategory.RANKING
-                            "all", "precious" -> PopularSubCategory.PRECIOUS
-                            else -> PopularSubCategory.COMPREHENSIVE
+                    } else {
+                        // 热门榜单(排行榜/入站必刷/综合热门):切回首页 POPULAR
+                        // 子分类的原生 feed,并弹回主宿主,与底栏点首页一致。
+                        // 注意顺序:先切子分类(同步写状态),再切大类(其状态更新在协程中,
+                        // 若后切子分类,switchCategory 捕获的旧快照会把子分类覆盖回去)。
+                        val homeIndex = visibleBottomBarItems.indexOf(BottomNavItem.HOME)
+                        if (homeIndex >= 0) {
+                            switchMainBottomPagerPage(homeIndex)
                         }
-                    )
-                    homeViewModel.switchCategory(HomeCategory.POPULAR)
-                    replaceNavigation3BackStack(
-                        popBiliPaiNavKeyToRoot(navigation3BackStack)
-                    )
+                        homeViewModel.switchPopularSubCategory(
+                            when (target.subCategoryKey) {
+                                "weekly" -> PopularSubCategory.WEEKLY
+                                "rank" -> PopularSubCategory.RANKING
+                                "all", "precious" -> PopularSubCategory.PRECIOUS
+                                else -> PopularSubCategory.COMPREHENSIVE
+                            }
+                        )
+                        homeViewModel.switchCategory(HomeCategory.POPULAR)
+                        replaceNavigation3BackStack(
+                            popBiliPaiNavKeyToRoot(navigation3BackStack)
+                        )
+                    }
                 },
             )
         }

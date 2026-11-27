@@ -1932,7 +1932,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
         if (target === _externalPlayer && !pageOwnership.isRetained(target)) {
             transferredDetailPlayer = java.lang.ref.WeakReference(target)
             if (target.playWhenReady) {
-                target.clearVideoSurface()
+                // 详情退场可能晚于小窗绑定。此时由旧 PlayerView 解绑自己的输出，
+                // 不清除播放器当前已交给小窗的 Surface。
+                if (!isMiniMode && !shouldKeepPlaybackForPipTransition()) {
+                    target.clearVideoSurface()
+                }
             } else {
                 releasePausedDetachedDetailBuffers()
             }

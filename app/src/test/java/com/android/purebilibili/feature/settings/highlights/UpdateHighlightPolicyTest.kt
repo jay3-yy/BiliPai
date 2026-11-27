@@ -143,8 +143,8 @@ class UpdateHighlightPolicyTest {
     }
 
     @Test
-    fun release621HighlightsExcludePinnedDonateAndUseDistinctSemanticIcons() {
-        val highlights = latestReleaseHighlights(621)
+    fun release622HighlightsExcludePinnedDonateAndUseDistinctSemanticIcons() {
+        val highlights = latestReleaseHighlights(622)
         assertEquals(6, highlights.size)
         assertTrue(highlights.none { it.action == UpdateHighlightAction.OPEN_DONATE })
         val icons = highlights.map { it.icon }
