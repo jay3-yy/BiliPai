@@ -1647,7 +1647,15 @@ data class ArticleMajor(
 data class DynamicStatModule(
     val comment: StatItem = StatItem(),
     val forward: StatItem = StatItem(),
-    val like: StatItem = StatItem()
+    val like: StatItem = StatItem(),
+    val favorite: DynamicFavoriteStat? = null,
+)
+
+@Serializable
+data class DynamicFavoriteStat(
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    val status: Boolean = false,
+    val hidden: Boolean = false,
 )
 
 @Serializable

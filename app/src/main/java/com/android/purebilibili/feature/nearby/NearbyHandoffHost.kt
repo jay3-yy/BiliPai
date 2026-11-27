@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.nearby
 
-import android.content.pm.PackageManager
-import android.os.Build
+import android.Manifest
 import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,7 +52,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -304,10 +302,8 @@ internal fun NearbyHandoffHost(
         if (!granted) session.status("需要局域网权限才能连接其他设备")
     }
     val enable: () -> Unit = {
-        if (Build.VERSION.SDK_INT >= 37 && context.applicationInfo.targetSdkVersion >= 37 &&
-            ContextCompat.checkSelfPermission(context, "android.permission.ACCESS_LOCAL_NETWORK") != PackageManager.PERMISSION_GRANTED
-        ) {
-            permission.launch("android.permission.ACCESS_LOCAL_NETWORK")
+        if (needsNearbyLocalNetworkPermission(context)) {
+            permission.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
         } else {
             runtime.setEnabled(true)
         }

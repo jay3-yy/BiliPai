@@ -4,16 +4,55 @@ import android.os.Build
 import android.os.SystemClock
 import com.android.purebilibili.core.network.policy.resolveHardcodedDnsFallback
 import okhttp3.Dns
+import okhttp3.DnsCache
 import okhttp3.android.AndroidDns
 import java.net.InetAddress
 import java.net.UnknownHostException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
+import java.util.concurrent.atomic.AtomicLong
 
 internal const val APP_DNS_FRESH_TTL_MS = 60_000L
 internal const val APP_DNS_STALE_FALLBACK_TTL_MS = 300_000L
 private const val APP_DNS_CACHE_MAX_HOSTS = 128
+
+internal fun buildNetworkDnsSignature(
+    dnsServerAddresses: List<String>,
+    isPrivateDnsActive: Boolean,
+    privateDnsServerName: String?,
+): String {
+    val servers = dnsServerAddresses.joinToString(",")
+    val privateHost = privateDnsServerName?.trim().orEmpty()
+    return "$servers|private=$isPrivateDnsActive|host=$privateHost"
+}
+
+/** Used only by the default network callback, whose events run on the same thread. */
+internal class NetworkDnsInvalidationTracker {
+    private var activeNetworkId: String? = null
+    private var lastDnsSignature: String? = null
+
+    fun onAvailable(networkId: String): Boolean {
+        if (activeNetworkId == networkId) return false
+        activeNetworkId = networkId
+        lastDnsSignature = null
+        return true
+    }
+
+    fun onLost(networkId: String): Boolean {
+        if (activeNetworkId != networkId) return false
+        activeNetworkId = null
+        lastDnsSignature = null
+        return true
+    }
+
+    fun onLinkPropertiesChanged(networkId: String, dnsSignature: String): Boolean {
+        if (activeNetworkId != networkId) return false
+        val previous = lastDnsSignature
+        lastDnsSignature = dnsSignature
+        return previous != null && previous != dnsSignature
+    }
+}
 
 internal class AppDnsCache(
     private val freshTtlMs: Long = APP_DNS_FRESH_TTL_MS,
@@ -26,41 +65,71 @@ internal class AppDnsCache(
         val resolvedAtMs: Long,
     )
 
+    private val generation = AtomicLong(0L)
+
     private val entries = object : LinkedHashMap<String, Entry>(32, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Entry>?): Boolean =
             size > maxHosts
     }
 
+    fun currentGeneration(): Long = generation.get()
+
     @Synchronized
-    fun getFresh(hostname: String): List<InetAddress>? {
+    fun getFresh(
+        hostname: String,
+        expectedGeneration: Long = generation.get(),
+    ): List<InetAddress>? {
+        if (expectedGeneration != generation.get()) return null
         val entry = entries[hostname.lowercase()] ?: return null
         val ageMs = nowMs() - entry.resolvedAtMs
         return if (ageMs in 0L..freshTtlMs) entry.addresses else null
     }
 
     @Synchronized
-    fun getStaleFallback(hostname: String): List<InetAddress>? {
+    fun getStaleFallback(
+        hostname: String,
+        expectedGeneration: Long = generation.get(),
+    ): List<InetAddress>? {
+        if (expectedGeneration != generation.get()) return null
         val entry = entries[hostname.lowercase()] ?: return null
         val ageMs = nowMs() - entry.resolvedAtMs
         return if (ageMs in 0L..staleFallbackTtlMs) entry.addresses else null
     }
 
     @Synchronized
-    fun put(hostname: String, addresses: List<InetAddress>) {
-        if (addresses.isEmpty()) return
+    fun put(
+        hostname: String,
+        addresses: List<InetAddress>,
+        expectedGeneration: Long = generation.get(),
+    ): Boolean {
+        if (addresses.isEmpty() || expectedGeneration != generation.get()) return false
         entries[hostname.lowercase()] = Entry(addresses = addresses, resolvedAtMs = nowMs())
+        return true
     }
 
     @Synchronized
     fun clear() {
+        generation.incrementAndGet()
         entries.clear()
     }
 }
 
 private val sharedAppDnsCache = AppDnsCache()
+private val sharedAndroidDnsCacheLock = Any()
+
+@Volatile
+private var sharedAndroidDnsCache: DnsCache? = null
+
+private fun getOrCreateAndroidDnsCache(): DnsCache {
+    sharedAndroidDnsCache?.let { return it }
+    return synchronized(sharedAndroidDnsCacheLock) {
+        sharedAndroidDnsCache ?: DnsCache().also { sharedAndroidDnsCache = it }
+    }
+}
 
 fun clearAppDnsCache() {
     sharedAppDnsCache.clear()
+    sharedAndroidDnsCache?.evictAll()
 }
 
 /**
@@ -72,7 +141,10 @@ fun clearAppDnsCache() {
  */
 fun buildAppDns(allowHardcodedIpFallback: Boolean = false): Dns {
     if (Build.VERSION.SDK_INT >= 37 && !allowHardcodedIpFallback) {
-        return AndroidDns()
+        return AndroidDns(
+            dnsCache = getOrCreateAndroidDnsCache(),
+            includeServiceMetadata = true,
+        )
     }
     return buildCachedAppDns(
         cache = sharedAppDnsCache,
@@ -85,13 +157,17 @@ internal fun buildCachedAppDns(
     allowHardcodedIpFallback: Boolean = false,
     systemLookup: (String) -> List<InetAddress> = { InetAddress.getAllByName(it).toList() },
 ): Dns {
-    val inFlight = ConcurrentHashMap<String, CompletableFuture<List<InetAddress>>>()
+    data class InFlightKey(val generation: Long, val host: String)
+
+    val inFlight = ConcurrentHashMap<InFlightKey, CompletableFuture<List<InetAddress>>>()
     return Dns { hostname ->
         val normalizedHost = hostname.trim().lowercase()
-        cache.getFresh(normalizedHost)?.let { return@Dns it }
-        // 同域名并发解析合并（Single-Flight），避免冷启动或 TTL 过期瞬间多次阻塞系统 DNS。
+        val generation = cache.currentGeneration()
+        cache.getFresh(normalizedHost, generation)?.let { return@Dns it }
+        // 同网络代次内按域名合并在途解析（Single-Flight）；切网推进代次后，新请求不复用旧在途且旧结果不回填。
+        val flightKey = InFlightKey(generation = generation, host = normalizedHost)
         val created = CompletableFuture<List<InetAddress>>()
-        val existing = inFlight.putIfAbsent(normalizedHost, created)
+        val existing = inFlight.putIfAbsent(flightKey, created)
         if (existing != null) {
             return@Dns try {
                 existing.get()
@@ -106,11 +182,12 @@ internal fun buildCachedAppDns(
         try {
             val resolved = try {
                 systemLookup(hostname).also { addresses ->
-                    cache.put(normalizedHost, addresses)
-                    CoreDataLog.d("ApiClient", "DNS resolved: $hostname -> $addresses")
+                    if (cache.put(normalizedHost, addresses, generation)) {
+                        CoreDataLog.d("ApiClient", "DNS resolved: $hostname -> $addresses")
+                    }
                 }
             } catch (error: UnknownHostException) {
-                cache.getStaleFallback(normalizedHost)?.let { stale ->
+                cache.getStaleFallback(normalizedHost, generation)?.let { stale ->
                     CoreDataLog.w("ApiClient", "DNS transient failure for $hostname, serving stale cache")
                     stale
                 } ?: run {
@@ -130,7 +207,7 @@ internal fun buildCachedAppDns(
             created.completeExceptionally(error)
             throw error
         } finally {
-            inFlight.remove(normalizedHost, created)
+            inFlight.remove(flightKey, created)
         }
     }
 }

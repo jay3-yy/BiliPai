@@ -7821,6 +7821,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         //  同步到 SharedPreferences，供同步读取使用 (VideoRepository 等)
         context.getSharedPreferences("privacy_mode", Context.MODE_PRIVATE)
             .edit().putBoolean("enabled", value).apply()
+        com.android.purebilibili.feature.tile.IncognitoModeTileService.requestListeningState(context)
     }
     
     // Search-only recording preference. Global privacy still overrides this choice.

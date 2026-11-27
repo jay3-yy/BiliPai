@@ -151,6 +151,9 @@ private data class BiliPaiJsPluginPreview(
     val sourceUrl: String?
 )
 
+// 扩展工坊仍在开发阶段，暂时隐藏订阅源浏览和管理入口。
+private const val SHOW_BPX_WORKSHOP = false
+
 // 常用入口按功能固定排序，不随开关或安装时间变化。
 private val pluginCenterCommonOrder = listOf(
     BuiltinPluginIds.SPONSOR_BLOCK,
@@ -664,7 +667,7 @@ fun PluginsContent(
                                 }
                             }
                             AppText(
-                                text = "当前 .bpx 扩展工坊、装扮部件与第三方沙盒接口仍在持续演进。所有外部扩展均运行于无登录凭证的隔离沙盒，连续超时或异常达 3 次将自动熔断停用。",
+                                text = "当前 .bpx 扩展、装扮部件与第三方沙盒接口仍在持续演进。所有外部扩展均运行于无登录凭证的隔离沙盒，连续超时或异常达 3 次将自动熔断停用。",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = AppContentColors.secondaryText(),
                             )
@@ -716,37 +719,39 @@ fun PluginsContent(
 
             builtInSection("常用插件", commonPlugins)
 
-            item(key = "bpx-workshop-heading") { PluginCenterSectionTitle("扩展工坊 (.bpx Beta)") }
-            item(key = "bpx-workshop-actions") {
-                AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    AppPreference(
-                        icon = rememberSettingsVector(R.drawable.ph_compass_24, R.drawable.ms_dashboard_24),
-                        title = if (isLoadingBpxRegistries) "正在同步订阅源目录…" else "浏览扩展订阅源工坊",
-                        subtitle = if (loadedBpxRegistries.isEmpty()) {
-                            "拉取官方食谱与已订阅 registry.json，支持一键安装与版本更新检测"
-                        } else {
-                            val totalExt = loadedBpxRegistries.sumOf { it.manifest?.extensions?.size ?: 0 }
-                            "已加载 ${loadedBpxRegistries.size} 个订阅源 · 共 $totalExt 款扩展（点击刷新）"
-                        },
-                        onClick = if (isLoadingBpxRegistries) null else ({
-                            isLoadingBpxRegistries = true
-                            scope.launch {
-                                loadedBpxRegistries = com.android.purebilibili.core.plugin.bpx.BpxRegistryManager
-                                    .fetchAllSubscribedRegistries(context)
-                                isLoadingBpxRegistries = false
-                            }
-                        }),
-                    )
-                    AppPreferenceDivider()
-                    AppPreference(
-                        icon = rememberSettingsVector(R.drawable.ph_link_24, R.drawable.ms_link_24),
-                        title = "管理自定义扩展源",
-                        subtitle = "已订阅 ${com.android.purebilibili.core.plugin.bpx.BpxRegistryManager.getSubscribedUrls(context).size} 个自定义扩展源",
-                        onClick = {
-                            customRegistryError = null
-                            showBpxRegistrySourceDialog = true
-                        },
-                    )
+            if (SHOW_BPX_WORKSHOP) {
+                item(key = "bpx-workshop-heading") { PluginCenterSectionTitle("扩展工坊 (.bpx Beta)") }
+                item(key = "bpx-workshop-actions") {
+                    AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        AppPreference(
+                            icon = rememberSettingsVector(R.drawable.ph_compass_24, R.drawable.ms_dashboard_24),
+                            title = if (isLoadingBpxRegistries) "正在同步订阅源目录…" else "浏览扩展订阅源工坊",
+                            subtitle = if (loadedBpxRegistries.isEmpty()) {
+                                "拉取官方食谱与已订阅 registry.json，支持一键安装与版本更新检测"
+                            } else {
+                                val totalExt = loadedBpxRegistries.sumOf { it.manifest?.extensions?.size ?: 0 }
+                                "已加载 ${loadedBpxRegistries.size} 个订阅源 · 共 $totalExt 款扩展（点击刷新）"
+                            },
+                            onClick = if (isLoadingBpxRegistries) null else ({
+                                isLoadingBpxRegistries = true
+                                scope.launch {
+                                    loadedBpxRegistries = com.android.purebilibili.core.plugin.bpx.BpxRegistryManager
+                                        .fetchAllSubscribedRegistries(context)
+                                    isLoadingBpxRegistries = false
+                                }
+                            }),
+                        )
+                        AppPreferenceDivider()
+                        AppPreference(
+                            icon = rememberSettingsVector(R.drawable.ph_link_24, R.drawable.ms_link_24),
+                            title = "管理自定义扩展源",
+                            subtitle = "已订阅 ${com.android.purebilibili.core.plugin.bpx.BpxRegistryManager.getSubscribedUrls(context).size} 个自定义扩展源",
+                            onClick = {
+                                customRegistryError = null
+                                showBpxRegistrySourceDialog = true
+                            },
+                        )
+                    }
                 }
             }
 

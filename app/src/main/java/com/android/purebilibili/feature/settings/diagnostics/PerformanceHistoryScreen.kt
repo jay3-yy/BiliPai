@@ -3,7 +3,7 @@ package com.android.purebilibili.feature.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -166,7 +166,7 @@ internal fun PerformanceHistoryContent(
     var summaryExpanded by rememberSaveable(current.id) { mutableStateOf(false) }
     val copy = rememberClipboardCopyHandler()
     LazyColumn(
-        modifier.appScrollBoundaryHaptics(listState),
+        modifier,
         state = listState,
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(14.dp),

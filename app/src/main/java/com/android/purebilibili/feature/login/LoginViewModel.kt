@@ -952,20 +952,25 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun syncCurrentAccountSession() {
+    private suspend fun syncCurrentAccountSession(): Unit = withContext(Dispatchers.IO) {
+        val expectedIdentity = TokenManager.accountIdentity.value
+        val cookieSession = com.android.purebilibili.core.network.AccountCookieSession.main()
         NetworkModule.clearRuntimeCookies()
         val response = NetworkModule.api.getNavInfo()
         val navData = response.data
         check(response.code == 0 && navData != null && navData.isLogin && navData.mid > 0L) {
             "登录态校验失败，请重新登录"
         }
-        TokenManager.saveMid(getApplication(), navData.mid)
+        val identity = checkNotNull(TokenManager.saveMid(getApplication(), navData.mid, expectedIdentity)) {
+            "登录期间账号已切换"
+        }
         com.android.purebilibili.core.network.AccountCookieStore.update(
-            getApplication(), com.android.purebilibili.core.network.AccountCookieSession.main(),
+            getApplication(), cookieSession,
             mapOf("DedeUserID" to navData.mid.toString()),
         )
-        TokenManager.saveVipStatus(navData.vip.status == 1)
-        AccountSessionStore.upsertCurrentAccount(getApplication(), navData)
+        checkNotNull(AccountSessionStore.upsertCurrentAccount(getApplication(), navData, identity)) {
+            "登录期间账号已切换"
+        }
     }
     
     /**

@@ -6,20 +6,30 @@ import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.graphics.drawable.Icon
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
+import com.android.purebilibili.core.ui.components.AppContentStatePresentation
+import com.android.purebilibili.core.ui.components.AppEmptyState
+import com.android.purebilibili.core.ui.components.AppListItem
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
-import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
 import com.android.purebilibili.core.util.FormatUtils
@@ -72,23 +82,55 @@ internal fun SpaceProfileDialogs(
             text = {
                 val listState = rememberLazyListState()
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = maxListHeight).appScrollBoundaryHaptics(listState),
+                    modifier = Modifier.heightIn(max = maxListHeight),
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    if (state.hasLoadedFollowedUsers && state.followedUsers.isEmpty()) item { AppText("暂无共同关注信息") }
+                    if (state.hasLoadedFollowedUsers && state.followedUsers.isEmpty()) item {
+                        AppEmptyState(
+                            title = "暂无共同关注信息",
+                            presentation = AppContentStatePresentation.INLINE,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                     items(state.followedUsers, key = { it.mid }) { user ->
-                        AppTextButton(onClick = { onDismissFollowedUsers(); onUserClick(user.mid) }) {
-                            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                AppText(user.uname)
-                                if (user.sign.isNotBlank()) AppText(user.sign, style = MaterialTheme.typography.bodySmall,
-                                    color = AppContentColors.secondaryText(), maxLines = 2)
-                            }
-                        }
+                        AppListItem(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onDismissFollowedUsers(); onUserClick(user.mid) },
+                            leadingContent = {
+                                AsyncImage(
+                                    model = FormatUtils.fixImageUrl(user.face),
+                                    contentDescription = "头像",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(40.dp).clip(CircleShape),
+                                )
+                            },
+                            headlineContent = {
+                                AppText(
+                                    user.uname,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            supportingContent = user.sign.takeIf { it.isNotBlank() }?.let { sign ->
+                                {
+                                    AppText(
+                                        sign,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = AppContentColors.secondaryText(),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            },
+                        )
                     }
                     item {
-                        if (state.isLoadingFollowedUsers) AppText("正在加载…")
-                        else if (state.hasMoreFollowedUsers) AppTextButton(onClick = onLoadMoreFollowedUsers) { AppText("加载更多") }
+                        Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                            if (state.isLoadingFollowedUsers) AppCircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            else if (state.hasMoreFollowedUsers) AppTextButton(onClick = onLoadMoreFollowedUsers) { AppText("加载更多") }
+                        }
                     }
                 }
             },
@@ -102,7 +144,7 @@ internal fun SpaceProfileDialogs(
             text = {
                 val listState = rememberLazyListState()
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = maxListHeight).appScrollBoundaryHaptics(listState),
+                    modifier = Modifier.heightIn(max = maxListHeight),
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
@@ -139,27 +181,66 @@ internal fun SpaceProfileDialogs(
             text = {
                 val listState = rememberLazyListState()
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = maxListHeight).appScrollBoundaryHaptics(listState),
+                    modifier = Modifier.heightIn(max = maxListHeight),
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    item { AppText(wall.name) }
-                    if (wall.list.isEmpty()) item { AppText("暂无粉丝勋章") }
-                    items(wall.list, key = { it.medal?.id ?: it.targetName }) { item ->
-                        AppTextButton(onClick = {
-                            onDismissMedals()
-                            val live = BilibiliNavigationTargetParser.parse(item.link) as? BilibiliNavigationTarget.Live
-                            if (item.liveStatus == 1 && live != null) onLiveClick(live.roomId, "", item.targetName)
-                            else item.medal?.ruid?.takeIf { it > 0 }?.let(onUserClick)
-                        }) {
-                            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                AppText(item.targetName + if (item.liveStatus == 1) " · 直播中" else "")
-                                item.medal?.let { medal ->
-                                    AppText("${medal.name} ${medal.level}" + if (item.medalInfo?.wearingStatus == 1) " · 佩戴中" else "",
-                                        style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
-                                }
-                            }
+                    if (wall.name.isNotBlank()) {
+                        item {
+                            AppText(
+                                wall.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppContentColors.secondaryText(),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                            )
                         }
+                    }
+                    if (wall.list.isEmpty()) item {
+                        AppEmptyState(
+                            title = "暂无粉丝勋章",
+                            presentation = AppContentStatePresentation.INLINE,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    items(wall.list, key = { it.medal?.id ?: it.targetName }) { item ->
+                        AppListItem(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onDismissMedals()
+                                    val live = BilibiliNavigationTargetParser.parse(item.link) as? BilibiliNavigationTarget.Live
+                                    if (item.liveStatus == 1 && live != null) onLiveClick(live.roomId, "", item.targetName)
+                                    else item.medal?.ruid?.takeIf { it > 0 }?.let(onUserClick)
+                                },
+                            headlineContent = {
+                                AppText(
+                                    item.targetName,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            supportingContent = item.medal?.let { medal ->
+                                {
+                                    val wearing = if (item.medalInfo?.wearingStatus == 1) " · 佩戴中" else ""
+                                    AppText(
+                                        "${medal.name} Lv.${medal.level}$wearing",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = AppContentColors.secondaryText(),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            },
+                            trailingContent = if (item.liveStatus == 1) {
+                                {
+                                    AppText(
+                                        "直播中",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = AppContentColors.accent(),
+                                    )
+                                }
+                            } else null,
+                        )
                     }
                 }
             },

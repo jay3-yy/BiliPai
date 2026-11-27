@@ -81,4 +81,23 @@ class BiliImageQualityPolicyTest {
             BiliImageQualityPolicy.resolveUrl("$image@960w_600h_1c_100q.webp", 80, targetWidthPx = 400),
         )
     }
+
+    @Test
+    fun `resolveUrlWithMetadata reports width bucket only when width transform is actually added`() {
+        val rawSized = BiliImageQualityPolicy.resolveUrlWithMetadata(image, 100, targetWidthPx = 640)
+        assertEquals("$image@672w_100q.webp", rawSized.url)
+        assertEquals(672, rawSized.appliedWidthBucket)
+
+        val preSizedCover = BiliImageQualityPolicy.resolveUrlWithMetadata(
+            "$image@640w_400h.webp",
+            100,
+            targetWidthPx = 640,
+        )
+        assertEquals("$image@640w_400h_100q.webp", preSizedCover.url)
+        assertEquals(null, preSizedCover.appliedWidthBucket)
+
+        val signed = BiliImageQualityPolicy.resolveUrlWithMetadata("$image?sign=1", 100, targetWidthPx = 640)
+        assertEquals("$image?sign=1", signed.url)
+        assertEquals(null, signed.appliedWidthBucket)
+    }
 }

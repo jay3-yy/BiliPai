@@ -114,3 +114,28 @@ fun getApiErrorMessage(code: Int, defaultMessage: String? = null): String {
         else -> defaultMessage ?: "未知错误 ($code)"
     }
 }
+
+private val CJK_CHAR_REGEX = Regex("[\\u4E00-\\u9FFF]")
+
+/**
+ * 将底层异常转为面向用户的中文提示：
+ * 保留后端返回的中文业务错误，过滤英文网络/序列化等技术栈原文。
+ */
+fun Throwable.toUserFriendlyMessage(fallback: String = "操作失败，请稍后重试"): String {
+    val raw = message?.trim().orEmpty()
+    val lower = raw.lowercase()
+    return when {
+        this is java.net.UnknownHostException || "unable to resolve host" in lower ->
+            "网络未连接，请检查网络设置"
+        this is java.net.SocketTimeoutException || "timeout" in lower || "timed out" in lower ->
+            "网络请求超时，请稍后重试"
+        this is java.net.ConnectException || "failed to connect" in lower || "connection refused" in lower ->
+            "无法连接服务器，请稍后重试"
+        this is javax.net.ssl.SSLException || "ssl" in lower && "handshake" in lower ->
+            "安全连接失败，请检查网络环境"
+        this is java.io.EOFException || "connection reset" in lower || "stream was reset" in lower ->
+            "网络连接已中断，请重试"
+        raw.isNotBlank() && CJK_CHAR_REGEX.containsMatchIn(raw) -> raw
+        else -> fallback
+    }
+}

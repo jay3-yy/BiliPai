@@ -5,6 +5,7 @@ import com.android.purebilibili.core.network.AppSignUtils
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.AccountCookieSession
 import com.android.purebilibili.core.network.AccountCookieStore
+import com.android.purebilibili.core.store.AccountSessionIdentity
 import com.android.purebilibili.core.store.AccountSessionStore
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.NavData
@@ -33,29 +34,33 @@ object SessionRepository {
             .ifBlank { java.util.UUID.randomUUID().toString() + "infoc" }
         val session = AccountCookieSession.from(sessData, csrf, resolvedMid, selectedBuvid)
         AccountCookieStore.replace(context, session, cookies + session.seed)
-        NetworkModule.clearRuntimeCookies()
-        NetworkModule.evictHttpCache(context)
         TokenManager.applyStoredSession(
             context = context, sessData = sessData, csrf = csrf, mid = resolvedMid,
             accessToken = accessToken, refreshToken = refreshToken,
             accessTokenPlatform = accessTokenPlatform, buvid3 = selectedBuvid, isVip = false,
+            forceEvictHttpCache = true,
         )
     }
 
-    suspend fun signOut(context: Context) = withContext(Dispatchers.IO) {
-        TokenManager.clear(context)
-        AccountSessionStore.clearActiveAccount(context)
-        AccountSessionStore.setPlaybackAccountMid(context, null)
-        NetworkModule.clearRuntimeCookies()
-        NetworkModule.clearPlaybackAccountClient()
-        NetworkModule.evictHttpCache(context)
+    suspend fun signOut(
+        context: Context,
+        expectedIdentity: AccountSessionIdentity? = null,
+    ): Boolean = withContext(Dispatchers.IO) {
+        TokenManager.clear(
+            context = context,
+            expectedIdentity = expectedIdentity,
+            shouldClearPlaybackAccountClient = { true },
+            onClearedLocked = {
+                AccountSessionStore.clearActiveAccount(context, clearNetworkState = false)
+                AccountSessionStore.setPlaybackAccountMid(context, null)
+            },
+        )
     }
 
     suspend fun completeQrLogin(context: Context, response: TvPollResponse) = withContext(Dispatchers.IO) {
         check(response.code == 0) { "扫码尚未确认" }
         val data = response.data ?: error("登录数据为空")
         val cookies = data.cookieInfo?.cookies.orEmpty().associate { it.name to it.value }
-        NetworkModule.clearRuntimeCookies()
         save(context, cookies["SESSDATA"].orEmpty(), cookies["bili_jct"].orEmpty(),
             cookies["buvid3"].orEmpty(), data.mid, data.accessToken, data.refreshToken,
             accessTokenPlatform = TokenManager.ACCESS_TOKEN_PLATFORM_ANDROID_HD, cookies = cookies)

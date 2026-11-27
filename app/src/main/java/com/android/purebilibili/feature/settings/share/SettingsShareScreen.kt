@@ -255,34 +255,27 @@ fun SettingsShareScreen(
                             iconTint = AppContentColors.secondaryText(),
                         )
                     }
-                    if (com.android.purebilibili.core.theme.LocalAppUiStyle.current == com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3) {
-                        if (uiState.savedProfiles.isEmpty()) {
-                            com.android.purebilibili.core.ui.components.AppText(
-                                "暂无保存的配置，可使用上方按钮保存。",
-                                modifier = Modifier.padding(16.dp),
-                            )
-                        }
-                        uiState.savedProfiles.forEach { profile ->
-                            androidx.compose.material3.ListItem(
-                                headlineContent = { com.android.purebilibili.core.ui.components.AppText(profile.name) },
-                                supportingContent = { com.android.purebilibili.core.ui.components.AppText("点击恢复此配置") },
-                                modifier = Modifier
-                                    .clickable(enabled = !uiState.isBusy) { viewModel.restoreSavedProfile(profile) },
-                            )
-                        }
-                    } else {
-                        uiState.savedProfiles.forEach { profile ->
+                    if (com.android.purebilibili.core.theme.LocalAppUiStyle.current == com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3 && uiState.savedProfiles.isEmpty()) {
+                        com.android.purebilibili.core.ui.components.AppText(
+                            "暂无保存的配置，可使用上方按钮保存。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppContentColors.secondaryText(),
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                    uiState.savedProfiles.forEachIndexed { index, profile ->
+                        if (index > 0 || com.android.purebilibili.core.theme.LocalAppUiStyle.current != com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3) {
                             AppPreferenceDivider(startIndent = 66.dp)
-                            AppPreference(
-                                icon = rememberSettingsVector(
-                                    settingsIconResource(R.drawable.ph_arrow_u_down_left_24, R.drawable.ms_restore_24),
-                                ),
-                                title = profile.name,
-                                subtitle = "点击恢复此配置",
-                                onClick = { viewModel.restoreSavedProfile(profile) },
-                                iconTint = AppContentColors.secondaryText(),
-                            )
                         }
+                        AppPreference(
+                            icon = rememberSettingsVector(
+                                settingsIconResource(R.drawable.ph_arrow_u_down_left_24, R.drawable.ms_restore_24),
+                            ),
+                            title = profile.name,
+                            subtitle = "点击恢复此配置",
+                            onClick = if (!uiState.isBusy) ({ viewModel.restoreSavedProfile(profile) }) else null,
+                            iconTint = AppContentColors.secondaryText(),
+                        )
                     }
                 }
             }

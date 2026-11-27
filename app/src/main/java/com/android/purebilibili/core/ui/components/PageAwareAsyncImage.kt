@@ -104,6 +104,9 @@ private fun PageAwareAsyncImageContent(
     }
     val imageKey = request?.data ?: model
     val slot = remember(memory, imageKey, request?.memoryCacheKey, request?.memoryCacheKeyExtras, resolvedImageLoader) { PageImageSlot(memory) }
+    val resolvedMemoryCacheKey = remember(imageKey, request?.memoryCacheKey, request?.memoryCacheKeyExtras, resolvedImageLoader) {
+        arrayOfNulls<MemoryCache.Key>(1)
+    }
     DisposableEffect(slot) {
         memory.register(slot)
         onDispose { memory.unregister(slot) }
@@ -134,8 +137,10 @@ private fun PageAwareAsyncImageContent(
         resolvedImageLoader, loadingAllowed, slot,
     ) {
         if (!loadingAllowed && request?.memoryCachePolicy?.readEnabled == true) {
-            request.memoryCacheKey?.let { key ->
-                resolvedImageLoader.memoryCache?.get(MemoryCache.Key(key, request.memoryCacheKeyExtras))?.image?.let { image ->
+            val lookupKey = resolvedMemoryCacheKey[0]
+                ?: request.memoryCacheKey?.let { MemoryCache.Key(it, request.memoryCacheKeyExtras) }
+            lookupKey?.let { key ->
+                resolvedImageLoader.memoryCache?.get(key)?.image?.let { image ->
                     slot.hold(image, image.asPainter(context, FilterQuality.Low))
                 }
             }
@@ -175,6 +180,7 @@ private fun PageAwareAsyncImageContent(
                 when (state) {
                     is AsyncImagePainter.State.Success -> {
                         val resource = state.result.image as ReleasablePageImage
+                        resolvedMemoryCacheKey[0] = state.result.memoryCacheKey
                         resource.image?.let { image ->
                             reveal?.onSuccess(state.result.dataSource, revealAllowed)
                             slot.retain(resource)

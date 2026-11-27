@@ -17,6 +17,10 @@ fun PlayUrlData.advertisedVideoQualityIds(): List<Int> =
         .distinct()
         .sortedDescending()
 
+fun PlayUrlData.vipVideoQualityIds(): Set<Int> = supportFormats.orEmpty()
+    .filter { it.needVip == true }
+    .mapTo(mutableSetOf()) { it.quality }
+
 fun missingPlaybackQualityBelowHighest(data: PlayUrlData): Int? {
     val available = data.playableVideoQualityIds().toSet()
     val highest = available.maxOrNull() ?: return null

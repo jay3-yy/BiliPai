@@ -2001,7 +2001,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 // The observer reloads once with that identity; equal MIDs never emit again.
                 viewModelScope.launch {
                     if (accountRequests.isCurrent(identity)) {
-                        TokenManager.saveMid(getApplication(), resolvedMid ?: 0L)
+                        TokenManager.saveMid(getApplication(), resolvedMid ?: 0L, identity)
                     }
                 }
                 return@onSuccess

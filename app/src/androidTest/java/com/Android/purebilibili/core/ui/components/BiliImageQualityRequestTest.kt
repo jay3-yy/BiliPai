@@ -70,4 +70,22 @@ class BiliImageQualityRequestTest {
         val original = source.newBuilder().originalBiliImage().build()
         assertSame(original, original.withBiliImageQuality(dataSaver = true, listQuality = 40))
     }
+
+    @Test
+    fun preSizedCoverPrefetchAndDisplayShareExactCacheIdentity() {
+        val base = ImageRequest.Builder(context)
+            .data(url)
+            .memoryCacheKey("cover_640x400")
+            .diskCacheKey("cover_640x400")
+            .placeholderMemoryCacheKey("cover_640x400")
+            .build()
+        val displayPrepared = base.withBiliImageQuality(dataSaver = false, listQuality = 100, targetWidthPx = null)
+        val preloadPrepared = base.withBiliImageQuality(dataSaver = false, listQuality = 100, targetWidthPx = 640)
+
+        assertEquals(displayPrepared.data, preloadPrepared.data)
+        assertEquals(displayPrepared.memoryCacheKeyExtras, preloadPrepared.memoryCacheKeyExtras)
+        assertEquals(displayPrepared.diskCacheKey, preloadPrepared.diskCacheKey)
+        assertEquals(displayPrepared.placeholderMemoryCacheKey, preloadPrepared.placeholderMemoryCacheKey)
+        assertEquals("cover_640x400|bilipai-image-quality-v1:100", preloadPrepared.diskCacheKey)
+    }
 }

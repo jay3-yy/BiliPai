@@ -102,7 +102,7 @@ internal fun SpaceWebVideosScreen(
                 onRefresh = viewModel::refresh,
                 modifier = Modifier.weight(1f),
             ) {
-                LazyVerticalGrid(
+                AppLazyVerticalGrid(
                     columns = GridCells.Adaptive(360.dp),
                     state = grid,
                     modifier = Modifier.fillMaxSize(),
@@ -118,16 +118,26 @@ internal fun SpaceWebVideosScreen(
                         )
                     }
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        Column(Modifier.fillMaxWidth().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                             when {
-                                state.isLoading -> AppText("正在加载…")
-                                state.error != null -> {
-                                    AppText(state.error.orEmpty())
-                                    AppTextButton(onClick = viewModel::retry) { AppText("重试") }
-                                }
-                                state.count == 0 -> AppText("暂无投稿")
+                                state.isLoading -> AppCircularProgressIndicator()
+                                state.error != null -> AppErrorState(
+                                    title = "加载失败",
+                                    message = state.error,
+                                    presentation = AppContentStatePresentation.INLINE,
+                                    primaryAction = AppContentStateAction("重试", viewModel::retry),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                state.count == 0 -> AppEmptyState(
+                                    title = "暂无投稿",
+                                    presentation = AppContentStatePresentation.INLINE,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                                 state.hasMore -> AppTextButton(onClick = viewModel::append) { AppText("加载更多") }
-                                state.count != null -> AppText("已到最后一页")
+                                state.count != null -> AppText(
+                                    "已到最后一页",
+                                    color = AppContentColors.secondaryText(),
+                                )
                             }
                         }
                     }

@@ -380,9 +380,22 @@ fun SpaceScreen(
         }
     }
     LaunchedEffect(fanModel) { fanModel.load() }
+    val spaceSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val spaceFeedbackScope = rememberCoroutineScope()
+    val showSpaceFeedback: (String) -> Unit = { feedbackMessage ->
+        if (feedbackMessage.isNotBlank()) {
+            spaceFeedbackScope.launch {
+                spaceSnackbarHostState.currentSnackbarData?.dismiss()
+                spaceSnackbarHostState.showSnackbar(
+                    message = feedbackMessage,
+                    duration = androidx.compose.material3.SnackbarDuration.Short,
+                )
+            }
+        }
+    }
     LaunchedEffect(fanModel) {
         fanModel.events.collect { message ->
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            showSpaceFeedback(message)
         }
     }
     val queryAicu = com.android.purebilibili.feature.aicu.LocalAicuNavigation.current
@@ -538,7 +551,7 @@ fun SpaceScreen(
     )
     LaunchedEffect(viewModel) {
         viewModel.locateEvents.collect { message ->
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            showSpaceFeedback(message)
         }
     }
     val currentSearchScope = currentSuccessState?.let { success ->
@@ -611,6 +624,9 @@ fun SpaceScreen(
     } else spaceChromeBackdrop
     AppScaffold(
         topBarIconBackdropSource = spaceChromeSource,
+        snackbarHost = {
+            com.android.purebilibili.core.ui.components.AppSnackbarHost(hostState = spaceSnackbarHostState)
+        },
         topBar = {
             BiliPaiImmersiveTopBar(
                 backdrop = spaceChromeBackdrop,
@@ -789,7 +805,7 @@ fun SpaceScreen(
                                                 },
                                                 onClick = {
                                                     if (!pinSpaceShortcut(context, mid, profile?.userInfo?.name?.ifBlank { "UID $mid" } ?: "UID $mid")) {
-                                                        android.widget.Toast.makeText(context, "未能添加桌面快捷方式", android.widget.Toast.LENGTH_SHORT).show()
+                                                        showSpaceFeedback("未能添加桌面快捷方式")
                                                     }
                                                 }),
                                         ))
@@ -1064,21 +1080,13 @@ fun SpaceScreen(
                             onSpaceDynamicRepostClick = { repostDynamicId = it },
                             onSpaceDynamicLikeClick = { dynamicId, isLiked ->
                                 dynamicInteractionViewModel.likeDynamic(dynamicId, isLiked) { _, message ->
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        message,
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                                    showSpaceFeedback(message)
                                 }
                             },
                             onSpaceDynamicReserveClick = dynamicInteractionViewModel::toggleDynamicReserve,
                             onSpaceDynamicDeleteClick = { action ->
                                 dynamicInteractionViewModel.deleteDynamic(action) { success, message ->
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        message,
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                                    showSpaceFeedback(message)
                                     if (success) viewModel.removeSpaceDynamic(action.dynamicId)
                                 }
                             },
@@ -1199,11 +1207,7 @@ fun SpaceScreen(
             onDismiss = { repostDynamicId = null },
             onRepost = { content, alsoComment, richContents, topic, onComplete ->
                 dynamicInteractionViewModel.repostDynamic(dynamicId, content, alsoComment, richContents, topic) { success, message ->
-                    android.widget.Toast.makeText(
-                        context,
-                        message,
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
+                    showSpaceFeedback(message)
                     if (success) {
                         forwardCountDeltas[dynamicId] = (forwardCountDeltas[dynamicId] ?: 0) + 1
                         repostDynamicId = null
@@ -1253,18 +1257,10 @@ fun SpaceScreen(
                         coroutineScope.launch {
                             if (isBlocked) {
                                 val result = blockedUpRepository.unblockUpWithBilibiliSync(mid)
-                                android.widget.Toast.makeText(
-                                    context,
-                                    result.message,
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
+                                showSpaceFeedback(result.message)
                             } else {
                                 val result = blockedUpRepository.blockUpWithBilibiliSync(mid, userName, userFace)
-                                android.widget.Toast.makeText(
-                                    context,
-                                    result.message,
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
+                                showSpaceFeedback(result.message)
                             }
                             viewModel.refreshRelation()
                             showBlockConfirmDialog = false

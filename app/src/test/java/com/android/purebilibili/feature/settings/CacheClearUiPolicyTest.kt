@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.CacheClearTarget
 import com.android.purebilibili.core.util.CacheUtils
 import kotlin.test.Test
@@ -186,8 +187,8 @@ class CacheClearUiPolicyTest {
             CacheClearTarget.NETWORK,
             resolveCacheClearDonutHitTarget(
                 segments = segments,
-                dx = 0f,
-                dy = -40f,
+                dx = 40f,
+                dy = 0f,
                 innerRadius = 20f,
                 outerRadius = 50f
             )
@@ -196,8 +197,8 @@ class CacheClearUiPolicyTest {
             CacheClearTarget.IMAGE_PREVIEW,
             resolveCacheClearDonutHitTarget(
                 segments = segments,
-                dx = 0f,
-                dy = 40f,
+                dx = -40f,
+                dy = 0f,
                 innerRadius = 20f,
                 outerRadius = 50f
             )
@@ -215,7 +216,7 @@ class CacheClearUiPolicyTest {
     }
 
     @Test
-    fun clearButtonLabel_usesSelectedBytes() {
+    fun clearButtonLabel_usesSelectedBytesOrSemanticResetLabel() {
         val breakdown = CacheUtils.CacheBreakdown(imageDiskCache = 2L * 1024 * 1024)
         assertEquals(
             "清理缓存 2.0 MB",
@@ -229,6 +230,91 @@ class CacheClearUiPolicyTest {
             resolveCacheClearButtonLabel(
                 breakdown = breakdown,
                 selectedTargets = emptySet()
+            )
+        )
+        assertEquals(
+            "重置选中元数据",
+            resolveCacheClearButtonLabel(
+                breakdown = breakdown,
+                selectedTargets = setOf(CacheClearTarget.APP_METADATA)
+            )
+        )
+    }
+
+    @Test
+    fun presetSelection_detectsRecommendedSpaceSavingAllAndCustom() {
+        assertEquals(
+            CacheClearPreset.RECOMMENDED,
+            resolveCacheClearPreset(resolvePresetTargets(CacheClearPreset.RECOMMENDED))
+        )
+        assertEquals(
+            CacheClearPreset.SPACE_SAVING,
+            resolveCacheClearPreset(resolvePresetTargets(CacheClearPreset.SPACE_SAVING))
+        )
+        assertEquals(
+            setOf(
+                CacheClearTarget.NETWORK,
+                CacheClearTarget.IMAGE_PREVIEW,
+                CacheClearTarget.TEMP_FILES_AND_LOGS
+            ),
+            resolvePresetTargets(CacheClearPreset.SPACE_SAVING)
+        )
+        assertEquals(
+            CacheClearPreset.ALL,
+            resolveCacheClearPreset(resolvePresetTargets(CacheClearPreset.ALL))
+        )
+        assertNull(resolveCacheClearPreset(setOf(CacheClearTarget.IMAGE_PREVIEW)))
+    }
+
+    @Test
+    fun autoClearStatusSummary_formatsIntervalThresholdPercentAndElapsedTime() {
+        val now = 10_000_000_000L
+        assertEquals(
+            "自动清理未开启 · 上限 5 GB（当前 0%）",
+            resolveAutoCacheClearStatusSummary(
+                interval = SettingsManager.AutoCacheClearInterval.NEVER,
+                thresholdGb = 5,
+                reclaimableDiskBytes = 0L,
+                lastAutoClearAtMillis = 0L,
+                nowMillis = now
+            )
+        )
+        val twoDaysMillis = 2L * 24L * 60L * 60L * 1000L
+        assertEquals(
+            "自动清理：每周 · 上限 4 GB（当前 50%） · 2 天前自动清理",
+            resolveAutoCacheClearStatusSummary(
+                interval = SettingsManager.AutoCacheClearInterval.WEEKLY,
+                thresholdGb = 4,
+                reclaimableDiskBytes = 2L * 1024L * 1024L * 1024L,
+                lastAutoClearAtMillis = now - twoDaysMillis,
+                nowMillis = now
+            )
+        )
+    }
+
+    @Test
+    fun cacheClearDeltaSummary_formatsBeforeAndAfterDiskBytes() {
+        assertNull(resolveCacheClearDeltaSummary(null, 1024L))
+        assertEquals(
+            "4.0 MB → 1.0 MB",
+            resolveCacheClearDeltaSummary(4L * 1024L * 1024L, 1024L * 1024L)
+        )
+    }
+
+    @Test
+    fun completeHeadline_distinguishesReleasedBytesFromMetadataOrMemoryClear() {
+        assertEquals(
+            "已释放 2.0 MB 磁盘空间",
+            resolveCacheClearCompleteHeadline(
+                releasedBytes = 2L * 1024 * 1024,
+                clearedTargets = setOf(CacheClearTarget.IMAGE_PREVIEW)
+            )
+        )
+        assertEquals(
+            "已清理 2 项缓存与运行时状态",
+            resolveCacheClearCompleteHeadline(
+                releasedBytes = 0L,
+                clearedTargets = setOf(CacheClearTarget.PLAYBACK_QUALITY, CacheClearTarget.APP_METADATA)
             )
         )
     }
@@ -266,7 +352,8 @@ class CacheClearUiPolicyTest {
         val segments = resolveCacheClearDonutSegments(CacheUtils.CacheBreakdown(httpCache = 500L), targets)
         assertTrue(segments.all { it.sweepAngle == 0f })
         assertTrue(segments.first { it.target == CacheClearTarget.APP_METADATA }.selected)
-        assertEquals("清理缓存 0 KB", resolveCacheClearButtonLabel(CacheUtils.CacheBreakdown(), targets))
+        assertEquals("重置选中元数据", resolveCacheClearButtonLabel(CacheUtils.CacheBreakdown(), targets))
+        assertEquals("待重置", resolveCacheClearDonutCenterCaption(CacheUtils.CacheBreakdown(), targets))
     }
 
     @Test

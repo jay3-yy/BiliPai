@@ -1,6 +1,7 @@
 // 文件路径: data/repository/DynamicRepository.kt
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.core.network.AccountCookieSession
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.OPUS_DETAIL_FEATURES
 import com.android.purebilibili.core.network.WbiUtils
@@ -9,6 +10,7 @@ import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.response.DynamicFeedResponse
 import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.data.model.response.DynamicStatModule
 import com.android.purebilibili.feature.article.shouldFetchArticleFallbackForOpus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -280,12 +282,11 @@ object DynamicRepository {
             val webItem = fetchWebDetailItem(id = cleanedId)
             webItem?.let(candidates::add)
 
-            var opusFallbackCvId: Long? = null
-            if (shouldRequestOpusDetailForDynamicDetail(webItem = webItem, seedItem = seed)) {
-                val opusFetch = fetchOpusDetail(cleanedId)
-                opusFetch.item?.let(candidates::add)
-                opusFallbackCvId = opusFetch.fallbackCvId
-            }
+            val opusFetch = if (shouldRequestOpusDetailForDynamicDetail(webItem = webItem, seedItem = seed)) {
+                fetchOpusDetail(cleanedId)
+            } else null
+            opusFetch?.item?.let(candidates::add)
+            val opusFallbackCvId = opusFetch?.fallbackCvId
 
             val preferredAfterWeb = resolvePreferredDynamicDetailItem(candidates)
             if (preferredAfterWeb != null &&
@@ -308,6 +309,8 @@ object DynamicRepository {
                 fetchWebDetailItem(id = null, rid = rid, type = 2)?.let(candidates::add)
             }
 
+            val favorite = opusFetch?.item?.modules?.module_stat?.favorite
+                ?: candidates.firstNotNullOfOrNull { it.modules.module_stat?.favorite }
             seed?.let(candidates::add)
             val resolved = resolvePreferredDynamicDetailItem(candidates)
             if (resolved != null) {
@@ -332,7 +335,13 @@ object DynamicRepository {
                     seed,
                 )
                 ensureCurrentAccount(account.identity)
-                return@withContext Result.success(withMetadata)
+                val stats = withMetadata.modules.module_stat
+                val resolvedStats = if (stats == null && favorite == null) null else {
+                    (stats ?: DynamicStatModule()).copy(favorite = favorite)
+                }
+                return@withContext Result.success(
+                    withMetadata.copy(modules = withMetadata.modules.copy(module_stat = resolvedStats))
+                )
             }
 
             Result.failure(Exception("动态详情为空"))
@@ -341,6 +350,30 @@ object DynamicRepository {
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)
+        }
+    }
+
+    internal suspend fun setOpusFavorite(
+        opusId: Long,
+        favorite: Boolean,
+        identity: AccountSessionIdentity,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val session = AccountCookieSession.main()
+            ensureCurrentAccount(identity)
+            val csrf = session.seed["bili_jct"]?.takeIf(String::isNotBlank) ?: error("请先登录")
+            val response = NetworkModule.api.favoriteOpusAction(
+                csrf = csrf,
+                body = buildFavoriteOpusRequest(opusId, favorite),
+                accountSession = session,
+            )
+            ensureCurrentAccount(identity)
+            check(response.code == 0) { response.message.ifBlank { if (favorite) "收藏失败" else "取消收藏失败" } }
+            Result.success(Unit)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Result.failure(error)
         }
     }
 

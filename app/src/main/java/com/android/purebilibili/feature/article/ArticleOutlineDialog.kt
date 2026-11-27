@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.article
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
@@ -19,7 +19,6 @@ import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppDialogAction
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
-import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 
 @Composable
 internal fun ArticleOutlineDialog(
@@ -40,7 +39,7 @@ internal fun ArticleOutlineDialog(
                 AppText("本文暂无标题目录", color = AppContentColors.secondaryText())
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = listMaxHeight).appScrollBoundaryHaptics(listState),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = listMaxHeight),
                     state = listState,
                 ) {
                     itemsIndexed(entries, key = { _, entry -> entry.blockIndex }) { index, entry ->

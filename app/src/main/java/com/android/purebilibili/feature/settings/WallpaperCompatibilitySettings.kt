@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import android.app.WallpaperManager
 import android.os.Build
 import android.widget.Toast
@@ -67,7 +69,7 @@ internal fun WallpaperCompatibilitySettings() {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                Toast.makeText(context, error.message ?: "图片取色失败", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, error.toUserFriendlyMessage("图片取色失败"), Toast.LENGTH_LONG).show()
             } finally {
                 busy = false
             }

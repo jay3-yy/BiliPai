@@ -624,6 +624,31 @@ private fun ImagePreviewOverlayContent(
         initialPage = initialIndex,
         pageCount = { images.size }
     )
+    val hdrPages = remember(requestToken) { mutableStateMapOf<Int, Boolean>() }
+    var ultraHdrBoostEnabled by remember(requestToken) { mutableStateOf(true) }
+    val previewHostView = LocalView.current
+    val currentPageHasHdr = hdrPages[pagerState.currentPage] == true
+    val targetDialogColorMode = resolveUltraHdrWindowColorMode(
+        hasGainmap = currentPageHasHdr,
+        boostEnabled = ultraHdrBoostEnabled,
+        isDismissing = isDismissing,
+    )
+    LaunchedEffect(previewHostView, targetDialogColorMode) {
+        val dialogWindow = ((previewHostView.parent as? DialogWindowProvider)
+            ?: (previewHostView as? DialogWindowProvider))?.window
+        if (dialogWindow != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            dialogWindow.colorMode = targetDialogColorMode
+        }
+    }
+    DisposableEffect(previewHostView) {
+        onDispose {
+            val dialogWindow = ((previewHostView.parent as? DialogWindowProvider)
+                ?: (previewHostView as? DialogWindowProvider))?.window
+            if (dialogWindow != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                dialogWindow.colorMode = android.content.pm.ActivityInfo.COLOR_MODE_DEFAULT
+            }
+        }
+    }
 
     if (onPageSelected != null) {
         LaunchedEffect(pagerState.settledPage) { onPageSelected(pagerState.settledPage) }
@@ -1351,6 +1376,8 @@ private fun ImagePreviewOverlayContent(
                                 .crossfade(false)
                                 .listener(
                                     onSuccess = { _, result ->
+                                        val loadedBitmap = (result.image as? coil3.BitmapImage)?.bitmap
+                                        hdrPages[page] = bitmapHasUltraHdrGainmap(loadedBitmap)
                                         if (placeholderCacheKey != null) {
                                             ImagePreviewOverlayController.recordSourceImage(
                                                 requestToken,
@@ -1605,6 +1632,36 @@ private fun ImagePreviewOverlayContent(
                     safeInsetEnd = safeDrawingPadding.calculateEndPadding(layoutDirection),
                     safeInsetBottom = safeDrawingPadding.calculateBottomPadding()
                 )
+                if (currentPageHasHdr && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(
+                                start = overlayPadding.start + AppSpacingTokens.Medium,
+                                top = overlayPadding.top + AppSpacingTokens.Medium,
+                            )
+                            .clip(CircleShape)
+                            .background(
+                                if (ultraHdrBoostEnabled) {
+                                    MediaContrastPalette.Scrim.copy(alpha = 0.72f)
+                                } else {
+                                    MediaContrastPalette.Scrim.copy(alpha = 0.42f)
+                                }
+                            )
+                            .appActionClickable {
+                                ultraHdrBoostEnabled = !ultraHdrBoostEnabled
+                            }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        AppText(
+                            text = if (ultraHdrBoostEnabled) "Ultra HDR" else "HDR 关",
+                            color = MediaContrastPalette.Foreground.copy(
+                                alpha = if (ultraHdrBoostEnabled) 0.96f else 0.7f
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
                 val resolvedText = resolveImagePreviewText(
                     textContent = textContent,
                     currentPage = pagerState.currentPage,
@@ -2245,14 +2302,14 @@ private fun ImagePreviewOverlayContent(
                     }
                 }
 
-                // 右下角声音切换按钮（支持有声实况播放与静音切换）
+                // 声音开关和实况菜单共用顶部安全区。
                 if (!currentLiveVideoUrl.isNullOrBlank() && isLivePhotoEnabled) {
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
+                            .align(Alignment.TopEnd)
                             .padding(
                                 end = maxOf(12.dp, safeDrawingPadding.calculateEndPadding(layoutDirection) + 4.dp),
-                                bottom = overlayPadding.bottom
+                                top = overlayPadding.top,
                             )
                             .clip(CircleShape)
                             .background(MediaContrastPalette.Scrim.copy(alpha = 0.65f))

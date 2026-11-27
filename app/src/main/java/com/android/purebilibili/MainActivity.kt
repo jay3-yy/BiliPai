@@ -1,6 +1,8 @@
 // 文件路径: app/src/main/java/com/android/purebilibili/MainActivity.kt
 package com.android.purebilibili
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.feature.privacy.authenticatePrivacyAccess
 
 import com.android.purebilibili.core.ui.components.AppSnackbarHost
@@ -1158,6 +1160,13 @@ class MainActivity : AppCompatActivity() {
         //  初始调用，后续会根据主题动态更新
         enableEdgeToEdge()
         AppWindowSystemUiController.configureEdgeToEdgeHost(this)
+        com.android.purebilibili.core.ui.adaptive.installExternalDropTarget(this) { droppedLink ->
+            handleIntent(
+                Intent(Intent.ACTION_SEND)
+                    .setType("text/plain")
+                    .putExtra(Intent.EXTRA_TEXT, droppedLink)
+            )
+        }
         
         // 初始化小窗管理器
         miniPlayerManager = MiniPlayerManager.getInstance(this)
@@ -2709,7 +2718,7 @@ class MainActivity : AppCompatActivity() {
                                                 current = startupUpdateDownloadState,
                                                 errorMessage = error.message ?: "更新下载失败"
                                             )
-                                            Toast.makeText(context, error.message ?: "更新下载失败", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, error.toUserFriendlyMessage("更新下载失败"), Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 }) {

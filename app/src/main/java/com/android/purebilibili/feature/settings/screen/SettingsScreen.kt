@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
@@ -163,22 +165,18 @@ fun SettingsScreen(
 
     // Local UI State
     var showCacheDialog by remember { mutableStateOf(false) }
-    var showCacheAnimation by remember { mutableStateOf(false) }
+    var cacheDialogStage by remember { mutableStateOf(CacheClearDialogStage.SELECT) }
     var cacheProgress by remember { mutableStateOf<CacheClearProgress?>(null) }
-    var cacheClearSucceeded by remember { mutableStateOf(false) }
-    var cacheReleasedSize by remember { mutableStateOf("") }
+    var cacheReleasedBytes by remember { mutableLongStateOf(0L) }
+    var cacheBeforeDiskBytes by remember { mutableStateOf<Long?>(null) }
+    var lastAutoCacheClearAt by remember { mutableLongStateOf(0L) }
+    var cacheErrorMessage by remember { mutableStateOf<String?>(null) }
     val cacheClearOptions = remember { resolveCacheClearOptions() }
     var selectedCacheClearTargets by remember {
         mutableStateOf(resolveDefaultCacheClearTargets())
     }
     var pendingCacheClearTargets by remember {
         mutableStateOf(resolveDefaultCacheClearTargets())
-    }
-    val selectedCacheSizeSummary = remember(state.cacheBreakdown, selectedCacheClearTargets) {
-        resolveSelectedCacheSizeSummary(
-            breakdown = state.cacheBreakdown,
-            selectedTargets = selectedCacheClearTargets
-        )
     }
     var versionClickCount by remember { mutableIntStateOf(0) }
     var showEasterEggDialog by remember { mutableStateOf(false) }
@@ -300,8 +298,11 @@ fun SettingsScreen(
     // Callbacks
     val onClearCacheAction = {
         selectedCacheClearTargets = resolveDefaultCacheClearTargets()
-        cacheClearSucceeded = false
-        cacheReleasedSize = ""
+        cacheDialogStage = CacheClearDialogStage.SELECT
+        cacheProgress = null
+        cacheReleasedBytes = 0L
+        cacheBeforeDiskBytes = null
+        cacheErrorMessage = null
         viewModel.refreshCacheSize()
         showCacheDialog = true
     }
@@ -431,7 +432,7 @@ fun SettingsScreen(
         }.onFailure { error ->
             if (!silent || shouldOpenReleaseNotes) {
                 updateStatusText = context.getString(R.string.settings_update_failed)
-                Toast.makeText(context, error.message ?: context.getString(R.string.settings_update_error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, error.toUserFriendlyMessage(context.getString(R.string.settings_update_error)), Toast.LENGTH_SHORT).show()
             }
         }
         isCheckingUpdate = false
@@ -462,13 +463,18 @@ fun SettingsScreen(
     }
 
     // Effects
-    LaunchedEffect(showCacheAnimation) {
-        if (!showCacheAnimation) return@LaunchedEffect
-        val startedAt = android.os.SystemClock.elapsedRealtime()
-        cacheClearSucceeded = false
+    LaunchedEffect(showCacheDialog) {
+        if (!showCacheDialog) return@LaunchedEffect
+        lastAutoCacheClearAt = SettingsManager.getLastAutoCacheClearAt(context)
+    }
+
+    LaunchedEffect(cacheDialogStage) {
+        if (cacheDialogStage != CacheClearDialogStage.CLEARING) return@LaunchedEffect
+        cacheErrorMessage = null
         cacheProgress = CacheClearProgress(0L, pendingCacheClearTargets.size.toLong())
         try {
             val before = CacheUtils.getCacheBreakdown(context)
+            cacheBeforeDiskBytes = before.reclaimableDiskSize
             val clearResult = viewModel.clearCache(pendingCacheClearTargets) { step ->
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
                     cacheProgress = CacheClearProgress(
@@ -480,30 +486,32 @@ fun SettingsScreen(
             if (shouldMarkCacheClearAnimationComplete(clearResult.isSuccess)) {
                 val after = clearResult.getOrThrow()
                 // 磁盘释放量不混入内存估算；任务进度与容量统计采用不同的单位。
-                cacheReleasedSize = formatCacheClearBytes((before.reclaimableDiskSize - after.reclaimableDiskSize).coerceAtLeast(0L))
-                cacheClearSucceeded = true
+                val released = (before.reclaimableDiskSize - after.reclaimableDiskSize).coerceAtLeast(0L)
+                cacheReleasedBytes = released
                 cacheProgress = CacheClearProgress(
                     current = pendingCacheClearTargets.size.toLong(), total = pendingCacheClearTargets.size.toLong(),
-                    isComplete = true, clearedSize = cacheReleasedSize
+                    isComplete = true, clearedSize = formatCacheClearBytes(released)
                 )
-                if (android.os.SystemClock.elapsedRealtime() - startedAt < 150L) {
-                    showCacheAnimation = false
-                    cacheProgress = null
-                }
+                cacheDialogStage = CacheClearDialogStage.COMPLETE
             } else {
-                Toast.makeText(context, resolveCacheClearFailureMessage(clearResult.exceptionOrNull(),
-                    context.getString(R.string.settings_cache_clear_failed)), Toast.LENGTH_SHORT).show()
+                cacheErrorMessage = resolveCacheClearFailureMessage(
+                    clearResult.exceptionOrNull(),
+                    context.getString(R.string.settings_cache_clear_failed)
+                )
                 viewModel.refreshCacheSize()
-                showCacheAnimation = false
                 cacheProgress = null
+                cacheDialogStage = CacheClearDialogStage.ERROR
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (error: Exception) {
-            Toast.makeText(context, resolveCacheClearFailureMessage(error), Toast.LENGTH_SHORT).show()
+            cacheErrorMessage = resolveCacheClearFailureMessage(
+                error,
+                context.getString(R.string.settings_cache_clear_failed)
+            )
             viewModel.refreshCacheSize()
-            showCacheAnimation = false
             cacheProgress = null
+            cacheDialogStage = CacheClearDialogStage.ERROR
         }
     }
 
@@ -553,10 +561,14 @@ fun SettingsScreen(
     }
     if (showCacheDialog) {
         CacheClearConfirmDialog(
+            stage = cacheDialogStage,
             breakdown = state.cacheBreakdown,
-            selectedCacheSizeSummary = selectedCacheSizeSummary,
             options = cacheClearOptions,
             selectedTargets = selectedCacheClearTargets,
+            clearedTargets = pendingCacheClearTargets,
+            autoClearInterval = autoCacheClearInterval,
+            autoClearThresholdGb = autoCacheClearThresholdGb,
+            lastAutoClearAtMillis = lastAutoCacheClearAt,
             onTargetToggle = { target, checked ->
                 selectedCacheClearTargets = if (checked) {
                     selectedCacheClearTargets + target
@@ -564,21 +576,34 @@ fun SettingsScreen(
                     selectedCacheClearTargets - target
                 }
             },
+            onPresetSelect = { preset ->
+                selectedCacheClearTargets = resolvePresetTargets(preset)
+            },
             onConfirm = {
                 if (selectedCacheClearTargets.isEmpty()) {
                     Toast.makeText(context, context.getString(R.string.settings_cache_select_at_least_one), Toast.LENGTH_SHORT).show()
                 } else {
                     pendingCacheClearTargets = selectedCacheClearTargets
-                    cacheProgress = CacheClearProgress(0L, selectedCacheClearTargets.size.toLong())
-                    showCacheAnimation = true
+                    cacheDialogStage = CacheClearDialogStage.CLEARING
                 }
             },
-            onDismiss = { if (!showCacheAnimation) showCacheDialog = false },
-            clearing = showCacheAnimation,
+            onDismiss = {
+                if (cacheDialogStage != CacheClearDialogStage.CLEARING) {
+                    showCacheDialog = false
+                }
+            },
             progress = cacheProgress,
-            clearSucceeded = cacheClearSucceeded,
-            releasedSize = cacheReleasedSize,
-            onProgressDismiss = { showCacheAnimation = false; cacheProgress = null }
+            releasedBytes = cacheReleasedBytes,
+            beforeDiskBytes = cacheBeforeDiskBytes,
+            errorMessage = cacheErrorMessage,
+            onRetry = {
+                cacheDialogStage = CacheClearDialogStage.CLEARING
+            },
+            onBackToSelect = {
+                cacheProgress = null
+                cacheErrorMessage = null
+                cacheDialogStage = CacheClearDialogStage.SELECT
+            }
         )
     }
 
@@ -720,7 +745,7 @@ fun SettingsScreen(
         }
     }
     val settingsBackTarget = resolveSettingsBackTarget(
-        showCacheAnimation = showCacheAnimation,
+        showCacheAnimation = showCacheDialog && cacheDialogStage == CacheClearDialogStage.CLEARING,
         showCacheDialog = showCacheDialog,
         showPathDialog = showPathDialog,
         showImageSavePathDialog = showImageSavePathDialog,
@@ -737,8 +762,7 @@ fun SettingsScreen(
             SettingsBackTarget.NONE -> Unit
             SettingsBackTarget.CACHE_ANIMATION -> {
                 if (cacheProgress?.isComplete == true) {
-                    showCacheAnimation = false
-                    cacheProgress = null
+                    cacheDialogStage = CacheClearDialogStage.COMPLETE
                 }
             }
             SettingsBackTarget.CACHE_DIALOG -> showCacheDialog = false

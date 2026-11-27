@@ -222,14 +222,22 @@ fun DynamicScreen(
     val context = LocalContext.current
     var pendingMessageShare by remember { mutableStateOf<com.android.purebilibili.data.model.response.DynamicItem?>(null) }
     val dynamicMenuScope = rememberCoroutineScope()
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val showFeedback: (String) -> Unit = { feedbackMessage ->
+        if (feedbackMessage.isNotBlank()) {
+            dynamicMenuScope.launch {
+                snackbarHostState.currentSnackbarData?.dismiss()
+                snackbarHostState.showSnackbar(
+                    message = feedbackMessage,
+                    duration = androidx.compose.material3.SnackbarDuration.Short,
+                )
+            }
+        }
+    }
     val saveDynamicFallback: (com.android.purebilibili.data.model.response.DynamicItem) -> Unit = { item ->
         dynamicMenuScope.launch {
             val saved = saveDynamicImageToGallery(context, item)
-            android.widget.Toast.makeText(
-                context,
-                if (saved) "已保存动态图片" else "保存动态失败",
-                android.widget.Toast.LENGTH_SHORT,
-            ).show()
+            showFeedback(if (saved) "已保存动态图片" else "保存动态失败")
         }
     }
     val checkDynamicFallback: (String, String?) -> Unit = { id, text ->
@@ -238,9 +246,7 @@ fun DynamicScreen(
 
     val unfoldRelatedDynamics: (String) -> Unit = { id ->
         viewModel.unfoldRelatedDynamics(id) { _, message ->
-            if (message.isNotBlank()) {
-                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
-            }
+            showFeedback(message)
         }
     }
 
@@ -396,13 +402,13 @@ fun DynamicScreen(
                         pendingQuickFilterFeedback =
                             com.android.purebilibili.feature.plugin.QuickContentFilterTarget.fromDynamic(matchedItem)
                     } else {
-                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                        showFeedback(message)
                     }
                 }
             },
             onOther = {
                 viewModel.handleManageAction(it) { _, message ->
-                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                    showFeedback(message)
                 }
             },
         )
@@ -841,6 +847,12 @@ fun DynamicScreen(
 
     AppScaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = {
+            com.android.purebilibili.core.ui.components.AppSnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = com.android.purebilibili.core.ui.LocalBottomBarContentPadding.current),
+            )
+        },
         containerColor = Color.Transparent // 透明背景以显示渐变
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
@@ -1088,17 +1100,17 @@ fun DynamicScreen(
                                         onRepostClick = { showRepostDialog = it },
                                         onLikeClick = { dynamicId ->
                                             viewModel.likeDynamic(dynamicId) { _, msg ->
-                                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                                showFeedback(msg)
                                             }
                                         },
                                         onWatchLaterClick = { aid ->
                                             viewModel.addToWatchLater(aid) { _, msg ->
-                                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                                showFeedback(msg)
                                             }
                                         },
                                         onDeleteClick = { action ->
                                             viewModel.deleteDynamic(action) { _, msg ->
-                                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                                showFeedback(msg)
                                             }
                                         },
                                         onManageAction = manageActionCallback,
@@ -1324,17 +1336,17 @@ fun DynamicScreen(
                                     onRepostClick = { showRepostDialog = it },
                                     onLikeClick = { dynamicId ->
                                         viewModel.likeDynamic(dynamicId) { _, msg ->
-                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            showFeedback(msg)
                                         }
                                     },
                                     onWatchLaterClick = { aid ->
                                         viewModel.addToWatchLater(aid) { _, msg ->
-                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            showFeedback(msg)
                                         }
                                     },
                                     onDeleteClick = { action ->
                                         viewModel.deleteDynamic(action) { _, msg ->
-                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                            showFeedback(msg)
                                         }
                                     },
                                     onManageAction = manageActionCallback,
@@ -1549,7 +1561,7 @@ fun DynamicScreen(
             onDismiss = { showRepostDialog = null },
             onRepost = { content, alsoComment, richContents, topic, onComplete ->
                 viewModel.repostDynamic(dynamicId, content, alsoComment, richContents, topic) { success, msg ->
-                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                    showFeedback(msg)
                     if (success) showRepostDialog = null
                     onComplete(success)
                 }
@@ -1583,11 +1595,11 @@ fun DynamicScreen(
                 publishError = null
                 if (editId.isNullOrBlank()) {
                     viewModel.publishDynamic(draft = draft, context = context) { success, msg ->
-                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                        showFeedback(msg)
                         if (success) {
                             dynamicMenuScope.launch {
                                 val clearResult = com.android.purebilibili.feature.dynamic.components.DynamicDraftStore.clear(context, selfUid)
-                                if (clearResult.isFailure) android.widget.Toast.makeText(context, "发布成功，但草稿清除失败", android.widget.Toast.LENGTH_LONG).show()
+                                if (clearResult.isFailure) showFeedback("发布成功，但草稿清除失败")
                                 submitting = false
                                 showPublishDialog = false
                                 editingDraft = com.android.purebilibili.data.model.response.DynamicPublishDraft(text = "")
@@ -1599,7 +1611,7 @@ fun DynamicScreen(
                     }
                 } else {
                     viewModel.editDynamic(context, editId, draft) { success, msg ->
-                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                        showFeedback(msg)
                         submitting = false
                         if (success) {
                             showPublishDialog = false
@@ -1653,7 +1665,7 @@ fun DynamicScreen(
                             reasonType = selectedReason.type,
                             reasonDesc = otherDesc
                         ) { _, msg ->
-                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                            showFeedback(msg)
                             pendingReport = null
                         }
                     }
@@ -1674,7 +1686,7 @@ fun DynamicScreen(
             item = shareItem,
             onDismiss = { pendingMessageShare = null },
             onResult = { _, message ->
-                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                showFeedback(message)
             },
         )
     }

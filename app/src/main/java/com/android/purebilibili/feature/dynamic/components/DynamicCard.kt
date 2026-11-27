@@ -1,6 +1,8 @@
 // 文件路径: feature/dynamic/components/DynamicCard.kt
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.util.toUserFriendlyMessage
+
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
 import com.android.purebilibili.core.ui.adaptive.adaptiveExternalTextDragSource
@@ -2273,7 +2275,7 @@ internal fun DynamicLinkCardSlot(
                     if (com.android.purebilibili.core.store.TokenManager.accountIdentity.value == account && session.complete(result)) {
                         if (feedbackActive.get() && visualWorkAllowed) {
                             result.onFailure { error ->
-                                android.widget.Toast.makeText(context, error.message ?: "预约操作失败", android.widget.Toast.LENGTH_SHORT).show()
+                                android.widget.Toast.makeText(context, error.toUserFriendlyMessage("预约操作失败"), android.widget.Toast.LENGTH_SHORT).show()
                             }
                         }
                     }

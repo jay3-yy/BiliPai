@@ -99,7 +99,12 @@ fun LiveCard(
                         .background(AppContentColors.accent(), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    AppText("🔴", fontSize = MaterialTheme.typography.titleMedium.fontSize)
+                    AppIcon(
+                        imageVector = rememberAppPlayIcon(),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(AppSpacingTokens.Large),
+                    )
                 }
                 Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
                 AppText(

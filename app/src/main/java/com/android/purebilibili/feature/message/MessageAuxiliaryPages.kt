@@ -6,10 +6,14 @@ import com.android.purebilibili.core.ui.components.appVerticalScroll as vertical
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -183,12 +187,19 @@ internal fun MessageAuxiliaryPage(
                         }
                     }
                 }
-                if (state.loading) item { AppText("加载中…", Modifier.padding(24.dp)) }
-                state.error?.let { error -> item {
-                    Column(Modifier.padding(16.dp)) {
-                        AppText(error, color = AppContentColors.secondaryText())
-                        AppTextButton(onClick = { model.loadPage(page, state.query) }) { AppText("重试") }
+                if (state.loading) item {
+                    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        AppCircularProgressIndicator()
                     }
+                }
+                state.error?.let { error -> item {
+                    AppErrorState(
+                        title = "加载失败",
+                        message = error,
+                        presentation = AppContentStatePresentation.INLINE,
+                        primaryAction = AppContentStateAction("重试") { model.loadPage(page, state.query) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 } }
                 if (page == "settings:0") item {
                     MessageSettingRow("禁用收到的赞", "关闭消息页入口及其未读提醒", onClick = { scope.launch { MessageCenterPreferences.setDisabledLikes(context, !disabledLikes) } }) {
@@ -231,16 +242,44 @@ internal fun MessageAuxiliaryPage(
                 }
                 items(state.users, key = { it.mid }) { user ->
                     Row(Modifier.fillMaxWidth().clickable { onOpenLink("bilibili://space/${user.mid}") }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        AsyncImage(user.face, "头像", Modifier.size(44.dp))
+                        AsyncImage(
+                            model = user.face,
+                            contentDescription = "头像",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(44.dp).clip(CircleShape),
+                        )
                         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                            AppText(user.uname, style = MaterialTheme.typography.bodyLarge)
-                            AppText(user.sign, maxLines = 2, color = AppContentColors.secondaryText())
+                            AppText(
+                                user.uname,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (user.sign.isNotBlank()) {
+                                AppText(
+                                    user.sign,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = AppContentColors.secondaryText(),
+                                )
+                            }
                         }
                         if (page == "blacklist") AppTextButton(onClick = { pendingUnblock = user }, enabled = !state.busy) { AppText("移除") }
                     }
                 }
-                if (state.hasMore) item { AppTextButton(onClick = model::more, enabled = !state.busy) { AppText(if (state.busy) "加载中…" else "加载更多") } }
-                if (!state.loading && state.error == null && state.settings.isEmpty() && state.users.isEmpty() && state.keywords == null) item { AppText("暂无内容", Modifier.padding(24.dp)) }
+                if (state.hasMore) item {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                        AppTextButton(onClick = model::more, enabled = !state.busy) { AppText(if (state.busy) "加载中…" else "加载更多") }
+                    }
+                }
+                if (!state.loading && state.error == null && state.settings.isEmpty() && state.users.isEmpty() && state.keywords == null) item {
+                    AppEmptyState(
+                        title = "暂无内容",
+                        presentation = AppContentStatePresentation.INLINE,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
     }
@@ -250,15 +289,18 @@ internal fun MessageAuxiliaryPage(
             onDismissRequest = { badgeEditor = null },
             title = { AppText(if (editingDynamic) "动态未读标记" else "消息未读标记") },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     com.android.purebilibili.core.store.UnreadBadgeMode.entries.forEach { mode ->
-                        AppTextButton(onClick = {
-                            badgeEditor = null
-                            scope.launch {
-                                if (editingDynamic) MessageCenterPreferences.setDynamicBadgeMode(context, mode)
-                                else MessageCenterPreferences.setMessageBadgeMode(context, mode)
-                            }
-                        }) { AppText((if (mode == currentMode) "✓  " else "") + mode.label) }
+                        AppSingleChoiceRow(
+                            selected = mode == currentMode,
+                            onClick = {
+                                badgeEditor = null
+                                scope.launch {
+                                    if (editingDynamic) MessageCenterPreferences.setDynamicBadgeMode(context, mode)
+                                    else MessageCenterPreferences.setMessageBadgeMode(context, mode)
+                                }
+                            },
+                        ) { AppText(mode.label) }
                     }
                 }
             },
@@ -267,11 +309,19 @@ internal fun MessageAuxiliaryPage(
     }
     selection?.let { setting ->
         AppAlertDialog(onDismissRequest = { selection = null }, title = { AppText(setting.title.ifBlank { "接收范围" }) }, text = {
-            Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-                setting.options.forEach { option -> AppTextButton(onClick = {
-                    selection = null
-                    if (!option.selected) model.changeSetting(setting, selectedType = option.type)
-                }) { AppText((if (option.selected) "✓  " else "") + option.text) } }
+            Column(
+                modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                setting.options.forEach { option ->
+                    AppSingleChoiceRow(
+                        selected = option.selected,
+                        onClick = {
+                            selection = null
+                            if (!option.selected) model.changeSetting(setting, selectedType = option.type)
+                        },
+                    ) { AppText(option.text) }
+                }
             }
         }, confirmButton = { AppTextButton(onClick = { selection = null }) { AppText("取消") } })
     }

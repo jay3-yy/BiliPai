@@ -4,23 +4,30 @@ import com.android.purebilibili.core.ui.AppContentColors
 
 import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.network.grpc.DynamicReactionApi
 import com.android.purebilibili.core.network.grpc.DynamicReactionUser
 import com.android.purebilibili.core.ui.AppModalBottomSheet
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
+import com.android.purebilibili.core.ui.components.AppContentStateAction
+import com.android.purebilibili.core.ui.components.AppContentStatePresentation
+import com.android.purebilibili.core.ui.components.AppEmptyState
+import com.android.purebilibili.core.ui.components.AppErrorState
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
-import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.feature.video.playback.policy.VideoUiWorkPermission
 import com.android.purebilibili.feature.video.playback.policy.runVisibleVideoUiWork
@@ -91,7 +98,7 @@ fun DynamicReactionSheet(item: DynamicItem, onDismiss: () -> Unit, onUserClick: 
         }
         AppText(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).appScrollBoundaryHaptics(listState),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp),
             state = listState,
             contentPadding = PaddingValues(16.dp),
         ) {
@@ -103,24 +110,50 @@ fun DynamicReactionSheet(item: DynamicItem, onDismiss: () -> Unit, onUserClick: 
                 Row(
                     Modifier.fillMaxWidth().appActionClickable { onDismiss(); onUserClick(user.mid) }.padding(vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    AsyncImage(model = user.face, contentDescription = null, modifier = Modifier.size(44.dp).clip(CircleShape))
-                    Column {
-                        AppText(user.name, style = MaterialTheme.typography.bodyLarge)
-                        AppText(user.action, color = AppContentColors.secondaryText())
+                    AsyncImage(
+                        model = user.face,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(44.dp).clip(CircleShape),
+                    )
+                    Column(Modifier.weight(1f)) {
+                        AppText(
+                            user.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        AppText(
+                            user.action,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppContentColors.secondaryText(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
             item {
-                when {
-                    loading -> AppText("正在加载…", modifier = Modifier.padding(16.dp))
-                    error != null -> Column {
-                        AppText(error.orEmpty(), color = AppContentColors.error())
-                        AppTextButton(onClick = { scope.launch { load() } }) { AppText("重试") }
+                Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                    when {
+                        loading -> AppCircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        error != null -> AppErrorState(
+                            title = "加载失败",
+                            message = error,
+                            presentation = AppContentStatePresentation.INLINE,
+                            primaryAction = AppContentStateAction("重试") { scope.launch { load() } },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        loaded && users.isEmpty() -> AppEmptyState(
+                            title = "暂无赞和转发用户",
+                            presentation = AppContentStatePresentation.INLINE,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        hasMore -> AppText("继续滑动加载", style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
+                        else -> AppText("已显示全部", style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
                     }
-                    loaded && users.isEmpty() -> AppText("暂无赞和转发用户")
-                    hasMore -> AppText("继续滑动加载", color = AppContentColors.secondaryText())
-                    else -> AppText("已显示全部", color = AppContentColors.secondaryText())
                 }
             }
         }

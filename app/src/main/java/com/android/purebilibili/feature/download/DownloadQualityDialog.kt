@@ -35,7 +35,8 @@ fun DownloadQualityDialog(
     qualityOptions: List<Pair<Int, String>>,  // (qualityId, qualityLabel)
     currentQuality: Int,
     onQualitySelected: (Int, DownloadOptions) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    vipQualityIds: Set<Int>,
 ) {
     val preferences = rememberDownloadPreferenceState(qualityOptions, currentQuality) ?: return
     val context = LocalContext.current.applicationContext
@@ -61,7 +62,6 @@ fun DownloadQualityDialog(
                 // 画质列表
                 qualityOptions.forEach { (qualityId, qualityLabel) ->
                     val isSelected = qualityId == preferences.selectedQuality
-                    val isVip = qualityLabel.contains("4K") || qualityLabel.contains("HDR") || qualityLabel.contains("杜比")
 
                     AppSingleChoiceRow(
                         selected = isSelected,
@@ -76,7 +76,7 @@ fun DownloadQualityDialog(
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = AppSurfaceTokens.onSurfaceContainerHigh()
                             )
-                            if (isVip) {
+                            if (qualityId in vipQualityIds) {
                                 Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
                                 AppSurface(
                                     color = MaterialTheme.colorScheme.tertiary,

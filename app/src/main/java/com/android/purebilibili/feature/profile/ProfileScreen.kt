@@ -6608,7 +6608,7 @@ fun ProfileTripleActionEntry(
     if (showDialog) {
         AppAlertDialog(
             onDismissRequest = { showDialog = false },
-            title = { AppText("🎉 三连成功！") },
+            title = { AppText("三连成功！") },
             text = { AppText("请选择你想解锁的功能：") },
             confirmButton = {
                 AppTextButton(onClick = {

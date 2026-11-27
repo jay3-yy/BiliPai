@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.nearby
 
 import android.content.Context
+import android.os.Build
+import com.android.purebilibili.feature.cast.hasRawLocalNetworkAccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +18,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+internal fun needsNearbyLocalNetworkPermission(context: Context): Boolean =
+    Build.VERSION.SDK_INT >= 37 && context.applicationInfo.targetSdkVersion >= 37 &&
+        !hasRawLocalNetworkAccess(context)
+
 /** 供播放器顶栏、标签栏图标等轻量入口订阅的只读接力状态快照。 */
 internal data class NearbyHandoffStatus(
     val enabled: Boolean = false,
@@ -28,7 +34,7 @@ internal data class NearbyHandoffStatus(
  * - 持久化用户的设备接力开关，前台切页通过短宽限期保持连接不中断；
  * - 退到后台超过宽限期立即释放监听与连接，遵守后台内存与电量纪律。
  */
-internal class NearbyHandoffRuntime private constructor(appContext: Context) {
+internal class NearbyHandoffRuntime private constructor(private val appContext: Context) {
     val session = NearbySession(appContext)
     private val runtimeScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -61,10 +67,11 @@ internal class NearbyHandoffRuntime private constructor(appContext: Context) {
         initJob = runtimeScope.launch {
             try {
                 val persisted = session.initialize()
-                _ready.value = true
-                if (!_enabled.value && persisted.enabled) {
+                // 未获局域网权限时跳过冷启动发现，避免系统弹出设备选择框。
+                if (persisted.enabled && !needsNearbyLocalNetworkPermission(appContext)) {
                     _enabled.value = true
                 }
+                _ready.value = true
                 _autoAcceptTrusted.value = persisted.autoAcceptTrusted
                 syncListenerState()
             } catch (cancelled: CancellationException) {

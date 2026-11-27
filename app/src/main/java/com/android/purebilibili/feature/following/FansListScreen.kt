@@ -139,16 +139,26 @@ private fun FansListContent(
                 ) {
                     when {
                         state.loading -> AppCircularProgressIndicator()
-                        state.error != null -> {
-                            AppText(state.error)
-                            AppTextButton(onClick = onLoadMore) { AppText("重试") }
-                        }
-                        state.users.isEmpty() -> AppText("暂无粉丝")
+                        state.error != null -> AppErrorState(
+                            title = "加载失败",
+                            message = state.error,
+                            presentation = AppContentStatePresentation.INLINE,
+                            primaryAction = AppContentStateAction("重试", onLoadMore),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        state.users.isEmpty() -> AppEmptyState(
+                            title = "暂无粉丝",
+                            presentation = AppContentStatePresentation.INLINE,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                         state.hasMore -> {
                             LaunchedEffect(state.users.size) { onLoadMore() }
                             AppTextButton(onClick = onLoadMore) { AppText("加载更多") }
                         }
-                        else -> AppText("已显示全部粉丝")
+                        else -> AppText(
+                            "已显示全部粉丝",
+                            color = com.android.purebilibili.core.ui.AppContentColors.secondaryText(),
+                        )
                     }
                 }
             }

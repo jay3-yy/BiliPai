@@ -217,6 +217,7 @@ internal fun NearbySendStageOverlay(
     val glassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
     val blurEnabled = !reduceMotion && !isLowBlurBudgetForced()
     val haptic = rememberAppHapticFeedback(AppHapticScene.CONTROLS)
+    val launchRichHaptic = com.android.purebilibili.core.ui.rememberRichHapticFeedback(AppHapticScene.NAVIGATION)
     val hapticEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
     val accent = AppContentColors.accent()
     val density = LocalDensity.current
@@ -313,7 +314,7 @@ internal fun NearbySendStageOverlay(
             launchStartY = fromY
             launchStartScale = fromScale
             launchStartRotationX = fromRotationX
-            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+            if (hapticEnabled) launchRichHaptic(com.android.purebilibili.core.ui.AppRichHapticPattern.GLASS_SNAP)
             scope.launch {
                 if (reduceMotion) {
                     launchProgress.animateTo(1f, continuityTween(140))

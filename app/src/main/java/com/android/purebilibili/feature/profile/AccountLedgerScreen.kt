@@ -95,26 +95,49 @@ internal fun AccountLedgerContent(
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
                     item(key = "account") {
-                        AppText(
-                            if (loggedIn) "当前账号 UID ${state.identity.mid}，以下为 B 站返回的近期${selected.title}。"
-                            else "请先登录后查看硬币与经验明细。",
-                            modifier = Modifier.padding(16.dp),
-                        )
+                        if (loggedIn) {
+                            AppText(
+                                "展示近期${selected.title}变动记录（UID ${state.identity.mid}）",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                color = AppContentColors.secondaryText(),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            )
+                        } else {
+                            AppEmptyState(
+                                title = "请先登录",
+                                message = "登录后即可查看硬币与经验明细",
+                                presentation = AppContentStatePresentation.INLINE,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                     }
                     if (loggedIn) {
-                        if (section.loading) item(key = "loading") { AppText("正在加载…", Modifier.padding(16.dp)) }
+                        if (section.loading) item(key = "loading") {
+                            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                                AppCircularProgressIndicator()
+                            }
+                        }
                         section.error?.let { error ->
                             item(key = "error") {
-                                Column(Modifier.padding(horizontal = 16.dp)) {
-                                    AppText(if (section.entries != null) "$error\n以下保留上次加载的记录。" else error)
-                                    AppTextButton(onClick = onRefresh, enabled = !section.loading) { AppText("重试") }
-                                }
+                                AppErrorState(
+                                    title = "加载失败",
+                                    message = if (section.entries != null) "$error\n以下保留上次加载的记录" else error,
+                                    presentation = AppContentStatePresentation.INLINE,
+                                    primaryAction = if (!section.loading) AppContentStateAction("重试", onRefresh) else null,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
                         }
                         val entries = section.entries
                         if (entries != null) {
                             if (entries.isEmpty() && !section.loading && section.error == null) {
-                                item(key = "empty") { AppText("暂无近期${selected.title}", Modifier.padding(16.dp)) }
+                                item(key = "empty") {
+                                    AppEmptyState(
+                                        title = "暂无近期${selected.title}",
+                                        presentation = AppContentStatePresentation.INLINE,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
                             }
                             itemsIndexed(entries, key = { index, _ -> "entry_$index" }) { _, entry ->
                                 val delta = formatLedgerDelta(entry.delta)

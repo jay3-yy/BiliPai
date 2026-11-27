@@ -9,6 +9,7 @@ import com.android.purebilibili.core.store.AccountSessionStore
 import com.android.purebilibili.core.store.StoredAccountSession
 import com.android.purebilibili.data.model.response.*
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -537,6 +538,7 @@ interface BilibiliApi {
     suspend fun favoriteOpusAction(
         @Query("csrf") csrf: String,
         @retrofit2.http.Body body: kotlinx.serialization.json.JsonObject,
+        @retrofit2.http.Tag accountSession: AccountCookieSession? = null,
     ): SimpleApiResponse
 
     @retrofit2.http.FormUrlEncoded
@@ -3268,6 +3270,10 @@ object NetworkModule {
     private var playbackAccountBangumiApi: BangumiApi? = null
 
     private val dnsNetworkCallbackRegistered = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val firstDnsNetworkAvailable = CompletableDeferred<Boolean>()
+    private val dnsNetworkMonitorScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + Dispatchers.IO
+    )
 
     private val coreWarmupHosts = listOf(
         "api.bilibili.com",
@@ -3287,50 +3293,65 @@ object NetworkModule {
 
     private fun registerDnsInvalidationOnNetworkChange(context: Context) {
         if (!dnsNetworkCallbackRegistered.compareAndSet(false, true)) return
-        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
-            ?: return
-        runCatching {
-            manager.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
-                @Volatile
-                private var lastNetwork: android.net.Network? = null
-
-                @Volatile
-                private var lastDnsSignature: String? = null
-
-                override fun onAvailable(network: android.net.Network) {
-                    val previous = lastNetwork
-                    lastNetwork = network
-                    // 注册默认网络回调时会立刻回放一次当前网络，避免把刚预热的冷启动 DNS 缓存立刻清空。
-                    if (previous != null && previous != network) {
-                        clearAppDnsCache()
+        val appContext = context.applicationContext
+        // 放到后台 IO 线程注册默认网络回调，避免冷启动主线程执行 ConnectivityManager Binder IPC，
+        // 也不做额外 activeNetwork 同步查询。
+        dnsNetworkMonitorScope.launch {
+            val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            if (manager == null) {
+                firstDnsNetworkAvailable.complete(false)
+                return@launch
+            }
+            val tracker = NetworkDnsInvalidationTracker()
+            runCatching {
+                manager.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: android.net.Network) {
+                        if (tracker.onAvailable(network.toString())) {
+                            clearAppDnsCache()
+                        }
+                        firstDnsNetworkAvailable.complete(true)
                     }
-                }
 
-                override fun onLost(network: android.net.Network) {
-                    if (lastNetwork == network) {
-                        lastNetwork = null
-                        lastDnsSignature = null
+                    override fun onLost(network: android.net.Network) {
+                        if (tracker.onLost(network.toString())) {
+                            clearAppDnsCache()
+                        }
                     }
-                    clearAppDnsCache()
-                }
 
-                override fun onLinkPropertiesChanged(
-                    network: android.net.Network,
-                    linkProperties: android.net.LinkProperties,
-                ) {
-                    val signature = linkProperties.dnsServers.joinToString(",") { it.hostAddress.orEmpty() }
-                    val previous = lastDnsSignature
-                    lastDnsSignature = signature
-                    if (previous != null && previous != signature) {
-                        clearAppDnsCache()
+                    override fun onLinkPropertiesChanged(
+                        network: android.net.Network,
+                        linkProperties: android.net.LinkProperties,
+                    ) {
+                        val privateDnsActive = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                            linkProperties.isPrivateDnsActive
+                        } else {
+                            false
+                        }
+                        val privateDnsServerName = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                            linkProperties.privateDnsServerName
+                        } else {
+                            null
+                        }
+                        val signature = buildNetworkDnsSignature(
+                            dnsServerAddresses = linkProperties.dnsServers.map { it.hostAddress.orEmpty() },
+                            isPrivateDnsActive = privateDnsActive,
+                            privateDnsServerName = privateDnsServerName,
+                        )
+                        if (tracker.onLinkPropertiesChanged(network.toString(), signature)) {
+                            clearAppDnsCache()
+                        }
                     }
-                }
-            })
+                })
+            }.onFailure {
+                firstDnsNetworkAvailable.complete(false)
+                CoreDataLog.w("ApiClient", "Unable to register the default network callback", it)
+            }
         }
     }
 
     /** 冷启动异步预解析高频 B 站域名，减少首屏接口与封面首次建连 DNS 阻塞。 */
     suspend fun prewarmCoreHosts() = coroutineScope {
+        if (!firstDnsNetworkAvailable.await()) return@coroutineScope
         val dns = okHttpClient.dns
         coreWarmupHosts.forEach { host ->
             launch(Dispatchers.IO) {

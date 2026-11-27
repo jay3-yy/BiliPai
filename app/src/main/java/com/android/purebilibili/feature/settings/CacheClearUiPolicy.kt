@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.CacheClearTarget
 import com.android.purebilibili.core.util.CacheUtils
 
@@ -56,6 +57,81 @@ internal fun resolveDefaultCacheClearTargets(): Set<CacheClearTarget> {
         .filter { it.defaultSelected }
         .map { it.target }
         .toSet()
+}
+
+internal enum class CacheClearPreset {
+    RECOMMENDED,
+    SPACE_SAVING,
+    ALL
+}
+
+internal enum class CacheClearDialogStage {
+    SELECT,
+    CLEARING,
+    COMPLETE,
+    ERROR
+}
+
+private val SPACE_SAVING_TARGETS = setOf(
+    CacheClearTarget.NETWORK,
+    CacheClearTarget.IMAGE_PREVIEW,
+    CacheClearTarget.TEMP_FILES_AND_LOGS
+)
+
+internal fun resolvePresetTargets(preset: CacheClearPreset): Set<CacheClearTarget> = when (preset) {
+    CacheClearPreset.RECOMMENDED -> resolveDefaultCacheClearTargets()
+    CacheClearPreset.SPACE_SAVING -> SPACE_SAVING_TARGETS
+    CacheClearPreset.ALL -> CacheClearTarget.entries.toSet()
+}
+
+internal fun resolveCacheClearPreset(selectedTargets: Set<CacheClearTarget>): CacheClearPreset? = when (selectedTargets) {
+    resolveDefaultCacheClearTargets() -> CacheClearPreset.RECOMMENDED
+    SPACE_SAVING_TARGETS -> CacheClearPreset.SPACE_SAVING
+    CacheClearTarget.entries.toSet() -> CacheClearPreset.ALL
+    else -> null
+}
+
+internal fun resolveAutoCacheClearStatusSummary(
+    interval: SettingsManager.AutoCacheClearInterval,
+    thresholdGb: Int,
+    reclaimableDiskBytes: Long?,
+    lastAutoClearAtMillis: Long,
+    nowMillis: Long = System.currentTimeMillis()
+): String = buildList {
+    add(
+        if (interval == SettingsManager.AutoCacheClearInterval.NEVER) {
+            "自动清理未开启"
+        } else {
+            "自动清理：${interval.label}"
+        }
+    )
+    val safeThresholdGb = thresholdGb.coerceAtLeast(1)
+    val thresholdBytes = safeThresholdGb.toLong() * 1024L * 1024L * 1024L
+    if (reclaimableDiskBytes != null) {
+        val percentText = formatCacheClearPercent(reclaimableDiskBytes.coerceAtLeast(0L), thresholdBytes)
+        add("上限 $safeThresholdGb GB（当前 $percentText）")
+    } else {
+        add("上限 $safeThresholdGb GB")
+    }
+    if (lastAutoClearAtMillis > 0L && nowMillis >= lastAutoClearAtMillis) {
+        val elapsedMillis = nowMillis - lastAutoClearAtMillis
+        val hourMillis = 60L * 60L * 1000L
+        val dayMillis = 24L * hourMillis
+        val timeText = when {
+            elapsedMillis < hourMillis -> "刚刚自动清理"
+            elapsedMillis < dayMillis -> "${elapsedMillis / hourMillis} 小时前自动清理"
+            else -> "${elapsedMillis / dayMillis} 天前自动清理"
+        }
+        add(timeText)
+    }
+}.joinToString(" · ")
+
+internal fun resolveCacheClearDeltaSummary(
+    beforeDiskBytes: Long?,
+    afterDiskBytes: Long?
+): String? {
+    if (beforeDiskBytes == null || afterDiskBytes == null) return null
+    return "${formatCacheClearBytes(beforeDiskBytes.coerceAtLeast(0L))} → ${formatCacheClearBytes(afterDiskBytes.coerceAtLeast(0L))}"
 }
 
 internal fun resolveCacheClearConfirmationMessage(
@@ -130,6 +206,13 @@ internal fun resolveCacheClearButtonLabel(
     if (selectedTargets.isEmpty()) return "清理缓存"
     if (breakdown == null) return "清理缓存"
     val selectedBytes = resolveSelectedCacheBytes(breakdown, selectedTargets)
+    if (selectedBytes <= 0L) {
+        return if (selectedTargets.all { it == CacheClearTarget.APP_METADATA }) {
+            "重置选中元数据"
+        } else {
+            "清理选中项"
+        }
+    }
     return "清理缓存 ${formatCacheClearBytes(selectedBytes)}"
 }
 
@@ -139,6 +222,37 @@ internal fun resolveCacheClearDonutCenterSize(
 ): String {
     if (breakdown == null) return "计算中"
     return formatCacheClearBytes(resolveSelectedCacheBytes(breakdown, selectedTargets))
+}
+
+internal fun resolveCacheClearDonutCenterCaption(
+    breakdown: CacheUtils.CacheBreakdown?,
+    selectedTargets: Set<CacheClearTarget>
+): String = when {
+    breakdown == null -> "正在统计"
+    selectedTargets.isEmpty() -> "未选择"
+    resolveSelectedCacheBytes(breakdown, selectedTargets) == 0L &&
+        selectedTargets.all { it == CacheClearTarget.APP_METADATA } -> "待重置"
+    else -> "已选释放"
+}
+
+internal fun resolveDeviceStorageSummary(totalBytes: Long, availableBytes: Long): String {
+    val safeTotal = totalBytes.coerceAtLeast(0L)
+    val safeAvailable = availableBytes.coerceAtLeast(0L)
+    return "设备可用 ${formatCacheClearBytes(safeAvailable)} / 共 ${formatCacheClearBytes(safeTotal)}"
+}
+
+internal fun resolveCacheClearCompleteHeadline(
+    releasedBytes: Long,
+    clearedTargets: Set<CacheClearTarget>
+): String {
+    if (releasedBytes > 0L) {
+        return "已释放 ${formatCacheClearBytes(releasedBytes)} 磁盘空间"
+    }
+    return if (clearedTargets.isNotEmpty()) {
+        "已清理 ${clearedTargets.size} 项缓存与运行时状态"
+    } else {
+        "缓存清理已完成"
+    }
 }
 
 internal fun resolveCacheClearDonutSegments(

@@ -195,25 +195,29 @@ class DownloadWorker(
     override suspend fun getForegroundInfo(): ForegroundInfo = getForegroundInfo(0f)
 
     private suspend fun getForegroundInfo(progress: Float): ForegroundInfo {
-        val task = DownloadManager.tasks.value[inputData.getString(KEY_TASK_ID)]
+        val currentTaskId = inputData.getString(KEY_TASK_ID)
+        val allTasks = DownloadManager.tasks.value
+        val task = allTasks[currentTaskId]
+        val remainingCount = allTasks.values.count {
+            it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PENDING
+        }
         val percent = (progress.coerceIn(0f, 1f) * 100).toInt()
-        val notification = androidx.core.app.NotificationCompat.Builder(
-            applicationContext,
-            DOWNLOAD_NOTIFICATION_CHANNEL_ID
-        )
-            .setContentTitle(task?.title?.takeIf { it.isNotBlank() } ?: "下载中...")
-            .setContentText("下载中 $percent%")
-            .setProgress(100, percent, percent <= 0)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .build()
+        val notification = com.android.purebilibili.core.notification.liveupdate.LiveUpdateNotificationFactory
+            .buildDownloadNotification(
+                context = applicationContext,
+                state = com.android.purebilibili.core.notification.liveupdate.LiveUpdateDownloadState(
+                    title = task?.title.orEmpty(),
+                    progressPercent = percent,
+                    remainingCount = remainingCount,
+                    paused = task?.status == DownloadStatus.PAUSED,
+                ),
+            )
 
         val serviceType = resolveDownloadForegroundServiceType(Build.VERSION.SDK_INT)
         return if (serviceType != null) {
-            ForegroundInfo(foregroundNotificationId(inputData.getString(KEY_TASK_ID)), notification, serviceType)
+            ForegroundInfo(foregroundNotificationId(currentTaskId), notification, serviceType)
         } else {
-            ForegroundInfo(foregroundNotificationId(inputData.getString(KEY_TASK_ID)), notification)
+            ForegroundInfo(foregroundNotificationId(currentTaskId), notification)
         }
     }
 }

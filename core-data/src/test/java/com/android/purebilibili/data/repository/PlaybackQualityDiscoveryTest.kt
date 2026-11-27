@@ -9,6 +9,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -19,6 +20,21 @@ class PlaybackQualityDiscoveryTest {
     private fun track(id: Int, codec: String = "avc1") = DashVideo(
         id = id, codecs = codec, baseUrl = "https://example.com/$id/$codec.m4s"
     )
+
+    @Test
+    fun `VIP badge follows the server flag even when the quality name suggests otherwise`() {
+        val data = Json.decodeFromString<PlayUrlData>(
+            """{
+                "support_formats": [
+                    {"quality": 120, "description": "4K", "need_vip": false},
+                    {"quality": 125, "description": "HDR"},
+                    {"quality": 112, "description": "1080P+", "need_vip": true}
+                ]
+            }""".trimIndent(),
+        )
+
+        assertEquals(setOf(112), data.vipVideoQualityIds())
+    }
 
     @Test
     fun `supplement requests highest missing lower tier once and keeps first response metadata`() = runTest {

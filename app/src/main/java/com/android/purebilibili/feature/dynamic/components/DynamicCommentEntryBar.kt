@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -81,6 +83,8 @@ private object DynamicCommentBarSpec {
     val MinimumActionPadding = AppSpacingTokens.ExtraSmall
     val ActionCountGap = AppSpacingTokens.ExtraSmall
     val DockGap = AppSpacingTokens.Small
+    val DetailGlassCommentHeight = 40.dp
+    val DetailGlassCommentInset = AppSpacingTokens.Small
     val CountWidthAllowance = 1.dp
     val OverflowIconSize = 20.dp
 }
@@ -99,6 +103,7 @@ internal fun DynamicCommentEntryBar(
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     isScrollInProgressProvider: () -> Boolean = { false },
+    glassHeight: Dp = DynamicCommentBarSpec.Glass.height,
 ) {
     val dimensions = if (liquidGlassEnabled) DynamicCommentBarSpec.Glass else DynamicCommentBarSpec.Native
     val shape = resolveSharedBottomBarCapsuleShape()
@@ -117,13 +122,13 @@ internal fun DynamicCommentEntryBar(
             shape = shape,
             // The glass renderer shapes the moving shell. An outer clip would cut off
             // the shell and content when the shared press transform moves them.
-            modifier = modifier.height(dimensions.height),
+            modifier = modifier.height(glassHeight),
             backdrop = backdrop,
             reuseEnabled = true,
             materialEnabled = true,
             elasticFeedbackEnabled = true,
             drawShellLens = true,
-            shellLensIntensity = resolveFloatingDockGeometryScale(dimensions.height.value),
+            shellLensIntensity = resolveFloatingDockGeometryScale(glassHeight.value),
             isScrollInProgressProvider = isScrollInProgressProvider,
             // 内容只含文字与图标，不需要再录制玻璃外壳。
             captureShellForContent = false,
@@ -175,16 +180,29 @@ internal fun DynamicDetailCommentBar(
     onLike: () -> Unit,
     onRepost: () -> Unit,
     onShare: () -> Unit,
+    isFavorite: Boolean?,
+    favoriteInProgress: Boolean,
+    onFavorite: () -> Unit,
     isScrollInProgressProvider: () -> Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val actions = listOf(
+    val actions = listOfNotNull(
         AppWindowAction(
             label = if (isLiked) "取消点赞" else "点赞",
             icon = if (isLiked) rememberAppLikeFilledIcon() else rememberAppLikeIcon(),
             iconTint = if (isLiked) AppContentColors.accent() else null,
             onClick = onLike,
         ),
+        isFavorite?.let { selected ->
+            AppWindowAction(
+                label = if (selected) "取消收藏" else "收藏",
+                icon = if (selected) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                iconTint = if (selected) AppContentColors.accent() else null,
+                enabled = !favoriteInProgress,
+                selected = selected,
+                onClick = onFavorite,
+            )
+        },
         AppWindowAction(
             label = "转发",
             icon = Icons.Outlined.IosShare,
@@ -215,6 +233,12 @@ internal fun DynamicDetailCommentBar(
         val compact = availableActionWidth < actionSlotsWidth + minimumActionPadding * 2
         val actionPadding = ((availableActionWidth - actionSlotsWidth) / 2)
             .coerceIn(minimumActionPadding, preferredActionPadding)
+        val actionWidth = if (compact) actionHeight else actionSlotsWidth + actionPadding * 2
+        val commentInset = if (liquidGlassEnabled) {
+            (availableActionWidth - actionWidth).coerceIn(0.dp, DynamicCommentBarSpec.DetailGlassCommentInset)
+        } else {
+            0.dp
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(dockGap),
@@ -224,14 +248,17 @@ internal fun DynamicDetailCommentBar(
                 onClick = onComment,
                 liquidGlassEnabled = liquidGlassEnabled,
                 backdrop = backdrop,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = commentInset),
                 containerColor = containerColor,
                 isScrollInProgressProvider = isScrollInProgressProvider,
+                glassHeight = DynamicCommentBarSpec.DetailGlassCommentHeight,
             )
             val actionModifier = if (compact) {
                 Modifier.size(actionHeight)
             } else {
-                Modifier.width(actionSlotsWidth + actionPadding * 2).height(actionHeight)
+                Modifier.width(actionWidth).height(actionHeight)
             }
             val actionContent: @Composable () -> Unit = {
                 if (compact) {

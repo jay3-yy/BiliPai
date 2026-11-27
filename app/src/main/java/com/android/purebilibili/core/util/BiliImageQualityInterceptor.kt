@@ -30,17 +30,31 @@ internal fun ImageRequest.withBiliImageQuality(
     targetWidthPx: Int? = null,
 ): ImageRequest {
     if (extras[OriginalBiliImage] == true) return this
+    val normalizedQuality = com.android.purebilibili.core.store.ContentDisplayPreferences.normalizeQuality(listQuality)
+    val selectedQuality = if (dataSaver) BiliImageQualityPolicy.DATA_SAVER_QUALITY
+        else normalizedQuality.takeIf { it > 0 } ?: BiliImageQualityPolicy.HIGH_QUALITY
+    return applyBiliImageQualityTransform(
+        selectedQuality = selectedQuality,
+        targetWidthPx = targetWidthPx,
+    )
+}
+
+private fun ImageRequest.applyBiliImageQualityTransform(
+    selectedQuality: Int,
+    targetWidthPx: Int?,
+): ImageRequest {
     val url = when (val value = data) {
         is String -> value
         is android.net.Uri -> value.toString()
         else -> return this
     }
-    val normalizedQuality = com.android.purebilibili.core.store.ContentDisplayPreferences.normalizeQuality(listQuality)
-    val selectedQuality = if (dataSaver) BiliImageQualityPolicy.DATA_SAVER_QUALITY
-        else normalizedQuality.takeIf { it > 0 } ?: BiliImageQualityPolicy.HIGH_QUALITY
-    val resolved = BiliImageQualityPolicy.resolveUrl(url, selectedQuality, targetWidthPx)
+    val resolution = BiliImageQualityPolicy.resolveUrlWithMetadata(url, selectedQuality, targetWidthPx)
+    val resolved = resolution.url
     val quality = selectedQuality.toString()
-    val widthBucket = targetWidthPx?.let(BiliImageQualityPolicy::resolveCdnWidthBucket)?.toString()
+    // 仅当本次 URL 变换实际追加了宽度桶（或请求上一次已记录该宽度桶）时才写入宽度缓存维度；
+    // 原 URL 自带 640w 等宽度时保持与显示路径一致，不额外附加 _w672。
+    val widthBucket = resolution.appliedWidthBucket?.toString()
+        ?: memoryCacheKeyExtras[WIDTH_CACHE_EXTRA]
     val widthTag = widthBucket?.let { "_w$it" }.orEmpty()
     if (resolved == url && QUALITY_CACHE_EXTRA !in memoryCacheKeyExtras) return this
     if (resolved == url && memoryCacheKeyExtras[QUALITY_CACHE_EXTRA] == quality &&
@@ -51,10 +65,10 @@ internal fun ImageRequest.withBiliImageQuality(
         .memoryCacheKeyExtra(QUALITY_CACHE_EXTRA, quality)
         .apply {
             if (widthBucket != null) memoryCacheKeyExtra(WIDTH_CACHE_EXTRA, widthBucket)
-            this@withBiliImageQuality.diskCacheKey?.let { key ->
+            this@applyBiliImageQualityTransform.diskCacheKey?.let { key ->
                 diskCacheKey(key.substringBefore(QUALITY_DISK_SUFFIX) + QUALITY_DISK_SUFFIX + quality + widthTag)
             }
-            this@withBiliImageQuality.placeholderMemoryCacheKey?.let { key ->
+            this@applyBiliImageQualityTransform.placeholderMemoryCacheKey?.let { key ->
                 val extras = buildMap {
                     putAll(key.extras)
                     put(QUALITY_CACHE_EXTRA, quality)
@@ -70,28 +84,17 @@ internal fun ImageRequest.withBiliImageQuality(
 
 internal class BiliImageQualityInterceptor : Interceptor {
     override suspend fun intercept(chain: Interceptor.Chain): ImageResult {
-        // 组件已准备好的请求沿用同一快照，并按已解析视口宽度补充 CDN 宽度桶，避免下载超大图。
+        // 组件已准备好的请求沿用同一质量快照，并按实际生效的 URL 变换统一内存、磁盘与占位缓存键。
         val request = chain.request
         val targetWidthPx = (chain.size.width as? coil3.size.Dimension.Pixels)?.px
         val prepared = if (QUALITY_CACHE_EXTRA in request.memoryCacheKeyExtras) {
             if (targetWidthPx != null && request.extras[OriginalBiliImage] != true) {
                 val quality = request.memoryCacheKeyExtras[QUALITY_CACHE_EXTRA]?.toIntOrNull()
-                val url = (request.data as? String) ?: (request.data as? android.net.Uri)?.toString()
-                val resized = if (quality != null && url != null) {
-                    BiliImageQualityPolicy.resolveUrl(url, quality, targetWidthPx)
-                } else null
-                if (resized != null && resized != url) {
-                    val widthBucket = BiliImageQualityPolicy.resolveCdnWidthBucket(targetWidthPx)?.toString()
-                    val widthTag = widthBucket?.let { "_w$it" }.orEmpty()
-                    request.newBuilder()
-                        .data(resized)
-                        .apply {
-                            if (widthBucket != null) memoryCacheKeyExtra(WIDTH_CACHE_EXTRA, widthBucket)
-                            request.diskCacheKey?.let { key ->
-                                diskCacheKey(key.substringBefore(QUALITY_DISK_SUFFIX) + QUALITY_DISK_SUFFIX + quality + widthTag)
-                            }
-                        }
-                        .build()
+                if (quality != null) {
+                    request.applyBiliImageQualityTransform(
+                        selectedQuality = quality,
+                        targetWidthPx = targetWidthPx,
+                    )
                 } else request
             } else request
         } else {

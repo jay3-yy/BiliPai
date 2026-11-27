@@ -304,7 +304,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         isProfileLoadInFlight = true
         val generation = ++profileLoadGeneration
         resetProfileContentRequests()
-        val requestedMid = TokenManager.midCache
+        val requestedIdentity = accountRequests.identity
+        val requestedMid = requestedIdentity.mid
         _uiState.update { state ->
             val current = state as? ProfileUiState.Success
             if (current != null && current.user.mid == requestedMid) {
@@ -313,7 +314,6 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 ProfileUiState.Loading
             }
         }
-        val requestedIdentity = accountRequests.identity
         profileLoadJob = accountRequests.launch {
             performProfileLoad(generation, requestedMid, requestedIdentity)
         }
@@ -347,7 +347,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             currentProfileWbiImg = data.wbi_img
             contentReadyGeneration = generation
             loadVisibleProfileContent()
-            profileRequestOrNull { persistProfileSession(generation, data) }
+            profileRequestOrNull { persistProfileSession(generation, requestedIdentity, data) }
             currentCoroutineContext().ensureActive()
             if (!isCurrentProfileLoad(generation)) return
             loadProfileEnrichment(generation, data.mid, data.wbi_img)
@@ -410,15 +410,19 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    private suspend fun persistProfileSession(generation: Long, data: NavData) {
+    private suspend fun persistProfileSession(
+        generation: Long,
+        expectedIdentity: AccountSessionIdentity,
+        data: NavData,
+    ) {
         if (!isCurrentProfileLoad(generation)) return
-        if (TokenManager.midCache != data.mid) {
-            TokenManager.saveMid(getApplication(), data.mid)
+        if (expectedIdentity.mid != data.mid) {
+            TokenManager.saveMid(getApplication(), data.mid, expectedIdentity)
             return
         }
-        TokenManager.saveVipStatus(data.vip.status == 1)
-        AccountSessionStore.upsertCurrentAccount(getApplication(), data)
-        refreshSavedAccounts()
+        if (AccountSessionStore.upsertCurrentAccount(getApplication(), data, expectedIdentity) != null) {
+            refreshSavedAccounts()
+        }
     }
 
     private suspend fun loadProfileEnrichment(
@@ -692,13 +696,26 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             if (!isCurrentProfileLoad(generation) ||
                 !accountRequests.isCurrent(requestedIdentity)
             ) return@launch
-            TokenManager.clear(getApplication())
+            val app = getApplication<Application>()
+            // 在 TokenManager.sessionMutationMutex 内原子核验预期身份后再清理，
+            // 避免挂起读取播放账号或并发切换至新账号 B 时误清 B 的凭据与活跃账号标记。
+            val cleared = TokenManager.clear(
+                context = app,
+                expectedIdentity = requestedIdentity,
+                shouldClearPlaybackAccountClient = {
+                    val playbackMid = AccountSessionStore.getPlaybackAccountMid(app)
+                    playbackMid == null || playbackMid == requestedIdentity.mid
+                },
+                onClearedLocked = {
+                    AccountSessionStore.clearActiveAccount(app, clearNetworkState = false)
+                },
+            )
+            if (!cleared) return@launch
             val clearedIdentity = AccountSessionIdentity(
                 mid = null,
                 generation = requestedIdentity.generation + if (requestedIdentity.mid != null) 1L else 0L
             )
             if (TokenManager.accountIdentity.value != clearedIdentity) return@launch
-            AccountSessionStore.clearActiveAccount(getApplication())
             refreshSavedAccounts()
             _uiState.value = ProfileUiState.LoggedOut(
                 topPhoto = resolveProfileTopPhoto(customBgUri)
@@ -959,7 +976,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             // retain background
             val customBgUri = SettingsManager.getProfileBgUri(context).first() ?: ""
             if (TokenManager.accountIdentity.value != identity) return@launch
-            AccountSessionStore.upsertCurrentAccount(context)
+            AccountSessionStore.upsertCurrentAccount(context, expectedIdentity = identity)
             if (TokenManager.accountIdentity.value != identity) return@launch
             val playbackMid = withContext(Dispatchers.IO) {
                 AccountSessionStore.getPlaybackAccountMid(context)
@@ -969,15 +986,19 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                 mid = null,
                 generation = identity.generation + if (identity.mid != null) 1L else 0L
             )
-            if (playbackMid == null || playbackMid == identity.mid) {
-                SessionRepository.signOut(context)
-                if (TokenManager.accountIdentity.value != clearedIdentity) return@launch
+            val cleared = if (playbackMid == null || playbackMid == identity.mid) {
+                SessionRepository.signOut(context, expectedIdentity = identity)
             } else {
-                TokenManager.clear(context)
-                if (TokenManager.accountIdentity.value != clearedIdentity) return@launch
-                AccountSessionStore.clearActiveAccount(context)
-                NetworkModule.clearRuntimeCookies()
+                TokenManager.clear(
+                    context = context,
+                    expectedIdentity = identity,
+                    shouldClearPlaybackAccountClient = { false },
+                    onClearedLocked = {
+                        AccountSessionStore.clearActiveAccount(context, clearNetworkState = false)
+                    },
+                )
             }
+            if (!cleared || TokenManager.accountIdentity.value != clearedIdentity) return@launch
             refreshSavedAccounts()
             _uiState.value = ProfileUiState.LoggedOut(topPhoto = customBgUri)
             com.android.purebilibili.core.util.AnalyticsHelper.syncUserContext(

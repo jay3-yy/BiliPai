@@ -37,8 +37,8 @@ import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.AlternateEmail
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
@@ -510,7 +510,7 @@ private fun MessageCenterShortcutCard(
     val icon = when (item.destination) {
         MessageCenterDestination.ReplyMe -> androidx.compose.material.icons.Icons.Outlined.ChatBubbleOutline
         MessageCenterDestination.AtMe -> androidx.compose.material.icons.Icons.Outlined.AlternateEmail
-        MessageCenterDestination.LikeMe -> androidx.compose.material.icons.Icons.Outlined.FavoriteBorder
+        MessageCenterDestination.LikeMe -> Icons.Outlined.ThumbUp
         MessageCenterDestination.SystemNotice -> androidx.compose.material.icons.Icons.Outlined.NotificationsNone
     }
     Column(

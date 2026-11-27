@@ -29,12 +29,21 @@ internal fun ChatEmotePanel(
     AppSurface(modifier.height(panelHeight)) {
         Column(Modifier.fillMaxSize()) {
             when {
-                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { AppText("加载表情中…") }
-                error != null -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                    AppText(error)
-                    AppTextButton(onClick = onRetry) { AppText("重试") }
+                loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    AppCircularProgressIndicator()
                 }
-                packages.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { AppText("暂无可用表情") }
+                error != null -> AppErrorState(
+                    title = "表情加载失败",
+                    message = error,
+                    presentation = AppContentStatePresentation.INLINE,
+                    primaryAction = AppContentStateAction("重试", onRetry),
+                    modifier = Modifier.fillMaxSize(),
+                )
+                packages.isEmpty() -> AppEmptyState(
+                    title = "暂无可用表情",
+                    presentation = AppContentStatePresentation.INLINE,
+                    modifier = Modifier.fillMaxSize(),
+                )
                 else -> {
                     val tabOptions = remember(packages) {
                         packages.map { AppSegmentOption(it.id, it.text) }
