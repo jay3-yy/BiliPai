@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.video.ui.section
 
-import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -12,7 +11,6 @@ import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.danmaku.DanmakuViewport
 import com.android.purebilibili.feature.video.danmaku.configureAsPassiveDanmakuOverlay
-import com.android.purebilibili.feature.video.playback.policy.createPlatformDanmakuBrightnessRenderEffect
 
 @Composable
 internal fun VideoDanmakuRenderSurface(
@@ -21,14 +19,21 @@ internal fun VideoDanmakuRenderSurface(
     useFullscreenTextSize: Boolean,
     renderingPaused: Boolean,
     brightnessFactor: Float = 1f,
+    useIndependentSurface: Boolean = false,
+    surfaceVisible: Boolean = true,
+    targetFrameRateHz: Float = 0f,
     modifier: Modifier = Modifier,
 ) {
-    key(manager) {
+    key(manager, useIndependentSurface) {
         val viewRef = remember { mutableStateOf<DanmakuRenderView?>(null) }
         val lastBrightnessRef = remember { floatArrayOf(1f) }
+        val lastTargetFrameRateRef = remember { floatArrayOf(0f) }
         AndroidView(
             factory = { context ->
-                DanmakuRenderView(context).apply {
+                DanmakuRenderView(
+                    context = context,
+                    usesIndependentSurface = useIndependentSurface,
+                ).apply {
                     viewRef.value = this
                     manager.useFullscreenTextSize = useFullscreenTextSize
                     manager.updateViewport(viewport)
@@ -37,10 +42,11 @@ internal fun VideoDanmakuRenderSurface(
                     }
                     setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     configureAsPassiveDanmakuOverlay()
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        setRenderEffect(createPlatformDanmakuBrightnessRenderEffect(brightnessFactor))
-                        lastBrightnessRef[0] = brightnessFactor
-                    }
+                    setSurfaceOverlayVisible(surfaceVisible)
+                    engine.setBrightnessFactor(brightnessFactor)
+                    lastBrightnessRef[0] = brightnessFactor
+                    engine.setTargetFrameRateHz(targetFrameRateHz)
+                    lastTargetFrameRateRef[0] = targetFrameRateHz
                     manager.setRenderingPaused(this, renderingPaused)
                     manager.attachView(this)
                 }
@@ -48,9 +54,13 @@ internal fun VideoDanmakuRenderSurface(
             // 半屏和全屏移动同一播放器时复用渲染器，保留在屏弹幕与时间线。
             // 临时离开布局只暂停；真正离开播放宿主才由 onRelease 释放。
             onReset = { view ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && lastBrightnessRef[0] != 1f) {
-                    view.setRenderEffect(null)
+                if (lastBrightnessRef[0] != 1f) {
+                    view.engine.setBrightnessFactor(1f)
                     lastBrightnessRef[0] = 1f
+                }
+                if (lastTargetFrameRateRef[0] != 0f) {
+                    view.engine.setTargetFrameRateHz(0f)
+                    lastTargetFrameRateRef[0] = 0f
                 }
                 manager.setRenderingPaused(view, true)
             },
@@ -65,16 +75,25 @@ internal fun VideoDanmakuRenderSurface(
                         manager.attachView(view)
                     }
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && lastBrightnessRef[0] != brightnessFactor) {
-                    view.setRenderEffect(createPlatformDanmakuBrightnessRenderEffect(brightnessFactor))
+                view.setSurfaceOverlayVisible(surfaceVisible)
+                if (lastBrightnessRef[0] != brightnessFactor) {
+                    view.engine.setBrightnessFactor(brightnessFactor)
                     lastBrightnessRef[0] = brightnessFactor
+                }
+                if (lastTargetFrameRateRef[0] != targetFrameRateHz) {
+                    view.engine.setTargetFrameRateHz(targetFrameRateHz)
+                    lastTargetFrameRateRef[0] = targetFrameRateHz
                 }
                 manager.setRenderingPaused(view, renderingPaused)
             },
             onRelease = { view ->
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    view.setRenderEffect(null)
+                if (lastBrightnessRef[0] != 1f) {
+                    view.engine.setBrightnessFactor(1f)
                     lastBrightnessRef[0] = 1f
+                }
+                if (lastTargetFrameRateRef[0] != 0f) {
+                    view.engine.setTargetFrameRateHz(0f)
+                    lastTargetFrameRateRef[0] = 0f
                 }
                 if (viewRef.value === view) viewRef.value = null
                 manager.detachView(view)

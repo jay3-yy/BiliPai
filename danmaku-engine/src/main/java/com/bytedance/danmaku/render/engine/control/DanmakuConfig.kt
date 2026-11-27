@@ -39,6 +39,7 @@ class DanmakuConfig : AbsConfig() {
         const val TYPE_COMMON_BOTTOM_CENTER_VISIBLE_CHANGE = 1104
         const val TYPE_COMMON_BUFFER_EXPIRE_CHECK = 1105
         const val TYPE_COMMON_PAUSE_INVALIDATE_WHEN_BLANK = 1106
+        const val TYPE_COMMON_BRIGHTNESS = 1107
 
         const val TYPE_TEXT_SIZE = 1200
         const val TYPE_TEXT_COLOR = 1201
@@ -221,6 +222,18 @@ class DanmakuConfig : AbsConfig() {
             set(value) {
                 field = value
                 config.notifyConfigChanged(TYPE_COMMON_PAUSE_INVALIDATE_WHEN_BLANK)
+            }
+
+        /**
+         * RGB brightness scale in [0.4f..1f] (1f keeps original colors without scaling).
+         * Applied per draw item to avoid attaching a full-screen offscreen RenderEffect on HDR video.
+         */
+        var brightnessFactor = 1f
+            set(value) {
+                val normalized = if (value.isFinite()) value.coerceIn(0.4f, 1f) else 1f
+                if (field == normalized) return
+                field = normalized
+                config.notifyConfigChanged(TYPE_COMMON_BRIGHTNESS)
             }
     }
 

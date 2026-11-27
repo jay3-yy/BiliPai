@@ -16,11 +16,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
+import com.android.purebilibili.core.ui.adaptive.DeviceThermalBudgetState
 import com.android.purebilibili.danmaku.parser.TimedDanmakuWindow
 import com.android.purebilibili.danmaku.parser.bas.BasDanmaku
 import com.android.purebilibili.danmaku.parser.bas.BasTarget
@@ -63,14 +63,21 @@ fun BasDanmakuOverlay(
     }
     LaunchedEffect(player, items, view, wake, renderingPaused) {
         if (renderingPaused) return@LaunchedEffect
+        var lastRenderedFrameNs = 0L
         while (isActive) {
             val position = player.currentPosition
             view.frame(position)
             if (!player.isPlaying || items.isEmpty()) {
+                lastRenderedFrameNs = 0L
                 wake.receive()
             } else if (view.hasActiveScene) {
-                withFrameNanos { }
+                val minIntervalNs = resolveSpecialDanmakuMinFrameIntervalNs(
+                    thermalTier = DeviceThermalBudgetState.tier,
+                    activeCount = view.activeSceneCount,
+                )
+                lastRenderedFrameNs = awaitNextSpecialDanmakuFrame(lastRenderedFrameNs, minIntervalNs)
             } else {
+                lastRenderedFrameNs = 0L
                 val next = view.nextSceneTimeMs
                 if (next == null) wake.receive()
                 else {
@@ -111,6 +118,7 @@ private class BasOverlayView(context: Context, private val player: Player) : Vie
     private var downY = 0f
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     val hasActiveScene: Boolean get() = active.isNotEmpty()
+    val activeSceneCount: Int get() = active.size
 
     init {
         setWillNotDraw(false)

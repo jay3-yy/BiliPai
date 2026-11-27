@@ -78,6 +78,8 @@ import com.android.purebilibili.feature.anime4k.isAnime4KGles3Available
 import com.android.purebilibili.feature.anime4k.resolveInitialVideoEnhancementEnabled
 import com.android.purebilibili.feature.anime4k.resolveAnime4KOutputDecision
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
+import com.android.purebilibili.feature.video.danmaku.rememberPlayerDanmakuTargetFrameRateHz
+import com.android.purebilibili.feature.video.danmaku.shouldUseIndependentDanmakuSurface
 import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
 import com.android.purebilibili.core.ui.components.AppSurface
@@ -808,18 +810,40 @@ fun BangumiPlayerView(
             )
         }
         if (danmakuEnabled && !features.isAudioOnly && !features.isInPipMode && sharedSurfaceVisible) {
-            key(danmakuManager) {
+            val useIndependentDanmakuSurface = shouldUseIndependentDanmakuSurface(
+                useTextureVideoSurface = useTextureSurface,
+                anime4kActive = shouldRenderAnime4kPipeline,
+                capturePlayerPage = capturePlayerPage,
+                isInPipMode = features.isInPipMode,
+            )
+            val danmakuTargetFrameRateHz = rememberPlayerDanmakuTargetFrameRateHz(
+                player = exoPlayer,
+                isPlaying = isPlaying && sharedSurfaceVisible && !features.isAudioOnly,
+            )
+            key(danmakuManager, useIndependentDanmakuSurface) {
+                val lastTargetFrameRateRef = remember { floatArrayOf(0f) }
                 AndroidView(
                     factory = { ctx ->
-                        DanmakuRenderView(ctx).apply {
+                        DanmakuRenderView(
+                            context = ctx,
+                            usesIndependentSurface = useIndependentDanmakuSurface,
+                        ).apply {
                             danmakuManager.useFullscreenTextSize = isFullscreen
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                            android.util.Log.w("BangumiPlayer", "🎯 DanmakuView factory: creating new view")
+                            setSurfaceOverlayVisible(sharedSurfaceVisible)
+                            engine.setTargetFrameRateHz(danmakuTargetFrameRateHz)
+                            lastTargetFrameRateRef[0] = danmakuTargetFrameRateHz
+                            android.util.Log.w("BangumiPlayer", "🎯 DanmakuView factory: creating new view (surface=$useIndependentDanmakuSurface)")
                             danmakuManager.attachView(this)
                         }
                     },
                     update = { view ->
                         danmakuManager.useFullscreenTextSize = isFullscreen
+                        view.setSurfaceOverlayVisible(sharedSurfaceVisible)
+                        if (lastTargetFrameRateRef[0] != danmakuTargetFrameRateHz) {
+                            view.engine.setTargetFrameRateHz(danmakuTargetFrameRateHz)
+                            lastTargetFrameRateRef[0] = danmakuTargetFrameRateHz
+                        }
                         if (view.width > 0 && view.height > 0) {
                             val sizeTag = "${view.width}x${view.height}"
                             if (view.tag != sizeTag) {
@@ -829,7 +853,13 @@ fun BangumiPlayerView(
                             }
                         }
                     },
-                    onRelease = { view -> danmakuManager.detachView(view) },
+                    onRelease = { view ->
+                        if (lastTargetFrameRateRef[0] != 0f) {
+                            view.engine.setTargetFrameRateHz(0f)
+                            lastTargetFrameRateRef[0] = 0f
+                        }
+                        danmakuManager.detachView(view)
+                    },
                     modifier = bangumiTabletopUpperModifier
                         .fillMaxSize()
                         .then(if (capturePlayerPage) playerPageBackdrop.danmaku.modifier else Modifier)

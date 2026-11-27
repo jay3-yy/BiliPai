@@ -18,13 +18,17 @@ package com.bytedance.danmaku.render.engine.render.draw.text
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Matrix
+import android.graphics.RenderNode
 import android.graphics.Shader
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.os.Build
 import android.text.TextUtils
+import androidx.annotation.RequiresApi
 import com.bytedance.danmaku.render.engine.control.DanmakuConfig
 import com.bytedance.danmaku.render.engine.render.draw.DrawItem
 import com.bytedance.danmaku.render.engine.utils.DRAW_TYPE_TEXT
+import kotlin.math.ceil
 
 /**
  * Created by dss886 on 2019/4/19.
@@ -37,6 +41,16 @@ import com.bytedance.danmaku.render.engine.utils.DRAW_TYPE_TEXT
  *
  * Turn TextData.includeFontPadding to false will cut the space between Top and Ascent.
  */
+internal fun scaleDanmakuColorRgb(color: Int, brightnessFactor: Float): Int {
+    if (!brightnessFactor.isFinite() || brightnessFactor >= 0.999f) return color
+    val factor = brightnessFactor.coerceIn(0.4f, 1f)
+    val a = color ushr 24
+    val r = (((color ushr 16) and 0xFF) * factor + 0.5f).toInt().coerceIn(0, 255)
+    val g = (((color ushr 8) and 0xFF) * factor + 0.5f).toInt().coerceIn(0, 255)
+    val b = ((color and 0xFF) * factor + 0.5f).toInt().coerceIn(0, 255)
+    return (a shl 24) or (r shl 16) or (g shl 8) or b
+}
+
 open class TextDrawItem: DrawItem<TextData>() {
 
     private val mTextPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
@@ -55,11 +69,35 @@ open class TextDrawItem: DrawItem<TextData>() {
     private val gradientMatrix = Matrix()
     private var vipGradient: LinearGradient? = null
     private var vipGradientWidth = 0f
+    private var vipGradientBrightness = 1f
 
     private val mFontMetrics = Paint.FontMetrics()
     private var mMetricsValid = false
     private var mMetricsTextSize = 0f
     private var mMetricsTypeface: Typeface? = null
+
+    // API 29+ 硬件显示列表缓存：在屏移动数百帧仅复放 RenderNode，避免逐帧双次 drawText 描边与排版。
+    private var cachedRenderNode: Any? = null
+    private var nodeValid = false
+    private var nodePadPx = 0
+    private var nodeText: String? = null
+    private var nodeTextSize = 0f
+    private var nodeTypeface: Typeface? = null
+    private var nodeFillColor = 0
+    private var nodeStrokeWidth = 0f
+    private var nodeStrokeColor = 0
+    private var nodeBrightness = 1f
+    private var nodeIncludeFontPadding = false
+    private var nodeUpOwner = false
+    private var nodeVipGradual = false
+    private var nodeHasUnderline = false
+    private var nodeUnderlineWidth = 0f
+    private var nodeUnderlineColor = 0
+    private var nodeUnderlineStrokeWidth = 0f
+    private var nodeUnderlineStrokeColor = 0
+    private var nodeUnderlineMarginTop = 0f
+    private var nodeWidth = 0f
+    private var nodeHeight = 0f
 
     private fun fontMetrics(paint: Paint): Paint.FontMetrics {
         if (!mMetricsValid || mMetricsTextSize != paint.textSize || mMetricsTypeface != paint.typeface) {
@@ -77,8 +115,10 @@ open class TextDrawItem: DrawItem<TextData>() {
 
     override fun onBindData(data: TextData) {
         mMetricsValid = false
+        nodeValid = false
         vipGradient = null
         vipGradientWidth = 0f
+        vipGradientBrightness = 1f
         mTextPaint.shader = null
         mTextPaint.flags = Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG
         mUnderlinePaint.flags = Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG
@@ -107,11 +147,128 @@ open class TextDrawItem: DrawItem<TextData>() {
     }
 
     override fun onDraw(canvas: Canvas, config: DanmakuConfig) {
-        if (upBadgeAdvance > 0f) {
-            drawUpBadge(canvas)
+        val brightness = config.common.brightnessFactor
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && canvas.isHardwareAccelerated) {
+            drawWithRenderNodeApi29(canvas, config, brightness)
+            return
         }
-        drawText(canvas, mTextPaint, config)
-        drawUnderline(canvas, mTextPaint, mUnderlinePaint, config)
+        drawItemAt(canvas, config, brightness, originX = x, originY = y)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun drawWithRenderNodeApi29(canvas: Canvas, config: DanmakuConfig, brightness: Float) {
+        val text = data?.text
+        if (TextUtils.isEmpty(text) || width <= 0f || height <= 0f) return
+        val textSize = data?.textSize ?: config.text.size
+        val typeface = data?.typeface ?: config.text.typeface
+        val fillColor = data?.textColor ?: config.text.color
+        val strokeWidth = data?.textStrokeWidth ?: config.text.strokeWidth
+        val strokeColor = data?.textStrokeColor ?: config.text.strokeColor
+        val includeFontPadding = data?.includeFontPadding ?: config.text.includeFontPadding
+        val isUpOwner = upBadgeAdvance > 0f
+        val isVipGradual = data?.isVipGradualColor == true
+        val hasUnderline = data?.hasUnderline == true
+        val underlineWidth = config.underline.width
+        val underlineColor = data?.textColor ?: config.underline.color
+        val underlineStrokeWidth = config.underline.strokeWidth
+        val underlineStrokeColor = config.underline.strokeColor
+        val underlineMarginTop = config.underline.marginTop
+
+        val node = (cachedRenderNode as? RenderNode)
+            ?: RenderNode("DanmakuTextItem").also { cachedRenderNode = it }
+        val needsRecord = !nodeValid ||
+            !node.hasDisplayList() ||
+            nodeText != text ||
+            nodeTextSize != textSize ||
+            nodeTypeface !== typeface ||
+            nodeFillColor != fillColor ||
+            nodeStrokeWidth != strokeWidth ||
+            nodeStrokeColor != strokeColor ||
+            nodeBrightness != brightness ||
+            nodeIncludeFontPadding != includeFontPadding ||
+            nodeUpOwner != isUpOwner ||
+            nodeVipGradual != isVipGradual ||
+            nodeHasUnderline != hasUnderline ||
+            nodeWidth != width ||
+            nodeHeight != height ||
+            (hasUnderline && (
+                nodeUnderlineWidth != underlineWidth ||
+                    nodeUnderlineColor != underlineColor ||
+                    nodeUnderlineStrokeWidth != underlineStrokeWidth ||
+                    nodeUnderlineStrokeColor != underlineStrokeColor ||
+                    nodeUnderlineMarginTop != underlineMarginTop
+                ))
+
+        if (needsRecord) {
+            val strokePad = ceil(
+                maxOf(
+                    strokeWidth.coerceAtLeast(0f),
+                    if (hasUnderline) underlineStrokeWidth.coerceAtLeast(0f) else 0f,
+                ) * 0.5f,
+            ).toInt() + 1
+            val extraBottom = if (hasUnderline) {
+                ceil(underlineMarginTop + underlineWidth + underlineStrokeWidth).toInt().coerceAtLeast(0)
+            } else {
+                0
+            }
+            val recordWidth = ceil(width).toInt() + strokePad * 2
+            val recordHeight = ceil(height).toInt() + extraBottom + strokePad * 2
+            if (recordWidth <= 0 || recordHeight <= 0) return
+
+            node.setPosition(0, 0, recordWidth, recordHeight)
+            node.setClipToBounds(false)
+            val recordingCanvas = node.beginRecording(recordWidth, recordHeight)
+            try {
+                drawItemAt(
+                    canvas = recordingCanvas,
+                    config = config,
+                    brightness = brightness,
+                    originX = strokePad.toFloat(),
+                    originY = strokePad.toFloat(),
+                )
+            } finally {
+                node.endRecording()
+            }
+            nodePadPx = strokePad
+            nodeText = text
+            nodeTextSize = textSize
+            nodeTypeface = typeface
+            nodeFillColor = fillColor
+            nodeStrokeWidth = strokeWidth
+            nodeStrokeColor = strokeColor
+            nodeBrightness = brightness
+            nodeIncludeFontPadding = includeFontPadding
+            nodeUpOwner = isUpOwner
+            nodeVipGradual = isVipGradual
+            nodeHasUnderline = hasUnderline
+            nodeUnderlineWidth = underlineWidth
+            nodeUnderlineColor = underlineColor
+            nodeUnderlineStrokeWidth = underlineStrokeWidth
+            nodeUnderlineStrokeColor = underlineStrokeColor
+            nodeUnderlineMarginTop = underlineMarginTop
+            nodeWidth = width
+            nodeHeight = height
+            nodeValid = true
+        }
+
+        val saveCount = canvas.save()
+        canvas.translate(x - nodePadPx, y - nodePadPx)
+        canvas.drawRenderNode(node)
+        canvas.restoreToCount(saveCount)
+    }
+
+    private fun drawItemAt(
+        canvas: Canvas,
+        config: DanmakuConfig,
+        brightness: Float,
+        originX: Float,
+        originY: Float,
+    ) {
+        if (upBadgeAdvance > 0f) {
+            drawUpBadge(canvas, brightness, originX, originY)
+        }
+        drawText(canvas, mTextPaint, config, brightness, originX, originY)
+        drawUnderline(canvas, mTextPaint, mUnderlinePaint, config, brightness, originX, originY)
     }
 
     private fun resolveUpBadgeAdvance(textHeight: Float): Float {
@@ -126,20 +283,20 @@ open class TextDrawItem: DrawItem<TextData>() {
         return upBadgeTextWidth + badgeHeight + UP_BADGE_TEXT_GAP_RATIO * textHeight
     }
 
-    private fun drawUpBadge(canvas: Canvas) {
+    private fun drawUpBadge(canvas: Canvas, brightness: Float, originX: Float, originY: Float) {
         val badgeHeight = height * UP_BADGE_HEIGHT_RATIO
         // 徽章与文字在行内垂直居中
-        val badgeTop = y + (height - badgeHeight) / 2f
+        val badgeTop = originY + (height - badgeHeight) / 2f
         val badgeTextSize = badgeHeight * UP_BADGE_TEXT_RATIO
         mUpBadgePaint.textSize = badgeTextSize
         mUpBadgePaint.typeface = Typeface.DEFAULT_BOLD
-        mUpBadgePaint.color = UP_BADGE_COLOR
-        mUpBadgeRect.set(x, badgeTop, x + upBadgeWidth, badgeTop + badgeHeight)
+        mUpBadgePaint.color = scaleDanmakuColorRgb(UP_BADGE_COLOR, brightness)
+        mUpBadgeRect.set(originX, badgeTop, originX + upBadgeWidth, badgeTop + badgeHeight)
         canvas.drawRoundRect(mUpBadgeRect, badgeHeight * 0.22f, badgeHeight * 0.22f, mUpBadgePaint)
-        mUpBadgePaint.color = UP_BADGE_TEXT_COLOR
+        mUpBadgePaint.color = scaleDanmakuColorRgb(UP_BADGE_TEXT_COLOR, brightness)
         canvas.drawText(
             UP_BADGE_TEXT,
-            x + (upBadgeWidth - upBadgeTextWidth) / 2f,
+            originX + (upBadgeWidth - upBadgeTextWidth) / 2f,
             badgeTop + upBadgeBaselineOffset,
             mUpBadgePaint,
         )
@@ -149,8 +306,15 @@ open class TextDrawItem: DrawItem<TextData>() {
         super.recycle()
         mMetricsValid = false
         mMetricsTypeface = null
+        nodeValid = false
+        nodeText = null
+        nodeTypeface = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            (cachedRenderNode as? RenderNode)?.discardDisplayList()
+        }
         vipGradient = null
         vipGradientWidth = 0f
+        vipGradientBrightness = 1f
         upBadgeAdvance = 0f
         upBadgeTextWidth = 0f
         upBadgeWidth = 0f
@@ -165,40 +329,55 @@ open class TextDrawItem: DrawItem<TextData>() {
     /**
      * Canvas.drawText() is positioning the text by baseline
      */
-    private fun drawText(canvas: Canvas, paint: Paint, config: DanmakuConfig) {
+    private fun drawText(
+        canvas: Canvas,
+        paint: Paint,
+        config: DanmakuConfig,
+        brightness: Float,
+        originX: Float,
+        originY: Float,
+    ) {
         data?.text?.let { text ->
             // UP 徽章占位在文字前方；渐变与描边按纯文字宽度计算。
-            val textX = x + upBadgeAdvance
+            val textX = originX + upBadgeAdvance
             // 描边保持单色，复用的画笔不能带上上一条弹幕的渐变。
             paint.shader = null
             val includeFontPadding = data?.includeFontPadding ?: config.text.includeFontPadding
             // draw stroke
             (data?.textStrokeWidth ?: config.text.strokeWidth).takeIf { it > 0 }?.let { width ->
                 paint.style = Paint.Style.STROKE
-                paint.color = data?.textStrokeColor ?: config.text.strokeColor
+                paint.color = scaleDanmakuColorRgb(data?.textStrokeColor ?: config.text.strokeColor, brightness)
                 paint.typeface = data?.typeface ?: config.text.typeface
                 paint.textSize = data?.textSize ?: config.text.size
                 paint.strokeWidth = width
-                val baseline = getBaseline(includeFontPadding, y, paint)
+                val baseline = getBaseline(includeFontPadding, originY, paint)
                 canvas.drawText(text, textX, baseline, paint)
             }
             // draw drawText
             paint.style = Paint.Style.FILL
-            paint.color = data?.textColor ?: config.text.color
+            paint.color = scaleDanmakuColorRgb(data?.textColor ?: config.text.color, brightness)
             paint.typeface = data?.typeface ?: config.text.typeface
             paint.textSize = data?.textSize ?: config.text.size
             paint.strokeWidth = 0f
-            val baseline = getBaseline(includeFontPadding, y, paint)
+            val baseline = getBaseline(includeFontPadding, originY, paint)
             if (data?.isVipGradualColor == true && textWidth > 0f) {
-                if (vipGradient == null || vipGradientWidth != textWidth) {
+                if (vipGradient == null || vipGradientWidth != textWidth || vipGradientBrightness != brightness) {
+                    val gradientColors = if (brightness >= 0.999f) {
+                        VIP_GRADIENT_COLORS
+                    } else {
+                        IntArray(VIP_GRADIENT_COLORS.size) { index ->
+                            scaleDanmakuColorRgb(VIP_GRADIENT_COLORS[index], brightness)
+                        }
+                    }
                     vipGradient = LinearGradient(
                         0f, 0f, textWidth, 0f,
-                        VIP_GRADIENT_COLORS, null, Shader.TileMode.CLAMP,
+                        gradientColors, null, Shader.TileMode.CLAMP,
                     )
                     vipGradientWidth = textWidth
+                    vipGradientBrightness = brightness
                 }
-                // 渐变跟随文字移动；只更新矩阵，不在每帧创建 Shader。
-                gradientMatrix.setTranslate(x, 0f)
+                // 渐变跟随文字起点；只更新矩阵，不在每帧创建 Shader。
+                gradientMatrix.setTranslate(textX, 0f)
                 vipGradient?.setLocalMatrix(gradientMatrix)
                 paint.shader = vipGradient
             }
@@ -207,22 +386,30 @@ open class TextDrawItem: DrawItem<TextData>() {
         }
     }
 
-    private fun drawUnderline(canvas: Canvas, textPaint: Paint, underlinePaint: Paint,config: DanmakuConfig) {
+    private fun drawUnderline(
+        canvas: Canvas,
+        textPaint: Paint,
+        underlinePaint: Paint,
+        config: DanmakuConfig,
+        brightness: Float,
+        originX: Float,
+        originY: Float,
+    ) {
         takeIf { data?.hasUnderline == true }?.let {
             val includeFontPadding = data?.includeFontPadding ?: config.text.includeFontPadding
-            val underlineY = y + getFontHeight(includeFontPadding, textPaint) + config.underline.marginTop
+            val underlineY = originY + getFontHeight(includeFontPadding, textPaint) + config.underline.marginTop
             // draw underline stroke
             takeIf {config.underline.strokeWidth > 0 }?.let {
                 underlinePaint.style = Paint.Style.STROKE
-                underlinePaint.color = config.underline.strokeColor
+                underlinePaint.color = scaleDanmakuColorRgb(config.underline.strokeColor, brightness)
                 underlinePaint.strokeWidth = config.underline.strokeWidth
-                canvas.drawRect(x, underlineY, x + width, underlineY + config.underline.width, underlinePaint)
+                canvas.drawRect(originX, underlineY, originX + width, underlineY + config.underline.width, underlinePaint)
             }
             // draw underline
             underlinePaint.style = Paint.Style.FILL
-            underlinePaint.color = data?.textColor ?: config.underline.color
+            underlinePaint.color = scaleDanmakuColorRgb(data?.textColor ?: config.underline.color, brightness)
             underlinePaint.strokeWidth = 0f
-            canvas.drawRect(x, underlineY, x + width, underlineY + config.underline.width, underlinePaint)
+            canvas.drawRect(originX, underlineY, originX + width, underlineY + config.underline.width, underlinePaint)
         }
     }
 

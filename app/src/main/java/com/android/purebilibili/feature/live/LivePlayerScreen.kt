@@ -99,6 +99,9 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
+import com.android.purebilibili.core.player.withDynamicScheduling
+import com.android.purebilibili.feature.video.danmaku.rememberPlayerDanmakuTargetFrameRateHz
+import com.android.purebilibili.feature.video.danmaku.shouldUseIndependentDanmakuSurface
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -698,6 +701,7 @@ private fun LiveRoomScreen(
                     .withAppVideoDecoderPreference(context)
             )
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .withDynamicScheduling()
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -1324,14 +1328,25 @@ private fun LiveRoomScreen(
                 liveLayoutMode != LiveRoomLayoutMode.PortraitVerticalOverlay || isFullscreen || pipPresentation
             val liveDanmakuInPip = pipPresentation
             if (liveDanmakuLayerEnabled && sharedSurfaceVisible) {
+                val liveDanmakuActive = showLiveDanmakuOverlay && (
+                    (liveVisualWorkActive && !miniPlayerManager.isMiniMode) ||
+                        (liveDanmakuInPip && !pipNoDanmaku)
+                    )
+                val useIndependentLiveDanmakuSurface = shouldUseIndependentDanmakuSurface(
+                    useTextureVideoSurface = useTextureSurfaceForLivePlayer,
+                    anime4kActive = false,
+                    capturePlayerPage = captureLivePlayerPage,
+                    isInPipMode = liveDanmakuInPip,
+                )
+                val liveDanmakuTargetFrameRateHz = rememberPlayerDanmakuTargetFrameRateHz(
+                    player = exoPlayer,
+                    isPlaying = isPlaying && liveDanmakuActive,
+                )
                 // 隐藏时保留渲染器并暂停，恢复后跟随直播时间；画中画沿用弹幕显示偏好。
                 LiveDanmakuOverlay(
                     danmakuFlow = viewModel.danmakuFlow,
                     sessionKey = "$siteId:$roomId",
-                    active = showLiveDanmakuOverlay && (
-                        (liveVisualWorkActive && !miniPlayerManager.isMiniMode) ||
-                            (liveDanmakuInPip && !pipNoDanmaku)
-                        ),
+                    active = liveDanmakuActive,
                     interactionEnabled = liveDanmakuInteractionEnabled && liveVisualWorkActive &&
                         !liveDanmakuInPip && !miniPlayerManager.isMiniMode,
                     onCaptureReady = { captureLiveDanmakuTap = it },
@@ -1343,6 +1358,9 @@ private fun LiveRoomScreen(
                     isFullscreen = isFullscreen,
                     displayArea = liveDanmakuDisplayArea,
                     danmakuSettings = liveDanmakuSettings,
+                    useIndependentSurface = useIndependentLiveDanmakuSurface,
+                    surfaceVisible = showLiveDanmakuOverlay,
+                    targetFrameRateHz = liveDanmakuTargetFrameRateHz,
                     modifier = Modifier.fillMaxSize()
                         .then(if (captureLivePlayerPage) livePlayerBackdrop.danmaku.modifier else Modifier)
                         .graphicsLayer {
@@ -1357,8 +1375,19 @@ private fun LiveRoomScreen(
                     livePlayerBackdrop.backdrop.takeIf { captureLivePlayerPage && livePlayerBackdrop.video.isReady },
             ) {
                 val controlsStats by viewModel.liveRoomStats.collectAsStateWithLifecycle()
-                val controlsClock by produceState(System.currentTimeMillis(), roomInfo.roomId, roomInfo.liveStartTime) {
-                    while (true) { value = System.currentTimeMillis(); delay(30_000L) }
+                val controlsClockActive = roomInfo.liveStartTime > 0L &&
+                    liveHostLifecycleState.isAtLeast(Lifecycle.State.STARTED)
+                val controlsClock by produceState(
+                    System.currentTimeMillis(),
+                    roomInfo.roomId,
+                    roomInfo.liveStartTime,
+                    controlsClockActive,
+                ) {
+                    if (!controlsClockActive) return@produceState
+                    while (true) {
+                        value = System.currentTimeMillis()
+                        delay(30_000L)
+                    }
                 }
                 val watchedDisplay = controlsStats.watchedText.ifBlank { roomInfo.watchedText }
                 val onlineRankDisplay = controlsStats.onlineRankText.ifBlank { roomInfo.onlineRankText }
@@ -1700,8 +1729,19 @@ private fun LiveRoomScreen(
 
     val roomAppBar: @Composable () -> Unit = {
         val barStats by viewModel.liveRoomStats.collectAsStateWithLifecycle()
-        val barClock by produceState(System.currentTimeMillis(), roomInfo.roomId, roomInfo.liveStartTime) {
-            while (true) { value = System.currentTimeMillis(); delay(30_000L) }
+        val barClockActive = roomInfo.liveStartTime > 0L &&
+            liveHostLifecycleState.isAtLeast(Lifecycle.State.STARTED)
+        val barClock by produceState(
+            System.currentTimeMillis(),
+            roomInfo.roomId,
+            roomInfo.liveStartTime,
+            barClockActive,
+        ) {
+            if (!barClockActive) return@produceState
+            while (true) {
+                value = System.currentTimeMillis()
+                delay(30_000L)
+            }
         }
         val watchedDisplay = barStats.watchedText.ifBlank { roomInfo.watchedText }
         val onlineRankDisplay = barStats.onlineRankText.ifBlank { roomInfo.onlineRankText }

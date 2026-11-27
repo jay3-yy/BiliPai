@@ -18,6 +18,7 @@ package com.bytedance.danmaku.render.engine.render.draw.bitmap
 import android.graphics.*
 import com.bytedance.danmaku.render.engine.control.DanmakuConfig
 import com.bytedance.danmaku.render.engine.render.draw.DrawItem
+import com.bytedance.danmaku.render.engine.render.draw.text.scaleDanmakuColorRgb
 import com.bytedance.danmaku.render.engine.utils.DRAW_TYPE_BITMAP
 
 /**
@@ -28,7 +29,8 @@ open class BitmapDrawItem: DrawItem<BitmapData>() {
     private val mBitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     private val mRectF = RectF()
     private var mCachedTint: Int? = null
-    private var mCachedColorFilter: PorterDuffColorFilter? = null
+    private var mCachedBrightness: Float = 1f
+    private var mCachedColorFilter: ColorFilter? = null
 
     override fun getDrawType(): Int {
         return DRAW_TYPE_BITMAP
@@ -57,9 +59,21 @@ open class BitmapDrawItem: DrawItem<BitmapData>() {
             if (bitmap.isRecycled) return@let
             mRectF.set(x, y, x + width, y + height)
             val tint = data?.tintColor
-            if (tint != mCachedTint) {
+            val brightness = config.common.brightnessFactor
+            if (tint != mCachedTint || brightness != mCachedBrightness) {
                 mCachedTint = tint
-                mCachedColorFilter = tint?.let { PorterDuffColorFilter(it, PorterDuff.Mode.SRC_IN) }
+                mCachedBrightness = brightness
+                mCachedColorFilter = when {
+                    tint != null -> PorterDuffColorFilter(
+                        scaleDanmakuColorRgb(tint, brightness),
+                        PorterDuff.Mode.SRC_IN,
+                    )
+                    brightness < 0.999f -> LightingColorFilter(
+                        scaleDanmakuColorRgb(Color.WHITE, brightness) and 0x00FFFFFF,
+                        0,
+                    )
+                    else -> null
+                }
             }
             mBitmapPaint.colorFilter = mCachedColorFilter
             canvas.drawBitmap(bitmap, null, mRectF, mBitmapPaint)
@@ -69,6 +83,7 @@ open class BitmapDrawItem: DrawItem<BitmapData>() {
     override fun recycle() {
         super.recycle()
         mCachedTint = null
+        mCachedBrightness = 1f
         mCachedColorFilter = null
         mBitmapPaint.reset()
         mRectF.set(0F, 0F, 0F, 0F)

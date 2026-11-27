@@ -79,8 +79,11 @@ fun LiveDanmakuOverlay(
     isFullscreen: Boolean,
     displayArea: Float = 1f,
     danmakuSettings: DanmakuSettings = DanmakuSettings(),
+    useIndependentSurface: Boolean = false,
+    surfaceVisible: Boolean = true,
+    targetFrameRateHz: Float = 0f,
     modifier: Modifier = Modifier
-) = key(sessionKey) {
+) = key(sessionKey, useIndependentSurface) {
     val context = LocalContext.current
     val density = context.resources.displayMetrics.density
     val safeDisplayArea = displayArea.takeIf(Float::isFinite)?.coerceIn(0.25f, 1f) ?: 1f
@@ -105,11 +108,19 @@ fun LiveDanmakuOverlay(
     val pendingItems = remember { ArrayDeque<PendingLiveDanmakuItem>() }
     val pendingItemsBeforeStart = remember { ArrayDeque<LiveDanmakuItem>() }
 
+    val lastTargetFrameRateRef = remember { floatArrayOf(0f) }
+
     AndroidView(
         factory = { viewContext ->
-            DanmakuRenderView(viewContext).apply {
+            DanmakuRenderView(
+                context = viewContext,
+                usesIndependentSurface = useIndependentSurface,
+            ).apply {
                 configureAsPassiveDanmakuOverlay()
                 setBackgroundColor(AndroidColor.TRANSPARENT)
+                setSurfaceOverlayVisible(surfaceVisible)
+                this.engine.setTargetFrameRateHz(targetFrameRateHz)
+                lastTargetFrameRateRef[0] = targetFrameRateHz
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
@@ -129,6 +140,11 @@ fun LiveDanmakuOverlay(
                     bounds.overlaps(coordinates.findRootCoordinates().boundsInWindow())
             },
         update = { view ->
+            view.setSurfaceOverlayVisible(surfaceVisible)
+            if (lastTargetFrameRateRef[0] != targetFrameRateHz) {
+                view.engine.setTargetFrameRateHz(targetFrameRateHz)
+                lastTargetFrameRateRef[0] = targetFrameRateHz
+            }
             val textSize = resolveDanmakuTextSizePx(
                 density = density,
                 fontScale = danmakuSettings.fontScale,
@@ -339,6 +355,7 @@ fun LiveDanmakuOverlay(
 
     DisposableEffect(Unit) {
         onDispose {
+            engine?.setTargetFrameRateHz(0f)
             engine?.close()
             renderView?.releaseRenderer()
             // 队列中的表情位图由弹幕引擎的渲染数据持有，这里只清理引用不主动回收。

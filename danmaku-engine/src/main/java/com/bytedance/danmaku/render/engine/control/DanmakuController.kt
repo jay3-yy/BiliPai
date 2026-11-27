@@ -245,7 +245,14 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
         when (type) {
             DanmakuConfig.TYPE_COMMON_PLAY_SPEED -> mDataManager.onPlaySpeedChanged()
             DanmakuConfig.TYPE_TEXT_SIZE -> mRenderEngine.typesetting(mDataManager.queryPlayTime(), false, true)
-            DanmakuConfig.TYPE_COMMON_ALPHA -> mDanmakuView.alpha = config.common.alpha / 255f
+            DanmakuConfig.TYPE_COMMON_ALPHA -> {
+                val host = mDanmakuView as? com.bytedance.danmaku.render.engine.DanmakuRenderHost
+                if (host != null) {
+                    host.applyDanmakuAlpha(config.common.alpha)
+                } else {
+                    mDanmakuView.alpha = config.common.alpha / 255f
+                }
+            }
             DanmakuConfig.TYPE_COMMON_TOP_CENTER_VISIBLE_CHANGE -> {
                 if (!config.common.topVisible) {
                     mRenderEngine.clear(LAYER_TYPE_TOP_CENTER)
@@ -276,15 +283,17 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
         val playTime = mDataManager.queryPlayTime()
         if (mIsPlaying) {
             renderClock.advance(SystemClock.uptimeMillis())
-            val t0 = System.nanoTime()
+            val profileEnabled = mProfiler.isProfilingEnabled()
+            val stageBreakdown = profileEnabled && mProfiler.needsStageBreakdown()
+            val t0 = if (profileEnabled) System.nanoTime() else 0L
             val newItems = mDataManager.queryDanmaku()
-            val t1 = System.nanoTime()
+            val t1 = if (stageBreakdown) System.nanoTime() else t0
             mRenderEngine.addItems(playTime, newItems)
-            val t2 = System.nanoTime()
+            val t2 = if (stageBreakdown) System.nanoTime() else t1
             val typesettingCount = mRenderEngine.typesetting(playTime, true)
-            val t3 = System.nanoTime()
+            val t3 = if (stageBreakdown) System.nanoTime() else t2
             mRenderEngine.draw(canvas)
-            val t4 = System.nanoTime()
+            val t4 = if (profileEnabled) System.nanoTime() else t3
             if (!config.common.pauseInvalidateWhenBlank) {
                 view.postInvalidateCompat()
             } else if (typesettingCount > 0) {
@@ -299,7 +308,9 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
                     }
                 }
             }
-            mProfiler.profilerDrawTimeCost(canvas, t0, t1, t2, t3, t4)
+            if (profileEnabled) {
+                mProfiler.profilerDrawTimeCost(canvas, t0, t1, t2, t3, t4)
+            }
         } else {
             mRenderEngine.typesetting(playTime, false)
             mRenderEngine.draw(canvas)

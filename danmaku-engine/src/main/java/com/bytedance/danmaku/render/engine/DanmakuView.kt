@@ -33,12 +33,14 @@ import com.bytedance.danmaku.render.engine.control.DanmakuController
 @Suppress("unused")
 class DanmakuView @JvmOverloads constructor(context: Context,
                                             attrs: AttributeSet? = null,
-                                            defStyleAttr: Int = 0) : View(context, attrs, defStyleAttr) {
+                                            defStyleAttr: Int = 0) : View(context, attrs, defStyleAttr), DanmakuRenderHost {
 
     @Suppress("MemberVisibilityCanBePrivate")
-    val controller: DanmakuController = DanmakuController(this)
+    override val controller: DanmakuController = DanmakuController(this)
 
     private val cadence = RenderFrameCadence()
+    private var targetFrameRateHz = 0f
+    private var cachedDisplayRefreshRateHz = 0f
     private var framePending = false
     private var needsFrame = false
     private var wakeAtMs = 0L
@@ -57,7 +59,22 @@ class DanmakuView @JvmOverloads constructor(context: Context,
         }
     }
 
-    internal fun requestRenderFrame(delayMs: Long = 0L) {
+    override fun asView(): View = this
+
+    override fun setTargetFrameRateHz(fps: Float) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            post { setTargetFrameRateHz(fps) }
+            return
+        }
+        targetFrameRateHz = if (fps.isFinite() && fps > 0f) fps else 0f
+        updateCadenceForDisplay()
+    }
+
+    override fun applyDanmakuAlpha(alpha: Int) {
+        this.alpha = alpha.coerceIn(0, 255) / 255f
+    }
+
+    override fun requestRenderFrame(delayMs: Long) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             post { requestRenderFrame(delayMs) }
             return
@@ -78,7 +95,7 @@ class DanmakuView @JvmOverloads constructor(context: Context,
         }
     }
 
-    internal fun cancelRenderFrames() {
+    override fun cancelRenderFrames() {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             post { cancelRenderFrames() }
             return
@@ -99,8 +116,17 @@ class DanmakuView @JvmOverloads constructor(context: Context,
         Choreographer.getInstance().postFrameCallback(renderFrame)
     }
 
+    private fun updateCadenceForDisplay() {
+        val displayHz = display?.refreshRate ?: 0f
+        if (displayHz.isFinite() && displayHz > 0f) {
+            cachedDisplayRefreshRateHz = displayHz
+        }
+        cadence.updateCadence(targetFps = targetFrameRateHz, displayHz = cachedDisplayRefreshRateHz)
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        updateCadenceForDisplay()
         requestRenderFrame()
     }
 
@@ -120,15 +146,30 @@ class DanmakuView @JvmOverloads constructor(context: Context,
         if (controllerReady) updateVisibilityScheduling()
     }
 
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (controllerReady && hasWindowFocus) {
+            updateCadenceForDisplay()
+        }
+    }
+
     private var controllerReady = false
     init { controllerReady = true }
 
     private fun updateVisibilityScheduling() {
-        if (canRender()) requestRenderFrame() else cancelRenderFrames()
+        if (canRender()) {
+            updateCadenceForDisplay()
+            requestRenderFrame()
+        } else {
+            cancelRenderFrames()
+        }
     }
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
+        if (changed) {
+            updateCadenceForDisplay()
+        }
         controller.onLayoutSizeChanged(right - left, bottom - top)
     }
 

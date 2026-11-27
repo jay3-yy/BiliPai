@@ -16,6 +16,12 @@ interface DanmakuEngine : AutoCloseable {
 
     fun updateConfig(config: DanmakuRenderConfig)
 
+    /** Adjusts RGB brightness scale in [0.4f..1f] per item without an offscreen View layer. */
+    fun setBrightnessFactor(factor: Float) = Unit
+
+    /** Hints a preferred refresh rate (Hz) for LTPO/SurfaceFlinger pacing; `0f` uses native VSync. */
+    fun setTargetFrameRateHz(fps: Float) = Unit
+
     /**
      * Hides ordinary danmaku matching a selected ID or exact original text.
      * Active items keep moving; clearing both sets restores their visibility.

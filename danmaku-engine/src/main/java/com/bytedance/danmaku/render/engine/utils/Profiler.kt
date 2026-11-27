@@ -27,25 +27,39 @@ import java.text.DecimalFormat
  */
 class Profiler(private val config: DanmakuConfig) {
 
-    private val mDebugPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
-    private val mNsFormat: DecimalFormat = DecimalFormat("0,000,000 ns")
-    private val mMsFormat: DecimalFormat = DecimalFormat("0.000 ms")
+    private val mDebugPaint by lazy(LazyThreadSafetyMode.NONE) {
+        Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
+    }
+    private val mNsFormat by lazy(LazyThreadSafetyMode.NONE) {
+        DecimalFormat("0,000,000 ns")
+    }
+    private val mMsFormat by lazy(LazyThreadSafetyMode.NONE) {
+        DecimalFormat("0.000 ms")
+    }
 
-    fun profilerDrawTimeCost(canvas: Canvas, vararg time: Long) {
-        if (time.size != 5) {
-            return
-        }
+    internal fun isProfilingEnabled(): Boolean =
+        config.debug.showDrawTimeCost || Logger.isVerboseLoggable() || Logger.isWarnLoggable()
 
+    internal fun needsStageBreakdown(): Boolean = Logger.isVerboseLoggable()
+
+    fun profilerDrawTimeCost(
+        canvas: Canvas,
+        t0: Long,
+        t1: Long,
+        t2: Long,
+        t3: Long,
+        t4: Long,
+    ) {
         if (Logger.isVerboseLoggable()) {
             Logger.v(LOG_TAG_PERFORMANCE, "draw(): " +
-                    "all=${mNsFormat.format(time[4] - time[0])}, " +
-                    "query=${mNsFormat.format(time[1] - time[0])}, " +
-                    "add=${mNsFormat.format(time[2] - time[1])}, " +
-                    "typesetting=${mNsFormat.format(time[3] - time[2])}, " +
-                    "draw=${mNsFormat.format(time[4] - time[3])}")
+                    "all=${mNsFormat.format(t4 - t0)}, " +
+                    "query=${mNsFormat.format(t1 - t0)}, " +
+                    "add=${mNsFormat.format(t2 - t1)}, " +
+                    "typesetting=${mNsFormat.format(t3 - t2)}, " +
+                    "draw=${mNsFormat.format(t4 - t3)}")
         }
 
-        val totalInMs = (time[4] - time[0]).toFloat() / 1000_000
+        val totalInMs = (t4 - t0).toFloat() / 1000_000
 
         if (Logger.isWarnLoggable() && totalInMs > 8) {
             Logger.w(LOG_TAG_PERFORMANCE, "The time cost of the DanmakuView's draw() method is more than " +
@@ -62,5 +76,10 @@ class Profiler(private val config: DanmakuConfig) {
         }
     }
 
-
+    fun profilerDrawTimeCost(canvas: Canvas, vararg time: Long) {
+        if (time.size != 5) {
+            return
+        }
+        profilerDrawTimeCost(canvas, time[0], time[1], time[2], time[3], time[4])
+    }
 }

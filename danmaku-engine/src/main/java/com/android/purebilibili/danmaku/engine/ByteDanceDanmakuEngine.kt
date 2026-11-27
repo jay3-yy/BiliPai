@@ -2,7 +2,7 @@ package com.android.purebilibili.danmaku.engine
 
 import android.os.Trace
 import com.bytedance.danmaku.render.engine.render.sortOnlyIfOutOfOrder
-import com.bytedance.danmaku.render.engine.DanmakuView
+import com.bytedance.danmaku.render.engine.DanmakuRenderHost
 import com.bytedance.danmaku.render.engine.data.DanmakuData
 import com.bytedance.danmaku.render.engine.render.draw.bitmap.BitmapData
 import com.bytedance.danmaku.render.engine.render.draw.mask.MaskData
@@ -14,9 +14,9 @@ import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_TOP_CENTER
 import java.util.function.LongSupplier
 
 internal class ByteDanceDanmakuEngine(
-    private val view: DanmakuView
+    private val host: DanmakuRenderHost
 ) : DanmakuEngine {
-    private val controller = view.controller
+    private val controller = host.controller
     private val visibility = DanmakuVisibility()
     @Volatile
     private var closed = false
@@ -104,6 +104,16 @@ internal class ByteDanceDanmakuEngine(
                 }
             }
         }
+    }
+
+    override fun setBrightnessFactor(factor: Float) {
+        if (closed) return
+        controller.config.common.brightnessFactor = factor
+    }
+
+    override fun setTargetFrameRateHz(fps: Float) {
+        if (closed) return
+        host.setTargetFrameRateHz(fps)
     }
 
     override fun setHiddenDanmaku(ids: Set<Long>, texts: Set<String>) {

@@ -87,6 +87,8 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.danmaku.configureAsPassiveDanmakuOverlay
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
+import com.android.purebilibili.feature.video.danmaku.rememberPlayerDanmakuTargetFrameRateHz
+import com.android.purebilibili.feature.video.danmaku.shouldUseIndependentDanmakuSurface
 import com.android.purebilibili.feature.video.ui.components.TwoFingerSpeedFeedbackOverlay
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.cancelPlayerViewViewportRefresh
@@ -333,6 +335,7 @@ fun OfflineVideoPlayerScreen(
                     .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
                     .withAppVideoDecoderPreference(context)
             )
+            .experimentalSetDynamicSchedulingEnabled(true)
             .build().withAppVideoDecoderDiagnostics(context)
     }
     var playerView by remember(player) { mutableStateOf<PlayerView?>(null) }
@@ -1223,22 +1226,45 @@ fun OfflineVideoPlayerScreen(
 
             if (danmakuAvailable) {
                 val sharedDanmakuVisible = com.android.purebilibili.navigation3.LocalNavigationSharedSurfaceVisible.current
-                key(danmakuManager) {
+                val useIndependentDanmakuSurface = shouldUseIndependentDanmakuSurface(
+                    useTextureVideoSurface = false,
+                    anime4kActive = false,
+                    capturePlayerPage = false,
+                    isInPipMode = false,
+                )
+                val danmakuOverlayVisible = showDanmakuLayer && sharedDanmakuVisible
+                val danmakuTargetFrameRateHz = rememberPlayerDanmakuTargetFrameRateHz(
+                    player = player,
+                    isPlaying = isPlaying && danmakuOverlayVisible && !task.isAudioOnly,
+                )
+                key(danmakuManager, useIndependentDanmakuSurface) {
+                    val lastTargetFrameRateRef = remember { floatArrayOf(0f) }
                     AndroidView(
                         factory = { ctx ->
-                            DanmakuRenderView(ctx).apply {
+                            DanmakuRenderView(
+                                context = ctx,
+                                usesIndependentSurface = useIndependentDanmakuSurface,
+                            ).apply {
                                 danmakuManager.useFullscreenTextSize = isFullscreen
                                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                 configureAsPassiveDanmakuOverlay()
+                                setSurfaceOverlayVisible(danmakuOverlayVisible)
+                                engine.setTargetFrameRateHz(danmakuTargetFrameRateHz)
+                                lastTargetFrameRateRef[0] = danmakuTargetFrameRateHz
                                 danmakuManager.attachView(this)
                             }
                         },
                         update = { view ->
                             danmakuManager.useFullscreenTextSize = isFullscreen
-                            view.visibility = if (showDanmakuLayer && sharedDanmakuVisible) {
+                            view.visibility = if (danmakuOverlayVisible) {
                                 android.view.View.VISIBLE
                             } else {
                                 android.view.View.GONE
+                            }
+                            view.setSurfaceOverlayVisible(danmakuOverlayVisible)
+                            if (lastTargetFrameRateRef[0] != danmakuTargetFrameRateHz) {
+                                view.engine.setTargetFrameRateHz(danmakuTargetFrameRateHz)
+                                lastTargetFrameRateRef[0] = danmakuTargetFrameRateHz
                             }
                             if (view.width > 0 && view.height > 0) {
                                 val sizeTag = "${view.width}x${view.height}"
@@ -1248,7 +1274,13 @@ fun OfflineVideoPlayerScreen(
                                 }
                             }
                         },
-                        onRelease = { view -> danmakuManager.detachView(view) },
+                        onRelease = { view ->
+                            if (lastTargetFrameRateRef[0] != 0f) {
+                                view.engine.setTargetFrameRateHz(0f)
+                                lastTargetFrameRateRef[0] = 0f
+                            }
+                            danmakuManager.detachView(view)
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }

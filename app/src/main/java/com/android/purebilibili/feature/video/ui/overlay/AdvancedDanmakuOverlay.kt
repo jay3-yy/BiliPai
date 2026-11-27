@@ -12,13 +12,13 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
+import com.android.purebilibili.core.ui.adaptive.DeviceThermalBudgetState
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.danmaku.parser.AdvancedDanmakuData
 import com.android.purebilibili.danmaku.parser.TimedDanmakuWindow
@@ -60,16 +60,23 @@ fun AdvancedDanmakuOverlay(
     }
     LaunchedEffect(player, window, renderingPaused) {
         if (renderingPaused) return@LaunchedEffect
+        var lastRenderedFrameNs = 0L
         while (isActive) {
             val now = player.currentPosition
             position.longValue = now
             val visible = window.update(now)
             active.value = visible
             if (!player.isPlaying) {
+                lastRenderedFrameNs = 0L
                 wake.receive()
             } else if (visible.isNotEmpty()) {
-                withFrameNanos { }
+                val minIntervalNs = resolveSpecialDanmakuMinFrameIntervalNs(
+                    thermalTier = DeviceThermalBudgetState.tier,
+                    activeCount = visible.size,
+                )
+                lastRenderedFrameNs = awaitNextSpecialDanmakuFrame(lastRenderedFrameNs, minIntervalNs)
             } else {
+                lastRenderedFrameNs = 0L
                 val next = window.nextStartTimeMs
                 if (next == null) wake.receive()
                 else {
