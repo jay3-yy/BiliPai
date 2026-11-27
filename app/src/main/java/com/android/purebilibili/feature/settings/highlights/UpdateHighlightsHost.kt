@@ -20,13 +20,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Cast
-import androidx.compose.material.icons.outlined.CleaningServices
-import androidx.compose.material.icons.outlined.ContentCut
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.HighQuality
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
@@ -35,7 +36,6 @@ import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.WatchLater
-import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -563,11 +563,11 @@ private fun UpdateHighlightPreviewCard(
 
 private fun resolveUpdateHighlightIcon(feature: UpdateHighlight): ImageVector = when (feature.icon) {
     UpdateHighlightIcon.SPEED -> Icons.Outlined.Speed
-    UpdateHighlightIcon.CONTENT_CUT -> Icons.Outlined.ContentCut
+    UpdateHighlightIcon.CONTENT_CUT -> Icons.Outlined.EditNote
     UpdateHighlightIcon.CAST -> Icons.Outlined.Cast
-    UpdateHighlightIcon.WIDGETS -> Icons.Outlined.Widgets
-    UpdateHighlightIcon.AUTO_FIX_HIGH -> Icons.Outlined.AutoFixHigh
-    UpdateHighlightIcon.CLEANING_SERVICES -> Icons.Outlined.CleaningServices
+    UpdateHighlightIcon.WIDGETS -> Icons.Outlined.GridView
+    UpdateHighlightIcon.AUTO_FIX_HIGH -> Icons.Outlined.HighQuality
+    UpdateHighlightIcon.CLEANING_SERVICES -> Icons.Outlined.DeleteSweep
     UpdateHighlightIcon.PALETTE -> Icons.Outlined.Palette
     UpdateHighlightIcon.FAVORITE -> Icons.Outlined.FavoriteBorder
     UpdateHighlightIcon.DOWNLOAD -> Icons.Outlined.Download
