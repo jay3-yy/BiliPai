@@ -4,6 +4,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
@@ -26,6 +27,7 @@ internal fun SettingsSectionFocusEffect(
             SettingsSearchFocusController.clear(current.token)
             return@LaunchedEffect
         }
+        withFrameNanos { }
         if (current.settingId == null) {
             listState.animateScrollToItem(index)
             SettingsSearchFocusController.clear(current.token)

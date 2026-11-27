@@ -169,6 +169,7 @@ fun PlaybackSettingsContent(
             SettingsSearchFocusController.clear(request.token)
             return@LaunchedEffect
         }
+        androidx.compose.runtime.withFrameNanos { }
         if (request.settingId != null) listState.scrollToItem(index) else listState.animateScrollToItem(index)
         if (request.settingId == null) SettingsSearchFocusController.clear(request.token)
         else clearUnclaimedSettingsFocusRequest(request.token)

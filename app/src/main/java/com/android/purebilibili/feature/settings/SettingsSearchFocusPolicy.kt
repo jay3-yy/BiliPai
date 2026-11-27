@@ -207,6 +207,7 @@ internal fun resolvePlaybackSettingsItemScrollIndex(
     page: PlaybackSettingsPage,
     focusId: String,
     settingId: String?,
+    includeNearbyHandoff: Boolean = com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED,
 ): Int? {
     val sections = when (page) {
         PlaybackSettingsPage.PLAYBACK -> playbackSettingsSectionKeys
@@ -228,7 +229,13 @@ internal fun resolvePlaybackSettingsItemScrollIndex(
         for (key in sections) {
             add(key + "_title")
             when (key) {
-                SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER -> PlaybackMiniPlayerGroup.entries.forEach { add(it.itemKey) }
+                SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER -> {
+                    PlaybackMiniPlayerGroup.entries.forEach { add(it.itemKey) }
+                    if (page == PlaybackSettingsPage.PLAYBACK && includeNearbyHandoff) {
+                        add("playback_nearby_handoff_title")
+                        add("playback_nearby_handoff")
+                    }
+                }
                 SettingsSearchFocusIds.PLAYBACK_FULLSCREEN -> PlaybackFullscreenGroup.entries.forEach { add(it.itemKey) }
                 else -> add(key)
             }

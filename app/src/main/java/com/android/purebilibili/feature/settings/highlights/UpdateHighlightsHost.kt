@@ -585,13 +585,16 @@ private fun resolveUpdateHighlightIcon(feature: UpdateHighlight): ImageVector = 
         UpdateHighlightAction.OPEN_DOWNLOAD_LIST -> Icons.Outlined.Download
         UpdateHighlightAction.OPEN_ICON_SETTINGS,
         UpdateHighlightAction.OPEN_APPEARANCE_SETTINGS,
+        UpdateHighlightAction.OPEN_IMAGE_DISPLAY_SETTINGS,
         UpdateHighlightAction.PREVIEW_CMF -> Icons.Outlined.Palette
         UpdateHighlightAction.OPEN_LISTEN_VIDEO -> Icons.Outlined.Headphones
         UpdateHighlightAction.OPEN_PERSONAL_RECAP -> Icons.Outlined.History
         UpdateHighlightAction.OPEN_WATCH_LATER -> Icons.Outlined.WatchLater
         UpdateHighlightAction.OPEN_CUSTOM_PUSH_SETTINGS -> Icons.Outlined.Notifications
-        UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS -> Icons.Outlined.PlayCircle
+        UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS,
+        UpdateHighlightAction.OPEN_DECODER_SETTINGS -> Icons.Outlined.PlayCircle
         UpdateHighlightAction.OPEN_HOME_SETTINGS -> Icons.Outlined.Home
+        UpdateHighlightAction.OPEN_STORAGE_SETTINGS -> Icons.Outlined.DeleteSweep
         UpdateHighlightAction.OPEN_SETTINGS -> Icons.Outlined.Tune
         null -> Icons.Outlined.AutoAwesome
     }

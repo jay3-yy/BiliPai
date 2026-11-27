@@ -187,4 +187,32 @@ class SettingsSearchFocusPolicyTest {
             resolveSettingsSceneDetailFocus(SettingsSearchTarget.DIAGNOSTICS)
         )
     }
+
+    @Test
+    fun playbackScrollIndexAccountsForNearbyHandoffSectionWhenEnabled() {
+        val withoutNearby = resolvePlaybackSettingsItemScrollIndex(
+            page = PlaybackSettingsPage.PLAYBACK,
+            focusId = SettingsSearchFocusIds.PLAYBACK_DEBUG,
+            settingId = null,
+            includeNearbyHandoff = false,
+        )
+        val withNearby = resolvePlaybackSettingsItemScrollIndex(
+            page = PlaybackSettingsPage.PLAYBACK,
+            focusId = SettingsSearchFocusIds.PLAYBACK_DEBUG,
+            settingId = null,
+            includeNearbyHandoff = true,
+        )
+        val nearbyIndex = resolvePlaybackSettingsItemScrollIndex(
+            page = PlaybackSettingsPage.PLAYBACK,
+            focusId = "playback_nearby_handoff",
+            settingId = "playback.nearby_handoff",
+            includeNearbyHandoff = true,
+        )
+
+        assertNotNull(withoutNearby)
+        assertNotNull(withNearby)
+        assertNotNull(nearbyIndex)
+        assertEquals(withoutNearby + 2, withNearby)
+        assertEquals(withNearby - 2, nearbyIndex)
+    }
 }

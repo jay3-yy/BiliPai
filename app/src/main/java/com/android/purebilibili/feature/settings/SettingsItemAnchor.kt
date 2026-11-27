@@ -21,10 +21,14 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 
@@ -38,6 +42,8 @@ internal fun SettingsItemAnchor(
     val bringIntoView = remember { BringIntoViewRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val view = LocalView.current
+    val density = LocalDensity.current
+    var rowSize by remember { mutableStateOf(IntSize.Zero) }
     var highlighted by remember { mutableStateOf(false) }
     var searchQuery by rememberSaveable(settingId) { mutableStateOf("") }
     LaunchedEffect(request?.token, settingId) {
@@ -46,8 +52,23 @@ internal fun SettingsItemAnchor(
         try {
             searchQuery = current.query
             keyboard?.hide()
+            // 等待列表滚动与首帧测量落定后再请求带上下安全留白的可见定位，避免被顶部栏或底边遮挡。
             withFrameNanos { }
-            bringIntoView.bringIntoView()
+            withFrameNanos { }
+            val currentSize = rowSize
+            if (currentSize.width > 0 && currentSize.height > 0) {
+                val safeMarginPx = with(density) { 84.dp.toPx() }
+                bringIntoView.bringIntoView(
+                    Rect(
+                        left = 0f,
+                        top = -safeMarginPx,
+                        right = currentSize.width.toFloat(),
+                        bottom = currentSize.height.toFloat() + safeMarginPx,
+                    )
+                )
+            } else {
+                bringIntoView.bringIntoView()
+            }
             highlighted = true
             view.announceForAccessibility("已定位到${settingsItemDirectory.firstOrNull { it.settingId == settingId }?.title.orEmpty()}")
             delay(SettingsSearchHighlightTiming.HOLD_MILLIS)
@@ -64,6 +85,7 @@ internal fun SettingsItemAnchor(
     val highlightColor = AppContentColors.accent()
     Column(
         modifier.fillMaxWidth()
+            .onSizeChanged { rowSize = it }
             .bringIntoViewRequester(bringIntoView)
             .drawWithContent {
                 drawContent()

@@ -3236,10 +3236,31 @@ fun AppNavigation(
                         pushNavigation3Key(BiliPaiNavKey.CustomPushSettings)
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS ->
                         pushNavigation3Key(BiliPaiNavKey.PlaybackSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_DECODER_SETTINGS -> {
+                        com.android.purebilibili.feature.settings.SettingsSearchFocusController.submit(
+                            target = com.android.purebilibili.feature.settings.SettingsSearchTarget.PLAYBACK,
+                            focusId = com.android.purebilibili.feature.settings.SettingsSearchFocusIds.PLAYBACK_DECODER,
+                            settingId = "playback.hw_decode",
+                        )
+                        pushNavigation3Key(BiliPaiNavKey.PlaybackSettings)
+                    }
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_APPEARANCE_SETTINGS ->
                         pushNavigation3Key(BiliPaiNavKey.AppearanceSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_IMAGE_DISPLAY_SETTINGS -> {
+                        com.android.purebilibili.feature.settings.SettingsSearchFocusController.submit(
+                            target = com.android.purebilibili.feature.settings.SettingsSearchTarget.APPEARANCE,
+                            focusId = "content_image_display_title",
+                        )
+                        pushNavigation3Key(BiliPaiNavKey.AppearanceSettings)
+                    }
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_HOME_SETTINGS ->
                         pushNavigation3Key(BiliPaiNavKey.HomeSettings)
+                    com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_STORAGE_SETTINGS ->
+                        pushNavigation3Key(
+                            BiliPaiNavKey.SettingsCategory(
+                                com.android.purebilibili.feature.settings.SettingsRootCategory.STORAGE_BACKUP
+                            )
+                        )
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_SETTINGS ->
                         pushNavigation3Key(BiliPaiNavKey.Settings)
                     com.android.purebilibili.feature.settings.highlights.UpdateHighlightAction.OPEN_DONATE,
