@@ -152,8 +152,11 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
@@ -2069,6 +2072,81 @@ private fun SpaceContent(
             state.opusCollections.isNotEmpty()
         ) rememberNavigationControlMotionGroup() else null
         val opusCollectionMotionActive = LocalVisualWorkAllowed.current && isSelectedPage
+        val bannerPullOffset = remember(gridState) { androidx.compose.animation.core.Animatable(0f) }
+        val bannerMaxPullPx = with(density) { SPACE_BANNER_MAX_PULL_OFFSET_DP.dp.toPx() }
+        val bannerPullConnection = remember(gridState, bannerPullOffset, coroutineScope, bannerMaxPullPx, selectedMainTab) {
+            object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                override fun onPreScroll(
+                    available: Offset,
+                    source: androidx.compose.ui.input.nestedscroll.NestedScrollSource,
+                ): Offset {
+                    if (selectedMainTab == SpaceMainTab.SHOP) return Offset.Zero
+                    if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput &&
+                        available.y < 0f &&
+                        bannerPullOffset.value > 0f
+                    ) {
+                        val current = bannerPullOffset.value
+                        val next = (current + available.y).coerceAtLeast(0f)
+                        val consumedY = next - current
+                        coroutineScope.launch { bannerPullOffset.snapTo(next) }
+                        return Offset(0f, consumedY)
+                    }
+                    return Offset.Zero
+                }
+
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: androidx.compose.ui.input.nestedscroll.NestedScrollSource,
+                ): Offset {
+                    if (selectedMainTab == SpaceMainTab.SHOP) return Offset.Zero
+                    if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput &&
+                        available.y > 0f &&
+                        !gridState.canScrollBackward
+                    ) {
+                        val current = bannerPullOffset.value
+                        val resistance = (1f - (current / bannerMaxPullPx).coerceIn(0f, 1f)).coerceAtLeast(0.18f)
+                        val next = (current + available.y * 0.55f * resistance).coerceIn(0f, bannerMaxPullPx)
+                        coroutineScope.launch { bannerPullOffset.snapTo(next) }
+                        return Offset(0f, available.y)
+                    }
+                    return Offset.Zero
+                }
+
+                override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                    if (bannerPullOffset.value > 0f) {
+                        coroutineScope.launch {
+                            bannerPullOffset.animateTo(
+                                0f,
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            )
+                        }
+                    }
+                    return androidx.compose.ui.unit.Velocity.Zero
+                }
+
+                override suspend fun onPostFling(
+                    consumed: androidx.compose.ui.unit.Velocity,
+                    available: androidx.compose.ui.unit.Velocity,
+                ): androidx.compose.ui.unit.Velocity {
+                    if (bannerPullOffset.value > 0f) {
+                        coroutineScope.launch {
+                            bannerPullOffset.animateTo(
+                                0f,
+                                spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow,
+                                ),
+                            )
+                        }
+                    }
+                    return androidx.compose.ui.unit.Velocity.Zero
+                }
+            }
+        }
         Box(Modifier.fillMaxSize()) {
         LazyVerticalStaggeredGrid(
             columns = StaggeredGridCells.Fixed(gridColumns),
@@ -2080,6 +2158,7 @@ private fun SpaceContent(
             },
             modifier = Modifier
                 .fillMaxSize()
+                .nestedScroll(bannerPullConnection)
                 .homeFeedPinchZoom(
                     enabled = selectedMainTab != SpaceMainTab.DYNAMIC && homeSettings.gridColumnPinchEnabled,
                     currentColumns = gridColumns,
@@ -2139,6 +2218,7 @@ private fun SpaceContent(
                     collapseFractionProvider = { if (pinContentTabs) 0f else headerCollapseFraction.value },
                     collapseAsUnit = pinContentTabs,
                     bannerScrollOffsetPxProvider = { bannerScrollOffsetPx.value },
+                    bannerPullDownPxProvider = { bannerPullOffset.value },
                     bannerScrollState = gridState,
                     chargeGroup = state.chargeGroup,
                     guardGroup = state.guardGroup,
@@ -3560,6 +3640,7 @@ private fun SpaceHeader(
     upStat: UpStatData?,
     collapseFractionProvider: () -> Float,
     bannerScrollOffsetPxProvider: () -> Float = { 0f },
+    bannerPullDownPxProvider: () -> Float = { 0f },
     bannerScrollState: androidx.compose.foundation.gestures.ScrollableState,
     chargeGroup: SpaceSupporterGroup? = null,
     guardGroup: SpaceSupporterGroup? = null,
@@ -3707,6 +3788,48 @@ private fun SpaceHeader(
                 )
                 .background(MaterialTheme.colorScheme.surface)
         ) {
+        val bannerMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
+            !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
+        val bannerBlurEnabled = bannerMotionEnabled && !isLowBlurBudgetForced()
+        val bannerBlurCache = remember { com.android.purebilibili.core.ui.transition.BlurRenderEffectCache() }
+        DisposableEffect(bannerBlurCache) {
+            onDispose { bannerBlurCache.clear() }
+        }
+        val bannerEffectScrollRangePx = with(density) {
+            minOf(
+                maxBannerParallaxTranslationPx + heroHeight.toPx(),
+                SPACE_BANNER_SCROLL_EFFECT_RANGE_DP.dp.toPx(),
+            )
+        }
+        val bannerPullEffectRangePx = with(density) { SPACE_BANNER_PULL_EFFECT_RANGE_DP.dp.toPx() }
+        val heroHeightPx = with(density) { heroHeight.toPx() }
+        val bannerHaptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(
+            com.android.purebilibili.core.ui.AppHapticScene.ADJUSTMENT
+        )
+        LaunchedEffect(bannerScrollState, bannerEffectScrollRangePx, bannerPullEffectRangePx, bannerMotionEnabled) {
+            if (!bannerMotionEnabled || bannerEffectScrollRangePx <= 0f) return@LaunchedEffect
+            var lastStep = resolveSpaceBannerZoomHapticStep(
+                scrollOffsetPx = bannerScrollOffsetPxProvider(),
+                scrollRangePx = bannerEffectScrollRangePx,
+                pullDownPx = bannerPullDownPxProvider(),
+                pullRangePx = bannerPullEffectRangePx,
+            )
+            snapshotFlow {
+                val pullDownPx = bannerPullDownPxProvider()
+                val interacting = bannerScrollState.isScrollInProgress || pullDownPx > 0f
+                interacting to resolveSpaceBannerZoomHapticStep(
+                    scrollOffsetPx = bannerScrollOffsetPxProvider(),
+                    scrollRangePx = bannerEffectScrollRangePx,
+                    pullDownPx = pullDownPx,
+                    pullRangePx = bannerPullEffectRangePx,
+                )
+            }.collect { (interacting, step) ->
+                if (interacting && step > lastStep) {
+                    bannerHaptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }
+                lastStep = step
+            }
+        }
         Box(
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -3725,8 +3848,9 @@ private fun SpaceHeader(
                         val horizontalInsetPx = outerPadding.coerceAtLeast(0.dp).roundToPx()
                         val topInsetPx = chromeTopInset.coerceAtLeast(0.dp).roundToPx()
                         val targetWidth = constraints.maxWidth + horizontalInsetPx * 2
-                        val bannerTotalHeightPx = bannerTotalHeightDp.roundToPx()
-                        val visibleHeightPx = heroHeight.roundToPx()
+                        val pullPx = bannerPullDownPxProvider().roundToInt().coerceAtLeast(0)
+                        val bannerTotalHeightPx = bannerTotalHeightDp.roundToPx() + pullPx
+                        val visibleHeightPx = heroHeight.roundToPx() + pullPx
                         val placeable = measurable.measure(
                             constraints.copy(
                                 minWidth = targetWidth,
@@ -3754,6 +3878,7 @@ private fun SpaceHeader(
                 ) {
                     Box(
                         Modifier.fillMaxSize()
+                            .clipToBounds()
                             .imagePreviewSourceBounds(topPhotoRect)
                             .alpha(if (topPhotoHidden) 0f else 1f)
                             .appActionClickable(
@@ -3774,7 +3899,27 @@ private fun SpaceHeader(
                             onPageChange = onBannerPageChange,
                             pageActive = bannerPageActive,
                             contentPageMoving = contentPageMoving,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    val effect = resolveSpaceBannerScrollEffect(
+                                        scrollOffsetPx = bannerScrollOffsetPxProvider(),
+                                        scrollRangePx = bannerEffectScrollRangePx,
+                                        pullDownPx = bannerPullDownPxProvider(),
+                                        pullRangePx = bannerPullEffectRangePx,
+                                        heroHeightPx = heroHeightPx,
+                                        scaleEnabled = bannerMotionEnabled,
+                                        blurEnabled = bannerBlurEnabled,
+                                    )
+                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+                                    scaleX = effect.scale
+                                    scaleY = effect.scale
+                                    renderEffect = if (effect.blurRadiusDp > 0.01f) {
+                                        bannerBlurCache.resolve(effect.blurRadiusDp.dp.toPx())
+                                    } else {
+                                        null
+                                    }
+                                }
                         )
 
                         Box(
@@ -3797,7 +3942,16 @@ private fun SpaceHeader(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .graphicsLayer { alpha = 1f - collapseFractionProvider() }
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        val pullPx = bannerPullDownPxProvider().roundToInt().coerceAtLeast(0)
+                        layout(placeable.width, placeable.height + pullPx) {
+                            placeable.placeRelative(0, pullPx)
+                        }
+                    }
+                    .graphicsLayer {
+                        alpha = 1f - collapseFractionProvider()
+                    }
                     .padding(top = avatarTopPadding, start = 4.dp, end = 0.dp),
                 verticalAlignment = Alignment.Top
             ) {

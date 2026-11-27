@@ -153,6 +153,16 @@ class UpdateHighlightPolicyTest {
     }
 
     @Test
+    fun release623HighlightsExcludePinnedDonateAndUseDistinctSemanticIcons() {
+        val highlights = latestReleaseHighlights(623)
+        assertEquals(4, highlights.size)
+        assertTrue(highlights.none { it.action == UpdateHighlightAction.OPEN_DONATE })
+        val icons = highlights.map { it.icon }
+        assertTrue(icons.all { it != null })
+        assertEquals(highlights.size, icons.toSet().size)
+    }
+
+    @Test
     fun formatDisplayVersionNameStripsBuildVariantSuffix() {
         assertEquals("0.10.6", formatDisplayVersionName("0.10.6-debug"))
         assertEquals("0.10.6", formatDisplayVersionName("0.10.6-dev"))

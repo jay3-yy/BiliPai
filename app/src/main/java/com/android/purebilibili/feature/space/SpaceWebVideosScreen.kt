@@ -120,7 +120,8 @@ internal fun SpaceWebVideosScreen(
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                             when {
-                                state.isLoading -> AppCircularProgressIndicator()
+                                state.isLoading && state.items.isNotEmpty() -> AppCircularProgressIndicator()
+                                state.isLoading -> Unit
                                 state.error != null -> AppErrorState(
                                     title = "加载失败",
                                     message = state.error,

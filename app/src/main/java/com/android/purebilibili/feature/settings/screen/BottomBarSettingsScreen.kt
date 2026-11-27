@@ -588,6 +588,19 @@ fun BottomBarSettingsContent(
                                 },
                             )
                         }
+                        AppPreferenceDivider()
+                        SettingsItemAnchor("navigation.home_top_tab_swipe_drawer") {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_TOP_TAB_SWIPE_DRAWER),
+                                iconTint = AppContentColors.secondaryText(),
+                                title = settingItemTitle("navigation.home_top_tab_swipe_drawer"),
+                                subtitle = "在首页第一个顶部标签页向右滑动时自然展开个人侧边栏",
+                                checked = homeConfiguration.homeTopTabSwipeDrawerEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch { SettingsManager.setHomeTopTabSwipeDrawerEnabled(context, enabled) }
+                                },
+                            )
+                        }
                         if (!hideTopTabs) {
                             AppPreferenceDivider()
                             SettingsSingleChoicePreference(

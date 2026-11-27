@@ -151,6 +151,7 @@ internal enum class SettingsIconRole(
     KEEP_TOP_SEARCH(R.drawable.ic_settings_top_search_24),
     BOTTOM_BAR_SEARCH_INSIDE_DOCK(R.drawable.ms_manage_search_24, R.drawable.ph_align_bottom_24),
     HOME_AVATAR_DRAWER(R.drawable.ic_settings_home_avatar_drawer_24),
+    HOME_TOP_TAB_SWIPE_DRAWER(R.drawable.ms_swipe_right_24, R.drawable.ph_hand_swipe_right_24),
     LINKED_DOCK_MERGE(R.drawable.ms_merge_24, R.drawable.ph_arrows_merge_24),
     BOTTOM_BAR_SCROLL_COMPACT(R.drawable.ic_settings_bottom_bar_compact_24),
     LIST_SCOPED_SEARCH(R.drawable.ms_find_in_page_24, R.drawable.ph_list_magnifying_glass_24),

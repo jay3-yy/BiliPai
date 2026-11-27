@@ -148,4 +148,81 @@ class SpaceHeaderPresentationPolicyTest {
         val unknown = resolveSpaceDisplayTags(tags, sex = "未知", showSex = true)
         assertEquals(listOf("location", "real_name"), unknown.map { it.type })
     }
+
+    @Test
+    fun `resolveSpaceBannerScrollEffect interpolates scale and blur for scroll and pull down`() {
+        val atRest = resolveSpaceBannerScrollEffect(
+            scrollOffsetPx = 0f,
+            scrollRangePx = 400f,
+        )
+        assertEquals(1f, atRest.scale, 0.001f)
+        assertEquals(0f, atRest.blurRadiusDp, 0.001f)
+
+        val quarter = resolveSpaceBannerScrollEffect(
+            scrollOffsetPx = 100f,
+            scrollRangePx = 400f,
+        )
+        // ease-out(0.25) = 1 - 0.75^2 = 0.4375
+        assertEquals(1f + (SPACE_BANNER_MAX_SCROLL_SCALE - 1f) * 0.4375f, quarter.scale, 0.001f)
+        assertEquals(SPACE_BANNER_MAX_SCROLL_BLUR_DP * 0.4375f, quarter.blurRadiusDp, 0.001f)
+
+        val pullDown = resolveSpaceBannerScrollEffect(
+            scrollOffsetPx = 0f,
+            scrollRangePx = 400f,
+            pullDownPx = 200f,
+            pullRangePx = 200f,
+            heroHeightPx = 300f,
+        )
+        // minFillScale = (300 + 200) / 300 = 1.6667 > SPACE_BANNER_MAX_SCROLL_SCALE
+        assertEquals(500f / 300f, pullDown.scale, 0.001f)
+        assertEquals(SPACE_BANNER_MAX_PULL_BLUR_DP, pullDown.blurRadiusDp, 0.001f)
+
+        val clamped = resolveSpaceBannerScrollEffect(
+            scrollOffsetPx = Float.MAX_VALUE,
+            scrollRangePx = 400f,
+        )
+        assertEquals(SPACE_BANNER_MAX_SCROLL_SCALE, clamped.scale, 0.001f)
+        assertEquals(SPACE_BANNER_MAX_SCROLL_BLUR_DP, clamped.blurRadiusDp, 0.001f)
+    }
+
+    @Test
+    fun `resolveSpaceBannerScrollEffect respects scale and blur gates`() {
+        val blurDisabled = resolveSpaceBannerScrollEffect(
+            scrollOffsetPx = 400f,
+            scrollRangePx = 400f,
+            scaleEnabled = true,
+            blurEnabled = false,
+        )
+        assertEquals(SPACE_BANNER_MAX_SCROLL_SCALE, blurDisabled.scale, 0.001f)
+        assertEquals(0f, blurDisabled.blurRadiusDp, 0.001f)
+
+        val allDisabled = resolveSpaceBannerScrollEffect(
+            scrollOffsetPx = 400f,
+            scrollRangePx = 400f,
+            scaleEnabled = false,
+            blurEnabled = false,
+        )
+        assertEquals(1f, allDisabled.scale, 0.001f)
+        assertEquals(0f, allDisabled.blurRadiusDp, 0.001f)
+    }
+
+    @Test
+    fun `resolveSpaceBannerZoomHapticStep quantizes zoom progress into discrete steps`() {
+        assertEquals(0, resolveSpaceBannerZoomHapticStep(scrollOffsetPx = 0f, scrollRangePx = 400f))
+        assertEquals(0, resolveSpaceBannerZoomHapticStep(scrollOffsetPx = 99f, scrollRangePx = 400f))
+        assertEquals(1, resolveSpaceBannerZoomHapticStep(scrollOffsetPx = 100f, scrollRangePx = 400f))
+        assertEquals(2, resolveSpaceBannerZoomHapticStep(scrollOffsetPx = 200f, scrollRangePx = 400f))
+        assertEquals(3, resolveSpaceBannerZoomHapticStep(scrollOffsetPx = 300f, scrollRangePx = 400f))
+        assertEquals(SPACE_BANNER_ZOOM_HAPTIC_STEPS, resolveSpaceBannerZoomHapticStep(scrollOffsetPx = 400f, scrollRangePx = 400f))
+        assertEquals(SPACE_BANNER_ZOOM_HAPTIC_STEPS, resolveSpaceBannerZoomHapticStep(scrollOffsetPx = Float.MAX_VALUE, scrollRangePx = 400f))
+        assertEquals(
+            2,
+            resolveSpaceBannerZoomHapticStep(
+                scrollOffsetPx = 0f,
+                scrollRangePx = 400f,
+                pullDownPx = 100f,
+                pullRangePx = 200f,
+            ),
+        )
+    }
 }

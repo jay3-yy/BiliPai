@@ -84,6 +84,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "navigation.is_bottom_bar_floating" to "开启后底栏与屏幕边缘留出间距；关闭后贴近底部显示",
     "navigation.keep_home_top_search" to "开启时顶部与底栏搜索同时显示；关闭时隐藏首页顶部搜索条",
     "navigation.home_avatar_drawer" to "在底栏导航下，开启后点击首页头像打开侧边抽屉，关闭后进入个人主页",
+    "navigation.home_top_tab_swipe_drawer" to "在首页第一个顶部标签页向右滑动时自然展开个人侧边栏",
     "navigation.bottom_bar_scroll_compact_enabled" to "浏览时收起底栏，上滑或点击展开；有播放条时保持联动",
     "navigation.linked_dock_merge_on_scroll_enabled" to "向下浏览时，搜索按钮与底栏合并",
     "navigation.list_scoped_search_enabled" to "浏览底栏中的收藏、历史或稍后再看时，底栏提交的关键词用于筛选当前列表",

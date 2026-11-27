@@ -704,6 +704,7 @@ data class HomeSettings(
     val hideTopTabs: Boolean = false,
     val homeTopRightAction: HomeTopRightAction = HomeTopRightAction.SETTINGS,
     val homeAvatarDrawerEnabled: Boolean = false,
+    val homeTopTabSwipeDrawerEnabled: Boolean = true,
     val homeTopLayoutOrder: HomeTopLayoutOrder = HomeTopLayoutOrder.SEARCH_THEN_TABS,
     val isHeaderBlurEnabled: Boolean = false,
     val headerBlurMode: HomeHeaderBlurMode = HomeHeaderBlurMode.ALWAYS_OFF,
@@ -1699,6 +1700,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_HIDE_TOP_TABS = booleanPreferencesKey("hide_top_tabs")
     private val KEY_HOME_TOP_RIGHT_ACTION = intPreferencesKey("home_top_right_action")
     private val KEY_HOME_AVATAR_DRAWER_ENABLED = booleanPreferencesKey("home_avatar_drawer_enabled")
+    private val KEY_HOME_TOP_TAB_SWIPE_DRAWER_ENABLED = booleanPreferencesKey("home_top_tab_swipe_drawer_enabled")
     //  [新增] 顶部标签自定义 - 顺序和可见性
     private val KEY_TOP_TAB_ORDER = stringPreferencesKey("top_tab_order")
     private val KEY_TOP_TAB_VISIBLE_TABS = stringPreferencesKey("top_tab_visible_tabs")
@@ -2069,6 +2071,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 preferences[KEY_HOME_TOP_RIGHT_ACTION] ?: HomeTopRightAction.SETTINGS.value
             ),
             homeAvatarDrawerEnabled = preferences[KEY_HOME_AVATAR_DRAWER_ENABLED] ?: false,
+            homeTopTabSwipeDrawerEnabled = preferences[KEY_HOME_TOP_TAB_SWIPE_DRAWER_ENABLED] ?: true,
             homeTopLayoutOrder = HomeTopLayoutOrder.fromValue(
                 preferences[KEY_HOME_TOP_LAYOUT_ORDER] ?: HomeTopLayoutOrder.SEARCH_THEN_TABS.value
             ),
@@ -4724,6 +4727,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setHomeAvatarDrawerEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_HOME_AVATAR_DRAWER_ENABLED] = enabled
+        }
+    }
+
+    fun getHomeTopTabSwipeDrawerEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_HOME_TOP_TAB_SWIPE_DRAWER_ENABLED] ?: true }
+        .distinctUntilChanged()
+
+    suspend fun setHomeTopTabSwipeDrawerEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HOME_TOP_TAB_SWIPE_DRAWER_ENABLED] = enabled
         }
     }
 
@@ -9902,6 +9915,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_HIDE_TOP_TABS, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_HOME_TOP_RIGHT_ACTION, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_AVATAR_DRAWER_ENABLED, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_HOME_TOP_TAB_SWIPE_DRAWER_ENABLED, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_ORDER, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_DYNAMIC_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),

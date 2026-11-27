@@ -27,7 +27,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -55,9 +56,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppHapticScene
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.rememberAppHapticFeedback
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.RelatedVideo
 import kotlinx.coroutines.launch
@@ -273,6 +276,8 @@ internal fun FullscreenSwipeUpRelatedDrawer(
                 Color.White.copy(alpha = 0.10f)
             }
             val accentColor = AppContentColors.selectionAccent(liquidGlassEnabled)
+            val menuHaptics = rememberAppHapticFeedback(AppHapticScene.MENUS)
+            val controlHaptics = rememberAppHapticFeedback(AppHapticScene.CONTROLS)
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -300,6 +305,7 @@ internal fun FullscreenSwipeUpRelatedDrawer(
                             },
                             onDragEnd = {
                                 if (panelHeightPx > 0 && dragOffset.value > panelHeightPx * 0.28f) {
+                                    menuHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     onDismiss()
                                 } else {
                                     scope.launch {
@@ -356,7 +362,12 @@ internal fun FullscreenSwipeUpRelatedDrawer(
                                         if (isSelected) accentColor.copy(alpha = 0.24f)
                                         else Color.White.copy(alpha = 0.08f)
                                     )
-                                    .clickable { selectedTab = FullscreenDrawerTab.RELATED }
+                                    .clickable {
+                                        if (!isSelected) {
+                                            menuHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            selectedTab = FullscreenDrawerTab.RELATED
+                                        }
+                                    }
                                     .padding(horizontal = 12.dp, vertical = 5.dp)
                             ) {
                                 AppText(
@@ -376,7 +387,12 @@ internal fun FullscreenSwipeUpRelatedDrawer(
                                         if (isSelected) accentColor.copy(alpha = 0.24f)
                                         else Color.White.copy(alpha = 0.08f)
                                     )
-                                    .clickable { selectedTab = FullscreenDrawerTab.QUEUE }
+                                    .clickable {
+                                        if (!isSelected) {
+                                            menuHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            selectedTab = FullscreenDrawerTab.QUEUE
+                                        }
+                                    }
                                     .padding(horizontal = 12.dp, vertical = 5.dp)
                             ) {
                                 AppText(
@@ -396,7 +412,10 @@ internal fun FullscreenSwipeUpRelatedDrawer(
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
-                                .clickable(onClick = onClearUpcomingQueue)
+                                .clickable {
+                                    controlHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    onClearUpcomingQueue()
+                                }
                                 .padding(horizontal = 6.dp, vertical = 3.dp),
                         )
                     } else {
@@ -422,7 +441,10 @@ internal fun FullscreenSwipeUpRelatedDrawer(
                                 modifier = Modifier
                                     .width(168.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onQueueItemClick(item) }
+                                    .clickable {
+                                        controlHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onQueueItemClick(item)
+                                    }
                             ) {
                                 Box(
                                     modifier = Modifier
@@ -467,7 +489,10 @@ internal fun FullscreenSwipeUpRelatedDrawer(
                                                 .padding(5.dp)
                                                 .clip(RoundedCornerShape(999.dp))
                                                 .background(Color.Black.copy(alpha = 0.68f))
-                                                .clickable { onRemoveQueueItem(index) }
+                                                .clickable {
+                                                    menuHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    onRemoveQueueItem(index)
+                                                }
                                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                                         ) {
                                             AppText(
@@ -532,7 +557,10 @@ internal fun FullscreenSwipeUpRelatedDrawer(
                                 modifier = Modifier
                                     .width(168.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onVideoClick(video) }
+                                    .clickable {
+                                        controlHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        onVideoClick(video)
+                                    }
                             ) {
                                 Box(
                                     modifier = Modifier

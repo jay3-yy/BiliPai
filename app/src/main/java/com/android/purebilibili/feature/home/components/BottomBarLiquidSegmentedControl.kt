@@ -53,6 +53,8 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorProducer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.CornerRadius
@@ -677,7 +679,7 @@ internal fun AndroidNativeUnderlinedSegmentedControl(
     }
     val animatedSelectedIndex = animateFloatAsState(
         targetValue = safeSelectedIndex.toFloat(),
-        animationSpec = tween(durationMillis = 250, easing = EaseOut),
+        animationSpec = tween(durationMillis = 300, easing = AppMotionEasing.StandardEase),
         label = "nativeUnderlinePosition",
     )
     val latestPositionProvider = rememberUpdatedState(indicatorPositionProvider)
@@ -731,7 +733,10 @@ internal fun AndroidNativeUnderlinedSegmentedControl(
                             }
                         ),
                         tapToCopyEnabled = false,
-                        color = if (selected) selectedTextColor else unselectedTextColor,
+                        color = ColorProducer {
+                            val weight = (1f - kotlin.math.abs(currentPosition() - index)).coerceIn(0f, 1f)
+                            lerp(unselectedTextColor, selectedTextColor, weight)
+                        },
                         fontSize = labelFontSize,
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                         maxLines = 1,
@@ -756,10 +761,9 @@ internal fun AndroidNativeUnderlinedSegmentedControl(
                         segmentWidthDp = segmentWidth.value,
                         labelWidthsDp = measuredLabelWidths,
                     )
-                    val widthPx = geometry.widthDp.dp.roundToPx().toFloat()
-                    val offsetPx = geometry.offsetDp.dp.roundToPx().toFloat()
-                    val thickness = (AppSpacingTokens.ExtraSmall - AppSpacingTokens.Micro / 2)
-                        .roundToPx().toFloat()
+                    val widthPx = geometry.widthDp.dp.toPx()
+                    val offsetPx = geometry.offsetDp.dp.toPx()
+                    val thickness = (AppSpacingTokens.ExtraSmall - AppSpacingTokens.Micro / 2).toPx()
                     drawRoundRect(
                         color = selectedTextColor,
                         topLeft = Offset(

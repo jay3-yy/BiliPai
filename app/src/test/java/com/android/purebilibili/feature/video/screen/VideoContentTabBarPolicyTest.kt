@@ -331,7 +331,7 @@ class VideoContentTabBarPolicyTest {
         val md3Spec = resolveVideoContentTabSwitchAnimationSpec(AppTopTabPresentation.MATERIAL_UNDERLINE)
 
         assertEquals(360, iosSpec.durationMs)
-        assertEquals(240, md3Spec.durationMs)
+        assertEquals(300, md3Spec.durationMs)
         assertTrue(iosSpec.durationMs > md3Spec.durationMs)
         assertEquals(iosSpec.durationMs, resolveInlinePortraitPlayerCommentCollapseDurationMillis(iosSpec))
         assertEquals(md3Spec.durationMs, resolveInlinePortraitPlayerCommentCollapseDurationMillis(md3Spec))
@@ -344,10 +344,10 @@ class VideoContentTabBarPolicyTest {
             assertEquals(360, glassSpec.durationMs)
             assertEquals(glassSpec.durationMs, resolveInlinePortraitPlayerCommentCollapseDurationMillis(glassSpec))
         }
-        assertEquals(240, resolveVideoContentTabSwitchAnimationSpec(
+        assertEquals(300, resolveVideoContentTabSwitchAnimationSpec(
             AppTopTabPresentation.MATERIAL_UNDERLINE, liquidGlassEnabled = false,
         ).durationMs)
-        assertEquals(240, resolveVideoContentTabSwitchAnimationSpec(
+        assertEquals(300, resolveVideoContentTabSwitchAnimationSpec(
             AppTopTabPresentation.TONAL_CAPSULE, liquidGlassEnabled = false,
         ).durationMs)
     }

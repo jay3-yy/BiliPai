@@ -1,6 +1,8 @@
 package com.android.purebilibili.core.ui.common
 
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.MutatePriority
@@ -12,6 +14,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.pager.PagerDefaults
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import com.android.purebilibili.core.ui.components.ScrollBoundaryFeedback
 import com.android.purebilibili.core.ui.components.appMiuixPagerGesture
@@ -60,6 +63,10 @@ internal const val HOME_PAGER_HORIZONTAL_LOCK_SLOP_MULTIPLIER = 1.5f
 internal const val PAGER_RELEASE_POSITION_THRESHOLD = 0.2f
 internal const val PAGER_RELEASE_MAX_POSITION_THRESHOLD_DP = 96f
 internal const val PAGER_RELEASE_MIN_FLING_VELOCITY_DP = 300f
+private val PiliPlusPagerSettleSpringSpec = spring<Float>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = 438.65f,
+)
 
 internal fun resolveVerticalPriorityPagerGestureDirection(
     totalX: Float,
@@ -152,6 +159,11 @@ internal fun resolvePagerReleaseTargetPage(
  * [shouldYield] aborts this detector without consuming the pointer stream, so a nested
  * horizontal pager (such as the home hero carousel) can own the same gesture.
  */
+internal fun shouldTriggerPagerBackwardEdgeSwipe(
+    canScrollBackward: Boolean,
+    initialScrollDelta: Float,
+): Boolean = !canScrollBackward && initialScrollDelta < 0f
+
 internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
     state: PagerState,
     enabled: Boolean = true,
@@ -162,8 +174,9 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
     shouldYield: () -> Boolean = { false },
     settleAnimationSpec: AnimationSpec<Float>? = null,
     exposePageActions: Boolean = true,
+    onEdgeBackwardSwipe: (() -> Unit)? = null,
 ): Modifier = composed {
-    if (!enabled || state.pageCount < 2) return@composed this
+    if (!enabled || (state.pageCount < 2 && onEdgeBackwardSwipe == null)) return@composed this
     // Non-list surfaces can retain Miuix's cross-axis takeover behavior.
     if (!forceVerticalPriority && LocalAppUiStyle.current == AppUiStyle.MIUIX) {
         if (shouldYield()) return@composed this
@@ -175,15 +188,20 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
     }
 
     val boundaryFeedback = rememberScrollBoundaryFeedback(state)
+    val liquidGlassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
     val latestShouldYield = rememberUpdatedState(shouldYield)
+    val latestOnEdgeBackwardSwipe = rememberUpdatedState(onEdgeBackwardSwipe)
     val latestDragInteractionSource = rememberUpdatedState(dragInteractionSource)
-    val latestSettleAnimationSpec = rememberUpdatedState(settleAnimationSpec)
+    val latestSettleAnimationSpec = rememberUpdatedState(
+        settleAnimationSpec ?: if (!liquidGlassEnabled) PiliPlusPagerSettleSpringSpec else null
+    )
     val pageActionScope = rememberCoroutineScope()
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
     val minimumFlingVelocityPx = with(density) {
         PAGER_RELEASE_MIN_FLING_VELOCITY_DP.dp.toPx()
     }
+    val edgeBackwardTriggerDistancePx = with(density) { 16.dp.toPx() }
     val maximumPositionThresholdPx = with(density) {
         PAGER_RELEASE_MAX_POSITION_THRESHOLD_DP.dp.toPx()
     }
@@ -286,6 +304,66 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                 touchSlop = viewConfiguration.touchSlop,
             )
             val scrollDirectionMultiplier = if (reverseDirection) -1f else 1f
+            val initialScrollDelta = initialHorizontalDelta * scrollDirectionMultiplier
+            val backwardEdgeSwipe = latestOnEdgeBackwardSwipe.value
+            if (backwardEdgeSwipe != null &&
+                shouldTriggerPagerBackwardEdgeSwipe(
+                    canScrollBackward = state.canScrollBackward,
+                    initialScrollDelta = initialScrollDelta,
+                )
+            ) {
+                var accumulatedBackwardPx = -initialScrollDelta
+                var triggered = accumulatedBackwardPx >= edgeBackwardTriggerDistancePx
+                if (triggered) {
+                    backwardEdgeSwipe()
+                }
+                var gestureCancelled = false
+                var released = false
+                while (!released) {
+                    val event = awaitPointerEvent(PointerEventPass.Main)
+                    if (latestShouldYield.value()) {
+                        gestureCancelled = true
+                        released = true
+                        continue
+                    }
+                    val change = event.changes.firstOrNull { it.id == trackedPointerId }
+                        ?: event.changes.firstOrNull { it.pressed }
+                    if (change == null) {
+                        gestureCancelled = true
+                        released = true
+                        continue
+                    }
+                    val pointerSwitched = change.id != trackedPointerId
+                    if (pointerSwitched) {
+                        trackedPointerId = change.id
+                        velocityTracker.resetTracking()
+                    }
+                    velocityTracker.addPointerInputChange(change)
+                    if (change.changedToUpIgnoreConsumed() || !change.pressed) {
+                        released = true
+                    } else {
+                        val horizontalDelta = if (pointerSwitched) 0f else change.positionChangeIgnoreConsumed().x
+                        change.consume()
+                        if (horizontalDelta != 0f) {
+                            accumulatedBackwardPx += -(horizontalDelta * scrollDirectionMultiplier)
+                            if (!triggered && accumulatedBackwardPx >= edgeBackwardTriggerDistancePx) {
+                                triggered = true
+                                backwardEdgeSwipe()
+                            }
+                        }
+                    }
+                }
+                if (!triggered && !gestureCancelled) {
+                    val maxFlingVelocity = viewConfiguration.maximumFlingVelocity
+                    val releaseVelocity = velocityTracker.calculateVelocity(
+                        Velocity(maxFlingVelocity, maxFlingVelocity)
+                    ).x * scrollDirectionMultiplier
+                    if (-releaseVelocity >= minimumFlingVelocityPx && accumulatedBackwardPx > 0f) {
+                        backwardEdgeSwipe()
+                    }
+                }
+                return@gesture
+            }
             val dragSession = PagerDragScrollSession(boundaryFeedback)
             val scrollJob = dragCoroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
                 var release: PagerDragRelease? = null
@@ -309,8 +387,37 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                     val positionBeforeSettle = state.currentPage + state.currentPageOffsetFraction
                     boundaryFeedback.beforeScroll()
                     val animationSpec = latestSettleAnimationSpec.value
-                    if (animationSpec == null) state.animateScrollToPage(targetPage)
-                    else state.animateScrollToPage(targetPage, animationSpec = animationSpec)
+                    if (animationSpec == null) {
+                        state.animateScrollToPage(targetPage)
+                    } else {
+                        val pageStridePx = (state.layoutInfo.pageSize + state.layoutInfo.pageSpacing).toFloat()
+                        if (pageStridePx > 0f) {
+                            state.scroll {
+                                val targetOffsetPx =
+                                    ((targetPage - state.currentPage) - state.currentPageOffsetFraction) * pageStridePx
+                                var previousValue = 0f
+                                androidx.compose.animation.core.animate(
+                                    initialValue = 0f,
+                                    targetValue = targetOffsetPx,
+                                    initialVelocity = dragRelease.velocityPxPerSecond,
+                                    animationSpec = animationSpec,
+                                ) { value, _ ->
+                                    val clampedValue = if (targetOffsetPx >= 0f) {
+                                        value.coerceAtMost(targetOffsetPx)
+                                    } else {
+                                        value.coerceAtLeast(targetOffsetPx)
+                                    }
+                                    val delta = clampedValue - previousValue
+                                    previousValue = clampedValue
+                                    if (delta != 0f) {
+                                        scrollBy(delta)
+                                    }
+                                }
+                            }
+                        } else {
+                            state.animateScrollToPage(targetPage, animationSpec = animationSpec)
+                        }
+                    }
                     val positionAfterSettle = state.currentPage + state.currentPageOffsetFraction
                     boundaryFeedback.afterScroll(positionAfterSettle - positionBeforeSettle, moved = true)
                 }

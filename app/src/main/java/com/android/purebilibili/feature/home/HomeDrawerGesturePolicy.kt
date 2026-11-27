@@ -12,3 +12,27 @@ internal fun shouldEnableHomeDrawerGestures(
 ): Boolean {
     return currentValue == DrawerValue.Open || targetValue == DrawerValue.Open
 }
+
+/**
+ * 仅在首页顶部标签可见、处于首个顶部标签页且侧边栏未展开时，
+ * 允许向右滑动手势自然展开首页个人侧边栏。
+ */
+internal fun shouldAllowHomeFirstTabSwipeToOpenDrawer(
+    isSwipeDrawerEnabled: Boolean,
+    isHomeDrawerAvailable: Boolean,
+    hideTopTabs: Boolean,
+    isTopLevelActive: Boolean,
+    currentPage: Int,
+    isPagerScrollInProgress: Boolean,
+    isDrawerClosed: Boolean,
+    isSubscriptionArticleOpen: Boolean = false,
+): Boolean {
+    return isSwipeDrawerEnabled &&
+        isHomeDrawerAvailable &&
+        !hideTopTabs &&
+        isTopLevelActive &&
+        currentPage == 0 &&
+        !isPagerScrollInProgress &&
+        isDrawerClosed &&
+        !isSubscriptionArticleOpen
+}

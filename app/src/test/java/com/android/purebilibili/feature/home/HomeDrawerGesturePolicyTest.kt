@@ -38,4 +38,52 @@ class HomeDrawerGesturePolicyTest {
             )
         )
     }
+
+    @Test
+    fun `first top tab swipe opens drawer only when enabled and settled on page zero`() {
+        assertTrue(
+            shouldAllowHomeFirstTabSwipeToOpenDrawer(
+                isSwipeDrawerEnabled = true,
+                isHomeDrawerAvailable = true,
+                hideTopTabs = false,
+                isTopLevelActive = true,
+                currentPage = 0,
+                isPagerScrollInProgress = false,
+                isDrawerClosed = true,
+            )
+        )
+        assertFalse(
+            shouldAllowHomeFirstTabSwipeToOpenDrawer(
+                isSwipeDrawerEnabled = false,
+                isHomeDrawerAvailable = true,
+                hideTopTabs = false,
+                isTopLevelActive = true,
+                currentPage = 0,
+                isPagerScrollInProgress = false,
+                isDrawerClosed = true,
+            )
+        )
+        assertFalse(
+            shouldAllowHomeFirstTabSwipeToOpenDrawer(
+                isSwipeDrawerEnabled = true,
+                isHomeDrawerAvailable = true,
+                hideTopTabs = false,
+                isTopLevelActive = true,
+                currentPage = 1,
+                isPagerScrollInProgress = false,
+                isDrawerClosed = true,
+            )
+        )
+        assertFalse(
+            shouldAllowHomeFirstTabSwipeToOpenDrawer(
+                isSwipeDrawerEnabled = true,
+                isHomeDrawerAvailable = true,
+                hideTopTabs = true,
+                isTopLevelActive = true,
+                currentPage = 0,
+                isPagerScrollInProgress = false,
+                isDrawerClosed = true,
+            )
+        )
+    }
 }

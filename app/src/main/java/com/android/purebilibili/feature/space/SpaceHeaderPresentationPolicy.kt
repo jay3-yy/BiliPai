@@ -124,3 +124,86 @@ internal fun resolveSpaceDisplayTags(
     result.addAll(otherTags)
     return result
 }
+
+internal data class SpaceBannerScrollEffect(
+    val scale: Float,
+    val blurRadiusDp: Float,
+)
+
+internal const val SPACE_BANNER_MAX_SCROLL_SCALE = 1.25f
+internal const val SPACE_BANNER_MAX_SCROLL_BLUR_DP = 18f
+internal const val SPACE_BANNER_MAX_PULL_BLUR_DP = 24f
+internal const val SPACE_BANNER_SCROLL_EFFECT_RANGE_DP = 110f
+internal const val SPACE_BANNER_PULL_EFFECT_RANGE_DP = 96f
+internal const val SPACE_BANNER_MAX_PULL_OFFSET_DP = 116f
+internal const val SPACE_BANNER_ZOOM_HAPTIC_STEPS = 4
+
+private fun resolveSpaceBannerRawProgress(
+    offsetPx: Float,
+    rangePx: Float,
+): Float = when {
+    rangePx <= 0f || offsetPx <= 0f -> 0f
+    !offsetPx.isFinite() -> 1f
+    else -> (offsetPx / rangePx).coerceIn(0f, 1f)
+}
+
+/**
+ * Quantizes the banner zoom progress into discrete steps so haptic ticks only fire on step crossings.
+ */
+internal fun resolveSpaceBannerZoomHapticStep(
+    scrollOffsetPx: Float,
+    scrollRangePx: Float,
+    pullDownPx: Float = 0f,
+    pullRangePx: Float = 0f,
+    steps: Int = SPACE_BANNER_ZOOM_HAPTIC_STEPS,
+): Int {
+    if (steps <= 0) return 0
+    val rawProgress = maxOf(
+        resolveSpaceBannerRawProgress(scrollOffsetPx, scrollRangePx),
+        resolveSpaceBannerRawProgress(pullDownPx, pullRangePx),
+    )
+    return (rawProgress * steps).toInt().coerceIn(0, steps)
+}
+
+/**
+ * Resolves the UP space banner's zoom-in scale and blur radius for both top pull-down stretch
+ * and top scroll-up collapse.
+ */
+internal fun resolveSpaceBannerScrollEffect(
+    scrollOffsetPx: Float,
+    scrollRangePx: Float,
+    pullDownPx: Float = 0f,
+    pullRangePx: Float = 0f,
+    heroHeightPx: Float = 0f,
+    scaleEnabled: Boolean = true,
+    blurEnabled: Boolean = true,
+): SpaceBannerScrollEffect {
+    val rawScroll = resolveSpaceBannerRawProgress(scrollOffsetPx, scrollRangePx)
+    val rawPull = resolveSpaceBannerRawProgress(pullDownPx, pullRangePx)
+    // Ease-out curve so zoom and blur respond immediately at the start of the gesture.
+    val scrollProgress = 1f - (1f - rawScroll) * (1f - rawScroll)
+    val pullProgress = 1f - (1f - rawPull) * (1f - rawPull)
+    val minFillScale = if (pullDownPx > 0f && heroHeightPx > 0f) {
+        (heroHeightPx + pullDownPx) / heroHeightPx
+    } else {
+        1f
+    }
+    val zoomScale = 1f + (SPACE_BANNER_MAX_SCROLL_SCALE - 1f) * maxOf(scrollProgress, pullProgress)
+    val scale = if (scaleEnabled) {
+        maxOf(zoomScale, minFillScale)
+    } else {
+        minFillScale
+    }
+    val blurRadiusDp = if (blurEnabled) {
+        maxOf(
+            SPACE_BANNER_MAX_SCROLL_BLUR_DP * scrollProgress,
+            SPACE_BANNER_MAX_PULL_BLUR_DP * pullProgress,
+        )
+    } else {
+        0f
+    }
+    return SpaceBannerScrollEffect(
+        scale = scale,
+        blurRadiusDp = blurRadiusDp,
+    )
+}
