@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.BoxWithConstraints
