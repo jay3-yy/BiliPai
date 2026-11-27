@@ -5,6 +5,7 @@ import com.android.purebilibili.core.util.toUserFriendlyMessage
 
 import com.android.purebilibili.core.player.withAppVideoDecoderDiagnostics
 import com.android.purebilibili.core.player.withAppVideoDecoderPreference
+import com.android.purebilibili.core.player.withDynamicScheduling
 
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.feature.video.player.basicPlayerKeyboardShortcuts
@@ -291,6 +292,7 @@ fun BangumiPlayerScreen(
                     )
                     .withAppVideoDecoderPreference(context)
             )
+            .withDynamicScheduling()
             .build().withAppVideoDecoderDiagnostics(context)
             .apply {
                 playWhenReady = true

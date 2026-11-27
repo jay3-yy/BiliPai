@@ -134,7 +134,6 @@ import com.android.purebilibili.feature.video.ui.components.toFullscreenAspectRa
 import com.android.purebilibili.feature.video.ui.components.toVideoAspectRatio
 import com.android.purebilibili.core.ui.common.copyOnLongPress
 import androidx.lifecycle.compose.currentStateAsState
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import dev.chrisbanes.haze.HazeState
@@ -1972,7 +1971,8 @@ private fun FullscreenControlButton(
     }
 }
 
-private fun formatCurrentClock(): String {
-    val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
-    return formatter.format(Date())
-}
+private val FULLSCREEN_CLOCK_FORMATTER: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+
+private fun formatCurrentClock(): String =
+    java.time.LocalTime.now().format(FULLSCREEN_CLOCK_FORMATTER)

@@ -110,8 +110,11 @@ class BackgroundAudioService : MediaLibraryService() {
                 }
             },
         )
-        val http = OkHttpDataSource.Factory(NetworkModule.okHttpClient).setDefaultRequestProperties(
-            mapOf("Referer" to "https://www.bilibili.com/")
+        val http = com.android.purebilibili.core.player.PlaybackHttpDataSourceFactory.create(
+            context = this,
+            fallbackClient = NetworkModule.okHttpClient,
+            headers = mapOf("Referer" to "https://www.bilibili.com/"),
+            customProxyEnabled = com.android.purebilibili.core.store.NetworkProxyStore.getSync().enabled,
         )
         player = ExoPlayer.Builder(this,
             com.android.purebilibili.core.player.HiResCompatibleRenderersFactory(this)
@@ -121,6 +124,7 @@ class BackgroundAudioService : MediaLibraryService() {
                 .setBufferDurationsMs(10_000, 30_000, 1000, 2000)
                 .setTargetBufferBytes(4 * 1024 * 1024)
                 .setPrioritizeTimeOverSizeThresholds(false).build())
+            .experimentalSetDynamicSchedulingEnabled(true)
             .build().apply {
                 setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)

@@ -911,8 +911,12 @@ class VideoPlaybackUseCase(
         playbackSpeed: Float = 1.0f,
         videoCodecPreference: String = "hev1",
         videoSecondCodecPreference: String = "avc1",
-        isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
-        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+        isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(
+            appContext ?: NetworkModule.appContext
+        ),
+        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(
+            appContext ?: NetworkModule.appContext
+        ),
         isDolbyAudioSupported: Boolean =
             com.android.purebilibili.core.util.MediaUtils.isDolbyAtmosAudioSupported(),
         isDolbyAudioSoftwareDecoded: Boolean =
@@ -1039,8 +1043,12 @@ class VideoPlaybackUseCase(
         playbackSpeed: Float = 1.0f,
         videoCodecPreference: String = "hev1",
         videoSecondCodecPreference: String = "avc1",
-        isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
-        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+        isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(
+            appContext ?: NetworkModule.appContext
+        ),
+        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(
+            appContext ?: NetworkModule.appContext
+        ),
         isDolbyAudioSupported: Boolean =
             com.android.purebilibili.core.util.MediaUtils.isDolbyAtmosAudioSupported(),
         isDolbyAudioSoftwareDecoded: Boolean =
@@ -1163,8 +1171,12 @@ class VideoPlaybackUseCase(
         videoCodecPreference: String = "hev1",
         videoSecondCodecPreference: String = "avc1",
         playbackQualityMode: PlaybackQualityMode = PlaybackQualityMode.AUTO,
-        isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupported(),
-        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
+        isHevcSupported: Boolean = com.android.purebilibili.core.util.MediaUtils.isHevcSupportedForPlayback(
+            appContext ?: NetworkModule.appContext
+        ),
+        isAv1Supported: Boolean = com.android.purebilibili.core.util.MediaUtils.isAv1SupportedForPlayback(
+            appContext ?: NetworkModule.appContext
+        ),
         isDolbyAudioSupported: Boolean =
             com.android.purebilibili.core.util.MediaUtils.isDolbyAtmosAudioSupported(),
         isDolbyAudioSoftwareDecoded: Boolean =
@@ -1301,9 +1313,11 @@ class VideoPlaybackUseCase(
             "Referer" to "https://www.bilibili.com",
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-        val upstreamFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
-            NetworkModule.playbackOkHttpClient
-        ).setDefaultRequestProperties(headers)
+        val upstreamFactory = com.android.purebilibili.core.player.PlaybackHttpDataSourceFactory.create(
+            context = appContext ?: NetworkModule.appContext,
+            fallbackClient = NetworkModule.playbackOkHttpClient,
+            headers = headers,
+        )
         val dataSourceFactory = buildCachedPlaybackDataSourceFactory(upstreamFactory, cdnCacheKeysByUrl)
 
         val mediaSourceFactory = androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(dataSourceFactory)
@@ -1328,9 +1342,11 @@ class VideoPlaybackUseCase(
             "Referer" to "https://www.bilibili.com",
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-        val upstreamFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
-            NetworkModule.playbackOkHttpClient
-        ).setDefaultRequestProperties(headers)
+        val upstreamFactory = com.android.purebilibili.core.player.PlaybackHttpDataSourceFactory.create(
+            context = appContext ?: NetworkModule.appContext,
+            fallbackClient = NetworkModule.playbackOkHttpClient,
+            headers = headers,
+        )
         val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(
             context,
             PlaybackMediaCache.buildCdnOptimizedDataSourceFactory(

@@ -493,8 +493,11 @@ internal suspend fun prefetchPortraitPlaybackHead(
 @UnstableApi
 internal fun buildPortraitCachedMediaSourceFactory(context: Context): DefaultMediaSourceFactory {
     val headers = buildPortraitPlaybackHttpHeaders()
-    val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-        .setDefaultRequestProperties(headers)
+    val upstreamFactory = com.android.purebilibili.core.player.PlaybackHttpDataSourceFactory.create(
+        context = context,
+        fallbackClient = NetworkModule.playbackOkHttpClient,
+        headers = headers,
+    )
     val dataSourceFactory: DataSource.Factory =
         PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
     return DefaultMediaSourceFactory(context)

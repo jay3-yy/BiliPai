@@ -584,6 +584,8 @@ object LogCollector {
     private const val MAX_LOG_MESSAGE_CHARS = 16 * 1024
     private val lock = Any()
     private val buffer = ArrayDeque<LogEntry>(MAX_ENTRIES)
+    private val entryDateFormatter: java.time.format.DateTimeFormatter =
+        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
     private val fileDateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
     private val diskWriter = Executors.newSingleThreadExecutor()
@@ -602,7 +604,9 @@ object LogCollector {
         val message: String
     ) {
         fun format(): String {
-            val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date(timestamp))
+            val time = java.time.Instant.ofEpochMilli(timestamp)
+                .atZone(java.time.ZoneId.systemDefault())
+                .format(entryDateFormatter)
             return "[$time] $level/$tag: $message"
         }
     }

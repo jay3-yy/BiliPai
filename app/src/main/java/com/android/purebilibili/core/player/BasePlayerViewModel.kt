@@ -251,8 +251,11 @@ abstract class BasePlayerViewModel : ViewModel() {
             "Referer" to referer,
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-        val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-            .setDefaultRequestProperties(headers)
+        val upstreamFactory = PlaybackHttpDataSourceFactory.create(
+            context = context,
+            fallbackClient = NetworkModule.playbackOkHttpClient,
+            headers = headers,
+        )
         val cachedFactory = PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
         val dataSourceFactory: DataSource.Factory = DefaultDataSource.Factory(context, cachedFactory)
         val mediaItem = MediaItem.Builder()
@@ -325,8 +328,11 @@ abstract class BasePlayerViewModel : ViewModel() {
             "Referer" to referer,
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-        val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-            .setDefaultRequestProperties(headers)
+        val upstreamFactory = PlaybackHttpDataSourceFactory.create(
+            context = NetworkModule.appContext,
+            fallbackClient = NetworkModule.playbackOkHttpClient,
+            headers = headers,
+        )
         val dataSourceFactory: DataSource.Factory = NetworkModule.appContext?.let { context ->
             PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
         } ?: upstreamFactory

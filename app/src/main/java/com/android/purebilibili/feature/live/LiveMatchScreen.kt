@@ -199,7 +199,7 @@ private fun LiveMatchContent(
                         AppIcon(Icons.AutoMirrored.Outlined.KeyboardArrowLeft, contentDescription = "前一天")
                     }
                     AppText(
-                        state.date.format(DateTimeFormatter.ofPattern("MM月dd日 E", Locale.SIMPLIFIED_CHINESE)),
+                        state.date.format(LIVE_MATCH_DATE_FORMATTER),
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.Center,
                     )
@@ -272,6 +272,11 @@ private fun LiveMatchContent(
     }
 }
 
+private val LIVE_MATCH_DATE_FORMATTER: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("MM月dd日 E", Locale.SIMPLIFIED_CHINESE)
+private val LIVE_MATCH_TIME_FORMATTER: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("HH:mm")
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun LiveMatchCard(
@@ -320,7 +325,7 @@ internal fun LiveMatchCard(
                 ) {
                     AppText(
                         if (contest.startTime > 0) Instant.ofEpochSecond(contest.startTime).atZone(ZoneId.systemDefault())
-                            .format(DateTimeFormatter.ofPattern("HH:mm")) else "时间待定",
+                            .format(LIVE_MATCH_TIME_FORMATTER) else "时间待定",
                         modifier = Modifier.align(Alignment.CenterVertically),
                         color = AppContentColors.secondaryText(),
                     )

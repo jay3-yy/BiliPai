@@ -89,6 +89,7 @@ fun ExternalMediaPlayerScreen(
                 androidx.media3.exoplayer.DefaultRenderersFactory(context).withAppVideoDecoderPreference(context)
             )
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .experimentalSetDynamicSchedulingEnabled(true)
             .build().withAppVideoDecoderDiagnostics(context)
     }
 

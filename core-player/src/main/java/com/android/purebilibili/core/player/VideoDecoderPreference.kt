@@ -3,6 +3,7 @@
 package com.android.purebilibili.core.player
 
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 
 /**
@@ -48,6 +49,7 @@ internal fun <T> orderVideoDecoders(
 
 /**
  * 只调整视频候选顺序，不删除候选，不改变音频排序或安全/隧道解码查询条件。
+ * 保持 Media3 默认的异步 MediaCodec 缓冲队列策略（API 31+ 自动启用，旧系统保持稳定兼容）。
  * 由 Media3 继续判断具体格式支持；偏好不保证设备具备对应的可用解码器。
  */
 fun DefaultRenderersFactory.withVideoDecoderPreference(preferHardware: Boolean): DefaultRenderersFactory =
@@ -66,4 +68,9 @@ fun DefaultRenderersFactory.withVideoDecoderPreference(preferHardware: Boolean):
             isSoftware = { it.softwareOnly },
             decoderName = { it.name },
         )
-    }.setEnableDecoderFallback(true)
+    }
+        .setEnableDecoderFallback(true)
+
+/** 启用 Media3 动态调度，使播放循环按解码/渲染到期时间精准休眠以降低播放期 CPU 唤醒。 */
+fun ExoPlayer.Builder.withDynamicScheduling(): ExoPlayer.Builder =
+    experimentalSetDynamicSchedulingEnabled(true)

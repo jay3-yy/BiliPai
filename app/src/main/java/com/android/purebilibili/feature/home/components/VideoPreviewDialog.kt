@@ -401,10 +401,10 @@ fun DisposableVideoPlayer(
     val currentOnPlaybackError by androidx.compose.runtime.rememberUpdatedState(onPlaybackError)
     val currentOnFirstFrame by androidx.compose.runtime.rememberUpdatedState(onFirstFrame)
     val player = remember(context, url) {
-        val upstream = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
-            com.android.purebilibili.core.network.NetworkModule.playbackOkHttpClient
-        ).setDefaultRequestProperties(
-            mapOf("Referer" to "https://www.bilibili.com/", "User-Agent" to "Mozilla/5.0")
+        val upstream = com.android.purebilibili.core.player.PlaybackHttpDataSourceFactory.create(
+            context = context,
+            fallbackClient = com.android.purebilibili.core.network.NetworkModule.playbackOkHttpClient,
+            headers = mapOf("Referer" to "https://www.bilibili.com/", "User-Agent" to "Mozilla/5.0"),
         )
         ExoPlayer.Builder(context)
             .setRenderersFactory(

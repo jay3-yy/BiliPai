@@ -72,7 +72,6 @@ import com.android.purebilibili.feature.video.ui.components.PiliPlusDanmakuSetti
 import com.android.purebilibili.feature.video.ui.components.PiliPlusDanmakuSendIcon
 import com.android.purebilibili.feature.video.ui.feedback.likeBurstAnchor
 import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.compose.material.icons.outlined.Home
@@ -955,7 +954,10 @@ private fun HeaderButton(
     }
 }
 
-private fun formatCurrentTime(): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+private val TOP_BAR_TIME_FORMATTER: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+
+private fun formatCurrentTime(): String = java.time.LocalTime.now().format(TOP_BAR_TIME_FORMATTER)
 
 private fun resolveBatteryLevelPercent(context: Context): Int? = runCatching {
     val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))

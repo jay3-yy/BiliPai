@@ -696,6 +696,36 @@ class BackgroundPlaybackPolicyTest {
         assertTrue(result.disabledTrackTypes.contains(C.TRACK_TYPE_VIDEO))
         assertEquals(0, result.maxVideoWidth)
         assertEquals(0, result.maxVideoHeight)
+        assertEquals(
+            TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED,
+            result.audioOffloadPreferences.audioOffloadMode,
+        )
+    }
+
+    @Test
+    fun backgroundTrackSelectionEnablesHardwareAudioOffloadWhenRequested() {
+        val current = TrackSelectionParameters.Builder().build()
+
+        val enabled = resolveTrackSelectionParametersForBackground(
+            currentTrackSelectionParameters = current,
+            shouldDisableVideoTrack = true,
+            enableAudioOffload = true,
+        )
+        assertTrue(enabled.disabledTrackTypes.contains(C.TRACK_TYPE_VIDEO))
+        assertEquals(
+            TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED,
+            enabled.audioOffloadPreferences.audioOffloadMode,
+        )
+
+        val disabled = resolveTrackSelectionParametersWithoutVideo(
+            currentTrackSelectionParameters = enabled,
+            enableAudioOffload = false,
+        )
+        assertTrue(disabled.disabledTrackTypes.contains(C.TRACK_TYPE_VIDEO))
+        assertEquals(
+            TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED,
+            disabled.audioOffloadPreferences.audioOffloadMode,
+        )
     }
 
     @Test

@@ -12,7 +12,9 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.android.purebilibili.core.lifecycle.PendingResource
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.player.HiResCompatibleRenderersFactory
+import com.android.purebilibili.core.player.PlaybackHttpDataSourceFactory
 import com.android.purebilibili.core.player.PlaybackMediaCache
+import com.android.purebilibili.core.player.withDynamicScheduling
 import com.android.purebilibili.core.player.withVideoDecoderPreference
 import com.android.purebilibili.core.player.VideoDecoderDiagnostics
 import com.android.purebilibili.core.store.DataSaverState
@@ -30,8 +32,11 @@ internal fun createVideoDetailPlayer(context: Context): ExoPlayer {
         "Referer" to "https://www.bilibili.com",
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     )
-    val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-        .setDefaultRequestProperties(headers)
+    val upstreamFactory = PlaybackHttpDataSourceFactory.create(
+        context = context,
+        fallbackClient = NetworkModule.playbackOkHttpClient,
+        headers = headers,
+    )
     val dataSourceFactory: DataSource.Factory =
         PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
 
@@ -66,6 +71,7 @@ internal fun createVideoDetailPlayer(context: Context): ExoPlayer {
         .setLooper(android.os.Looper.getMainLooper())
         .setRenderersFactory(renderersFactory)
         .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+        .withDynamicScheduling()
         // 前 1/4 使用当前缓冲偏好，之后按常规阈值预缓冲。
         .setLoadControl(
             createVideoLoadControl(bufferPolicy)

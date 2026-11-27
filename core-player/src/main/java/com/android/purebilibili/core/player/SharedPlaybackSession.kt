@@ -79,7 +79,7 @@ class SharedPlaybackSession(
     val player: ExoPlayer = ExoPlayer.Builder(
         appContext,
         DefaultRenderersFactory(appContext).withVideoDecoderPreference(preferHardware = preferHardware),
-    ).build().let { VideoDecoderDiagnostics.attach(it, preferHardware) }.apply {
+    ).withDynamicScheduling().build().let { VideoDecoderDiagnostics.attach(it, preferHardware) }.apply {
         setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
         setHandleAudioBecomingNoisy(true)
     }
@@ -213,9 +213,14 @@ class SharedPlaybackSession(
     private data class PreparedSource(val source: androidx.media3.exoplayer.source.MediaSource, val quality: Int, val audioId: Int = -1)
 
     private fun createMediaSource(data: PlayUrlData, quality: Int, audioQuality: Int): PreparedSource {
-        val upstream = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient).setDefaultRequestProperties(mapOf(
-            "Referer" to "https://www.bilibili.com/", "User-Agent" to "Mozilla/5.0",
-        ))
+        val upstream = PlaybackHttpDataSourceFactory.create(
+            context = appContext,
+            fallbackClient = NetworkModule.playbackOkHttpClient,
+            headers = mapOf(
+                "Referer" to "https://www.bilibili.com/",
+                "User-Agent" to "Mozilla/5.0",
+            ),
+        )
         val dash = data.dash
         val supported = dash?.let { it.copy(video = it.video.filter { track ->
             val mime = MimeTypes.getMediaMimeType(track.codecs) ?: track.mimeType.ifBlank { MimeTypes.VIDEO_H264 }

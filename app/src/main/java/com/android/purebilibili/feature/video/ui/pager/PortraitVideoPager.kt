@@ -902,6 +902,7 @@ fun PortraitVideoPager(
                 resolveHandleAudioFocusByPolicy(audioFocusEnabled = audioFocusEnabled)
             )
             .setHandleAudioBecomingNoisy(true)
+            .experimentalSetDynamicSchedulingEnabled(true)
             .build().withAppVideoDecoderDiagnostics(context)
             .apply {
                 repeatMode = resolvePortraitPagerRepeatMode()

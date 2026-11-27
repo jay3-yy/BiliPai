@@ -78,7 +78,6 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Cast
 import androidx.compose.material.icons.outlined.Comment
 import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -993,10 +992,11 @@ private fun PlayerTitleInfoDock(
     }
 }
 
-private fun formatCurrentTime(): String {
-    val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
-    return formatter.format(Date())
-}
+private val GLASS_TOP_BAR_TIME_FORMATTER: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+
+private fun formatCurrentTime(): String =
+    java.time.LocalTime.now().format(GLASS_TOP_BAR_TIME_FORMATTER)
 
 private fun resolveBatteryLevelPercent(context: Context): Int? {
     return runCatching {
