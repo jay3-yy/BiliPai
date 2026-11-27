@@ -64,27 +64,29 @@ dependencyResolutionManagement {
             }
             filter { includeGroup("gsai.sdk") }
         }
-        // GitHub Packages (compose-miuix-ui/miuix).
-        // Authentication is required even for this public package. Keep credentials outside
+        // GitHub Packages (compose-miuix-ui/miuix) hosts -SNAPSHOT builds;
+        // release / RC versions resolve from mavenCentral().
+        // Authentication is required even for public GitHub Packages. Keep credentials outside
         // the repository in ~/.gradle/gradle.properties or environment variables.
         val gprUser = providers.gradleProperty("gpr.user")
             .orElse(providers.environmentVariable("GITHUB_ACTOR"))
         val gprKey = providers.gradleProperty("gpr.key")
             .orElse(providers.environmentVariable("GITHUB_TOKEN"))
-        exclusiveContent {
-            forRepository {
-                maven {
-                    name = "GitHubPackagesMiuix"
-                    url = uri("https://maven.pkg.github.com/compose-miuix-ui/miuix")
-                    if (gprUser.isPresent && gprKey.isPresent) {
-                        credentials {
-                            username = gprUser.get()
-                            password = gprKey.get()
-                        }
-                    }
+        maven {
+            name = "GitHubPackagesMiuix"
+            url = uri("https://maven.pkg.github.com/compose-miuix-ui/miuix")
+            mavenContent {
+                snapshotsOnly()
+            }
+            content {
+                includeGroup("top.yukonga.miuix.kmp")
+            }
+            if (gprUser.isPresent && gprKey.isPresent) {
+                credentials {
+                    username = gprUser.get()
+                    password = gprKey.get()
                 }
             }
-            filter { includeGroup("top.yukonga.miuix.kmp") }
         }
     }
 }
@@ -93,6 +95,7 @@ rootProject.name = "BiliPai"
 include(":app")
 include(":system-animation-stubs")
 include(":app-tv")
+include(":app-wear")
 include(":core-data")
 include(":core-player")
 include(":baselineprofile")

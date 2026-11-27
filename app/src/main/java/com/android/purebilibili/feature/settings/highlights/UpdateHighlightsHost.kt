@@ -20,6 +20,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.AutoFixHigh
+import androidx.compose.material.icons.outlined.Cast
+import androidx.compose.material.icons.outlined.CleaningServices
+import androidx.compose.material.icons.outlined.ContentCut
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Headphones
@@ -31,6 +35,7 @@ import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.WatchLater
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -114,6 +119,7 @@ internal fun UpdateHighlightsHost(
         .collectAsStateWithLifecycle(initialValue = UpdateHighlightHistory())
     var initialized by remember { mutableStateOf(false) }
     var automaticIds by rememberSaveable { mutableStateOf("") }
+    var pendingBatchIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var previewSnapshot by remember { mutableStateOf<AppThemeSettings?>(null) }
     var applied by rememberSaveable { mutableStateOf(false) }
     var applying by remember { mutableStateOf(false) }
@@ -151,14 +157,10 @@ internal fun UpdateHighlightsHost(
             return@LaunchedEffect
         }
         delay(1_200)
-        // Mark the whole pending batch once, so a skipped-version update never chains sheets.
-        val batchIds = history.pendingIds
+        // Only record the pending batch locally until the user actually dismisses or acts on the sheet,
+        // so a transient pause/route jitter right after reveal cannot permanently swallow the highlights.
+        pendingBatchIds = history.pendingIds
         automaticIds = pending.joinToString(",") { it.id }
-        try {
-            UpdateHighlightsStore.markPresented(context, batchIds)
-        } catch (_: IOException) {
-            // Keep the displayed sheet usable; persist again on the next entry.
-        }
     }
     // Already enabled features need no invitation if the user later switches away again.
     LaunchedEffect(currentSettings, history.pendingIds) {
@@ -201,8 +203,24 @@ internal fun UpdateHighlightsHost(
     if ((!manualOpen && (!canShowAutomatically || automaticIds.isEmpty())) || currentSettings == null || showDonateDialog) return
 
     val snapshot = previewSnapshot
+    fun markAutomaticBatchConsumed() {
+        val batchIds = pendingBatchIds.ifEmpty {
+            automaticIds.split(',').filter { it.isNotBlank() }.toSet()
+        }
+        pendingBatchIds = emptySet()
+        if (!manualOpen && batchIds.isNotEmpty()) {
+            scope.launch {
+                try {
+                    UpdateHighlightsStore.markPresented(context, batchIds)
+                } catch (_: IOException) {
+                    // Retry on next entry if persistence fails.
+                }
+            }
+        }
+    }
     fun dismiss() {
         if (applying) return
+        markAutomaticBatchConsumed()
         automaticIds = ""
         previewSnapshot = null
         applied = false
@@ -302,9 +320,9 @@ internal fun UpdateHighlightsHost(
                         )
                         AppText(
                             text = if (manualOpen) {
-                                "v${BuildConfig.VERSION_NAME} 更新内容"
+                                "v${BuildConfig.VERSION_NAME} 更新要点"
                             } else {
-                                "更新成功 · v${BuildConfig.VERSION_NAME}"
+                                "新版本已就绪 · v${BuildConfig.VERSION_NAME}"
                             },
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -314,9 +332,9 @@ internal fun UpdateHighlightsHost(
                 }
                 AppText(
                     text = if (manualOpen) {
-                        "本次更新要点预览"
+                        "本次更新内容"
                     } else {
-                        "恭喜更新至 v${BuildConfig.VERSION_NAME}"
+                        "已更新至 v${BuildConfig.VERSION_NAME}"
                     },
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
@@ -324,9 +342,9 @@ internal fun UpdateHighlightsHost(
                 )
                 AppText(
                     text = if (manualOpen) {
-                        "点击下方任意要点卡片，即可一键前往对应功能区域体验。"
+                        "轻点下方任意卡片，即可直达对应功能体验。"
                     } else {
-                        "新版本已准备就绪，以下是本次更新要点预览，点击任意条目可直接前往对应区域。"
+                        "本次带来以下重点升级，轻点任意卡片即可直达体验。"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = AppContentColors.secondaryText(),
@@ -370,6 +388,7 @@ internal fun UpdateHighlightsHost(
                                         message = null
                                     }
                                     UpdateHighlightAction.OPEN_DONATE -> {
+                                        markAutomaticBatchConsumed()
                                         automaticIds = ""
                                         previewSnapshot = null
                                         applied = false
@@ -396,7 +415,7 @@ internal fun UpdateHighlightsHost(
 
             if (!manualOpen) {
                 AppText(
-                    text = "后续可随时在「设置 → 关于 → 本次更新」重复查看",
+                    text = "随时可在「设置 → 关于 → 本次更新」再次查看",
                     style = MaterialTheme.typography.labelSmall,
                     color = AppContentColors.secondaryText(),
                 )
@@ -415,7 +434,7 @@ internal fun UpdateHighlightsHost(
                 ),
             ) {
                 AppText(
-                    text = if (manualOpen) "关闭" else "知道了，开始体验",
+                    text = if (manualOpen) "关闭" else "开始体验",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onPrimary,
@@ -464,7 +483,7 @@ private fun UpdateHighlightPreviewCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     AppIcon(
-                        imageVector = resolveUpdateHighlightIcon(feature.action),
+                        imageVector = resolveUpdateHighlightIcon(feature),
                         contentDescription = null,
                         tint = accentColor,
                         modifier = Modifier.size(16.dp),
@@ -541,21 +560,40 @@ private fun UpdateHighlightPreviewCard(
     }
 }
 
-private fun resolveUpdateHighlightIcon(action: UpdateHighlightAction?): ImageVector = when (action) {
-    UpdateHighlightAction.OPEN_DONATE -> Icons.Outlined.FavoriteBorder
-    UpdateHighlightAction.OPEN_PLUGINS_SETTINGS -> Icons.Outlined.Speed
-    UpdateHighlightAction.OPEN_DOWNLOAD_LIST -> Icons.Outlined.Download
-    UpdateHighlightAction.OPEN_ICON_SETTINGS,
-    UpdateHighlightAction.OPEN_APPEARANCE_SETTINGS,
-    UpdateHighlightAction.PREVIEW_CMF -> Icons.Outlined.Palette
-    UpdateHighlightAction.OPEN_LISTEN_VIDEO -> Icons.Outlined.Headphones
-    UpdateHighlightAction.OPEN_PERSONAL_RECAP -> Icons.Outlined.History
-    UpdateHighlightAction.OPEN_WATCH_LATER -> Icons.Outlined.WatchLater
-    UpdateHighlightAction.OPEN_CUSTOM_PUSH_SETTINGS -> Icons.Outlined.Notifications
-    UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS -> Icons.Outlined.PlayCircle
-    UpdateHighlightAction.OPEN_HOME_SETTINGS -> Icons.Outlined.Home
-    UpdateHighlightAction.OPEN_SETTINGS -> Icons.Outlined.Tune
-    null -> Icons.Outlined.AutoAwesome
+private fun resolveUpdateHighlightIcon(feature: UpdateHighlight): ImageVector = when (feature.icon) {
+    UpdateHighlightIcon.SPEED -> Icons.Outlined.Speed
+    UpdateHighlightIcon.CONTENT_CUT -> Icons.Outlined.ContentCut
+    UpdateHighlightIcon.CAST -> Icons.Outlined.Cast
+    UpdateHighlightIcon.WIDGETS -> Icons.Outlined.Widgets
+    UpdateHighlightIcon.AUTO_FIX_HIGH -> Icons.Outlined.AutoFixHigh
+    UpdateHighlightIcon.CLEANING_SERVICES -> Icons.Outlined.CleaningServices
+    UpdateHighlightIcon.PALETTE -> Icons.Outlined.Palette
+    UpdateHighlightIcon.FAVORITE -> Icons.Outlined.FavoriteBorder
+    UpdateHighlightIcon.DOWNLOAD -> Icons.Outlined.Download
+    UpdateHighlightIcon.HEADPHONES -> Icons.Outlined.Headphones
+    UpdateHighlightIcon.HISTORY -> Icons.Outlined.History
+    UpdateHighlightIcon.WATCH_LATER -> Icons.Outlined.WatchLater
+    UpdateHighlightIcon.NOTIFICATIONS -> Icons.Outlined.Notifications
+    UpdateHighlightIcon.PLAY_CIRCLE -> Icons.Outlined.PlayCircle
+    UpdateHighlightIcon.HOME -> Icons.Outlined.Home
+    UpdateHighlightIcon.TUNE -> Icons.Outlined.Tune
+    UpdateHighlightIcon.AUTO_AWESOME -> Icons.Outlined.AutoAwesome
+    null -> when (feature.action) {
+        UpdateHighlightAction.OPEN_DONATE -> Icons.Outlined.FavoriteBorder
+        UpdateHighlightAction.OPEN_PLUGINS_SETTINGS -> Icons.Outlined.Speed
+        UpdateHighlightAction.OPEN_DOWNLOAD_LIST -> Icons.Outlined.Download
+        UpdateHighlightAction.OPEN_ICON_SETTINGS,
+        UpdateHighlightAction.OPEN_APPEARANCE_SETTINGS,
+        UpdateHighlightAction.PREVIEW_CMF -> Icons.Outlined.Palette
+        UpdateHighlightAction.OPEN_LISTEN_VIDEO -> Icons.Outlined.Headphones
+        UpdateHighlightAction.OPEN_PERSONAL_RECAP -> Icons.Outlined.History
+        UpdateHighlightAction.OPEN_WATCH_LATER -> Icons.Outlined.WatchLater
+        UpdateHighlightAction.OPEN_CUSTOM_PUSH_SETTINGS -> Icons.Outlined.Notifications
+        UpdateHighlightAction.OPEN_PLAYBACK_SETTINGS -> Icons.Outlined.PlayCircle
+        UpdateHighlightAction.OPEN_HOME_SETTINGS -> Icons.Outlined.Home
+        UpdateHighlightAction.OPEN_SETTINGS -> Icons.Outlined.Tune
+        null -> Icons.Outlined.AutoAwesome
+    }
 }
 
 @Composable

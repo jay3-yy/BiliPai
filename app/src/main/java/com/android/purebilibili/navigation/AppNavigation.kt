@@ -3279,7 +3279,12 @@ fun AppNavigation(
         ) {
             com.android.purebilibili.feature.settings.highlights.UpdateHighlightsHost(
                 allowAutomatic = !entryDialogsBlocked &&
-                    currentRoute == ScreenRoutes.Home.route && currentBottomNavItem == BottomNavItem.HOME &&
+                    com.android.purebilibili.feature.settings.highlights.isHomeRouteForAutomaticHighlights(
+                        isMainHostTop = currentNavigation3Key == BiliPaiNavKey.MainHost,
+                        isHomeBottomTab = currentBottomNavItem == BottomNavItem.HOME,
+                        currentRoute = currentRoute,
+                        homeRoute = ScreenRoutes.Home.route,
+                    ) &&
                     !foregroundSettling && !deferGlobalWallpaperPalette && !mainBottomPagerState.isNavigating &&
                     !isInPipMode && miniPlayerManager?.isPlaying != true &&
                     miniPlayerManager?.isMiniMode != true &&
