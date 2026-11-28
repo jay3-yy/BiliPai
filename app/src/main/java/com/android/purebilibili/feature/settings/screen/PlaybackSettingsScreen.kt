@@ -1689,6 +1689,9 @@ private fun PlaybackInteractionSettingsSection(
         .collectAsStateWithLifecycle(initialValue = true)
     val nextWatchHintEnabled by remember(context) { SettingsManager.getNextWatchHintEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = true)
+    val completionKeepsakePromptEnabled by remember(context) {
+        SettingsManager.getCompletionKeepsakePromptEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
     val externalPlaylistAutoContinueEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getExternalPlaylistAutoContinue(context) }.collectAsStateWithLifecycle(initialValue = true)
     val resumePlaybackPromptEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getResumePlaybackPromptEnabled(context) }.collectAsStateWithLifecycle(initialValue = true)
     val spacePlayedVideoLocatePromptEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getSpacePlayedVideoLocatePromptEnabled(context) }.collectAsStateWithLifecycle(initialValue = true)
@@ -1880,6 +1883,23 @@ private fun PlaybackInteractionSettingsSection(
                     scope.launch { SettingsManager.setNextWatchHintEnabled(context, enabled) }
                 },
                 iconTint = AppContentColors.secondaryText()
+            )
+        }
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.completion_keepsake_prompt_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.COMPLETION_KEEPSAKE_PROMPT),
+                title = playbackSettingTitle("playback.completion_keepsake_prompt_enabled"),
+                subtitle = if (completionKeepsakePromptEnabled) {
+                    "追番、合集或多 P 看完最后一集时，弹出完结纪念与短评记录面板"
+                } else {
+                    "关闭后播完不再弹出；个人回顾中已保存的完结纪念仍可查看与编辑"
+                },
+                checked = completionKeepsakePromptEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setCompletionKeepsakePromptEnabled(context, enabled) }
+                },
+                iconTint = AppContentColors.secondaryText(),
             )
         }
         AppPreferenceDivider()

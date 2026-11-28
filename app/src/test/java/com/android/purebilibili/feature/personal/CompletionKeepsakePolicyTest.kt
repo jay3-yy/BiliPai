@@ -2,10 +2,29 @@ package com.android.purebilibili.feature.personal
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class CompletionKeepsakePolicyTest {
+
+    @Test
+    fun `shouldAttemptCompletionKeepsakePrompt gates on setting toggle and non-null prompt`() {
+        val samplePrompt = CompletionKeepsakePrompt(
+            id = "bangumi:100",
+            kind = CompletionKeepsakeKind.BANGUMI,
+            title = "葬送的芙莉莲",
+            episodeCount = 28,
+            coverUrl = "https://img.test/cover.jpg",
+            seasonId = 100L,
+        )
+
+        assertTrue(shouldAttemptCompletionKeepsakePrompt(promptEnabled = true, prompt = samplePrompt))
+        assertFalse(shouldAttemptCompletionKeepsakePrompt(promptEnabled = false, prompt = samplePrompt))
+        assertFalse(shouldAttemptCompletionKeepsakePrompt(promptEnabled = true, prompt = null))
+        assertFalse(shouldAttemptCompletionKeepsakePrompt(promptEnabled = false, prompt = null))
+    }
 
     @Test
     fun `resolveBangumiCompletionKeepsake triggers only on final episode of multi-episode series`() {

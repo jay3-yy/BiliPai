@@ -318,8 +318,15 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             )
             viewModelScope.launch {
                 val context = NetworkModule.appContext
-                if (context != null && keepsakePrompt != null &&
-                    com.android.purebilibili.feature.personal.CompletionKeepsakeStore.shouldPrompt(context, keepsakePrompt.id)
+                val promptEnabled = context != null &&
+                    com.android.purebilibili.core.store.SettingsManager
+                        .isCompletionKeepsakePromptEnabled(context)
+                if (context != null &&
+                    com.android.purebilibili.feature.personal.shouldAttemptCompletionKeepsakePrompt(
+                        promptEnabled = promptEnabled,
+                        prompt = keepsakePrompt,
+                    ) &&
+                    com.android.purebilibili.feature.personal.CompletionKeepsakeStore.shouldPrompt(context, keepsakePrompt!!.id)
                 ) {
                     _completionKeepsakePrompt.value = keepsakePrompt
                 } else {

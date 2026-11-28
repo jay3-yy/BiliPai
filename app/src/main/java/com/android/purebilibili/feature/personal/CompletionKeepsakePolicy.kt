@@ -36,6 +36,11 @@ data class CompletionKeepsakeRecord(
     val seasonId: Long = 0L,
 )
 
+internal fun shouldAttemptCompletionKeepsakePrompt(
+    promptEnabled: Boolean,
+    prompt: CompletionKeepsakePrompt?,
+): Boolean = promptEnabled && prompt != null
+
 internal fun resolveBangumiCompletionKeepsake(
     seasonId: Long,
     title: String,
