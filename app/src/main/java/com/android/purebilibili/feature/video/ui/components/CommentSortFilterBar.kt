@@ -205,6 +205,8 @@ fun CommentSortHeader(
                         indicatorHeight = spec.indicatorHeightDp.dp,
                         labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
                         compactMiuixWhenTwoOptions = true,
+                        // 排序栏固定为两个槽位，玻璃指示器拖动放大时需要越过轨道边缘绘制。
+                        forceEqualWidth = liquidGlassEnabled,
                         dragSelectionEnabled = true,
                         tapPressRefractionEnabled = false,
                     )

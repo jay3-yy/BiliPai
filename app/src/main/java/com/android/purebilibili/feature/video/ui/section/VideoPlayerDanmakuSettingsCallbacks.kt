@@ -240,11 +240,7 @@ internal fun VideoPlayerOverlayActions.withPlayerDanmakuSettingsCallbacks(
     },
     onDanmakuSmartOcclusionChange = { value ->
         launchSettingsWrite {
-            SettingsManager.setDanmakuSmartOcclusion(
-                context,
-                value,
-                activeDanmakuScope
-            )
+            SettingsManager.setDanmakuSmartOcclusion(context, value)
         }
     },
     onDanmakuFullscreenPanelWidthModeChange = { value ->

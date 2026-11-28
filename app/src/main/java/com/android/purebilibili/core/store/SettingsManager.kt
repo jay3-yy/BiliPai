@@ -1109,12 +1109,12 @@ enum class DanmakuSettingsScope(
     PORTRAIT(
         keyPrefix = "portrait",
         badgeLabel = "非全屏专用",
-        subtitle = "开关、行距和区域与全屏同步，字号及其余样式独立"
+        subtitle = "弹幕开关、智能遮罩、行距和区域与全屏同步，字号及其余样式独立"
     ),
     LANDSCAPE(
         keyPrefix = "landscape",
         badgeLabel = "全屏专用",
-        subtitle = "开关、行距和区域与非全屏同步，字号及其余样式独立"
+        subtitle = "弹幕开关、智能遮罩、行距和区域与非全屏同步，字号及其余样式独立"
     )
 }
 
@@ -5859,8 +5859,18 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey(buildScopedDanmakuKeyName(scope, "allow_colorful"))
     private fun keyDanmakuAllowSpecial(scope: DanmakuSettingsScope) =
         booleanPreferencesKey(buildScopedDanmakuKeyName(scope, "allow_special"))
+
     private fun keyDanmakuSmartOcclusion(scope: DanmakuSettingsScope) =
         booleanPreferencesKey(buildScopedDanmakuKeyName(scope, "smart_occlusion"))
+
+    private fun readDanmakuSmartOcclusion(preferences: Preferences): Boolean {
+        val shared = preferences[KEY_DANMAKU_SMART_OCCLUSION] ?: false
+        val nonFullscreen = preferences[keyDanmakuSmartOcclusion(DanmakuSettingsScope.PORTRAIT)]
+        val fullscreen = preferences[keyDanmakuSmartOcclusion(DanmakuSettingsScope.LANDSCAPE)]
+        // Preserve an existing opt-in when merging the two former playback profiles.
+        return (nonFullscreen ?: shared) || (fullscreen ?: shared)
+    }
+
     private fun keyDanmakuBlockRules(scope: DanmakuSettingsScope) =
         stringPreferencesKey(buildScopedDanmakuKeyName(scope, "block_rules"))
     private fun keyDanmakuMergeDuplicates(scope: DanmakuSettingsScope) =
@@ -6037,12 +6047,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             tapInteractionEnabled = preferences[KEY_DANMAKU_TAP_INTERACTION_ENABLED] ?: true,
             hideInteractiveCommands = preferences[KEY_DANMAKU_BLOCK_ATTENTION_COMMANDS] ?: false,
             blockAttentionCommands = preferences[KEY_DANMAKU_BLOCK_ATTENTION_COMMANDS] ?: false,
-            smartOcclusion = readScopedDanmakuPreference(
-                preferences = preferences,
-                scopeKey = keyDanmakuSmartOcclusion(scope),
-                legacyKey = KEY_DANMAKU_SMART_OCCLUSION,
-                defaultValue = false
-            ),
+            smartOcclusion = readDanmakuSmartOcclusion(preferences),
             // Profiles distinguish inline/fullscreen; this option is still portrait-only
             // at the renderer, so preserve it for portrait fullscreen's shared profile.
             portraitDisplayAreaMode = PortraitDanmakuDisplayAreaMode.fromValue(
@@ -6550,26 +6555,17 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         setDanmakuHideInteractiveCommands(context, value)
     }
 
-    fun getDanmakuSmartOcclusion(
-        context: Context,
-        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
-    ): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences ->
-            readScopedDanmakuPreference(
-                preferences = preferences,
-                scopeKey = keyDanmakuSmartOcclusion(scope),
-                legacyKey = KEY_DANMAKU_SMART_OCCLUSION,
-                defaultValue = false
-            )
-        }
+    fun getDanmakuSmartOcclusion(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map(::readDanmakuSmartOcclusion).distinctUntilChanged()
 
     suspend fun setDanmakuSmartOcclusion(
         context: Context,
-        value: Boolean,
-        scope: DanmakuSettingsScope = DanmakuSettingsScope.PORTRAIT
+        value: Boolean
     ) {
         context.settingsDataStore.edit { preferences ->
-            preferences[keyDanmakuSmartOcclusion(scope)] = value
+            preferences[KEY_DANMAKU_SMART_OCCLUSION] = value
+            preferences.remove(keyDanmakuSmartOcclusion(DanmakuSettingsScope.PORTRAIT))
+            preferences.remove(keyDanmakuSmartOcclusion(DanmakuSettingsScope.LANDSCAPE))
         }
     }
 

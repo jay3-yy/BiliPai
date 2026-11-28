@@ -4281,7 +4281,7 @@ private fun VideoPageItem(
                     scope.launch { SettingsManager.setDanmakuHideInteractiveCommands(context, it) }
                 },
                 onDanmakuBlockRulesRawChange = { scope.launch { SettingsManager.setDanmakuBlockRulesRaw(context, it, portraitDanmakuScope) } },
-                onDanmakuSmartOcclusionChange = { scope.launch { SettingsManager.setDanmakuSmartOcclusion(context, it, portraitDanmakuScope) } },
+                onDanmakuSmartOcclusionChange = { scope.launch { SettingsManager.setDanmakuSmartOcclusion(context, it) } },
                 onDanmakuFullscreenPanelWidthModeChange = {
                     scope.launch { SettingsManager.setDanmakuFullscreenPanelWidthMode(context, it) }
                 },

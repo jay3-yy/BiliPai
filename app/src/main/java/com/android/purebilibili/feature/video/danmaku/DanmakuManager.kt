@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.core.lifecycle.AbandonableResource
+import com.android.purebilibili.core.lifecycle.BackgroundManager
 import com.android.purebilibili.plugin.sdk.DanmakuItem as PluginDanmakuItem
 import com.android.purebilibili.plugin.sdk.DanmakuPluginApi
 import com.android.purebilibili.plugin.sdk.DanmakuStyle
@@ -36,9 +37,12 @@ import com.android.purebilibili.danmaku.engine.DANMAKU_LAYER_SCROLL
 import com.android.purebilibili.danmaku.engine.DANMAKU_LAYER_TOP
 import com.android.purebilibili.danmaku.engine.DanmakuEngine
 import com.android.purebilibili.danmaku.engine.DanmakuItem
+import com.android.purebilibili.danmaku.engine.DanmakuMaskFrame
 import com.android.purebilibili.danmaku.engine.DanmakuRenderConfig
 import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 import com.android.purebilibili.danmaku.engine.DanmakuWindow
+import com.android.purebilibili.data.repository.DanmakuRepository
+import com.android.purebilibili.data.repository.VideoRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -138,6 +142,7 @@ class DanmakuManager private constructor(
             stopDriftSync()
         } else if (isRenderingEnabled) {
             view.visibility = android.view.View.VISIBLE
+            requestWebMask()
             softResyncDanmakuTimeline(
                 positionMs = player?.currentPosition ?: 0L,
                 shouldPlay = player?.isPlaying == true,
@@ -219,18 +224,17 @@ class DanmakuManager private constructor(
     private val cacheUpdateMutex = Mutex()
     private var localSegmentPaths: List<String> = emptyList()
     private var isLocalSegmentSession: Boolean = false
-    private var webMaskBytes: ByteArray? = null
-    private var webMaskIndex: List<WebMaskChunkIndex> = emptyList()
-    private val webMaskChunkCache = object : LinkedHashMap<Int, List<com.android.purebilibili.danmaku.engine.DanmakuMaskFrame>>(8, 0.75f, true) {
-        override fun removeEldestEntry(
-            eldest: MutableMap.MutableEntry<Int, List<com.android.purebilibili.danmaku.engine.DanmakuMaskFrame>>?
-        ): Boolean = size > 6
+    private class WebMaskSource(val bytes: ByteArray, val index: List<WebMaskChunkIndex>, val fps: Int) {
+        val chunkCache = object : LinkedHashMap<Int, List<DanmakuMaskFrame>>(8, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<Int, List<DanmakuMaskFrame>>?
+            ): Boolean = size > 6
+        }
     }
-    private var webMaskFps: Int = 0
+    private var webMaskSource: WebMaskSource? = null
     private var webMaskScaleMode: com.android.purebilibili.danmaku.engine.DanmakuMaskScaleMode =
         com.android.purebilibili.danmaku.engine.DanmakuMaskScaleMode.FIT_CENTER
-    private var webMaskWindowStartMs: Long = Long.MIN_VALUE
-    private var webMaskWindowEndMs: Long = Long.MIN_VALUE
+    private var webMaskWindow: LongRange? = null
     private var sessionIdentity: DanmakuSessionIdentity? = null
     private var lastExplicitSeekPositionMs: Long? = null
     private var lastExplicitSeekElapsedRealtimeMs: Long? = null
@@ -1226,41 +1230,11 @@ class DanmakuManager private constructor(
 
         if (occlusionChanged) {
             if (smartOcclusion) {
-                if (webMaskBytes == null && cachedCid > 0L && cachedBvid.isNotBlank()) {
-                    val expectedCid = cachedCid
-                    val expectedGeneration = loadGeneration
-                    maskFetchJob?.cancel()
-                    maskFetchJob = scope.launch {
-                        val maskInfo = com.android.purebilibili.data.repository.VideoRepository
-                            .getPlayerInfo(cachedBvid, expectedCid)
-                            .getOrNull()
-                            ?.dmMask
-                        if (maskInfo == null || maskInfo.maskUrl.isBlank()) {
-                            showMaskStatusToast("已开启智能弹幕遮罩（当前视频暂无官方蒙版）")
-                            return@launch
-                        }
-                        val loaded = loadWebMask(
-                            cid = expectedCid,
-                            url = maskInfo.maskUrl,
-                            fps = maskInfo.fps,
-                            positionMs = player?.currentPosition ?: 0L,
-                            requestGeneration = expectedGeneration
-                        )
-                        showMaskStatusToast(
-                            if (loaded) "已开启智能弹幕遮罩" else "已开启智能弹幕遮罩（蒙版加载失败）"
-                        )
-                    }
-                } else if (webMaskBytes != null) {
-                    requestWebMaskWindow(player?.currentPosition ?: 0L)
-                    showMaskStatusToast("已开启智能弹幕遮罩")
-                } else {
-                    showMaskStatusToast("已开启智能弹幕遮罩")
-                }
+                requestWebMask(showStatus = true)
             } else {
-                maskLoadJob?.cancel()
                 maskFetchJob?.cancel()
-                webMaskWindowStartMs = Long.MIN_VALUE
-                webMaskWindowEndMs = Long.MIN_VALUE
+                maskFetchJob = null
+                resetWebMaskWindow()
                 controller?.replaceMaskFrames(emptyList(), player?.currentPosition ?: 0L)
                 showMaskStatusToast("已关闭智能弹幕遮罩")
             }
@@ -1413,7 +1387,7 @@ class DanmakuManager private constructor(
     fun updateMaskScaleMode(mode: com.android.purebilibili.danmaku.engine.DanmakuMaskScaleMode) {
         if (webMaskScaleMode == mode) return
         webMaskScaleMode = mode
-        if (config.smartOcclusionEnabled && webMaskBytes != null) {
+        if (config.smartOcclusionEnabled && webMaskSource != null) {
             applyConfigToController("mask_scale_mode")
         }
     }
@@ -1434,7 +1408,7 @@ class DanmakuManager private constructor(
                 baseDurationMs = originalTopShowTimeMin,
                 videoSpeed = normalizedSpeed
             ),
-            maskEnabled = config.smartOcclusionEnabled && webMaskBytes != null,
+            maskEnabled = config.smartOcclusionEnabled && webMaskSource != null,
             maskScaleMode = webMaskScaleMode,
         )
     }
@@ -1503,6 +1477,7 @@ class DanmakuManager private constructor(
         
         // 应用配置并同步倍速基准
         applyConfigToController("attachView")
+        if (previousController !== controller) resetWebMaskWindow()
 
         // 相关推荐 push 新详情页时，loadDanmaku 常在旧 controller 仍绑定（或 controller=null）
         // 时完成；若只在「此前无 controller」时重放，新 view 会永远吃不到已就绪缓存，
@@ -1512,6 +1487,7 @@ class DanmakuManager private constructor(
             previousController = previousController,
             reason = "attach_view_replay",
         )
+        if (previousController !== controller) requestWebMask()
         
         //  [关键修复] 等待 View 布局完成后再设置弹幕数据
         // DanmakuRenderEngine 需要有效的 View 尺寸来计算弹幕轨道位置
@@ -1627,6 +1603,7 @@ class DanmakuManager private constructor(
             view.releaseRenderer()
             return
         }
+        resetWebMaskWindow()
         hide()
         clear()
         controller?.pause()
@@ -1648,6 +1625,7 @@ class DanmakuManager private constructor(
      */
     private fun startDriftSync() {
         if (isSeekScrubbing || !isRenderingEnabled) return
+        requestWebMask()
         syncJob?.cancel()
         syncJob = scope.launch {
             var tickCount = 0
@@ -1898,6 +1876,7 @@ class DanmakuManager private constructor(
                     if (isSeekScrubbing) return
                     cancelObsoleteWindowRequest(newPosition.positionMs)
                     requestSpecialDanmakuWindow(newPosition.positionMs, "seek_discontinuity")
+                    requestWebMaskWindow(newPosition.positionMs)
                     Log.w(TAG, " Seek detected: ${oldPosition.positionMs}ms -> ${newPosition.positionMs}ms")
                     if (shouldSuppressFollowupHardResync(newPosition.positionMs)) {
                         Log.w(TAG, " Skip duplicate danmaku hard resync after explicit seek at ${newPosition.positionMs}ms (seek_discontinuity)")
@@ -2018,6 +1997,7 @@ class DanmakuManager private constructor(
                 previousController = controller,
                 reason = "load_cached"
             )
+            requestWebMask()
             return
         }
         
@@ -2052,14 +2032,7 @@ class DanmakuManager private constructor(
         clearSpecialDanmakuWindow()
         localSegmentPaths = emptyList()
         isLocalSegmentSession = false
-        webMaskBytes = null
-        webMaskIndex = emptyList()
-        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
-        webMaskFps = 0
-        webMaskWindowStartMs = Long.MIN_VALUE
-        webMaskWindowEndMs = Long.MIN_VALUE
-        maskLoadJob?.cancel()
-        maskFetchJob?.cancel()
+        clearWebMaskSource()
         _advancedDanmakuFlow.value = emptyList()
         _basDanmakuFlow.value = emptyList()
         _commandDanmakuFlow.value = emptyList()
@@ -2069,6 +2042,7 @@ class DanmakuManager private constructor(
         
         // 清除现有弹幕
         controller?.stop()
+        requestWebMask()
         
         loadJob?.cancel()
         loadJob = scope.launch {
@@ -2085,16 +2059,6 @@ class DanmakuManager private constructor(
                         title = mediaTitle,
                         durationSec = (durationMs / 1000L).coerceAtLeast(0L),
                     )
-                }
-                val maskInfoDeferred = async {
-                    if (config.smartOcclusionEnabled && bvid.isNotBlank()) {
-                        com.android.purebilibili.data.repository.VideoRepository
-                            .getPlayerInfo(bvid, cid)
-                            .getOrNull()
-                            ?.dmMask
-                    } else {
-                        null
-                    }
                 }
                 val viewReply = if (aid > 0) {
                      com.android.purebilibili.data.repository.DanmakuRepository.getDanmakuView(cid, aid)
@@ -2150,20 +2114,6 @@ class DanmakuManager private constructor(
                             withContext(Dispatchers.Main.immediate) { player?.currentPosition ?: 0L },
                             totalSegmentCount,
                         ),
-                    )
-                }
-                val maskInfo = maskInfoDeferred.await()
-                if (
-                    maskInfo != null &&
-                    maskInfo.maskUrl.isNotBlank() &&
-                    shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)
-                ) {
-                    loadWebMask(
-                        cid = cid,
-                        url = maskInfo.maskUrl,
-                        fps = maskInfo.fps,
-                        positionMs = player?.currentPosition ?: 0L,
-                        requestGeneration = requestGeneration
                     )
                 }
             } catch (e: CancellationException) {
@@ -2402,7 +2352,6 @@ class DanmakuManager private constructor(
         ++windowGeneration
         windowLoadJob?.cancel()
         windowLoadJob = null
-        maskLoadJob?.cancel()
         pendingSegmentIndices = emptyList()
     }
 
@@ -2442,12 +2391,6 @@ class DanmakuManager private constructor(
                     requestWindowGeneration = requestWindowGeneration,
                     allowXmlFallback = false,
                     reason = loadReason
-                )
-                requestWebMaskWindow(
-                    positionMs = positionMs,
-                    expectedCid = requestCid,
-                    requestGeneration = requestGeneration,
-                    requestWindowGeneration = requestWindowGeneration
                 )
             } catch (e: CancellationException) {
                 throw e
@@ -2617,70 +2560,89 @@ class DanmakuManager private constructor(
         }
     }
 
-    private suspend fun loadWebMask(
-        cid: Long,
-        url: String,
-        fps: Int,
-        positionMs: Long,
-        requestGeneration: Long
-    ): Boolean {
-        val bytes = com.android.purebilibili.data.repository.DanmakuRepository.getWebMask(url) ?: return false
-        if (!shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) return false
-        val index = withContext(Dispatchers.Default) { WebMaskParser.parseIndex(bytes) }
-        if (index.isEmpty()) return false
-        webMaskBytes = bytes
-        webMaskIndex = index
-        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
-        webMaskFps = fps
-        applyConfigToController("webmask_ready")
-        requestWebMaskWindow(
-            positionMs = positionMs,
-            expectedCid = cid,
-            requestGeneration = requestGeneration,
-            requestWindowGeneration = windowGeneration
-        )
-        return true
+    private fun requestWebMask(showStatus: Boolean = false) {
+        if (!config.smartOcclusionEnabled || BackgroundManager.isInBackground) return
+        val cid = cachedCid
+        val bvid = cachedBvid
+        if (webMaskSource != null || cid <= 0L || bvid.isBlank() || !config.isEnabled) {
+            if (webMaskSource != null) requestWebMaskWindow(player?.currentPosition ?: 0L)
+            if (showStatus) showMaskStatusToast("已开启智能弹幕遮罩")
+            return
+        }
+        // One metadata lookup per playback session until a new video, toggle or cache trim.
+        if (maskFetchJob != null) return
+        val generation = loadGeneration
+        maskFetchJob = scope.launch {
+            val playerInfo = VideoRepository.getPlayerInfo(bvid, cid).getOrElse {
+                if (showStatus) showMaskStatusToast("已开启智能弹幕遮罩（蒙版信息获取失败）")
+                return@launch
+            }
+            val maskInfo = playerInfo.dmMask?.takeIf { it.maskUrl.isNotBlank() }
+            if (maskInfo == null) {
+                if (showStatus) showMaskStatusToast("已开启智能弹幕遮罩（当前视频暂无官方蒙版）")
+                return@launch
+            }
+            val bytes = DanmakuRepository.getWebMask(maskInfo.maskUrl)
+            val index = if (bytes != null) {
+                withContext(Dispatchers.Default) { WebMaskParser.parseIndex(bytes) }
+            } else {
+                emptyList()
+            }
+            if (!shouldApplyDanmakuLoadResult(cid, generation, cachedCid, loadGeneration)) return@launch
+            if (bytes == null || index.isEmpty()) {
+                if (showStatus) showMaskStatusToast("已开启智能弹幕遮罩（蒙版加载失败）")
+                return@launch
+            }
+            webMaskSource = WebMaskSource(bytes, index, maskInfo.fps)
+            applyConfigToController("webmask_ready")
+            requestWebMaskWindow(player?.currentPosition ?: 0L)
+            if (showStatus) showMaskStatusToast("已开启智能弹幕遮罩")
+        }
     }
 
-    private fun requestWebMaskWindow(
-        positionMs: Long,
-        expectedCid: Long = cachedCid,
-        requestGeneration: Long = loadGeneration,
-        requestWindowGeneration: Long = windowGeneration
-    ) {
-        val bytes = webMaskBytes ?: return
-        if (!config.smartOcclusionEnabled) return
-        if (
-            positionMs >= webMaskWindowStartMs + WEB_MASK_REFRESH_GUARD_MS &&
-            positionMs <= webMaskWindowEndMs - WEB_MASK_REFRESH_GUARD_MS
-        ) return
-        val windowStartMs = (positionMs - WEB_MASK_LOOK_BEHIND_MS).coerceAtLeast(0L)
-        val windowEndMs = positionMs + WEB_MASK_LOOK_AHEAD_MS
+    private fun resetWebMaskWindow() {
         maskLoadJob?.cancel()
-        webMaskWindowStartMs = windowStartMs
-        webMaskWindowEndMs = windowEndMs
-        val index = webMaskIndex
-        if (index.isEmpty()) return
-        val chunkCache = webMaskChunkCache
+        maskLoadJob = null
+        webMaskWindow = null
+    }
+
+    private fun clearWebMaskSource() {
+        maskFetchJob?.cancel()
+        maskFetchJob = null
+        resetWebMaskWindow()
+        webMaskSource = null
+    }
+
+    private fun requestWebMaskWindow(positionMs: Long) {
+        val source = webMaskSource ?: return
+        if (controller == null || !config.smartOcclusionEnabled || !isRenderingEnabled ||
+            isSeekScrubbing || BackgroundManager.isInBackground
+        ) return
+        val position = positionMs.coerceAtLeast(0L)
+        webMaskWindow?.let { window ->
+            val refreshAfterStart = if (window.first == 0L) 0L else window.first + WEB_MASK_REFRESH_GUARD_MS
+            if (position in refreshAfterStart..(window.last - WEB_MASK_REFRESH_GUARD_MS)) return
+        }
+        val window = (position - WEB_MASK_LOOK_BEHIND_MS).coerceAtLeast(0L)..(position + WEB_MASK_LOOK_AHEAD_MS)
+        maskLoadJob?.cancel()
+        webMaskWindow = window
         maskLoadJob = scope.launch {
             val frames = withContext(Dispatchers.Default) {
-                synchronized(chunkCache) {
+                synchronized(source.chunkCache) {
                     WebMaskParser.parseWindow(
-                        data = bytes,
-                        fps = webMaskFps,
-                        windowStartMs = windowStartMs,
-                        windowEndMs = windowEndMs,
-                        preParsedIndex = index,
-                        chunkCache = chunkCache,
+                        data = source.bytes,
+                        fps = source.fps,
+                        windowStartMs = window.first,
+                        windowEndMs = window.last,
+                        preParsedIndex = source.index,
+                        chunkCache = source.chunkCache,
                     )
                 }
             }
-            if (!isCurrentSegmentWindowRequest(expectedCid, requestGeneration, requestWindowGeneration) ||
-                !config.smartOcclusionEnabled || isSeekScrubbing
-            ) return@launch
+            // This job is cancelled when its video, render target or seek window changes.
             controller?.replaceMaskFrames(
                 frames,
-                resolveDanmakuDataReadyPositionMs(player?.currentPosition, positionMs)
+                resolveDanmakuDataReadyPositionMs(player?.currentPosition, position)
             )
         }
     }
@@ -2697,8 +2659,7 @@ class DanmakuManager private constructor(
         loadJob?.cancel()
         windowLoadJob?.cancel()
         configRebuildJob?.cancel()
-        maskLoadJob?.cancel()
-        maskFetchJob?.cancel()
+        clearWebMaskSource()
         stopDriftSync()
         isPlaying = false
         isLoading = true
@@ -2707,12 +2668,6 @@ class DanmakuManager private constructor(
         cachedAid = 0L
         cachedBvid = ""
         cachedDurationMs = 0L
-        webMaskBytes = null
-        webMaskIndex = emptyList()
-        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
-        webMaskFps = 0
-        webMaskWindowStartMs = Long.MIN_VALUE
-        webMaskWindowEndMs = Long.MIN_VALUE
         timelineSyncedController = null
         pendingTimelineResync = false
         controller?.replaceMaskFrames(emptyList(), 0L)
@@ -2774,6 +2729,7 @@ class DanmakuManager private constructor(
             return
         }
         Log.d(TAG, "👁️ show()")
+        requestWebMask()
         val alreadyVisible = danmakuView?.visibility == android.view.View.VISIBLE
         danmakuView?.visibility = android.view.View.VISIBLE
         // Host/settings recomposition may request show again. A live, synced surface
@@ -2832,8 +2788,7 @@ class DanmakuManager private constructor(
         updateHotDanmakuPresentation(emptyList())
         loadJob?.cancel()
         windowLoadJob?.cancel()
-        maskLoadJob?.cancel()
-        maskFetchJob?.cancel()
+        clearWebMaskSource()
         configRebuildJob?.cancel()
         stopDriftSync()
         isPlaying = false
@@ -2850,12 +2805,6 @@ class DanmakuManager private constructor(
         clearSpecialDanmakuWindow()
         localSegmentPaths = emptyList()
         isLocalSegmentSession = false
-        webMaskBytes = null
-        webMaskIndex = emptyList()
-        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
-        webMaskFps = 0
-        webMaskWindowStartMs = Long.MIN_VALUE
-        webMaskWindowEndMs = Long.MIN_VALUE
         cachedDanmakuList = null
         hotDanmakuIndex = null
         sourceDanmakuList = null
@@ -2879,9 +2828,7 @@ class DanmakuManager private constructor(
         clearTapSelection()
         if (isSeekScrubbing) return
         isSeekScrubbing = true
-        maskLoadJob?.cancel()
-        webMaskWindowStartMs = Long.MIN_VALUE
-        webMaskWindowEndMs = Long.MIN_VALUE
+        resetWebMaskWindow()
         val ctrl = controller ?: return
         executeDanmakuSeekScrubStart(
             pause = {
@@ -2902,6 +2849,7 @@ class DanmakuManager private constructor(
         val positionMs = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
         cancelObsoleteWindowRequest(positionMs)
         requestSpecialDanmakuWindow(positionMs, "seek_scrub_cancel")
+        requestWebMaskWindow(positionMs)
         val shouldPlay = player?.isPlaying == true && isRenderingEnabled
         if (shouldPlay) startDriftSync()
         Log.d(TAG, "↩️ cancelSeekScrub() - restoring danmaku at ${positionMs}ms, play=$shouldPlay")
@@ -2970,6 +2918,7 @@ class DanmakuManager private constructor(
         val danmakuPos = applyDanmakuTimeOffsetMs(positionMs, timeOffsetMs)
         cancelObsoleteWindowRequest(danmakuPos)
         requestSpecialDanmakuWindow(danmakuPos, "manual_seek")
+        requestWebMaskWindow(positionMs)
         Log.w(TAG, "⏭️ seekTo($positionMs) - refreshing danmaku")
         val shouldPlay = player?.isPlaying == true
         markExplicitSeekResync(positionMs, startedPlayback = shouldPlay)
@@ -3002,6 +2951,7 @@ class DanmakuManager private constructor(
     ) {
         specialLoadingPausedForBackground = false
         requestSpecialDanmakuWindow(positionMs, "foreground_recovery")
+        requestWebMask()
         when (
             resolveDanmakuActionForForegroundRecovery(
                 playWhenReady = playWhenReady,
@@ -3185,10 +3135,7 @@ class DanmakuManager private constructor(
         ++specialWindowGeneration
         specialWindowLoadJob?.cancel()
         specialWindowLoadJob = null
-        maskLoadJob?.cancel()
-        maskLoadJob = null
-        maskFetchJob?.cancel()
-        maskFetchJob = null
+        clearWebMaskSource()
         configRebuildJob?.cancel()
         configRebuildJob = null
         timelineSyncedController = null
@@ -3224,15 +3171,7 @@ class DanmakuManager private constructor(
         _basDanmakuFlow.value = emptyList()
         val window = specialWindow
         if (window != null) scope.launch { specialWindowMutex.withLock { window.clearPrograms() } }
-        maskLoadJob?.cancel()
-        maskLoadJob = null
-        webMaskWindowStartMs = Long.MIN_VALUE
-        webMaskWindowEndMs = Long.MIN_VALUE
-        maskFetchJob?.cancel()
-        maskFetchJob = null
-        webMaskBytes = null
-        webMaskIndex = emptyList()
-        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
+        clearWebMaskSource()
         hotDanmakuIndex = null
         controller?.stop()
         // A trimmed renderer no longer owns the visible timeline. Foreground recovery
@@ -3391,12 +3330,6 @@ class DanmakuManager private constructor(
         clearSpecialDanmakuWindow()
         localSegmentPaths = emptyList()
         isLocalSegmentSession = false
-        webMaskBytes = null
-        webMaskIndex = emptyList()
-        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
-        webMaskFps = 0
-        webMaskWindowStartMs = Long.MIN_VALUE
-        webMaskWindowEndMs = Long.MIN_VALUE
         clearExplicitSeekResyncMarker()
         scope.coroutineContext[Job]?.cancel()
         

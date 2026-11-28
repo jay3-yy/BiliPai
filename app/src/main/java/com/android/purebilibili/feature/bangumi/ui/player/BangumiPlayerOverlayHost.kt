@@ -365,7 +365,7 @@ internal fun BangumiPlayerOverlayHost(
             onDanmakuWeightFilterLevelChange = { value -> settingsScope.launch { SettingsManager.setDanmakuWeightFilterLevel(context, value) } },
             onDanmakuHideInteractiveCommandsChange = { value -> settingsScope.launch { SettingsManager.setDanmakuHideInteractiveCommands(context, value) } },
             onDanmakuBlockRulesRawChange = { value -> settingsScope.launch { SettingsManager.setDanmakuBlockRulesRaw(context, value, danmakuSettingsScope) } },
-            onDanmakuSmartOcclusionChange = { value -> settingsScope.launch { SettingsManager.setDanmakuSmartOcclusion(context, value, danmakuSettingsScope) } },
+            onDanmakuSmartOcclusionChange = { value -> settingsScope.launch { SettingsManager.setDanmakuSmartOcclusion(context, value) } },
             onDanmakuFullscreenPanelWidthModeChange = { value -> settingsScope.launch { SettingsManager.setDanmakuFullscreenPanelWidthMode(context, value) } },
             onPortraitDanmakuDisplayAreaModeChange = { value -> settingsScope.launch { SettingsManager.setPortraitDanmakuDisplayAreaMode(context, value) } },
             onDoubleTapLike = { if (!isLiked) onToggleLike() },

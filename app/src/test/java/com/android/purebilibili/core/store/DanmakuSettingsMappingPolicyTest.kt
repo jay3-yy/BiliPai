@@ -166,6 +166,26 @@ class DanmakuSettingsMappingPolicyTest {
     }
 
     @Test
+    fun smartOcclusion_preservesOptInAcrossPlaybackProfiles() {
+        val inlineOnly = mutablePreferencesOf(
+            booleanPreferencesKey("danmaku_portrait_smart_occlusion") to true,
+            booleanPreferencesKey("danmaku_landscape_smart_occlusion") to false,
+        )
+        val fullscreenOnly = mutablePreferencesOf(
+            booleanPreferencesKey("danmaku_portrait_smart_occlusion") to false,
+            booleanPreferencesKey("danmaku_landscape_smart_occlusion") to true,
+        )
+        val sharedDisabled = mutablePreferencesOf(
+            booleanPreferencesKey("danmaku_smart_occlusion") to false,
+        )
+        for (profile in DanmakuSettingsScope.entries) {
+            assertTrue(mapDanmakuSettingsFromPreferences(inlineOnly, profile).smartOcclusion)
+            assertTrue(mapDanmakuSettingsFromPreferences(fullscreenOnly, profile).smartOcclusion)
+            assertFalse(mapDanmakuSettingsFromPreferences(sharedDisabled, profile).smartOcclusion)
+        }
+    }
+
+    @Test
     fun portraitDisplayAreaMode_survivesInlineAndFullscreenProfileSelection() {
         val screenTopPrefs = mutablePreferencesOf(
             intPreferencesKey("danmaku_portrait_display_area_mode") to

@@ -346,7 +346,7 @@ internal fun UpdateHighlightsHost(
                 AppText(
                     text = when {
                         editionLabel != null && manualOpen -> "感谢一年相伴！轻点下方任意卡片，即可直达对应功能体验。"
-                        editionLabel != null -> "感谢一年相伴！本次$editionLabel带来以下重点升级，轻点任意卡片即可直达体验。"
+                        editionLabel != null -> "感谢一年相伴！本次${editionLabel}带来以下重点升级，轻点任意卡片即可直达体验。"
                         manualOpen -> "轻点下方任意卡片，即可直达对应功能体验。"
                         else -> "本次带来以下重点升级，轻点任意卡片即可直达体验。"
                     },

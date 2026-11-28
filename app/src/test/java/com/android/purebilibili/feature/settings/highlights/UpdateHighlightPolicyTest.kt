@@ -173,9 +173,10 @@ class UpdateHighlightPolicyTest {
     }
 
     @Test
-    fun release625HighlightsExcludePinnedDonateAndUseDistinctSemanticIcons() {
-        val highlights = latestReleaseHighlights(625)
-        assertEquals(6, highlights.size)
+    fun release626HighlightsExcludePinnedDonateAndUseDistinctSemanticIcons() {
+        val highlights = latestReleaseHighlights(626)
+        assertEquals(5, highlights.size)
+        assertTrue(highlights.all { it.introducedVersionCode == 626 })
         assertTrue(highlights.none { it.action == UpdateHighlightAction.OPEN_DONATE })
         assertEquals("一周年特别纪念版", resolveReleaseEditionLabel("0.10.7"))
         val icons = highlights.map { it.icon }

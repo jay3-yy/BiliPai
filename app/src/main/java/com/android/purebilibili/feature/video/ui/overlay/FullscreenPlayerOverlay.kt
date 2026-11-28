@@ -1802,7 +1802,7 @@ private fun FullscreenPlayerOverlayContent(
                 },
                 onSmartOcclusionChange = {
                     localSmartOcclusion = it
-                    scope.launch { SettingsManager.setDanmakuSmartOcclusion(context, it, danmakuScope) }
+                    scope.launch { SettingsManager.setDanmakuSmartOcclusion(context, it) }
                 },
                 onBlockRulesRawChange = {
                     localBlockRulesRaw = it
