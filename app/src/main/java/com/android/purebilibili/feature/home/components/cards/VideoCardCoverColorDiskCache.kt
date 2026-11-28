@@ -8,6 +8,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -140,13 +141,34 @@ internal object VideoCardCoverColorDiskCache {
         synchronized(lock) {
             if (immediate) {
                 flushJob?.cancel()
-                flushJob = AppScope.ioScope.launch { flushNow(file) }
+                flushJob = AppScope.ioScope.launch {
+                    flushAndRescheduleIfNeeded(file, delayMs = 0L)
+                }
             } else if (flushJob?.isActive != true) {
                 flushJob = AppScope.ioScope.launch {
-                    delay(FLUSH_DEBOUNCE_MS)
-                    flushNow(file)
+                    flushAndRescheduleIfNeeded(file, delayMs = FLUSH_DEBOUNCE_MS)
                 }
             }
+        }
+    }
+
+    private suspend fun flushAndRescheduleIfNeeded(file: File, delayMs: Long) {
+        if (delayMs > 0L) {
+            delay(delayMs)
+        }
+        flushNow(file)
+        val selfJob = currentCoroutineContext()[Job]
+        val shouldScheduleFollowUp: Boolean
+        val immediateFollowUp: Boolean
+        synchronized(lock) {
+            if (flushJob === selfJob) {
+                flushJob = null
+            }
+            shouldScheduleFollowUp = pendingWrites > 0 && flushJob?.isActive != true
+            immediateFollowUp = pendingWrites >= FLUSH_BATCH_THRESHOLD
+        }
+        if (shouldScheduleFollowUp) {
+            scheduleFlush(file, immediate = immediateFollowUp)
         }
     }
 

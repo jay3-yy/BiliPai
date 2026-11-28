@@ -196,6 +196,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var followingsFullyLoaded: Boolean = false
     private var completeFollowingsLoadRequested: Boolean = false
     private var cacheSaveJob: Job? = null
+    private var followedLiveRefreshJob: Job? = null
     private var startupFollowingsHydrationScheduled: Boolean = false
     private var startupLoadsActivated: Boolean = false
     private val pageActivity = MutableStateFlow(false)
@@ -572,25 +573,21 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 selectedUserId = _selectedUserId.value
             )
             val userRequestToken = activeUserDynamicsRequestToken
-            coroutineScope {
-                val dynamicJob = async {
-                    if (refreshUserId != null) {
-                        loadUserDynamics(
-                            uid = refreshUserId,
-                            refresh = true,
-                            requestToken = userRequestToken
-                        )
-                    } else {
-                        loadDynamicFeedInternal(
-                            refresh = true,
-                            showLoading = _uiState.value.timelinePage(requestType).items.isEmpty(),
-                            requestType = requestType
-                        )
-                    }
-                }
-                val liveJob = async { loadFollowedUsersInternal() }
-                dynamicJob.await()
-                liveJob.await()
+            // 关注直播全量分页刷新与动态正文解耦，避免正文已更新却被最慢一页直播拉长下拉刷新指示器。
+            followedLiveRefreshJob?.cancel()
+            followedLiveRefreshJob = launchAccount { loadFollowedUsersInternal() }
+            if (refreshUserId != null) {
+                loadUserDynamics(
+                    uid = refreshUserId,
+                    refresh = true,
+                    requestToken = userRequestToken
+                )
+            } else {
+                loadDynamicFeedInternal(
+                    refresh = true,
+                    showLoading = _uiState.value.timelinePage(requestType).items.isEmpty(),
+                    requestType = requestType
+                )
             }
         } finally {
             if (showRefreshIndicator) {
@@ -607,8 +604,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadFollowedUsersInternal() {
-        LiveRepository.getFollowedLive(page = 1).onSuccess { liveRooms ->
-            cachedLiveRooms = liveRooms
+        LiveRepository.getAllFollowedLive().onSuccess { page ->
+            cachedLiveRooms = page.items
             rebuildFollowedUsers()
         }
     }
@@ -1250,6 +1247,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     override fun onCleared() {
         accountScope.cancel()
         cacheSaveJob?.cancel()
+        followedLiveRefreshJob?.cancel()
         userDynamicsJob?.cancel()
         userSelectionJob?.cancel()
         commentFraudCheckJob?.cancel()

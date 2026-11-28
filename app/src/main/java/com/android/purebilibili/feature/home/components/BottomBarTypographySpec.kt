@@ -1,7 +1,9 @@
 package com.android.purebilibili.feature.home.components
 
-import androidx.compose.ui.unit.TextUnit
+import androidx.compose.material3.Typography
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 
 /**
@@ -30,38 +32,70 @@ private fun dockLabelSp(baseSp: Float, fontScale: Float): TextUnit {
     return (baseSp * cappedScale / safeFontScale).sp
 }
 
-internal fun resolveBottomBarSkinDockLabelFontSize(fontScale: Float = 1f): TextUnit =
-    dockLabelSp(baseSp = 12f, fontScale = fontScale)
+private fun resolveThemeSp(unit: TextUnit?, fallbackSp: Float): Float =
+    if (unit != null && unit.isSpecified && unit.isSp) unit.value else fallbackSp
 
-internal fun resolveBottomBarSkinDockLabelLineHeight(fontScale: Float = 1f): TextUnit =
-    dockLabelSp(baseSp = 18f, fontScale = fontScale)
+internal fun resolveBottomBarSkinDockLabelFontSize(
+    fontScale: Float = 1f,
+    typography: Typography? = null,
+): TextUnit = dockLabelSp(
+    baseSp = resolveThemeSp(typography?.labelMedium?.fontSize, fallbackSp = 12f),
+    fontScale = fontScale,
+)
 
-/** 图标+文字：胶囊内当 caption，保持 labelSmall。 */
-internal fun resolveFloatingDockIconAndTextLabelFontSize(fontScale: Float = 1f): TextUnit =
-    dockLabelSp(baseSp = 11f, fontScale = fontScale)
+internal fun resolveBottomBarSkinDockLabelLineHeight(
+    fontScale: Float = 1f,
+    typography: Typography? = null,
+): TextUnit = dockLabelSp(
+    baseSp = resolveThemeSp(typography?.labelMedium?.lineHeight, fallbackSp = 18f),
+    fontScale = fontScale,
+)
+
+/** 图标+文字：胶囊内当 caption，跟随当前主题 labelSmall（Miuix footnote2 / MD3 labelSmall）。 */
+internal fun resolveFloatingDockIconAndTextLabelFontSize(
+    fontScale: Float = 1f,
+    typography: Typography? = null,
+): TextUnit = dockLabelSp(
+    baseSp = resolveThemeSp(typography?.labelSmall?.fontSize, fallbackSp = 11f),
+    fontScale = fontScale,
+)
 
 /**
- * 液态玻璃仅文字：指示器是 52dp 胶囊，labelSmall 会显得空。
- * 15sp 能填满两字标签，四字如「插件中心」仍进得了 68dp 槽。
+ * 仅文字标签：传入主题字阶时跟随当前主题 titleSmall（Miuix headline2 / MD3 titleSmall），
+ * 未传入时保留 15sp 默认基准。
  */
-internal fun resolveFloatingDockTextOnlyLabelFontSize(fontScale: Float = 1f): TextUnit =
-    dockLabelSp(baseSp = 15f, fontScale = fontScale)
+internal fun resolveFloatingDockTextOnlyLabelFontSize(
+    fontScale: Float = 1f,
+    typography: Typography? = null,
+): TextUnit = dockLabelSp(
+    baseSp = resolveThemeSp(typography?.titleSmall?.fontSize, fallbackSp = 15f),
+    fontScale = fontScale,
+)
 
 /** Keep top-dock line boxes close to their rendered glyphs so icon+label content fits its slot. */
 internal fun resolveFloatingDockLabelLineHeight(
     showIcon: Boolean,
     fontScale: Float = 1f,
-): TextUnit = dockLabelSp(baseSp = if (showIcon) 14f else 19f, fontScale = fontScale)
+    typography: Typography? = null,
+): TextUnit = dockLabelSp(
+    baseSp = if (showIcon) {
+        resolveThemeSp(typography?.labelSmall?.lineHeight, fallbackSp = 14f)
+    } else {
+        resolveThemeSp(typography?.titleSmall?.lineHeight, fallbackSp = 19f)
+    },
+    fontScale = fontScale,
+)
 
 internal fun resolveFloatingDockLabelFontSize(
     showIcon: Boolean,
     showText: Boolean,
     fontScale: Float = 1f,
+    typography: Typography? = null,
 ): TextUnit {
     if (!showText) return 0.sp
     return if (showIcon) {
-        resolveFloatingDockIconAndTextLabelFontSize(fontScale)
+        resolveFloatingDockIconAndTextLabelFontSize(fontScale = fontScale, typography = typography)
     } else {
-        resolveFloatingDockTextOnlyLabelFontSize(fontScale)
+        resolveFloatingDockTextOnlyLabelFontSize(fontScale = fontScale, typography = typography)
     }
 }

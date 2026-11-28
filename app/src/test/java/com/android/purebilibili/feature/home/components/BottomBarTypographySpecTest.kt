@@ -84,6 +84,42 @@ class BottomBarTypographySpecTest {
         assertTrue(bottomBar.contains("fontScale = LocalDensity.current.fontScale"), "底栏 dock 需要传 fontScale")
     }
 
+    @Test
+    fun dockAndTopTabTypography_followsActiveMiuixAndMd3ThemeScale() {
+        val miuix = com.android.purebilibili.core.theme.BiliMiuixTypography
+        val md3 = com.android.purebilibili.core.theme.Md3Typography
+
+        assertEquals(
+            miuix.labelMedium.fontSize,
+            resolveBottomBarSkinDockLabelFontSize(fontScale = 1f, typography = miuix),
+        )
+        assertEquals(
+            miuix.labelSmall.fontSize,
+            resolveFloatingDockLabelFontSize(showIcon = true, showText = true, fontScale = 1f, typography = miuix),
+        )
+        assertEquals(
+            miuix.titleSmall.fontSize,
+            resolveFloatingDockLabelFontSize(showIcon = false, showText = true, fontScale = 1f, typography = miuix),
+        )
+        assertEquals(
+            miuix.titleSmall.fontSize.value,
+            resolveTopTabLabelTextSizeSp(labelMode = 2, typography = miuix),
+        )
+        assertEquals(
+            miuix.labelSmall.fontSize.value,
+            resolveTopTabLabelTextSizeSp(labelMode = 0, typography = miuix),
+        )
+
+        assertEquals(
+            md3.labelMedium.fontSize,
+            resolveBottomBarSkinDockLabelFontSize(fontScale = 1f, typography = md3),
+        )
+        assertEquals(
+            md3.titleSmall.fontSize,
+            resolveFloatingDockLabelFontSize(showIcon = false, showText = true, fontScale = 1f, typography = md3),
+        )
+    }
+
     private fun loadSource(path: String): String {
         val normalizedPath = path.removePrefix("app/")
         return listOf(File(path), File(normalizedPath)).first { it.exists() }.readText()

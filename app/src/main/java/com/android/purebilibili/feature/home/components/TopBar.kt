@@ -1364,13 +1364,21 @@ private fun LightweightHomeTopTabs(
                 labelMode = normalizedLabelMode,
                 shellHeight = floatingDockHeight,
             )
+            val activeTypography = MaterialTheme.typography
+            val activeUiStyle = com.android.purebilibili.core.theme.LocalAppUiStyle.current
             val floatingLabelFontSize = resolveFloatingDockLabelFontSize(
                 showIcon = showIcon,
                 showText = showText,
                 fontScale = density.fontScale,
+                typography = activeTypography,
             )
-            // Native pure-text top tabs were visually undersized; enlarge this mode only.
-            val resolvedFloatingLabelFontSize = if (!isLiquidGlassEnabled && showText && !showIcon) {
+            // MD3 原生纯文字顶栏在未开玻璃时略小，仅对非 Miuix 保留 +2sp 补偿；Miuix 直接使用原生 headline2 字阶。
+            val resolvedFloatingLabelFontSize = if (
+                !isLiquidGlassEnabled &&
+                activeUiStyle != com.android.purebilibili.core.theme.AppUiStyle.MIUIX &&
+                showText &&
+                !showIcon
+            ) {
                 (floatingLabelFontSize.value + 2f).sp
             } else {
                 floatingLabelFontSize
@@ -1485,10 +1493,12 @@ private fun LightweightHomeTopTabs(
             else -> md3ContentPadding
         }
         val textMeasurer = rememberTextMeasurer()
+        val fixedTabTypography = MaterialTheme.typography
         val md3ContentWidths = remember(
             categories,
             normalizedLabelMode,
             isLiquidGlassEnabled,
+            fixedTabTypography,
             density,
             textMeasurer,
         ) {
@@ -1498,7 +1508,10 @@ private fun LightweightHomeTopTabs(
                         textMeasurer.measure(
                             text = category,
                             style = TextStyle(
-                                fontSize = resolveTopTabLabelTextSizeSp(normalizedLabelMode).sp,
+                                fontSize = resolveTopTabLabelTextSizeSp(
+                                    labelMode = normalizedLabelMode,
+                                    typography = fixedTabTypography,
+                                ).sp,
                                 fontWeight = FontWeight.SemiBold
                             ),
                             maxLines = 1
@@ -3042,14 +3055,15 @@ private fun LightweightTopTabItem(
                     showIcon -> 1
                     else -> 2
                 }
+                val tabTypography = MaterialTheme.typography
                 AppText(
                     text = category,
                     modifier = Modifier.weight(1f, fill = false),
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = resolveTopTabLabelTextSizeSp(labelMode).sp,
-                    lineHeight = resolveTopTabLabelLineHeightSp(labelMode).sp,
+                    fontSize = resolveTopTabLabelTextSizeSp(labelMode, typography = tabTypography).sp,
+                    lineHeight = resolveTopTabLabelLineHeightSp(labelMode, typography = tabTypography).sp,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                     color = contentColor
                 )

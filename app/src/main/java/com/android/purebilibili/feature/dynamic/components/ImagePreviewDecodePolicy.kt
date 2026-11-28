@@ -30,16 +30,33 @@ internal fun resolveImageDecodeSize(target: ImageDecodeTarget): ImageDecodeSize 
 }
 
 /**
- * 动态图文九宫格按单图/多图布局使用静态解码上限，保持磁盘/内存缓存键与 CDN 宽度桶稳定；
- * 点击进入全屏预览仍走 `FULLSCREEN_PREVIEW` / `ORIGINAL_QUALITY`，不影响看图清晰度。
+ * 动态图文九宫格按实际格子尺寸请求解码，同时受单图/多图最大边上限约束：
+ * - 小格子按实际像素请求，避免强行拉高 CDN 宽度桶（如 360px 格子从 480w 跳到 960w）；
+ * - 大屏或超大图仍以单图 1280px / 多图 768px 封顶，点击全屏预览继续走 `FULLSCREEN_PREVIEW` / `ORIGINAL_QUALITY`。
  */
-internal fun resolveDynamicGridDecodeSize(displayCount: Int): ImageDecodeSize {
+internal fun resolveDynamicGridDecodeSize(
+    displayCount: Int,
+    targetWidthPx: Int = 0,
+    targetHeightPx: Int = 0,
+): ImageDecodeSize {
     val maxEdgePx = if (displayCount <= 1) {
         DYNAMIC_SINGLE_MAX_EDGE_PX
     } else {
         DYNAMIC_MULTI_MAX_EDGE_PX
     }
-    return ImageDecodeSize(widthPx = maxEdgePx, heightPx = maxEdgePx)
+    if (targetWidthPx <= 0) {
+        return ImageDecodeSize(widthPx = maxEdgePx, heightPx = maxEdgePx)
+    }
+    val rawHeightPx = if (targetHeightPx > 0) targetHeightPx else targetWidthPx
+    val longestEdge = maxOf(targetWidthPx, rawHeightPx)
+    if (longestEdge <= maxEdgePx) {
+        return ImageDecodeSize(widthPx = targetWidthPx, heightPx = rawHeightPx)
+    }
+    val scale = maxEdgePx.toFloat() / longestEdge.toFloat()
+    return ImageDecodeSize(
+        widthPx = (targetWidthPx * scale).toInt().coerceIn(1, maxEdgePx),
+        heightPx = (rawHeightPx * scale).toInt().coerceIn(1, maxEdgePx),
+    )
 }
 
 internal fun estimateArgb8888ByteCount(size: ImageDecodeSize): Long {

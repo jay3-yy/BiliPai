@@ -32,8 +32,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import coil3.ImageLoader
 import com.android.purebilibili.core.ui.components.PageAwareAsyncImage
 import coil3.imageLoader
@@ -72,27 +74,39 @@ fun DrawGridV2(
     val gridSpacing = resolveDrawGridSpacingDp().dp
     val cornerRadius = resolveDrawGridCornerRadiusDp().dp
 
-    Box {
+    val density = LocalDensity.current
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val availableWidthPx = if (constraints.hasBoundedWidth) constraints.maxWidth else 0
         if (isSingleImage) {
             val singleItem = displayItems.first()
+            val widthFraction = resolveSingleImageWidthFraction(
+                width = singleItem.width,
+                height = singleItem.height
+            )
+            val aspectRatio = resolveSingleImageAspectRatio(
+                width = singleItem.width,
+                height = singleItem.height
+            )
+            val targetWidthPx = if (availableWidthPx > 0) {
+                (availableWidthPx * widthFraction).roundToInt().coerceAtLeast(1)
+            } else {
+                0
+            }
+            val targetHeightPx = if (targetWidthPx > 0) {
+                (targetWidthPx / aspectRatio).roundToInt().coerceAtLeast(1)
+            } else {
+                0
+            }
             DrawGridImage(
                 item = singleItem,
                 index = 0,
                 totalCount = totalCount,
                 displayCount = displayItems.size,
+                targetWidthPx = targetWidthPx,
+                targetHeightPx = targetHeightPx,
                 modifier = Modifier
-                    .fillMaxWidth(
-                        resolveSingleImageWidthFraction(
-                            width = singleItem.width,
-                            height = singleItem.height
-                        )
-                    )
-                    .aspectRatio(
-                        resolveSingleImageAspectRatio(
-                            width = singleItem.width,
-                            height = singleItem.height
-                        )
-                    ),
+                    .fillMaxWidth(widthFraction)
+                    .aspectRatio(aspectRatio),
                 gifImageLoader = gifImageLoader,
                 defaultImageLoader = defaultImageLoader,
                 cornerRadius = cornerRadius,
@@ -102,6 +116,12 @@ fun DrawGridV2(
                 onImagePreviewClick = onImagePreviewClick,
             )
         } else {
+            val spacingPx = with(density) { gridSpacing.roundToPx() }
+            val cellSizePx = if (availableWidthPx > 0) {
+                ((availableWidthPx - spacingPx * (columns - 1)).coerceAtLeast(1)) / columns
+            } else {
+                0
+            }
             var globalIndex = 0
             Column(verticalArrangement = Arrangement.spacedBy(gridSpacing)) {
                 displayItems.chunked(columns).forEach { row ->
@@ -116,6 +136,8 @@ fun DrawGridV2(
                                 index = currentIndex,
                                 totalCount = totalCount,
                                 displayCount = displayItems.size,
+                                targetWidthPx = cellSizePx,
+                                targetHeightPx = cellSizePx,
                                 modifier = Modifier
                                     .weight(1f)
                                     .aspectRatio(1f),
@@ -144,6 +166,8 @@ private fun DrawGridImage(
     index: Int,
     totalCount: Int,
     displayCount: Int,
+    targetWidthPx: Int,
+    targetHeightPx: Int,
     modifier: Modifier,
     gifImageLoader: ImageLoader,
     defaultImageLoader: ImageLoader,
@@ -205,8 +229,12 @@ private fun DrawGridImage(
         contentAlignment = Alignment.Center
     ) {
         if (imageUrl.isNotEmpty()) {
-            val decodeSize = remember(displayCount) {
-                resolveDynamicGridDecodeSize(displayCount = displayCount)
+            val decodeSize = remember(displayCount, targetWidthPx, targetHeightPx) {
+                resolveDynamicGridDecodeSize(
+                    displayCount = displayCount,
+                    targetWidthPx = targetWidthPx,
+                    targetHeightPx = targetHeightPx,
+                )
             }
             val imageRequest = remember(context, imageUrl, decodeSize) {
                 coil3.request.ImageRequest.Builder(context)

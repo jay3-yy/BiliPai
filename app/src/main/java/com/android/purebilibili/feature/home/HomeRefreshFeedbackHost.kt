@@ -47,20 +47,23 @@ internal fun HomeRefreshFeedbackHost(
             )
         }
     }
+    val effectMatchHintsEnabled by com.android.purebilibili.core.plugin.PluginStore
+        .effectMatchHintsEnabledFlow(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val filterFeedbackEvent by com.android.purebilibili.core.plugin.json.JsonPluginManager.filterFeedbackEvent.collectAsStateWithLifecycle()
 
-    //  当有视频被过滤时显示提示
-    LaunchedEffect(filterFeedbackEvent?.id) {
+    //  当有视频被过滤时显示提示（受「显示插件生效提示」开关控制）
+    LaunchedEffect(filterFeedbackEvent?.id, effectMatchHintsEnabled) {
         val event = filterFeedbackEvent ?: return@LaunchedEffect
-        if (event.count > 0) {
-            try {
+        try {
+            if (effectMatchHintsEnabled && event.count > 0) {
                 snackbarHostState.showSnackbar(
                     message = " 已过滤 ${event.count} 个视频",
                     duration = SnackbarDuration.Short
                 )
-            } finally {
-                com.android.purebilibili.core.plugin.json.JsonPluginManager.consumeFilterFeedbackEvent(event.id)
             }
+        } finally {
+            com.android.purebilibili.core.plugin.json.JsonPluginManager.consumeFilterFeedbackEvent(event.id)
         }
     }
 

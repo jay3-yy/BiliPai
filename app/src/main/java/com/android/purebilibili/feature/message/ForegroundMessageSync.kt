@@ -81,6 +81,12 @@ internal fun ForegroundMessageSyncHost(
     val focused = LocalWindowInfo.current.isWindowFocused
     val context = LocalContext.current
     val latestMessagePageOpen by rememberUpdatedState(messagePageOpen)
+    val notificationSettings by com.android.purebilibili.feature.message.notification.MessageNotificationSettingsStore
+        .getSettings(context)
+        .collectAsStateWithLifecycle(
+            initialValue = com.android.purebilibili.feature.message.notification.MessageNotificationSettings(),
+        )
+    val latestForegroundToastEnabled by rememberUpdatedState(notificationSettings.foregroundToastEnabled)
     LaunchedEffect(identity, lifecycle, focused, enabled) {
         if (!enabled || !focused || identity.mid == null) return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -138,7 +144,7 @@ internal fun ForegroundMessageSyncHost(
                         com.android.purebilibili.core.store.MessageBadgeCleanState.onNewMessage(checkNotNull(identity.mid))
                     }
                     previous?.let { ForegroundMessageSync.publish(identity, it, sessionMessageKeys) }
-                    if (newMessage && !latestMessagePageOpen) {
+                    if (newMessage && !latestMessagePageOpen && latestForegroundToastEnabled) {
                         Toast.makeText(context, "收到新消息，可前往「我的 → 消息中心」查看", Toast.LENGTH_LONG).show()
                     }
                     ForegroundMessageSync.refreshRequests.setFetchInFlight(refreshOwner, false)

@@ -24,6 +24,7 @@ internal data class MessageNotificationSettings(
     val notifySystemNotices: Boolean = true,
     val notifyDynamicUpdates: Boolean = true,
     val notifyLiveAlerts: Boolean = true,
+    val foregroundToastEnabled: Boolean = true,
 )
 
 internal object MessageNotificationSettingsStore {
@@ -38,6 +39,7 @@ internal object MessageNotificationSettingsStore {
     private val legacyMessageCenterKey = booleanPreferencesKey("msg_center")
     private val dynamicKey = booleanPreferencesKey("dynamic")
     private val liveKey = booleanPreferencesKey("live")
+    private val foregroundToastKey = booleanPreferencesKey("foreground_toast")
 
     fun getSettings(context: Context): Flow<MessageNotificationSettings> =
         context.applicationContext.messageNotificationSettingsStore.data.map { prefs ->
@@ -68,6 +70,7 @@ internal object MessageNotificationSettingsStore {
                 notifySystemNotices = resolved[systemNoticesKey] ?: true,
                 notifyDynamicUpdates = resolved[dynamicKey] ?: true,
                 notifyLiveAlerts = resolved[liveKey] ?: true,
+                foregroundToastEnabled = resolved[foregroundToastKey] ?: true,
             )
         }
 
@@ -109,5 +112,9 @@ internal object MessageNotificationSettingsStore {
 
     suspend fun setLiveAlertsEnabled(context: Context, enabled: Boolean) {
         context.applicationContext.messageNotificationSettingsStore.edit { it[liveKey] = enabled }
+    }
+
+    suspend fun setForegroundToastEnabled(context: Context, enabled: Boolean) {
+        context.applicationContext.messageNotificationSettingsStore.edit { it[foregroundToastKey] = enabled }
     }
 }

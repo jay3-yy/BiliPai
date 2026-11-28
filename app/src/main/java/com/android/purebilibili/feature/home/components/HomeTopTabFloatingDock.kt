@@ -382,6 +382,7 @@ internal fun HomeTopTabFloatingDock(
                     lineHeight = resolveFloatingDockLabelLineHeight(
                         showIcon = showIcon,
                         fontScale = fontScale,
+                        typography = MaterialTheme.typography,
                     ),
                     // Pure text already shares bottom-dock typography and measured slots.
                     // Glass scrolls overflow instead of shrinking these labels below it.

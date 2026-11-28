@@ -290,6 +290,19 @@ fun MessageNotificationSettingsScreen(
                     )
                 }
                 AppPreferenceDivider()
+                SettingSwitchItem(
+                    icon = rememberSettingsSemanticIcon(SettingsIconRole.MESSAGE_NOTIFICATION),
+                    title = "前台新消息弹窗提示",
+                    subtitle = "应用在前台收到新消息时弹出底部 Toast 提示",
+                    checked = settings.foregroundToastEnabled,
+                    onCheckedChange = { enabled ->
+                        scope.launch {
+                            MessageNotificationSettingsStore.setForegroundToastEnabled(context, enabled)
+                        }
+                    },
+                    iconTint = AppContentColors.secondaryText(),
+                )
+                AppPreferenceDivider()
                 SettingsItemAnchor("notification.mode") {
                     AppSingleChoicePreference(
                         icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_DELIVERY_MODE),

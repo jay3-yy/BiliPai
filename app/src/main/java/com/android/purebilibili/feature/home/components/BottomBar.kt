@@ -3645,7 +3645,10 @@ internal fun IllustratedSkinBottomBar(
                                 text = label,
                                 color = contentColor,
                                 style = appTextStyleWithLineHeightStyle(DockLabelLineHeightStyle),
-                                fontSize = resolveBottomBarSkinDockLabelFontSize(LocalDensity.current.fontScale),
+                                fontSize = resolveBottomBarSkinDockLabelFontSize(
+                                    fontScale = LocalDensity.current.fontScale,
+                                    typography = MaterialTheme.typography,
+                                ),
                                 lineHeight = resolveBottomBarSkinDockLabelLineHeight(LocalDensity.current.fontScale),
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                 maxLines = 1,
@@ -4800,10 +4803,12 @@ private fun ColumnScope.FloatingBottomBarTabVisual(
                 showIcon = showIcon,
                 showText = showText,
                 fontScale = LocalDensity.current.fontScale,
+                typography = MaterialTheme.typography,
             ),
             lineHeight = resolveFloatingDockLabelLineHeight(
                 showIcon = showIcon,
                 fontScale = LocalDensity.current.fontScale,
+                typography = MaterialTheme.typography,
             ),
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             maxLines = 1,
@@ -5509,10 +5514,12 @@ private fun RowScope.AndroidNativeBottomBarItem(
                     color = contentColor,
                     style = appTextStyleWithLineHeightStyle(DockLabelLineHeightStyle),
                     fontSize = resolveBottomBarSkinDockLabelFontSize(
-                        fontScale = LocalDensity.current.fontScale
+                        fontScale = LocalDensity.current.fontScale,
+                        typography = MaterialTheme.typography,
                     ),
                     lineHeight = resolveBottomBarSkinDockLabelLineHeight(
-                        fontScale = LocalDensity.current.fontScale
+                        fontScale = LocalDensity.current.fontScale,
+                        typography = MaterialTheme.typography,
                     ),
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,

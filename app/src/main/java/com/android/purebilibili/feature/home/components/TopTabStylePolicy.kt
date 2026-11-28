@@ -576,17 +576,37 @@ internal fun shouldUseMd3TopTabMaterialIndicator(
     return resolveTopTabIndicatorStyle(presentation) == TopTabIndicatorStyle.MATERIAL
 }
 
-fun resolveTopTabLabelTextSizeSp(labelMode: Int): Float {
+fun resolveTopTabLabelTextSizeSp(
+    labelMode: Int,
+    typography: androidx.compose.material3.Typography? = null,
+): Float {
+    val normalized = normalizeTopTabLabelMode(labelMode)
+    if (typography != null) {
+        val style = if (normalized == 0) typography.labelSmall else typography.titleSmall
+        if (style.fontSize.isSp) {
+            return style.fontSize.value
+        }
+    }
     val tuning = resolveTopTabVisualTuning()
-    return when (normalizeTopTabLabelMode(labelMode)) {
+    return when (normalized) {
         0 -> resolveMd3TopTabVisualSpec(isFloatingStyle = false, labelMode = labelMode).labelTextSize.value
         2 -> tuning.tabTextSizeSp
         else -> tuning.tabTextSizeSp
     }
 }
 
-fun resolveTopTabLabelLineHeightSp(labelMode: Int): Float {
-    return when (normalizeTopTabLabelMode(labelMode)) {
+fun resolveTopTabLabelLineHeightSp(
+    labelMode: Int,
+    typography: androidx.compose.material3.Typography? = null,
+): Float {
+    val normalized = normalizeTopTabLabelMode(labelMode)
+    if (typography != null) {
+        val style = if (normalized == 0) typography.labelSmall else typography.titleSmall
+        if (style.lineHeight.isSp) {
+            return maxOf(style.lineHeight.value, resolveTopTabLabelTextSizeSp(labelMode, typography))
+        }
+    }
+    return when (normalized) {
         0 -> resolveMd3TopTabVisualSpec(isFloatingStyle = false, labelMode = labelMode).labelLineHeight.value
         else -> {
             val tuning = resolveTopTabVisualTuning()

@@ -34,6 +34,22 @@ class ImagePreviewDecodePolicyTest {
     }
 
     @Test
+    fun dynamicGrid_usesActualCellSizeAndClampsAboveMaxEdge() {
+        assertEquals(
+            ImageDecodeSize(widthPx = 360, heightPx = 360),
+            resolveDynamicGridDecodeSize(displayCount = 9, targetWidthPx = 360, targetHeightPx = 360),
+        )
+        assertEquals(
+            ImageDecodeSize(widthPx = 768, heightPx = 768),
+            resolveDynamicGridDecodeSize(displayCount = 4, targetWidthPx = 960, targetHeightPx = 960),
+        )
+        assertEquals(
+            ImageDecodeSize(widthPx = 853, heightPx = 1280),
+            resolveDynamicGridDecodeSize(displayCount = 1, targetWidthPx = 1000, targetHeightPx = 1500),
+        )
+    }
+
+    @Test
     fun originalQuality_staysBelowCanvasBitmapLimit() {
         val previewSize = resolveImageDecodeSize(ImageDecodeTarget.FULLSCREEN_PREVIEW)
         val originalSize = resolveImageDecodeSize(ImageDecodeTarget.ORIGINAL_QUALITY)

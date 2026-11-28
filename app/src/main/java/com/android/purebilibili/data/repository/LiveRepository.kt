@@ -1025,8 +1025,8 @@ object LiveRepository {
      */
     suspend fun getFollowedLive(page: Int = 1): Result<List<LiveRoom>> = getFollowedLivePage(page).map { it.items }
 
-    /** 首页关注条聚合各页，不把接口首批数据当作完整关注列表；已知总页数时剩余页并发拉取。 */
-    private suspend fun getAllFollowedLive(): Result<LivePagedResult<LiveRoom>> {
+    /** 聚合关注直播间各页，不把接口首批数据当作完整关注列表；已知总页数时剩余页并发拉取。 */
+    suspend fun getAllFollowedLive(): Result<LivePagedResult<LiveRoom>> {
         val rooms = linkedMapOf<Long, LiveRoom>()
         var total: Int? = null
         fun merge(data: LivePagedResult<LiveRoom>) {
@@ -1041,15 +1041,16 @@ object LiveRepository {
         if (first.totalPages >= 2) {
             // 总页数已知：剩余页一次并发拉完，避免逐页串行拖慢关注条与整轮刷新。
             var failed: Throwable? = null
-            coroutineScope {
+            val pageResults = coroutineScope {
                 (2..first.totalPages).map { page ->
-                    async {
-                        getFollowedLivePage(page).onSuccess(::merge).onFailure { error ->
-                            if (error is CancellationException) throw error
-                            if (failed == null) failed = error
-                        }
-                    }
+                    async { getFollowedLivePage(page) }
                 }.awaitAll()
+            }
+            pageResults.forEach { result ->
+                result.onSuccess(::merge).onFailure { error ->
+                    if (error is CancellationException) throw error
+                    if (failed == null) failed = error
+                }
             }
             if (rooms.isEmpty() && failed != null) return Result.failure(failed!!)
             return Result.success(LivePagedResult(rooms.values.toList(), failed != null, first.totalPages + 1, total))

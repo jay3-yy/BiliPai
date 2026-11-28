@@ -1370,7 +1370,7 @@ fun PluginsContent(
                                 color = AppContentColors.primaryText()
                             )
                             AppText(
-                                text = "去广告或弹幕增强命中时显示顶部提示",
+                                text = "去广告、内容过滤或弹幕增强命中时显示提示",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = AppContentColors.secondaryText()
                             )
