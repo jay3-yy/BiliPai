@@ -58,6 +58,7 @@ data class VideoEngagementSeed(
     val isDisliked: Boolean = false,
     val likeCount: Int = 0,
     val coinCount: Int = 0,
+    val totalCoinCount: Int = 0,
     val favoriteCount: Int = 0,
     val isInWatchLater: Boolean = false,
     val isRepost: Boolean = false,
@@ -77,7 +78,7 @@ internal fun VideoEngagementUiState.authoritativeSnapshot(): VideoEngagementAuth
         isLiked = isLiked, likeStatusKnown = likeStatusKnown,
         isFollowing = isFollowing, followStatusKnown = followStatusKnown,
         relationshipStatusKnown = true, isDisliked = isDisliked, isFavorited = isFavorited,
-        likeCount = likeCount, favoriteCount = favoriteCount, coinCount = coinCount,
+        likeCount = likeCount, favoriteCount = favoriteCount, coinCount = coinCount, totalCoinCount = totalCoinCount,
         isInWatchLater = isInWatchLater, isRepost = isRepost,
         followingMids = if (isFollowing) setOf(owner.ownerMid) else emptySet(),
     ))
@@ -101,6 +102,7 @@ data class VideoEngagementUiState(
     val isDisliked: Boolean = false,
     val likeCount: Int = 0,
     val coinCount: Int = 0,
+    val totalCoinCount: Int = 0,
     val favoriteCount: Int = 0,
     val isInWatchLater: Boolean = false,
     val isRepost: Boolean = false,
@@ -298,6 +300,7 @@ class VideoEngagementViewModel(
             isDisliked = seed.isDisliked,
             likeCount = seed.likeCount,
             coinCount = seed.coinCount,
+            totalCoinCount = seed.totalCoinCount,
             favoriteCount = seed.favoriteCount,
             isInWatchLater = seed.isInWatchLater,
             isRepost = seed.isRepost,
@@ -326,6 +329,7 @@ class VideoEngagementViewModel(
                 likeCount = if (VideoEngagementField.LIKE in locallyModifiedFields) current.likeCount else seed.likeCount,
                 coinCount = if (VideoEngagementField.COIN in locallyModifiedFields ||
                     (current.relationshipStatusKnown && !seed.relationshipStatusKnown)) current.coinCount else seed.coinCount,
+                totalCoinCount = if (VideoEngagementField.COIN in locallyModifiedFields) current.totalCoinCount else seed.totalCoinCount,
                 isInWatchLater = if (VideoEngagementField.WATCH_LATER in locallyModifiedFields) current.isInWatchLater else seed.isInWatchLater,
                 isRepost = seed.isRepost,
                 followingMids = if (VideoEngagementField.FOLLOWING_MIDS in locallyModifiedFields ||
@@ -380,6 +384,7 @@ class VideoEngagementViewModel(
                 likeCount = source.likeCount,
                 favoriteCount = source.favoriteCount,
                 coinCount = source.coinCount,
+                totalCoinCount = source.totalCoinCount,
                 relationshipStatusKnown = true,
                 isRepost = source.isRepost,
                 isFollowing = if (currentSameOwner) source.isFollowing else target.isFollowing,
@@ -720,6 +725,7 @@ class VideoEngagementViewModel(
                         if (current.subject?.generation != subject.generation) current
                         else current.copy(
                             coinCount = minOf(current.coinCount + count, current.coinLimit),
+                            totalCoinCount = (current.totalCoinCount + count).coerceAtLeast(0),
                             likeBurstVisible = false,
                             maidAction = VideoMaidAction.COIN,
                             maidActionId = current.maidActionId + 1,
@@ -808,6 +814,10 @@ class VideoEngagementViewModel(
                                     if (visual.isLiked == current.isLiked) 0 else if (visual.isLiked) 1 else -1
                                 ).coerceAtLeast(0),
                             coinCount = visual.coinCount,
+                            totalCoinCount = (
+                                current.totalCoinCount +
+                                    (visual.coinCount - current.coinCount).coerceAtLeast(0)
+                                ).coerceAtLeast(0),
                             isFavorited = visual.isFavorited,
                             favoriteCount = (
                                 current.favoriteCount +
@@ -946,6 +956,7 @@ internal fun VideoPlaybackUiState.Success.toEngagementSeed(): VideoEngagementSee
         isDisliked = currentAccount && isDisliked,
         likeCount = info.stat.like,
         coinCount = if (currentAccount) coinCount else 0,
+        totalCoinCount = info.stat.coin,
         favoriteCount = info.stat.favorite,
         isInWatchLater = currentAccount && isInWatchLater,
         isRepost = info.isRepost,
@@ -974,6 +985,7 @@ internal fun VideoPlaybackUiState.Success.withEngagementUiState(
         info = info.copy(
             stat = info.stat.copy(
                 like = engagement.likeCount,
+                coin = if (engagement.totalCoinCount > 0 || info.stat.coin == 0) engagement.totalCoinCount else info.stat.coin,
                 favorite = engagement.favoriteCount
             )
         )

@@ -215,6 +215,7 @@ import com.android.purebilibili.feature.video.ui.components.UP_PREVIEW_SHEET_HEI
 import com.android.purebilibili.feature.video.ui.components.resolvePortraitOverlaySheetExpansion
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.resolveSafeVideoAspectRatio
+import com.android.purebilibili.feature.video.ui.components.toDanmakuMaskScaleMode
 import com.android.purebilibili.feature.video.ui.overlay.FullscreenDoubleTapAction
 import com.android.purebilibili.feature.video.ui.overlay.PortraitSubtitleHost
 import com.android.purebilibili.feature.video.ui.overlay.nextFullscreenSeekFeedbackEvent
@@ -3326,6 +3327,11 @@ private fun VideoPageItem(
     LaunchedEffect(danmakuManager, authorMid) {
         danmakuManager.bindUpOwnerMid(authorMid)
     }
+    LaunchedEffect(danmakuManager, aspectRatio, isCurrentPage) {
+        if (isCurrentPage) {
+            danmakuManager.updateMaskScaleMode(aspectRatio.toDanmakuMaskScaleMode())
+        }
+    }
     val followStatusKnown = pageEngagementState.followStatusKnown
     val isFollowing = pageEngagementState.isFollowing
     val detailVideoList = remember(bvid, watchLaterVideos, recommendationVideos) {
@@ -4103,7 +4109,7 @@ private fun VideoPageItem(
                 engagementCountsKnown = portraitDetailInfo?.bvid == bvid,
                 likeCount = pageEngagementState.likeCount.toLong(),
                 favoriteCount = pageEngagementState.favoriteCount.toLong(),
-                totalCoinCount = portraitDetailInfo?.stat?.coin?.toLong() ?: 0L,
+                totalCoinCount = pageEngagementState.totalCoinCount.toLong(),
                 shareCount = portraitDetailInfo?.stat?.share?.toLong() ?: 0L,
                 coinCount = pageEngagementState.coinCount,
                 anime4kAvailable = enhancement.available,

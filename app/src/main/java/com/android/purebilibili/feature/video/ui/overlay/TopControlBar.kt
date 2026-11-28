@@ -731,16 +731,9 @@ private fun PortraitRailAction(
             AppIcon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (active && !whiteFilledIcon) accent else Color.White,
+                tint = if (active) accent else Color.White,
                 modifier = Modifier.size(26.dp),
             )
-            if (active && whiteFilledIcon) {
-                Canvas(
-                    Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 4.dp).size(5.dp),
-                ) {
-                    drawCircle(accent)
-                }
-            }
         }
         if (count != null) {
             AppText(

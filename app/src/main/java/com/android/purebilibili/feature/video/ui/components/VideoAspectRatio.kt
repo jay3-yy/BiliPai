@@ -71,6 +71,13 @@ enum class VideoAspectRatio(
     }
 }
 
+internal fun VideoAspectRatio.toDanmakuMaskScaleMode(): com.android.purebilibili.danmaku.engine.DanmakuMaskScaleMode =
+    when (this) {
+        VideoAspectRatio.FILL -> com.android.purebilibili.danmaku.engine.DanmakuMaskScaleMode.CENTER_CROP
+        VideoAspectRatio.STRETCH -> com.android.purebilibili.danmaku.engine.DanmakuMaskScaleMode.FILL
+        else -> com.android.purebilibili.danmaku.engine.DanmakuMaskScaleMode.FIT_CENTER
+    }
+
 internal data class VideoViewportLayout(
     val width: Int,
     val height: Int

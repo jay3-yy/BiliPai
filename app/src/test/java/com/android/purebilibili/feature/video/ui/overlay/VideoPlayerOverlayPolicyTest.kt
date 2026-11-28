@@ -605,6 +605,87 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun centerBufferingSlot_enforcesSingleExclusiveSlotAndRespectsStartupAndCenterControlGates() {
+        val seekState = CenterLoadingUiState(
+            reason = CenterLoadingReason.SEEK_BUFFERING,
+            primaryText = "正在缓冲...",
+            secondaryText = "正在定位新进度...",
+        )
+        // 首帧前或起播 Loading 活跃时返回 null，避免与外层 PlayerLoadingIndicator 叠图
+        assertNull(
+            resolveCenterBufferingSlotState(
+                loadingIndicatorsActive = true,
+                showCenterPlaybackControl = false,
+                startupLoadingActive = true,
+                hasRenderedFirstFrame = true,
+                showRebufferingIndicator = true,
+                centerLoadingUiState = seekState,
+                isQualitySwitching = true,
+            )
+        )
+        assertNull(
+            resolveCenterBufferingSlotState(
+                loadingIndicatorsActive = true,
+                showCenterPlaybackControl = false,
+                startupLoadingActive = false,
+                hasRenderedFirstFrame = false,
+                showRebufferingIndicator = true,
+                centerLoadingUiState = seekState,
+                isQualitySwitching = true,
+            )
+        )
+        // 居中播放控制按钮可见时让位给按钮内加载态
+        assertNull(
+            resolveCenterBufferingSlotState(
+                loadingIndicatorsActive = true,
+                showCenterPlaybackControl = true,
+                startupLoadingActive = false,
+                hasRenderedFirstFrame = true,
+                showRebufferingIndicator = true,
+                centerLoadingUiState = seekState,
+                isQualitySwitching = true,
+            )
+        )
+        // 单槽互斥优先级：centerLoadingUiState > isQualitySwitching > showRebufferingIndicator
+        assertEquals(
+            CenterBufferingSlotState.DetailedLoading("正在缓冲...", "正在定位新进度..."),
+            resolveCenterBufferingSlotState(
+                loadingIndicatorsActive = true,
+                showCenterPlaybackControl = false,
+                startupLoadingActive = false,
+                hasRenderedFirstFrame = true,
+                showRebufferingIndicator = true,
+                centerLoadingUiState = seekState,
+                isQualitySwitching = true,
+            ),
+        )
+        assertEquals(
+            CenterBufferingSlotState.DetailedLoading("正在切换清晰度..."),
+            resolveCenterBufferingSlotState(
+                loadingIndicatorsActive = true,
+                showCenterPlaybackControl = false,
+                startupLoadingActive = false,
+                hasRenderedFirstFrame = true,
+                showRebufferingIndicator = true,
+                centerLoadingUiState = null,
+                isQualitySwitching = true,
+            ),
+        )
+        assertEquals(
+            CenterBufferingSlotState.Rebuffering,
+            resolveCenterBufferingSlotState(
+                loadingIndicatorsActive = true,
+                showCenterPlaybackControl = false,
+                startupLoadingActive = false,
+                hasRenderedFirstFrame = true,
+                showRebufferingIndicator = true,
+                centerLoadingUiState = null,
+                isQualitySwitching = false,
+            ),
+        )
+    }
+
+    @Test
     fun fullscreenLockButtonVisualState_matchesCurrentLockState() {
         val locked = resolveFullscreenLockButtonVisualState(isScreenLocked = true)
         assertEquals(FullscreenLockButtonIcon.LOCKED, locked.icon)

@@ -113,7 +113,7 @@ fun PagesSelector(
             Spacer(modifier = Modifier.width(8.dp))
             AppText(
                 text = "正在播放：$currentTitle",
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.bodySmall,
                 color = AppContentColors.secondaryText(),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -122,7 +122,7 @@ fun PagesSelector(
             Spacer(modifier = Modifier.width(10.dp))
             AppText(
                 text = "共${pages.size}P",
-                fontSize = 13.sp,
+                style = MaterialTheme.typography.labelMedium,
                 color = AppContentColors.accent(),
                 modifier = Modifier
                     .clip(AppShapes.container(ContainerLevel.Pill))
@@ -276,7 +276,7 @@ private fun PagesHorizontalPreviewRow(
                 }
                 AppText(
                     text = title,
-                    fontSize = 13.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = playerOptionContentColor(isCurrent, if (isCurrent) selectedAccent else AppContentColors.primaryText()),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

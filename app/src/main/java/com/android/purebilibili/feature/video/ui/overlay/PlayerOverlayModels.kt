@@ -451,6 +451,46 @@ internal fun resolveCenterLoadingVisualState(
     )
 }
 
+internal sealed interface CenterBufferingSlotState {
+    data object Rebuffering : CenterBufferingSlotState
+    data class DetailedLoading(
+        val primaryText: String,
+        val secondaryText: String? = null,
+    ) : CenterBufferingSlotState
+}
+
+/**
+ * 统一解析播放器中央的单一缓冲指示器槽位：
+ * - 首帧前（`!hasRenderedFirstFrame`）或外层起播 Loading 活跃（`startupLoadingActive`）时返回 `null`，
+ *   避免与 [VideoPlayerSection] 的起播加载指示器重叠；
+ * - 居中播放按钮可见（`showCenterPlaybackControl`）时返回 `null`，由按钮自身展示加载态；
+ * - 其余状态按 `centerLoadingUiState > isQualitySwitching > showRebufferingIndicator` 互斥收敛为单一视图。
+ */
+internal fun resolveCenterBufferingSlotState(
+    loadingIndicatorsActive: Boolean,
+    showCenterPlaybackControl: Boolean,
+    startupLoadingActive: Boolean,
+    hasRenderedFirstFrame: Boolean,
+    showRebufferingIndicator: Boolean,
+    centerLoadingUiState: CenterLoadingUiState?,
+    isQualitySwitching: Boolean,
+): CenterBufferingSlotState? {
+    if (!loadingIndicatorsActive || showCenterPlaybackControl || startupLoadingActive || !hasRenderedFirstFrame) {
+        return null
+    }
+    return when {
+        centerLoadingUiState != null -> CenterBufferingSlotState.DetailedLoading(
+            primaryText = centerLoadingUiState.primaryText,
+            secondaryText = centerLoadingUiState.secondaryText,
+        )
+        isQualitySwitching -> CenterBufferingSlotState.DetailedLoading(
+            primaryText = "正在切换清晰度...",
+        )
+        showRebufferingIndicator -> CenterBufferingSlotState.Rebuffering
+        else -> null
+    }
+}
+
 internal fun resolveSponsorProgressBarMarkers(
     durationMs: Long,
     markers: List<SponsorProgressMarker>

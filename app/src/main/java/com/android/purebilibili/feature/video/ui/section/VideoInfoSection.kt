@@ -328,7 +328,7 @@ fun VideoTitleSection(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         // Title row (expandable)
         Row(
@@ -874,37 +874,36 @@ fun VideoTitleWithDesc(
             }
         }
 
-        // 内容属性与榜单荣誉共用流式标签区，空间不足时自动换行。
-        // UP 主声明与禁止转载以非交互项并入同一流式行，避免各自独占整行。
-        val showDeclarationRows = !inlineDeclarations && argueMsgShown && (argueMsg.isNotBlank() || noReprint)
-        if (videoBadges.isNotEmpty() || honorChips.isNotEmpty() || showDeclarationRows) {
-            Spacer(Modifier.height(if (videoBadges.isNotEmpty() || honorChips.isNotEmpty()) 6.dp else 3.dp))
+        // 语义分层：1) 荣誉与属性徽标独立成流式行，避免被声明文字挤断换行；2) 声明区沉底弱化左对齐展示。
+        if (honorChips.isNotEmpty() || videoBadges.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
             androidx.compose.foundation.layout.FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                if (showDeclarationRows) {
-                    if (argueMsg.isNotBlank()) {
-                        VideoArgueMsgRow(argueMsg = argueMsg, modifier = Modifier.align(Alignment.CenterVertically))
-                    }
-                    if (noReprint) {
-                        VideoArgueMsgRow(
-                            argueMsg = "未经作者授权，请勿转载",
-                            modifier = Modifier.align(Alignment.CenterVertically),
-                        )
-                    }
+                honorChips.forEach { (_, text, jumpUrl) ->
+                    VideoHonorChip(
+                        text = text,
+                        onClick = { onDescriptionUrlClick?.invoke(jumpUrl) },
+                    )
                 }
                 videoBadges.forEach { badge ->
                     VideoDetailBadgeChip(
                         text = badge,
                     )
                 }
-                honorChips.forEach { (_, text, jumpUrl) ->
-                    VideoHonorChip(
-                        text = text,
-                        onClick = { onDescriptionUrlClick?.invoke(jumpUrl) },
-                    )
+            }
+        }
+        val showDeclarationRows = !inlineDeclarations && argueMsgShown && (argueMsg.isNotBlank() || noReprint)
+        if (showDeclarationRows) {
+            Spacer(Modifier.height(5.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                if (argueMsg.isNotBlank()) {
+                    VideoArgueMsgRow(argueMsg = argueMsg)
+                }
+                if (noReprint) {
+                    VideoArgueMsgRow(argueMsg = "未经作者授权，请勿转载")
                 }
             }
         }
@@ -1104,64 +1103,77 @@ private fun VideoDetailBadgeChip(
 ) {
     VideoInfoChip(
         text = text,
-        containerColor = AppSurfaceTokens.primaryContainer(),
-        contentColor = AppSurfaceTokens.onPrimaryContainer(),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+        contentColor = AppContentColors.secondaryText(),
+        fontWeight = FontWeight.Normal,
+        horizontalPadding = 6.dp,
+        verticalPadding = 2.5.dp,
     )
 }
 
 /**
  * UP 主视频声明行：
- * error_outline 小图标 + 12sp 次要色文本,如"虚构演绎,请勿过度解读"。
+ * 12dp 线性图标 + 弱化次要色文本，独立沉底，不与荣誉/属性胶囊混排。
  */
 @Composable
 private fun VideoArgueMsgRow(argueMsg: String, modifier: Modifier = Modifier) {
+    val mutedColor = AppContentColors.secondaryText().copy(alpha = 0.78f)
     Row(
         modifier = modifier,
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)
     ) {
-        androidx.compose.material3.Icon(
+        AppIcon(
             imageVector = Icons.Outlined.ErrorOutline,
             contentDescription = null,
-            tint = AppContentColors.secondaryText(),
-            modifier = Modifier.size(13.dp)
+            tint = mutedColor,
+            modifier = Modifier.size(12.dp)
         )
         AppText(
             text = argueMsg,
             style = MaterialTheme.typography.labelSmall,
-            color = AppContentColors.secondaryText()
+            color = mutedColor
         )
     }
 }
 
 /**
  * 视频荣誉徽标(全站排行榜最高第N名/每周必看等):
- * 着色小胶囊,有跳转链接时可点击,走通用的 B 站链接路由进入对应原生榜单页面。
+ * 低饱和主题色胶囊 + 尾部轻量箭头暗示可点击跳转对应原生榜单页。
  */
 @Composable
 private fun VideoHonorChip(
     text: String,
     onClick: (() -> Unit)? = null
 ) {
+    val accent = AppContentColors.accent()
     VideoInfoChip(
         text = text,
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        containerColor = accent.copy(alpha = 0.12f),
+        contentColor = accent,
+        fontWeight = FontWeight.Medium,
+        horizontalPadding = 7.dp,
+        verticalPadding = 2.5.dp,
+        showChevron = onClick != null,
         onClick = onClick,
     )
 }
 
-/** 标签共享字形、内边距与圆角；PiliPlus 同款紧凑尺寸，不做额外触控槽位，避免信息区出现大片空白。 */
+/** 标签共享字形、内边距与圆角；三材质各自遵循原生圆角，不借改共享尺寸补偿液态玻璃。 */
 @Composable
 private fun VideoInfoChip(
     text: String,
     containerColor: Color,
     contentColor: Color,
     modifier: Modifier = Modifier,
+    fontWeight: FontWeight = FontWeight.Medium,
+    horizontalPadding: androidx.compose.ui.unit.Dp = 7.dp,
+    verticalPadding: androidx.compose.ui.unit.Dp = 2.5.dp,
+    showChevron: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
     val shape = when (LocalAppUiStyle.current) {
-        AppUiStyle.MATERIAL3 -> MaterialTheme.shapes.small
+        AppUiStyle.MATERIAL3 -> MaterialTheme.shapes.extraSmall
         AppUiStyle.MIUIX -> AppShapes.container(ContainerLevel.Tag)
     }
     Box(
@@ -1170,14 +1182,33 @@ private fun VideoInfoChip(
         contentAlignment = Alignment.Center,
     ) {
         AppSurface(shape = shape, color = containerColor, contentColor = contentColor) {
-            AppText(
-                text = text,
-                color = contentColor,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.padding(
+                    start = horizontalPadding,
+                    end = if (showChevron) (horizontalPadding - 2.dp).coerceAtLeast(4.dp) else horizontalPadding,
+                    top = verticalPadding,
+                    bottom = verticalPadding,
+                ),
+            ) {
+                AppText(
+                    text = text,
+                    color = contentColor,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = fontWeight,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (showChevron) {
+                    AppIcon(
+                        imageVector = Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = contentColor.copy(alpha = 0.85f),
+                        modifier = Modifier.size(11.dp),
+                    )
+                }
+            }
         }
     }
 }

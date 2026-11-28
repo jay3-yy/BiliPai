@@ -2307,81 +2307,66 @@ private fun VideoPlayerOverlayContent(
         } else {
             Modifier.fillMaxSize()
         }
+        val centerBufferingSlot = resolveCenterBufferingSlotState(
+            loadingIndicatorsActive = loadingIndicatorsActive,
+            showCenterPlaybackControl = showCenterPlaybackControl,
+            startupLoadingActive = state.startupLoadingActive,
+            hasRenderedFirstFrame = hasRenderedFirstFrame,
+            showRebufferingIndicator = showRebufferingIndicator,
+            centerLoadingUiState = centerLoadingUiState,
+            isQualitySwitching = isQualitySwitching,
+        )
+        var lastCenterBufferingSlot by remember { mutableStateOf<CenterBufferingSlotState?>(null) }
+        if (centerBufferingSlot != null) {
+            lastCenterBufferingSlot = centerBufferingSlot
+        }
         Box(modifier = centerIndicatorHostModifier, contentAlignment = Alignment.Center) {
-            // --- 5.4  缓冲加载指示器 ---
+            // --- 5.4 / 5.5 单槽互斥居中缓冲加载指示器 ---
             AnimatedVisibility(
-                visible = showRebufferingIndicator && !showCenterPlaybackControl,
-                // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
-                // 看起来像又一次进场闪烁。
+                visible = centerBufferingSlot != null,
+                // 首帧前整段不参与合成，出现时硬切避免已有画面后的再缓冲闪烁；
+                // 所有居中缓冲态共用单槽，彻底避免淡入淡出期间叠出两个缓冲组件。
                 enter = EnterTransition.None,
-                exit = fadeOut(OverlayControlFadeSpec)
+                exit = fadeOut(OverlayControlFadeSpec),
             ) {
-                if (loadingIndicatorsActive && !showCenterPlaybackControl) {
-                    BiliTvBufferingIndicator(
-                        tint = centerLoadingVisualState.indicatorColor,
-                        bufferedProvider = { progressProvider().buffered },
-                    )
+                if (!loadingIndicatorsActive || showCenterPlaybackControl || state.startupLoadingActive || !hasRenderedFirstFrame) {
+                    return@AnimatedVisibility
                 }
-            }
-
-            AnimatedVisibility(
-                visible = hasRenderedFirstFrame && centerLoadingUiState != null && !showCenterPlaybackControl,
-                enter = fadeIn(OverlayControlFadeSpec),
-                exit = fadeOut(OverlayControlFadeSpec)
-            ) {
-                if (!loadingIndicatorsActive || showCenterPlaybackControl) return@AnimatedVisibility
-                val loadingState = centerLoadingUiState ?: return@AnimatedVisibility
-                Box(modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(
-                            horizontal = overlayVisualPolicy.qualitySwitchContentHorizontalPaddingDp.dp,
-                            vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
+                when (val activeSlot = centerBufferingSlot ?: lastCenterBufferingSlot ?: return@AnimatedVisibility) {
+                    CenterBufferingSlotState.Rebuffering -> {
+                        BiliTvBufferingIndicator(
+                            tint = centerLoadingVisualState.indicatorColor,
+                            bufferedProvider = { progressProvider().buffered },
                         )
-                    ) {
-                        BiliTvAnimatedBufferingIndicator(tint = centerLoadingVisualState.indicatorColor)
-                        Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
-                        AppText(
-                            text = loadingState.primaryText,
-                            color = centerLoadingVisualState.primaryTextColor,
-                            fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        loadingState.secondaryText?.let { secondaryText ->
-                            Spacer(modifier = Modifier.height(6.dp))
-                            AppText(
-                                text = secondaryText,
-                                color = centerLoadingVisualState.secondaryTextColor,
-                                fontSize = (overlayVisualPolicy.qualitySwitchMessageFontSp - 1).sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
                     }
-                }
-            }
-
-            // --- 5.5  清晰度切换中 Loading 指示器 ---
-            AnimatedVisibility(
-                visible = isQualitySwitching && centerLoadingUiState == null && !showCenterPlaybackControl,
-                enter = fadeIn(OverlayControlFadeSpec),
-                exit = fadeOut(OverlayControlFadeSpec)
-            ) {
-                Box(modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(
-                            horizontal = overlayVisualPolicy.qualitySwitchContentHorizontalPaddingDp.dp,
-                            vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
-                        )
-                    ) {
-                        BiliTvAnimatedBufferingIndicator(tint = centerLoadingVisualState.indicatorColor)
-                        Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
-                        AppText(
-                            text = "正在切换清晰度...",
-                            color = centerLoadingVisualState.primaryTextColor,
-                            fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                    is CenterBufferingSlotState.DetailedLoading -> {
+                        Box(modifier = Modifier.padding(overlayVisualPolicy.qualitySwitchOuterPaddingDp.dp)) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(
+                                    horizontal = overlayVisualPolicy.qualitySwitchContentHorizontalPaddingDp.dp,
+                                    vertical = overlayVisualPolicy.qualitySwitchContentVerticalPaddingDp.dp
+                                )
+                            ) {
+                                BiliTvAnimatedBufferingIndicator(tint = centerLoadingVisualState.indicatorColor)
+                                Spacer(modifier = Modifier.height(overlayVisualPolicy.qualitySwitchContentSpacingDp.dp))
+                                AppText(
+                                    text = activeSlot.primaryText,
+                                    color = centerLoadingVisualState.primaryTextColor,
+                                    fontSize = overlayVisualPolicy.qualitySwitchMessageFontSp.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                activeSlot.secondaryText?.let { secondaryText ->
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    AppText(
+                                        text = secondaryText,
+                                        color = centerLoadingVisualState.secondaryTextColor,
+                                        fontSize = (overlayVisualPolicy.qualitySwitchMessageFontSp - 1).sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

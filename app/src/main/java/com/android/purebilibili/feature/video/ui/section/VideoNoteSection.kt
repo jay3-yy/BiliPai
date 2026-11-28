@@ -344,7 +344,7 @@ fun VideoNoteEditorSheet(
                 .fillMaxWidth()
                 .fillMaxHeight(0.85f)
                 .imePadding()
-                .padding(horizontal = 18.dp)
+                .padding(horizontal = 16.dp)
         ) {
             AppText(
                 text = if (noteState.editorFromAiSummary) "AI 笔记草稿" else "视频笔记",

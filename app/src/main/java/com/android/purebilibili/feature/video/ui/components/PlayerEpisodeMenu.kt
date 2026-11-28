@@ -150,7 +150,7 @@ fun PlayerEpisodeMenu(
         playerBounds = playerBounds, onDismiss = onDismiss, inlinePanel = inlinePanel) { requestPanelDismiss ->
         Row(Modifier.fillMaxWidth().height(45.dp).horizontalScroll(rememberScrollState())
             .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (pages.size > 1) "分P" else "合集", fontSize = 16.sp)
+            Text(if (pages.size > 1) "分P" else "合集", style = MaterialTheme.typography.titleMedium)
             if (ugcSeason != null && isSubscribed != null && onSubscriptionChange != null) {
                 PanelAction(if (isSubscribed) Icons.Default.NotificationsOff else Icons.Default.NotificationsActive,
                     if (isSubscribed) "取消订阅" else "订阅") { onSubscriptionChange(!isSubscribed) }
@@ -481,7 +481,7 @@ internal fun PlayerPanelMediaRow(title: String, cover: String, durationSeconds: 
                 modifier = Modifier.fillMaxSize().then(if (episodePresentation) Modifier.clip(com.android.purebilibili.core.ui.AppShapes.container(com.android.purebilibili.core.ui.ContainerLevel.Chip)) else Modifier))
             if (partCoverIndex != null) Text(
                 text = partCoverIndex.removePrefix("P"),
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.align(Alignment.TopEnd)
                     .background(MaterialTheme.colorScheme.secondaryContainer, androidx.compose.foundation.shape.RoundedCornerShape(topEnd = 6.dp, bottomStart = 4.dp))
@@ -504,7 +504,7 @@ internal fun PlayerPanelMediaRow(title: String, cover: String, durationSeconds: 
             modifier = Modifier.weight(1f).then(if (episodePresentation) Modifier.height(100.dp) else Modifier),
             verticalArrangement = if (episodePresentation) Arrangement.Top else Arrangement.spacedBy(8.dp),
         ) {
-            Text(title, fontSize = 14.sp, lineHeight = 20.sp, color = color,
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = color,
                 maxLines = if (expandTitle) Int.MAX_VALUE else 2,
                 overflow = TextOverflow.Ellipsis,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
@@ -512,7 +512,7 @@ internal fun PlayerPanelMediaRow(title: String, cover: String, durationSeconds: 
             if (episodePresentation && episodePubdate > 0L) {
                 Text(java.time.Instant.ofEpochSecond(episodePubdate).atZone(java.time.ZoneId.systemDefault())
                     .format(EPISODE_PUBDATE_TIME_FORMATTER),
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
             if (episodePresentation && episodeViewCount != null && episodeViewCount >= 0L) {
                 com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow(
@@ -524,11 +524,11 @@ internal fun PlayerPanelMediaRow(title: String, cover: String, durationSeconds: 
                 if (accessEpisode != null) CollectionAccessBadge(episode = accessEpisode)
                 else CollectionAccessBadge(label = accessLabel)
             }
-            if (!episodePresentation && indexAndDuration.isNotBlank()) Text(indexAndDuration, fontSize = 12.sp, color = color)
-            if (!metadataText.isNullOrBlank()) Text(metadataText, fontSize = 12.sp,
+            if (!episodePresentation && indexAndDuration.isNotBlank()) Text(indexAndDuration, style = MaterialTheme.typography.bodySmall, color = color)
+            if (!metadataText.isNullOrBlank()) Text(metadataText, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (!durationBesideIndex && cover.isBlank() && durationText.isNotBlank()) Text(durationText, fontSize = 12.sp)
-            if (selected && !episodePresentation) Text("正在播放", fontSize = 12.sp, color = color)
+            if (!durationBesideIndex && cover.isBlank() && durationText.isNotBlank()) Text(durationText, style = MaterialTheme.typography.bodySmall)
+            if (selected && !episodePresentation) Text("正在播放", style = MaterialTheme.typography.labelMedium, color = color)
         }
     }
 }

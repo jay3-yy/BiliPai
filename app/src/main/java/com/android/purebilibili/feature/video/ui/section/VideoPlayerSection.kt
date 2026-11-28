@@ -12,6 +12,7 @@ import com.android.purebilibili.feature.video.ui.overlay.NextWatchOverlay
 
 import coil3.request.crossfade
 
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.input.key.Key
@@ -62,6 +63,7 @@ import com.android.purebilibili.feature.video.ui.components.schedulePlayerViewVi
 import com.android.purebilibili.feature.video.ui.components.cancelPlayerViewViewportRefresh
 import com.android.purebilibili.feature.video.ui.components.shouldUseFillMaxPlayerViewport
 import com.android.purebilibili.feature.video.ui.components.toAnime4KDisplayScaleMode
+import com.android.purebilibili.feature.video.ui.components.toDanmakuMaskScaleMode
 import com.android.purebilibili.feature.video.ui.components.toFullscreenAspectRatio
 import com.android.purebilibili.feature.video.ui.components.toVideoAspectRatio
 import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayHost
@@ -599,20 +601,47 @@ private fun BoxScope.VideoPlayerUpNextAndDrawerOverlays(
         .coerceAtLeast(0)
     val hasNextVideoPage = videoPagesForEndScreen.size > 1 &&
         activePageIndexForEndScreen in 0 until (videoPagesForEndScreen.size - 1)
+    val isCompactEndScreen = !isFullscreen && !isPortraitFullscreen
+    val showEndScreenNextCard = com.android.purebilibili.feature.video.ui.components.shouldShowEndScreenNextCard(
+        enabled = endScreenNextCountdownEnabled,
+        isInPipMode = isInPipMode,
+        isScreenLocked = isScreenLocked,
+        dismissed = endScreenCountdownDismissed || showFullscreenRelatedDrawer,
+        nextVideo = endScreenNextVideo,
+        countdownSeconds = endScreenCountdownSeconds,
+        allowAutoNext = endScreenAllowsAutoNext,
+        hasNextPage = hasNextVideoPage,
+    )
+    val targetEndScreenBottomPadding = when {
+        !isCompactEndScreen -> 78.dp
+        showControls -> 46.dp
+        else -> 12.dp
+    }
+    val endScreenBottomPaddingAnim = remember {
+        androidx.compose.animation.core.Animatable(
+            initialValue = targetEndScreenBottomPadding,
+            typeConverter = androidx.compose.ui.unit.Dp.VectorConverter,
+        )
+    }
+    var wasEndScreenVisible by remember { mutableStateOf(showEndScreenNextCard) }
+    LaunchedEffect(showEndScreenNextCard, targetEndScreenBottomPadding) {
+        // 仅在卡片可见时驱动间距动画，隐藏期间半屏控件显隐不触发逐帧动画与重组。
+        if (showEndScreenNextCard && wasEndScreenVisible) {
+            endScreenBottomPaddingAnim.animateTo(
+                targetValue = targetEndScreenBottomPadding,
+                animationSpec = tween(durationMillis = 180),
+            )
+        } else if (showEndScreenNextCard) {
+            endScreenBottomPaddingAnim.snapTo(targetEndScreenBottomPadding)
+        }
+        wasEndScreenVisible = showEndScreenNextCard
+    }
     com.android.purebilibili.feature.video.ui.components.EndScreenUpNextCountdownCard(
-        visible = com.android.purebilibili.feature.video.ui.components.shouldShowEndScreenNextCard(
-            enabled = endScreenNextCountdownEnabled,
-            isInPipMode = isInPipMode,
-            isScreenLocked = isScreenLocked,
-            dismissed = endScreenCountdownDismissed || showFullscreenRelatedDrawer,
-            nextVideo = endScreenNextVideo,
-            countdownSeconds = endScreenCountdownSeconds,
-            allowAutoNext = endScreenAllowsAutoNext,
-            hasNextPage = hasNextVideoPage,
-        ),
+        visible = showEndScreenNextCard,
         nextVideo = endScreenNextVideo,
         countdownSeconds = endScreenCountdownSeconds,
         fromQueue = queuedNextItem != null && endScreenNextVideo?.bvid == queuedNextItem.bvid,
+        compact = isCompactEndScreen,
         onPlayNow = { video ->
             onDismissEndScreenCountdown()
             onRelatedVideoClick(video.bvid, null)
@@ -620,7 +649,14 @@ private fun BoxScope.VideoPlayerUpNextAndDrawerOverlays(
         onDismiss = onDismissEndScreenCountdown,
         modifier = Modifier
             .align(Alignment.BottomEnd)
-            .padding(end = 16.dp, bottom = if (isFullscreen) 78.dp else 50.dp)
+            .padding(end = if (isCompactEndScreen) 10.dp else 16.dp)
+            // 在 layout 阶段读取动画偏移，避免每帧触发组合阶段重组。
+            .offset {
+                androidx.compose.ui.unit.IntOffset(
+                    x = 0,
+                    y = -endScreenBottomPaddingAnim.value.roundToPx(),
+                )
+            }
             .zIndex(123f),
     )
 
@@ -1947,6 +1983,10 @@ private fun VideoPlayerSectionContent(
     val lockHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.PLAYER_GESTURES)
     //  共享弹幕管理器（用于所有 seek 路径的一致同步）
     val danmakuManager = rememberDanmakuManager(bvid)
+    LaunchedEffect(currentAspectRatio, isFullscreen, isPortraitFullscreen, danmakuManager) {
+        val effectiveAspectRatio = if (isFullscreen || isPortraitFullscreen) currentAspectRatio else VideoAspectRatio.FIT
+        danmakuManager.updateMaskScaleMode(effectiveAspectRatio.toDanmakuMaskScaleMode())
+    }
     val captureScreenshot = rememberVideoScreenshotAction(
         onScreenshotSaved = { savedUri ->
             val capturedPosMs = (playerState.player?.currentPosition ?: 0L).coerceAtLeast(0L)

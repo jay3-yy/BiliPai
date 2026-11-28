@@ -29,7 +29,7 @@ internal fun VideoCommentLoadError(
         AppText(
             text = message,
             color = AppContentColors.error(),
-            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp, lineHeight = 26.sp),
+            style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
         )
         AppTextButton(onClick = onRetry) { AppText("重试") }

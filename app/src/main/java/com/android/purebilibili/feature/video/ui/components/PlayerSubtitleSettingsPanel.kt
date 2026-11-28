@@ -158,7 +158,7 @@ fun PlayerSubtitleSettingsPanel(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("字幕位置", Modifier.weight(1f), fontSize = 14.sp)
+                Text("字幕位置", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                 SubtitlePlacement.entries.forEach { option ->
                     com.android.purebilibili.core.ui.components.AppFilterChip(
                         selected = appearance.placement == option,

@@ -85,6 +85,7 @@ private val DefaultPortraitEngagementLoader = PortraitEngagementLoader { request
             val subject = resolvedSubject ?: requested
             val metadataSeed = seed.copy(
                 likeCount = if (knownInfo != null || info == null) seed.likeCount else info.stat.like,
+                totalCoinCount = if (knownInfo != null || info == null) seed.totalCoinCount else info.stat.coin,
                 favoriteCount = if (knownInfo != null || info == null) seed.favoriteCount else info.stat.favorite,
                 isRepost = info?.isRepost ?: seed.isRepost,
             )

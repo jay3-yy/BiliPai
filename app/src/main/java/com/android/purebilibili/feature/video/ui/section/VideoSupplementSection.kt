@@ -273,10 +273,7 @@ private fun AiSummaryPanelBody(
             if (summary.isNotEmpty()) {
                 AppText(
                     text = summary,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 15.sp,
-                        lineHeight = 22.5.sp,
-                    ),
+                    style = MaterialTheme.typography.bodyLarge,
                     color = primaryTextColor,
                     modifier = Modifier.padding(horizontal = 14.dp),
                 )
@@ -303,9 +300,7 @@ private fun AiSummaryPanelBody(
                             AppText(
                                 text = outlineItem.title,
                                 style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    lineHeight = 21.sp,
                                 ),
                                 color = primaryTextColor,
                             )
@@ -340,10 +335,7 @@ private fun AiSummaryPanelBody(
                                 }
                                 AppText(
                                     text = annotated,
-                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                        fontSize = 14.sp,
-                                        lineHeight = 21.sp,
-                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = primaryTextColor,
                                     modifier = Modifier.padding(bottom = 2.dp),
                                 )
@@ -371,10 +363,7 @@ private fun AiSummaryPanelBody(
                             }
                             AppText(
                                 text = annotated,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontSize = 14.sp,
-                                    lineHeight = 21.sp,
-                                ),
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = accentColor,
                             )
                         }

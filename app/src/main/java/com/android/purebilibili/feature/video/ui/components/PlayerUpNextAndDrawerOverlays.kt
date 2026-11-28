@@ -628,6 +628,7 @@ internal fun EndScreenUpNextCountdownCard(
     nextVideo: RelatedVideo?,
     countdownSeconds: Int?,
     fromQueue: Boolean = false,
+    compact: Boolean = false,
     onPlayNow: (RelatedVideo) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -651,25 +652,39 @@ internal fun EndScreenUpNextCountdownCard(
                 Color.White.copy(alpha = 0.12f)
             }
             val accentColor = AppContentColors.selectionAccent(liquidGlassEnabled)
+            val cardWidth = if (compact) 212.dp else 276.dp
+            val cardShape = RoundedCornerShape(if (compact) 10.dp else 14.dp)
+            val cardPadding = if (compact) 7.dp else 10.dp
+            val thumbWidth = if (compact) 60.dp else 88.dp
+            val thumbShape = RoundedCornerShape(if (compact) 6.dp else 8.dp)
+            val rowSpacing = if (compact) 7.dp else 10.dp
+            val headerFontSize = if (compact) 10.sp else 11.sp
+            val titleFontSize = if (compact) 11.sp else 12.sp
+            val titleLineHeight = if (compact) 13.sp else 15.sp
+            val titleMaxLines = if (compact) 1 else 2
+            val buttonSpacer = if (compact) 6.dp else 8.dp
+            val buttonShape = RoundedCornerShape(if (compact) 6.dp else 8.dp)
+            val buttonVerticalPadding = if (compact) 4.dp else 6.dp
+            val buttonFontSize = if (compact) 11.sp else 12.sp
 
             AppSurface(
                 color = surfaceColor,
-                shape = RoundedCornerShape(14.dp),
+                shape = cardShape,
                 shadowElevation = 8.dp,
                 modifier = Modifier
-                    .width(276.dp)
-                    .border(1.dp, borderColor, RoundedCornerShape(14.dp))
+                    .width(cardWidth)
+                    .border(1.dp, borderColor, cardShape)
             ) {
-                Column(modifier = Modifier.padding(10.dp)) {
+                Column(modifier = Modifier.padding(cardPadding)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(rowSpacing),
                     ) {
                         Box(
                             modifier = Modifier
-                                .width(88.dp)
+                                .width(thumbWidth)
                                 .aspectRatio(16f / 9f)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(thumbShape)
                                 .background(Color.White.copy(alpha = 0.08f))
                         ) {
                             AsyncImage(
@@ -683,7 +698,7 @@ internal fun EndScreenUpNextCountdownCard(
                             AppText(
                                 text = "${if (fromQueue) "队列下一集" else "即将播放"} · ${countdownSeconds}s",
                                 color = accentColor,
-                                fontSize = 11.sp,
+                                fontSize = headerFontSize,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                             )
@@ -691,48 +706,48 @@ internal fun EndScreenUpNextCountdownCard(
                             AppText(
                                 text = nextVideo.title,
                                 color = Color.White,
-                                fontSize = 12.sp,
-                                lineHeight = 15.sp,
+                                fontSize = titleFontSize,
+                                lineHeight = titleLineHeight,
                                 fontWeight = FontWeight.Medium,
-                                maxLines = 2,
+                                maxLines = titleMaxLines,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(buttonSpacer))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(buttonSpacer),
                     ) {
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(buttonShape)
                                 .background(Color.White.copy(alpha = 0.14f))
                                 .clickable(onClick = onDismiss)
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = buttonVerticalPadding),
                             contentAlignment = Alignment.Center,
                         ) {
                             AppText(
                                 text = "取消",
                                 color = Color.White.copy(alpha = 0.9f),
-                                fontSize = 12.sp,
+                                fontSize = buttonFontSize,
                                 fontWeight = FontWeight.Medium,
                             )
                         }
                         Box(
                             modifier = Modifier
                                 .weight(1.3f)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(buttonShape)
                                 .background(accentColor)
                                 .clickable { onPlayNow(nextVideo) }
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = buttonVerticalPadding),
                             contentAlignment = Alignment.Center,
                         ) {
                             AppText(
                                 text = "立即播放",
                                 color = MaterialTheme.colorScheme.onPrimary,
-                                fontSize = 12.sp,
+                                fontSize = buttonFontSize,
                                 fontWeight = FontWeight.SemiBold,
                             )
                         }

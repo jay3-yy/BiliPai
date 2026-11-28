@@ -22,6 +22,7 @@ internal fun resolvePortraitEngagementSeed(
         isLoggedIn = !TokenManager.sessDataCache.isNullOrEmpty(),
         isVip = TokenManager.isVipCache,
         likeCount = stat.like,
+        totalCoinCount = stat.coin,
         favoriteCount = stat.favorite,
         isRepost = info?.isRepost ?: false,
     )
@@ -40,6 +41,7 @@ internal fun resolvePortraitEngagementSeed(
             favoriteCount = if (root.relationshipStatusKnown) root.favoriteCount else seed.favoriteCount,
             isDisliked = if (root.relationshipStatusKnown) root.isDisliked else seed.isDisliked,
             coinCount = if (root.relationshipStatusKnown) root.coinCount else seed.coinCount,
+            totalCoinCount = if (root.relationshipStatusKnown) root.totalCoinCount else seed.totalCoinCount,
             followingMids = if (root.followStatusKnown) root.followingMids else seed.followingMids,
         )
     }

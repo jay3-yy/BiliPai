@@ -110,10 +110,10 @@ fun PlayerSponsorSegmentsPanel(
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         SponsorCategoryTitle(row.title, sponsorInfoColor(marker.category, marker.colorHex))
-                        Text(row.timeRange, fontSize = 13.sp, lineHeight = 16.sp,
+                        Text(row.timeRange, style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Text(row.behaviorLabel, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(row.behaviorLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (row.seekTargetMs != null) {
                         Box(
                             Modifier.size(36.dp).semantics { contentDescription = row.seekDescription }
@@ -185,13 +185,13 @@ private fun SponsorInfoDialog(onDismiss: () -> Unit, paneTitle: String, content:
 private fun SponsorCategoryTitle(title: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(Modifier.size(10.dp).background(color, CircleShape))
-        Text(title, fontSize = 14.sp, lineHeight = 14.sp)
+        Text(title, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
 @Composable
 private fun SponsorVoteOption(text: String, onClick: () -> Unit) {
-    Text(text, fontSize = 14.sp, modifier = Modifier.fillMaxWidth()
+    Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.fillMaxWidth()
         .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp))
 }
 

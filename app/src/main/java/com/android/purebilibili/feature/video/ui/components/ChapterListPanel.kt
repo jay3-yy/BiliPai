@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppSwitch as Switch
 import com.android.purebilibili.core.ui.components.AppText as Text
 import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
@@ -40,7 +41,7 @@ fun ChapterListPanel(
         draggable = true, useGlassSurface = useGlassSurface,
     ) { requestDismiss ->
         Row(modifier.fillMaxWidth().height(45.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("分段信息", fontSize = 16.sp, modifier = Modifier.weight(1f))
+            Text("分段信息", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             if (onShowViewPointsChange != null) Switch(checked = showViewPoints, onCheckedChange = onShowViewPointsChange)
             PanelAction(Icons.Default.Close, "关闭", requestDismiss)
         }

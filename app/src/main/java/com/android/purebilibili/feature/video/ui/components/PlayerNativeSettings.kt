@@ -125,7 +125,7 @@ internal fun PlayerNativeSettingsHost(
                         .padding(horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(title, fontSize = 16.sp)
+                    Text(title, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.weight(1f))
                     PanelAction(Icons.Outlined.Close, "关闭", requestDismiss)
                 }
@@ -231,9 +231,9 @@ internal fun PlayerSettingsRow(
         leading()
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             if (!subtitle.isNullOrBlank()) Text(
-                subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         trailing?.invoke()
@@ -300,7 +300,7 @@ internal fun PlayerSettingsPopupRow(
         ) {
             options.forEachIndexed { index, label ->
                 com.android.purebilibili.core.ui.components.AppDropdownMenuItem(
-                    text = { Text(label, fontSize = 14.sp) },
+                    text = { Text(label, style = MaterialTheme.typography.bodyMedium) },
                     enabled = enabled && enabledOptions.getOrElse(index) { true },
                     onClick = {
                         expanded = false
@@ -339,8 +339,8 @@ internal fun PlayerSettingsSelectionRow(
         return
     }
     ListItem(
-        headlineContent = { Text(title, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.38f)) },
-        supportingContent = if (subtitle != null) ({ Text(subtitle, fontSize = 12.sp) }) else null,
+        headlineContent = { Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.38f)) },
+        supportingContent = if (subtitle != null) ({ Text(subtitle, style = MaterialTheme.typography.bodySmall) }) else null,
         trailingContent = { if (selected) Icon(Icons.Outlined.Done, null, tint = MaterialTheme.colorScheme.primary) },
         modifier = rowModifier,
         // 玻璃容器接管时透出父容器；其他场景保留原生列表底色。
@@ -369,7 +369,7 @@ internal fun PlayerSettingsToggleRow(
         Text(
             text = title,
             modifier = Modifier.weight(1f),
-            fontSize = 14.sp,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
         AppSwitch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
