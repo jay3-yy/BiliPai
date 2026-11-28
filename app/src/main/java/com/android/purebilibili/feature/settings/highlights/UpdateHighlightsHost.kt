@@ -289,6 +289,7 @@ internal fun UpdateHighlightsHost(
 
     val accentColor = AppContentColors.accent()
     val displayVersionName = remember { formatDisplayVersionName(BuildConfig.VERSION_NAME) }
+    val editionLabel = remember(displayVersionName) { resolveReleaseEditionLabel(displayVersionName) }
     val maxScrollHeight = (LocalConfiguration.current.screenHeightDp * 0.56f).dp
 
     AppModalBottomSheet(onDismissRequest = ::dismiss) {
@@ -320,10 +321,11 @@ internal fun UpdateHighlightsHost(
                             modifier = Modifier.size(15.dp),
                         )
                         AppText(
-                            text = if (manualOpen) {
-                                "v$displayVersionName 更新要点"
-                            } else {
-                                "新版本已就绪 · v$displayVersionName"
+                            text = when {
+                                editionLabel != null && manualOpen -> "v$displayVersionName · $editionLabel"
+                                editionLabel != null -> "$editionLabel · v$displayVersionName"
+                                manualOpen -> "v$displayVersionName 更新要点"
+                                else -> "新版本已就绪 · v$displayVersionName"
                             },
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -332,20 +334,21 @@ internal fun UpdateHighlightsHost(
                     }
                 }
                 AppText(
-                    text = if (manualOpen) {
-                        "本次更新内容"
-                    } else {
-                        "已更新至 v$displayVersionName"
+                    text = when {
+                        editionLabel != null && manualOpen -> "$editionLabel 更新内容"
+                        manualOpen -> "本次更新内容"
+                        else -> "已更新至 v$displayVersionName"
                     },
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = AppContentColors.primaryText(),
                 )
                 AppText(
-                    text = if (manualOpen) {
-                        "轻点下方任意卡片，即可直达对应功能体验。"
-                    } else {
-                        "本次带来以下重点升级，轻点任意卡片即可直达体验。"
+                    text = when {
+                        editionLabel != null && manualOpen -> "感谢一年相伴！轻点下方任意卡片，即可直达对应功能体验。"
+                        editionLabel != null -> "感谢一年相伴！本次$editionLabel带来以下重点升级，轻点任意卡片即可直达体验。"
+                        manualOpen -> "轻点下方任意卡片，即可直达对应功能体验。"
+                        else -> "本次带来以下重点升级，轻点任意卡片即可直达体验。"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = AppContentColors.secondaryText(),
