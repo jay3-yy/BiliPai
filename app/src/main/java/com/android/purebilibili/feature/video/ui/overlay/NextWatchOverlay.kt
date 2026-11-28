@@ -67,11 +67,16 @@ internal fun BoxScope.NextWatchOverlay(
     eligible: Boolean,
     resolve: () -> NextWatchSuggestion?,
     play: (NextWatchSuggestion) -> Boolean,
+    fallbackFromCountdown: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val hintEnabled by remember(context) { SettingsManager.getNextWatchHintEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = true)
+    val promptMode by remember(context) { SettingsManager.getEndScreenNextPromptMode(context) }
+        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.EndScreenNextPromptMode.OFF)
+    val hintEnabled = com.android.purebilibili.core.store.shouldShowTopRightNextWatchOverlay(
+        mode = promptMode,
+        fallbackFromCountdown = fallbackFromCountdown,
+    )
     if (!hintEnabled) return
     val activity = LocalActivity.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle

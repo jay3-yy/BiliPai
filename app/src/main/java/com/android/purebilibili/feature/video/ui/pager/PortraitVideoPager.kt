@@ -2355,6 +2355,7 @@ fun PortraitVideoPager(
             eligible = isPortraitPlaybackAllowed && !isInPipMode && !isLoading && !pagerState.isScrollInProgress &&
                 !portraitCommentOverlayActive && !portraitUpPreviewActive &&
                 playbackCompletionBehavior != com.android.purebilibili.core.store.PlaybackCompletionBehavior.REPEAT_ONE,
+            fallbackFromCountdown = true,
             resolve = {
                 val targetPage = if (pagerState.currentPage < pageItems.lastIndex) pagerState.currentPage + 1
                     else if (playbackCompletionBehavior == com.android.purebilibili.core.store.PlaybackCompletionBehavior.LOOP_PLAYLIST) 0 else -1

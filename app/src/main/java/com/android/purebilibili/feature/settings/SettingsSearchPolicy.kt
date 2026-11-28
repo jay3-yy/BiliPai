@@ -1046,7 +1046,7 @@ internal fun resolveSettingsSearchResults(
             aliases = legacy?.aliases.orEmpty() + item.aliases + when (item.settingId) {
                 "playback.click_to_play_enabled", "playback.auto_play_enabled",
                 "playback.startup_auto_play_enabled", "playback.external_playlist_auto_continue_enabled" -> listOf("自动播放")
-                "playback.next_watch_hint_enabled" -> listOf("下一集", "相关推荐", "倒计时", "接下来观看", "片尾提示")
+                "playback.next_watch_hint_enabled" -> listOf("下一集", "相关推荐", "倒计时", "接下来观看", "接下来观看卡片", "片尾提示", "片尾推荐", "即将播放浮卡", "连播倒计时", "片尾即将播放倒计时")
                 "playback.image_preview3d_page_enabled" -> listOf("图片立体翻页3D", "3D翻页")
                 "playback.comment_fraud_detection_enabled" -> listOf("发评反诈", "评论检测", "评论检查")
                 "playback.comment_avatar_push_enabled" -> listOf("头像碰撞", "头像吸附", "头像推挤", "评论动效")

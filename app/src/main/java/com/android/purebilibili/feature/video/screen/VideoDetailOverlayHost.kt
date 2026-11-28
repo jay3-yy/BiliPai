@@ -355,13 +355,9 @@ internal fun VideoDetailFollowGroupDialog(
 }
 
 @Composable
-internal fun VideoDetailPlaybackEndedDialog(
+internal fun VideoDetailCompletionKeepsakeHost(
     viewModel: VideoPlaybackViewModel,
-    player: Player
 ) {
-    val showPlaybackEndedDialog by viewModel.showPlaybackEndedDialog.collectAsStateWithLifecycle(
-        context = kotlin.coroutines.EmptyCoroutineContext
-    )
     val completionKeepsakePrompt by viewModel.completionKeepsakePrompt.collectAsStateWithLifecycle(
         context = kotlin.coroutines.EmptyCoroutineContext
     )
@@ -372,44 +368,6 @@ internal fun VideoDetailPlaybackEndedDialog(
             onDismiss = viewModel::dismissCompletionKeepsake,
         )
     }
-    if (!showPlaybackEndedDialog) return
-
-    AppAlertDialog(
-        onDismissRequest = viewModel::dismissPlaybackEndedDialog,
-        title = { AppText("播放完成") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                AppText("选择接下来的操作")
-                com.android.purebilibili.core.ui.components.AppOutlinedButton(
-                    onClick = {
-                        viewModel.dismissPlaybackEndedDialog()
-                        player.seekTo(0)
-                        playPlayerFromUserAction(player)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    AppText("重播当前视频")
-                }
-            }
-        },
-        confirmButton = {
-            com.android.purebilibili.core.ui.AppDialogAction(
-                onClick = {
-                    viewModel.dismissPlaybackEndedDialog()
-                    viewModel.playNextRecommended()
-                },
-            ) {
-                AppText("播放下一个视频")
-            }
-        },
-        dismissButton = {
-            com.android.purebilibili.core.ui.AppDialogAction(
-                onClick = viewModel::dismissPlaybackEndedDialog,
-            ) {
-                AppText("暂不操作")
-            }
-        },
-    )
 }
 
 @Composable

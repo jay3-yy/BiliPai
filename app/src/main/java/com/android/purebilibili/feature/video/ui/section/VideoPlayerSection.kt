@@ -1111,7 +1111,9 @@ private fun VideoPlayerSectionContent(
         longPressSpeedSlideMode != com.android.purebilibili.core.store.LongPressSpeedSlideMode.OFF
     val doubleTapJumpAheadEnabled = playerInteractionSettings.doubleTapJumpAheadEnabled
     val fullscreenSwipeUpMoreEnabled = playerInteractionSettings.fullscreenSwipeUpMoreEnabled
-    val endScreenNextCountdownEnabled = playerInteractionSettings.endScreenNextCountdownEnabled
+    val endScreenNextCountdownEnabled = com.android.purebilibili.core.store.shouldShowBottomRightEndScreenCountdown(
+        playerInteractionSettings.endScreenNextPromptMode
+    )
     val pinchZoomSnapAndBadgeEnabled = playerInteractionSettings.pinchZoomSnapAndBadgeEnabled
     val twoFingerChapterSkipEnabled = playerInteractionSettings.twoFingerChapterSkipEnabled
     val portraitSwipeDownMinimizeEnabled = playerInteractionSettings.portraitSwipeDownMinimizeEnabled
@@ -5227,6 +5229,7 @@ private fun VideoPlayerSectionContent(
                 !showControls && !isGestureVisible && !landscapeCommentPanelVisible && !danmakuComposerVisible,
             resolve = actions.resolveNextWatch,
             play = actions.playNextWatch,
+            fallbackFromCountdown = false,
         )
 
         // 上滑/下滑进入全屏的拖动跟随反馈；手势结束(mode 复位)即隐藏。

@@ -14,10 +14,6 @@ internal class PlaybackCoordinator(
     private val sessionStore: PlaybackSessionStore
 ) {
 
-    data class PlaybackEndExecutionOutcome(
-        val shouldHidePlaybackEndedDialog: Boolean = false
-    )
-
     fun resolvePlaybackEnded(
         behavior: PlaybackCompletionBehavior,
         autoPlayEnabled: Boolean,
@@ -38,30 +34,25 @@ internal class PlaybackCoordinator(
         return action
     }
 
+    /** 执行播完策略动作，返回是否触发了继续播放或重播。 */
     fun executePlaybackEndAction(
         action: PlaybackEndAction,
         repeatCurrent: () -> Unit,
         playNextInOrder: (ignoreSavedProgress: Boolean, autoPlay: Boolean) -> Boolean,
         playNextFromPlaylistLoop: (ignoreSavedProgress: Boolean, autoPlay: Boolean) -> Boolean,
         autoContinue: (ignoreSavedProgress: Boolean, autoPlay: Boolean) -> Unit
-    ): PlaybackEndExecutionOutcome {
+    ): Boolean {
         return when (action) {
-            PlaybackEndAction.STOP -> PlaybackEndExecutionOutcome(
-                shouldHidePlaybackEndedDialog = true
-            )
+            PlaybackEndAction.STOP -> false
             PlaybackEndAction.REPEAT_CURRENT -> {
                 repeatCurrent()
-                PlaybackEndExecutionOutcome()
+                true
             }
-            PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST -> PlaybackEndExecutionOutcome(
-                shouldHidePlaybackEndedDialog = !playNextInOrder(true, true)
-            )
-            PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST_LOOP -> PlaybackEndExecutionOutcome(
-                shouldHidePlaybackEndedDialog = !playNextFromPlaylistLoop(true, true)
-            )
+            PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST -> playNextInOrder(true, true)
+            PlaybackEndAction.PLAY_NEXT_IN_PLAYLIST_LOOP -> playNextFromPlaylistLoop(true, true)
             PlaybackEndAction.AUTO_CONTINUE -> {
                 autoContinue(true, true)
-                PlaybackEndExecutionOutcome()
+                true
             }
         }
     }

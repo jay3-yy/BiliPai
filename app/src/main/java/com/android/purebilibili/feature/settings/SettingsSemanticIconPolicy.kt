@@ -312,7 +312,6 @@ internal enum class SettingsIconRole(
     LONG_PRESS_SPEED_SLIDE(R.drawable.ms_swap_horiz_24, R.drawable.ph_sliders_24),
     DOUBLE_TAP_JUMP_AHEAD(R.drawable.ms_skip_next_24, R.drawable.ph_skip_forward_24),
     FULLSCREEN_SWIPE_UP_MORE(R.drawable.ms_video_library_24, R.drawable.ph_file_video_24),
-    END_SCREEN_NEXT_COUNTDOWN(R.drawable.ms_auto_awesome_motion_24, R.drawable.ph_film_slate_24),
     PINCH_ZOOM_SNAP_BADGE(R.drawable.ms_zoom_out_map_24, R.drawable.ph_arrows_out_24),
     TWO_FINGER_CHAPTER_SKIP(R.drawable.ms_auto_awesome_24, R.drawable.ph_film_slate_24),
     PORTRAIT_SWIPE_DOWN_MINIMIZE(R.drawable.ms_picture_in_picture_24, R.drawable.ph_picture_in_picture_24),

@@ -87,7 +87,7 @@ class VideoDetailScreenMethodSizeStructureTest {
         assertFalse(holder.contains("internal fun VideoDetailFollowGroupDialog("))
         assertFalse(holder.contains("internal fun PortraitInlineVideoPlayerHost("))
         assertTrue(overlays.contains("internal fun VideoDetailFollowGroupDialog("))
-        assertTrue(overlays.contains("internal fun VideoDetailPlaybackEndedDialog("))
+        assertTrue(overlays.contains("internal fun VideoDetailCompletionKeepsakeHost("))
         assertTrue(playerHost.contains("internal fun PortraitInlineVideoPlayerHost("))
     }
 
@@ -167,7 +167,7 @@ class VideoDetailScreenMethodSizeStructureTest {
         assertTrue(adapter.lineSequence().count() <= 350)
         assertTrue(adapter.contains("InteractiveChoiceOverlay("))
         assertTrue(adapter.contains("ExternalPlaylistQueueSheet("))
-        assertTrue(adapter.contains("VideoDetailPlaybackEndedDialog("))
+        assertTrue(adapter.contains("VideoDetailCompletionKeepsakeHost("))
         assertFalse(holder.contains("InteractiveChoiceOverlay("))
         assertFalse(holder.contains("VideoShareSheet("))
         assertTrue(holder.contains("VideoDetailCommonOverlayAdapter("))
