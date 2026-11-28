@@ -123,6 +123,7 @@ internal enum class SettingsIconRole(
     AUDIO_SPECTRUM(R.drawable.ic_settings_cover_pulse_24),
     STARTUP_RESUME(R.drawable.ms_resume_24, R.drawable.ph_play_pause_24),
     NEXT_VIDEO_HINT(R.drawable.ms_preview_24, R.drawable.ph_eyes_24),
+    COMPLETION_KEEPSAKE_PROMPT(R.drawable.ms_auto_awesome_24, R.drawable.ph_sparkle_24),
     VIDEO_CONTENT_NOTICE(R.drawable.ms_report_24, R.drawable.ph_flag_24),
     DYNAMIC_CONTENT_NOTICE(R.drawable.ic_settings_dynamic_warning_24),
     MEMBER_SHOP(R.drawable.ic_settings_member_shop_24),

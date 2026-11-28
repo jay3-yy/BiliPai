@@ -152,6 +152,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "playback.music_lyrics_ui_style" to "经典全屏歌词；可在听视频右上角更多菜单临时切换；大字歌词，随播放逐字高亮",
     "playback.show_detail_related_videos" to "隐藏视频详情页中的相关推荐区域，不影响自动连播",
     "playback.next_watch_hint_enabled" to "最后 5 秒提示下一集或相关推荐，关闭不影响自动续播",
+    "playback.completion_keepsake_prompt_enabled" to "追番、合集或多 P 看完最后一集时弹出完结纪念与短评记录面板；关闭后不再弹出，个人回顾中已保存的完结纪念仍可查看与编辑",
     "playback.pause_on_player_collapse_enabled" to "浏览推荐并缩小画面时暂停，展开后恢复；关闭后缩小播放器时仍继续播放",
     "playback.pip_no_danmaku_enabled" to "需先开启后台播放；小窗和画中画中不显示弹幕；小窗和画中画中显示弹幕；选择小窗或画中画模式后生效",
     "playback.playback_cdn_preference" to "新视频优先使用此线路；不可用时换备用线路",

@@ -532,4 +532,18 @@ class SettingsSearchPolicyTest {
         )
     }
 
+    @Test
+    fun completionKeepsakePromptSettingIsSearchableByTitleAndAliases() {
+        listOf("完结纪念弹窗", "完结短评", "完结撒花", "播完弹窗", "合集完结", "追番完结").forEach { query ->
+            val results = resolveSettingsSearchResults(query, Int.MAX_VALUE)
+            assertTrue(
+                results.any {
+                    it.settingId == "playback.completion_keepsake_prompt_enabled" &&
+                        it.focusId == SettingsSearchFocusIds.PLAYBACK_INTERACTION
+                },
+                "Expected '$query' to match playback.completion_keepsake_prompt_enabled, got $results",
+            )
+        }
+    }
+
 }

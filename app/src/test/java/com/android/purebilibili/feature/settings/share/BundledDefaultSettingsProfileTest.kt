@@ -46,6 +46,7 @@ class BundledDefaultSettingsProfileTest {
             "resume_playback_prompt_enabled",
             "space_played_video_locate_prompt_enabled",
             "next_watch_hint_enabled",
+            "completion_keepsake_prompt_enabled",
             "background_playback_enabled",
             "auto_play",
             "auto_highest_quality",

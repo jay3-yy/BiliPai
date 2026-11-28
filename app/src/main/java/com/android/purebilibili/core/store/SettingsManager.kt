@@ -1581,6 +1581,8 @@ object SettingsManager {
     // 键定义
     private val KEY_SHOW_DETAIL_RELATED_VIDEOS = booleanPreferencesKey("show_detail_related_videos")
     private val KEY_NEXT_WATCH_HINT_ENABLED = booleanPreferencesKey("next_watch_hint_enabled")
+    private val KEY_COMPLETION_KEEPSAKE_PROMPT_ENABLED =
+        booleanPreferencesKey("completion_keepsake_prompt_enabled")
     private val KEY_AUTO_PLAY = booleanPreferencesKey("auto_play")
     private val KEY_PLAYBACK_COMPLETION_BEHAVIOR = intPreferencesKey("playback_completion_behavior")
     private val KEY_HW_DECODE = booleanPreferencesKey("hw_decode")
@@ -2620,6 +2622,19 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     suspend fun setNextWatchHintEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_NEXT_WATCH_HINT_ENABLED] = enabled }
+    }
+
+    fun getCompletionKeepsakePromptEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_COMPLETION_KEEPSAKE_PROMPT_ENABLED] ?: true }
+        .distinctUntilChanged()
+
+    suspend fun isCompletionKeepsakePromptEnabled(context: Context): Boolean =
+        getCompletionKeepsakePromptEnabled(context).first()
+
+    suspend fun setCompletionKeepsakePromptEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_COMPLETION_KEEPSAKE_PROMPT_ENABLED] = enabled
+        }
     }
 
     fun getAutoPlay(context: Context): Flow<Boolean> = context.settingsDataStore.data
@@ -10212,6 +10227,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_LIVE_AUTO_MINI_PLAYER_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_SHOW_DETAIL_RELATED_VIDEOS, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_NEXT_WATCH_HINT_ENABLED, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(
+                KEY_COMPLETION_KEEPSAKE_PROMPT_ENABLED,
+                SettingsShareSection.PLAYBACK,
+            ),
             BooleanShareablePreferenceDefinition(KEY_AUTO_PLAY, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_RESILIENT_VIDEO_BUFFER, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_WEAK_NETWORK_DEGRADE_PROMPT_ENABLED, SettingsShareSection.PLAYBACK),

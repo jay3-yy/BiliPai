@@ -2653,7 +2653,15 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         )
                         if (keepsakePrompt != null) {
                             viewModelScope.launch {
-                                if (com.android.purebilibili.feature.personal.CompletionKeepsakeStore.shouldPrompt(context, keepsakePrompt.id)) {
+                                val promptEnabled = com.android.purebilibili.core.store.SettingsManager
+                                    .isCompletionKeepsakePromptEnabled(context)
+                                if (
+                                    com.android.purebilibili.feature.personal.shouldAttemptCompletionKeepsakePrompt(
+                                        promptEnabled = promptEnabled,
+                                        prompt = keepsakePrompt,
+                                    ) &&
+                                    com.android.purebilibili.feature.personal.CompletionKeepsakeStore.shouldPrompt(context, keepsakePrompt.id)
+                                ) {
                                     _completionKeepsakePrompt.value = keepsakePrompt
                                 }
                             }
