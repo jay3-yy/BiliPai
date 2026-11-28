@@ -36,9 +36,19 @@ import com.bytedance.danmaku.render.engine.utils.*
  */
 class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, ICommandMonitor {
 
+    /**
+     * 串行保护时间轴、排版、配置监听与渲染层状态，允许 [com.bytedance.danmaku.render.engine.DanmakuSurfaceView]
+     * 在独立后台渲染线程调用 [draw]，同时主线程安全更新数据、配置与处理点击命中。
+     * 所有宿主 View 帧调度与透明度更新均在锁外触发，避免与主线程/Surface 回调形成锁顺序反转。
+     */
+    private val renderLock = Any()
+
     val config: DanmakuConfig = DanmakuConfig().apply {
+        notificationLock = renderLock
+        onAfterConfigChanged = ::onAfterConfigChangedUnlocked
         addListener(this@DanmakuController)
     }
+    @Volatile
     var itemClickListener: IItemClickListener? = null
 
     private val mCmdMonitors = mutableListOf<ICommandMonitor>()
@@ -48,9 +58,11 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
     private val mTouchHelper: TouchHelper = TouchHelper()
     private val mProfiler: Profiler = Profiler(config)
 
+    @Volatile
     private var mIsPlaying = false
     private val renderClock = RenderClock()
     internal val renderTimeMs: Long get() = renderClock.timeMs
+    @Volatile
     private var mIsTouchable = true
 
     init {
@@ -65,22 +77,30 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
      * Play or resume from paused
      */
     fun start(playTime: Long = 0L) {
-        if (mIsPlaying) {
-            return
+        val started = synchronized(renderLock) {
+            if (mIsPlaying) {
+                false
+            } else {
+                mIsPlaying = true
+                renderClock.resume(SystemClock.uptimeMillis())
+                mDataManager.onPlay(playTime)
+                true
+            }
         }
-        mIsPlaying = true
-        renderClock.resume(SystemClock.uptimeMillis())
-        mDataManager.onPlay(playTime)
-        mDanmakuView.postInvalidateCompat()
+        if (started) {
+            mDanmakuView.postInvalidateCompat()
+        }
     }
 
     /**
      * Pause Danmakus and keep them on the screen
      */
     fun pause() {
-        renderClock.pause(SystemClock.uptimeMillis())
-        mIsPlaying = false
-        mDataManager.onPause()
+        synchronized(renderLock) {
+            renderClock.pause(SystemClock.uptimeMillis())
+            mIsPlaying = false
+            mDataManager.onPause()
+        }
         mDanmakuView.cancelDanmakuFrames()
     }
 
@@ -88,11 +108,14 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
      * Stop playing and clear all items on the screen
      */
     fun stop() {
-        mIsPlaying = false
+        synchronized(renderLock) {
+            mIsPlaying = false
+            renderClock.reset()
+            mDataManager.onStop()
+            mRenderEngine.clear(LAYER_TYPE_UNDEFINE)
+        }
         mDanmakuView.cancelDanmakuFrames()
-        renderClock.reset()
-        mDataManager.onStop()
-        clear()
+        mDanmakuView.postInvalidateCompat()
     }
 
     /**
@@ -100,7 +123,9 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
      * and has no effect on the data set or timeline.
      */
     fun clear(layerType: Int = LAYER_TYPE_UNDEFINE) {
-        mRenderEngine.clear(layerType)
+        synchronized(renderLock) {
+            mRenderEngine.clear(layerType)
+        }
         if (layerType == LAYER_TYPE_UNDEFINE) {
             mDanmakuView.postInvalidateCompat()
         }
@@ -119,7 +144,9 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
         if (LAYER_Z_INDEXES.contains(layer.getLayerZIndex())) {
             throw IllegalArgumentException("The custom Z-Index conflicts with the built-in Z-Index.")
         }
-        mRenderEngine.addRenderLayer(layer)
+        synchronized(renderLock) {
+            mRenderEngine.addRenderLayer(layer)
+        }
     }
 
     /**
@@ -130,7 +157,9 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
         if (factory.getDrawType() < 2000) {
             throw IllegalArgumentException("The custom DrawType must not be less than 2000.")
         }
-        mRenderEngine.registerDrawItemFactory(factory)
+        synchronized(renderLock) {
+            mRenderEngine.registerDrawItemFactory(factory)
+        }
     }
 
     /**
@@ -138,35 +167,55 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
      * Replacing the data source when started is allowed.
      */
     fun setData(dataList: List<DanmakuData>, current: Long = 0) {
-        mDataManager.setData(dataList)
-        if (current > 0) {
-            mDataManager.onPlay(current)
+        val shouldInvalidate = synchronized(renderLock) {
+            mDataManager.setData(dataList)
+            if (current > 0) {
+                mDataManager.onPlay(current)
+            }
+            mIsPlaying
         }
-        if (mIsPlaying) mDanmakuView.postInvalidateCompat()
+        if (shouldInvalidate) mDanmakuView.postInvalidateCompat()
     }
 
     /** Replace only mask data; active ordinary lines and their cursor stay untouched. */
     fun replaceMaskData(dataList: List<DanmakuData>, playTime: Long) {
-        mRenderEngine.clear(LAYER_TYPE_MASK)
-        mDataManager.replaceMasks(dataList, playTime)
-        mRenderEngine.addItems(playTime, mDataManager.queryMasks(playTime))
+        synchronized(renderLock) {
+            mRenderEngine.clear(LAYER_TYPE_MASK)
+            mDataManager.replaceMasks(dataList, playTime)
+            mRenderEngine.addItems(playTime, mDataManager.queryMasks(playTime))
+        }
         mDanmakuView.postInvalidateCompat()
     }
 
     fun seekTimeline(playTime: Long) {
-        mDataManager.seekTo(playTime)
+        synchronized(renderLock) {
+            mDataManager.seekTo(playTime)
+        }
         mDanmakuView.postInvalidateCompat()
     }
 
     /** Reanchors the media clock while preserving the active render lines. */
     fun synchronizeTo(playTime: Long) {
-        mDataManager.synchronizePlayTime(playTime)
+        synchronized(renderLock) {
+            mDataManager.synchronizePlayTime(playTime)
+        }
         mDanmakuView.postInvalidateCompat()
     }
 
     fun setPlaybackPositionProvider(provider: java.util.function.LongSupplier?) {
-        mDataManager.setPlaybackPositionProvider(provider)
+        synchronized(renderLock) {
+            mDataManager.setPlaybackPositionProvider(provider)
+        }
         mDanmakuView.postInvalidateCompat()
+    }
+
+    internal fun hasPlaybackPositionProvider(): Boolean =
+        mDataManager.hasPlaybackPositionProvider()
+
+    internal fun refreshPlaybackAnchorFromMainThread() {
+        synchronized(renderLock) {
+            mDataManager.refreshPlaybackAnchorFromProvider()
+        }
     }
 
     /**
@@ -174,13 +223,18 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
      * You need to ensure the chronological order of the data by yourself.
      */
     fun appendData(dataList: List<DanmakuData>) {
-        mDataManager.appendData(dataList)
-        if (mIsPlaying && dataList.isNotEmpty()) mDanmakuView.postInvalidateCompat()
+        val shouldInvalidate = synchronized(renderLock) {
+            mDataManager.appendData(dataList)
+            mIsPlaying && dataList.isNotEmpty()
+        }
+        if (shouldInvalidate) mDanmakuView.postInvalidateCompat()
     }
 
     /** Remove consumed history without pause/setData/start. */
     fun discardDataBefore(playTime: Long) {
-        mDataManager.discardBefore(playTime)
+        synchronized(renderLock) {
+            mDataManager.discardBefore(playTime)
+        }
     }
 
     /**
@@ -190,7 +244,9 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
      * See [LayerBuffer]
      */
     fun addFakeData(data: DanmakuData) {
-        mDataManager.addFakeData(data)
+        synchronized(renderLock) {
+            mDataManager.addFakeData(data)
+        }
         if (config.common.pauseInvalidateWhenBlank) {
             mDanmakuView.postInvalidateCompat()
         }
@@ -198,8 +254,10 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
 
     /** Update retained data without clearing active lines or advancing the paused media clock. */
     fun remeasureData(update: (DanmakuData) -> Unit) {
-        mDataManager.getData().forEach(update)
-        mRenderEngine.typesetting(mDataManager.queryPlayTime(), false, true)
+        synchronized(renderLock) {
+            mDataManager.getData().forEach(update)
+            mRenderEngine.typesetting(mDataManager.queryPlayTime(), false, true)
+        }
         mDanmakuView.postInvalidateCompat()
     }
 
@@ -225,7 +283,9 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
      * Event is used by [DanmakuController] to tell you what is happening.
      */
     fun addEventListener(listener: IEventListener) {
-        mEventListeners.add(listener)
+        synchronized(renderLock) {
+            mEventListeners.add(listener)
+        }
     }
 
     /**
@@ -234,7 +294,9 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
      */
     @Suppress("unused")
     fun removeEventListener(listener: IEventListener) {
-        mEventListeners.remove(listener)
+        synchronized(renderLock) {
+            mEventListeners.remove(listener)
+        }
     }
 
     //////////////////////////////////////////////////////
@@ -242,26 +304,36 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
     //////////////////////////////////////////////////////
 
     override fun onConfigChanged(type: Int) {
-        when (type) {
-            DanmakuConfig.TYPE_COMMON_PLAY_SPEED -> mDataManager.onPlaySpeedChanged()
-            DanmakuConfig.TYPE_TEXT_SIZE -> mRenderEngine.typesetting(mDataManager.queryPlayTime(), false, true)
-            DanmakuConfig.TYPE_COMMON_ALPHA -> {
-                val host = mDanmakuView as? com.bytedance.danmaku.render.engine.DanmakuRenderHost
-                if (host != null) {
-                    host.applyDanmakuAlpha(config.common.alpha)
-                } else {
-                    mDanmakuView.alpha = config.common.alpha / 255f
+        // 由 AbsConfig.notifyConfigChanged 在 renderLock 互斥保护下与各 RenderLayer 同步分发。
+        synchronized(renderLock) {
+            when (type) {
+                DanmakuConfig.TYPE_COMMON_PLAY_SPEED -> mDataManager.onPlaySpeedChanged()
+                DanmakuConfig.TYPE_TEXT_SIZE -> mRenderEngine.typesetting(mDataManager.queryPlayTime(), false, true)
+                DanmakuConfig.TYPE_COMMON_TOP_CENTER_VISIBLE_CHANGE -> {
+                    if (!config.common.topVisible) {
+                        mRenderEngine.clear(LAYER_TYPE_TOP_CENTER)
+                    }
+                }
+                DanmakuConfig.TYPE_COMMON_BOTTOM_CENTER_VISIBLE_CHANGE -> {
+                    if (!config.common.bottomVisible) {
+                        mRenderEngine.clear(LAYER_TYPE_BOTTOM_CENTER)
+                    }
+                }
+                DanmakuConfig.TYPE_MASK_VALUE_CHANGE -> {
+                    mRenderEngine.typesetting(mDataManager.queryPlayTime(), false, true)
                 }
             }
-            DanmakuConfig.TYPE_COMMON_TOP_CENTER_VISIBLE_CHANGE -> {
-                if (!config.common.topVisible) {
-                    mRenderEngine.clear(LAYER_TYPE_TOP_CENTER)
-                }
-            }
-            DanmakuConfig.TYPE_COMMON_BOTTOM_CENTER_VISIBLE_CHANGE -> {
-                if (!config.common.bottomVisible) {
-                    mRenderEngine.clear(LAYER_TYPE_BOTTOM_CENTER)
-                }
+        }
+    }
+
+    private fun onAfterConfigChangedUnlocked(type: Int) {
+        if (type == DanmakuConfig.TYPE_COMMON_ALPHA) {
+            val alpha = config.common.alpha
+            val host = mDanmakuView as? com.bytedance.danmaku.render.engine.DanmakuRenderHost
+            if (host != null) {
+                host.applyDanmakuAlpha(alpha)
+            } else {
+                mDanmakuView.alpha = alpha / 255f
             }
         }
         mDanmakuView.postInvalidateCompat()
@@ -271,85 +343,106 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
     private var lastLayoutHeight = -1
 
     internal fun onLayoutSizeChanged(width: Int, height: Int) {
-        if (width == lastLayoutWidth && height == lastLayoutHeight) return
-        lastLayoutWidth = width
-        lastLayoutHeight = height
-        mRenderEngine.onLayoutSizeChanged(width, height)
-        mRenderEngine.typesetting(mDataManager.queryPlayTime(), false, true)
-        mDanmakuView.postInvalidateCompat()
+        val changed = synchronized(renderLock) {
+            if (width == lastLayoutWidth && height == lastLayoutHeight) {
+                false
+            } else {
+                lastLayoutWidth = width
+                lastLayoutHeight = height
+                mRenderEngine.onLayoutSizeChanged(width, height)
+                mRenderEngine.typesetting(mDataManager.queryPlayTime(), false, true)
+                true
+            }
+        }
+        if (changed) {
+            mDanmakuView.postInvalidateCompat()
+        }
     }
 
     internal fun draw(view: View, canvas: Canvas) {
-        val playTime = mDataManager.queryPlayTime()
-        if (mIsPlaying) {
-            renderClock.advance(SystemClock.uptimeMillis())
-            val profileEnabled = mProfiler.isProfilingEnabled()
-            val stageBreakdown = profileEnabled && mProfiler.needsStageBreakdown()
-            val t0 = if (profileEnabled) System.nanoTime() else 0L
-            val newItems = mDataManager.queryDanmaku()
-            val t1 = if (stageBreakdown) System.nanoTime() else t0
-            mRenderEngine.addItems(playTime, newItems)
-            val t2 = if (stageBreakdown) System.nanoTime() else t1
-            val typesettingCount = mRenderEngine.typesetting(playTime, true)
-            val t3 = if (stageBreakdown) System.nanoTime() else t2
-            mRenderEngine.draw(canvas)
-            val t4 = if (profileEnabled) System.nanoTime() else t3
-            if (!config.common.pauseInvalidateWhenBlank) {
-                view.postInvalidateCompat()
-            } else if (typesettingCount > 0) {
-                view.postInvalidateCompat()
-            } else if (mDataManager.getRemainDanmakuCount() > 0) {
-                mDataManager.nextDanmakuShowAfter(includeMask = false).let { after ->
-                    val showAfter = after * 100 / config.common.playSpeed
-                    if (showAfter in 0..NEXT_DANMAKU_SHOW_MIN_INTERVAL) {
-                        view.postInvalidateCompat()
-                    } else if (showAfter >= 0) {
-                        view.postDanmakuFrameAfter(showAfter - NEXT_DANMAKU_SHOW_MIN_INTERVAL / 2)
+        var scheduleImmediateNextFrame = false
+        var scheduleDelayedNextFrameMs = -1L
+        synchronized(renderLock) {
+            val playTime = mDataManager.queryPlayTime()
+            if (mIsPlaying) {
+                renderClock.advance(SystemClock.uptimeMillis())
+                val profileEnabled = mProfiler.isProfilingEnabled()
+                val stageBreakdown = profileEnabled && mProfiler.needsStageBreakdown()
+                val t0 = if (profileEnabled) System.nanoTime() else 0L
+                val newItems = mDataManager.queryDanmaku()
+                val t1 = if (stageBreakdown) System.nanoTime() else t0
+                mRenderEngine.addItems(playTime, newItems)
+                val t2 = if (stageBreakdown) System.nanoTime() else t1
+                val typesettingCount = mRenderEngine.typesetting(playTime, true)
+                val t3 = if (stageBreakdown) System.nanoTime() else t2
+                mRenderEngine.draw(canvas)
+                val t4 = if (profileEnabled) System.nanoTime() else t3
+                if (!config.common.pauseInvalidateWhenBlank) {
+                    scheduleImmediateNextFrame = true
+                } else if (typesettingCount > 0) {
+                    scheduleImmediateNextFrame = true
+                } else if (mDataManager.getRemainDanmakuCount() > 0) {
+                    mDataManager.nextDanmakuShowAfter(includeMask = false).let { after ->
+                        val showAfter = after * 100 / config.common.playSpeed
+                        if (showAfter in 0..NEXT_DANMAKU_SHOW_MIN_INTERVAL) {
+                            scheduleImmediateNextFrame = true
+                        } else if (showAfter >= 0) {
+                            scheduleDelayedNextFrameMs = showAfter - NEXT_DANMAKU_SHOW_MIN_INTERVAL / 2
+                        }
                     }
                 }
+                if (profileEnabled) {
+                    mProfiler.profilerDrawTimeCost(canvas, t0, t1, t2, t3, t4)
+                }
+            } else {
+                mRenderEngine.typesetting(playTime, false)
+                mRenderEngine.draw(canvas)
             }
-            if (profileEnabled) {
-                mProfiler.profilerDrawTimeCost(canvas, t0, t1, t2, t3, t4)
-            }
-        } else {
-            mRenderEngine.typesetting(playTime, false)
-            mRenderEngine.draw(canvas)
+        }
+        if (scheduleImmediateNextFrame) {
+            view.postInvalidateCompat()
+        } else if (scheduleDelayedNextFrameMs >= 0L) {
+            view.postDanmakuFrameAfter(scheduleDelayedNextFrameMs)
         }
     }
 
     /** Capture the touched item before Compose waits to distinguish single and double taps. */
     fun captureDanmakuClick(x: Float, y: Float): Pair<() -> Unit, () -> Unit>? {
-        val listener = itemClickListener ?: return null
-        var click: (() -> Unit)? = null
-        var capturedData: com.bytedance.danmaku.render.engine.data.DanmakuData? = null
-        itemClickListener = object : IItemClickListener {
-            override fun onDanmakuClick(
-                data: com.bytedance.danmaku.render.engine.data.DanmakuData,
-                itemRect: android.graphics.RectF,
-                clickPoint: android.graphics.PointF
-            ) {
-                // Renderer reuses these geometry objects between frames.
-                val rect = android.graphics.RectF(itemRect)
-                val point = android.graphics.PointF(clickPoint.x, clickPoint.y)
-                capturedData = data
-                click = { listener.onDanmakuClick(data, rect, point) }
+        val captured: Pair<() -> Unit, DanmakuData>? = synchronized(renderLock) {
+            val listener = itemClickListener ?: return null
+            var click: (() -> Unit)? = null
+            var capturedData: com.bytedance.danmaku.render.engine.data.DanmakuData? = null
+            itemClickListener = object : IItemClickListener {
+                override fun onDanmakuClick(
+                    data: com.bytedance.danmaku.render.engine.data.DanmakuData,
+                    itemRect: android.graphics.RectF,
+                    clickPoint: android.graphics.PointF
+                ) {
+                    // Renderer reuses these geometry objects between frames.
+                    val rect = android.graphics.RectF(itemRect)
+                    val point = android.graphics.PointF(clickPoint.x, clickPoint.y)
+                    capturedData = data
+                    click = { listener.onDanmakuClick(data, rect, point) }
+                }
+            }
+            val now = android.os.SystemClock.uptimeMillis()
+            val event = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
+            try {
+                val target = mRenderEngine.findTouchTarget(event) ?: return null
+                event.action = MotionEvent.ACTION_UP
+                target.onTouchEvent(event)
+                val action = click ?: return null
+                val data = capturedData ?: return null
+                action to data
+            } finally {
+                event.recycle()
+                itemClickListener = listener
             }
         }
-        val now = android.os.SystemClock.uptimeMillis()
-        val event = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0)
-        try {
-            val target = mRenderEngine.findTouchTarget(event) ?: return null
-            event.action = MotionEvent.ACTION_UP
-            target.onTouchEvent(event)
-            val action = click ?: return null
-            val data = capturedData ?: return null
-            executeCommand(com.bytedance.danmaku.render.engine.utils.CMD_PAUSE_ITEM, data = data)
-            return action to {
-                executeCommand(com.bytedance.danmaku.render.engine.utils.CMD_RESUME_ITEM, data = data)
-            }
-        } finally {
-            event.recycle()
-            itemClickListener = listener
+        val (action, data) = captured ?: return null
+        executeCommand(com.bytedance.danmaku.render.engine.utils.CMD_PAUSE_ITEM, data = data)
+        return action to {
+            executeCommand(com.bytedance.danmaku.render.engine.utils.CMD_RESUME_ITEM, data = data)
         }
     }
 
@@ -357,22 +450,30 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
         if (!mIsTouchable) {
             return false
         }
-        return mTouchHelper.onTouchEvent(event, mRenderEngine)
+        return synchronized(renderLock) {
+            mTouchHelper.onTouchEvent(event, mRenderEngine)
+        }
     }
 
     fun registerCmdMonitor(monitor: ICommandMonitor) {
-        mCmdMonitors.add(monitor)
+        synchronized(renderLock) {
+            mCmdMonitors.add(monitor)
+        }
     }
 
     fun unRegisterCmdMonitor(monitor: ICommandMonitor) {
-        mCmdMonitors.remove(monitor)
+        synchronized(renderLock) {
+            mCmdMonitors.remove(monitor)
+        }
     }
 
     fun notifyEvent(event: DanmakuEvent) {
-        mEventListeners.forEach {
-            it.onEvent(event)
+        synchronized(renderLock) {
+            mEventListeners.forEach {
+                it.onEvent(event)
+            }
+            Events.recycleEvent(event)
         }
-        Events.recycleEvent(event)
     }
 
     //////////////////////////////////////////////////////
@@ -380,16 +481,21 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
     //////////////////////////////////////////////////////
 
     private fun executeCommand(cmd: DanmakuCommand) {
-        mCmdMonitors.forEach {
-            it.onCommand(cmd)
+        val shouldInvalidate = synchronized(renderLock) {
+            mCmdMonitors.forEach {
+                it.onCommand(cmd)
+            }
+            cmd.what == CMD_PAUSE_ITEM || cmd.what == CMD_RESUME_ITEM
+        }
+        if (shouldInvalidate) {
+            mDanmakuView.postInvalidateCompat()
         }
     }
 
     override fun onCommand(cmd: DanmakuCommand) {
         when (cmd.what) {
             CMD_SET_TOUCHABLE -> (cmd.param as? Boolean)?.let { mIsTouchable = it }
-            CMD_PAUSE_ITEM -> mDanmakuView.postInvalidateCompat()
-            CMD_RESUME_ITEM -> mDanmakuView.postInvalidateCompat()
+            // CMD_PAUSE_ITEM / CMD_RESUME_ITEM 的刷帧通知由 executeCommand 在锁外统一触发。
         }
     }
 }

@@ -15,6 +15,7 @@
  */
 package com.bytedance.danmaku.render.engine.data
 
+import android.os.Looper
 import android.os.SystemClock
 import androidx.annotation.UiThread
 import com.bytedance.danmaku.render.engine.render.sortOnlyIfOutOfOrder
@@ -26,6 +27,15 @@ import kotlin.math.max
 import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_MASK
 import java.util.function.LongSupplier
 
+private fun isMainThreadOrNoAndroidLooper(): Boolean {
+    val mainLooper = try {
+        Looper.getMainLooper()
+    } catch (_: Throwable) {
+        null
+    } ?: return true
+    return Looper.myLooper() === mainLooper
+}
+
 /**
  * Created by dss886 on 2018/11/6.
  * DataManager is the timeline controller for the danmakus
@@ -33,6 +43,7 @@ import java.util.function.LongSupplier
 class DataManager(
     private val mConfig: DanmakuConfig,
     private val clockMs: () -> Long = { SystemClock.uptimeMillis() },
+    private val canQueryPositionProviderOnCurrentThread: () -> Boolean = ::isMainThreadOrNoAndroidLooper,
 ) {
     constructor(controller: DanmakuController) : this(controller.config)
 
@@ -58,7 +69,24 @@ class DataManager(
     private var mStartTimestamp = 0L
     private var mCurrentPlayTime = 0L
     private var mPlaySpeed = mConfig.common.playSpeed
+    @Volatile
     private var mPositionProvider: LongSupplier? = null
+
+    fun hasPlaybackPositionProvider(): Boolean = mPositionProvider != null
+
+    /**
+     * 仅在主线程触发：从外部播放器同步最新播放位置锚点，供后台弹幕渲染线程安全外推时间轴，
+     * 避免渲染线程跨线程访问 ExoPlayer 实例。
+     */
+    @UiThread
+    fun refreshPlaybackAnchorFromProvider() {
+        val provider = mPositionProvider ?: return
+        if (!mIsPlaying || !canQueryPositionProviderOnCurrentThread()) return
+        val anchored = provider.asLong.coerceAtLeast(0L)
+        mCurrentPlayTime = anchored
+        mStartPlayTime = anchored
+        mStartTimestamp = clockMs()
+    }
 
     @UiThread
     fun setPlaybackPositionProvider(provider: LongSupplier?) {
@@ -186,23 +214,31 @@ class DataManager(
         // the previous speed, even when the blank renderer has not drawn for seconds.
         if (mIsPlaying) {
             val provider = mPositionProvider
-            mCurrentPlayTime = if (provider != null) provider.asLong.coerceAtLeast(0L) else playTimeAt(now)
+            mCurrentPlayTime = if (provider != null && canQueryPositionProviderOnCurrentThread()) {
+                provider.asLong.coerceAtLeast(0L)
+            } else {
+                playTimeAt(now)
+            }
         }
         mStartPlayTime = mCurrentPlayTime
         mStartTimestamp = now
         mPlaySpeed = mConfig.common.playSpeed
     }
 
-    @UiThread
     fun queryPlayTime(): Long {
         if (!mIsPlaying) {
             return mCurrentPlayTime
         }
+        val now = clockMs()
         val provider = mPositionProvider
-        mCurrentPlayTime = if (provider != null) {
-            provider.asLong.coerceAtLeast(0L)
+        mCurrentPlayTime = if (provider != null && canQueryPositionProviderOnCurrentThread()) {
+            val anchored = provider.asLong.coerceAtLeast(0L)
+            // 主线程每次读取播放器位置时同步刷新锚点，后台渲染线程则基于该锚点平滑外推。
+            mStartPlayTime = anchored
+            mStartTimestamp = now
+            anchored
         } else {
-            playTimeAt(clockMs())
+            playTimeAt(now)
         }
         return mCurrentPlayTime
     }

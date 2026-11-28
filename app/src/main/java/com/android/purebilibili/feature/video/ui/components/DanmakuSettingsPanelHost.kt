@@ -13,10 +13,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.zIndex
 import com.android.purebilibili.core.ui.AppDialogWindowExitEffect
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.ModalWindowBackHandler
 import com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect
@@ -24,6 +28,9 @@ import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.blur.Backdrop
+
+internal val LocalDanmakuPanelBlurBackdrop = compositionLocalOf<Backdrop?> { null }
 
 @Composable
 internal fun DanmakuSettingsPanelHost(
@@ -34,10 +41,13 @@ internal fun DanmakuSettingsPanelHost(
     source: com.android.purebilibili.core.ui.components.AppGlassMenuSource? =
         com.android.purebilibili.core.ui.components.LocalAppGlassMenuSource.current,
     uiStyle: AppUiStyle = AppUiStyle.MATERIAL3,
+    blurContainerOnly: Boolean = false,
     content: @Composable (requestDismiss: () -> Unit) -> Unit,
 ) {
-    // 玻璃只替换容器与开合动画，设置内容、回调和原生布局策略共用。
-    if (com.android.purebilibili.core.ui.components.AppGlassMenu(
+    val config = LocalAppThemeConfig.current
+    val useBlurredNativePanel = blurContainerOnly && config.popupGlassEnabled &&
+        android.os.Build.VERSION.SDK_INT >= 33
+    if (!blurContainerOnly && com.android.purebilibili.core.ui.components.AppGlassMenu(
             expanded = true,
             onDismissRequest = onDismiss,
             title = "弹幕设置",
@@ -80,54 +90,74 @@ internal fun DanmakuSettingsPanelHost(
         }
     }
     LaunchedEffect(Unit) { settle(0f) }
-    PlayerNativeMenuTheme(uiStyle) {
-        Dialog(
-            onDismissRequest = dismiss,
-            properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
-        ) {
-            AppDialogWindowExitEffect(offset)
-            // 预测返回预览、撤销和松手共用面板位移，松手从当前画面继续滑出。
-            ModalWindowBackHandler(
-                enabled = !closing,
-                predictive = !reduceMotion,
-                onStarted = {
+    val panel: @Composable (Modifier) -> Unit = { panelModifier ->
+        ModalWindowBackHandler(
+            enabled = useBlurredNativePanel || !closing,
+            predictive = !reduceMotion && !closing,
+            onStarted = {
+                if (!closing) {
                     settlement?.cancel()
                     gestureStart = offset.floatValue
-                },
-                onProgress = { progress ->
+                }
+            },
+            onProgress = { progress ->
+                if (!closing) {
                     offset.floatValue = gestureStart + (1f - gestureStart) * progress * 0.25f
-                },
-                onCancelled = { if (!closing) settle(0f) },
-                onCompleted = dismiss,
+                }
+            },
+            onCancelled = { if (!closing) settle(0f) },
+            onCompleted = dismiss,
+        )
+        Box(
+            modifier = panelModifier.fillMaxSize(),
+            contentAlignment = when (layoutPolicy.anchor) {
+                DanmakuSettingsPanelAnchor.Bottom -> Alignment.BottomCenter
+                DanmakuSettingsPanelAnchor.End -> Alignment.CenterEnd
+                DanmakuSettingsPanelAnchor.Center -> Alignment.Center
+            },
+        ) {
+            Box(
+                Modifier.matchParentSize()
+                    .graphicsLayer { alpha = 1f - offset.floatValue }
+                    .background(Color.Black.copy(alpha = 0.32f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = dismiss,
+                    ),
             )
-            ModalWindowBlurBehindEffect(enabled = false)
-            com.android.purebilibili.core.ui.AppPopupWindowHost(enableWindowMaterial = false) {
-                Box(
-                    modifier = modifier.fillMaxSize(),
-                    contentAlignment = when (layoutPolicy.anchor) {
-                        DanmakuSettingsPanelAnchor.Bottom -> Alignment.BottomCenter
-                        DanmakuSettingsPanelAnchor.End -> Alignment.CenterEnd
-                        DanmakuSettingsPanelAnchor.Center -> Alignment.Center
-                    },
-                ) {
-                    Box(
-                        Modifier.matchParentSize()
-                            .graphicsLayer { alpha = 1f - offset.floatValue }
-                            .background(Color.Black.copy(alpha = 0.32f))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = dismiss,
-                            ),
-                    )
-                    Box(Modifier.graphicsLayer {
-                        val fraction = offset.floatValue
-                        if (layoutPolicy.anchor == DanmakuSettingsPanelAnchor.End) {
-                            translationX = size.width * fraction
-                        } else {
-                            translationY = size.height * fraction
-                        }
-                    }) { content(dismiss) }
+            Box(Modifier.graphicsLayer {
+                val fraction = offset.floatValue
+                if (layoutPolicy.anchor == DanmakuSettingsPanelAnchor.End) {
+                    translationX = size.width * fraction
+                } else {
+                    translationY = size.height * fraction
+                }
+            }) { content(dismiss) }
+        }
+    }
+    if (useBlurredNativePanel) {
+        // 同窗采样播放器背景，面板内容继续使用原生控件和布局。
+        val backdrop = com.android.purebilibili.core.ui.components.LocalAppGlassMenuBackdrop.current
+        CompositionLocalProvider(
+            LocalAppThemeConfig provides config.copy(liquidGlassEnabled = false, popupGlassEnabled = false),
+            LocalDanmakuPanelBlurBackdrop provides backdrop,
+            LocalPlayerGlassSettingsSurface provides false,
+        ) {
+            PlayerNativeMenuTheme(uiStyle) {
+                panel(modifier.zIndex(1f).semantics { paneTitle = "弹幕设置" })
+            }
+        }
+    } else {
+        PlayerNativeMenuTheme(uiStyle) {
+            Dialog(
+                onDismissRequest = dismiss,
+                properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false),
+            ) {
+                AppDialogWindowExitEffect(offset)
+                ModalWindowBlurBehindEffect(enabled = false)
+                com.android.purebilibili.core.ui.AppPopupWindowHost(enableWindowMaterial = false) {
+                    panel(modifier)
                 }
             }
         }

@@ -18,32 +18,32 @@ class DanmakuConfig {
     var isEnabled = true
     
     // 透明度 (0.0 - 1.0)
-    var opacity = 0.85f
+    var opacity = DANMAKU_DEFAULT_OPACITY
     
     // 字体缩放 (0.5 - 2.0)
-    var fontScale = 1.0f
+    var fontScale = DANMAKU_DEFAULT_FONT_SCALE
 
     // 字重（1-9；Android 9+ 映射到 100-900，旧系统降级为 normal/bold）
-    var fontWeight = 5
+    var fontWeight = DANMAKU_DEFAULT_FONT_WEIGHT
     
     // 滚动速度因子 (数值越大弹幕越慢)
-    var speedFactor = 1.0f
+    var speedFactor = DANMAKU_DEFAULT_SPEED
 
     // 明确的滚动时长（秒）
-    var scrollDurationSeconds = 7.0f
+    var scrollDurationSeconds = DANMAKU_DEFAULT_SCROLL_DURATION_SECONDS
     
     // 显示区域比例 (0.125 至 1.0，每档增加 0.125)
-    var displayAreaRatio = 0.5f
+    var displayAreaRatio = DANMAKU_DEFAULT_DISPLAY_AREA
 
     // 行高倍率
-    var lineHeight = 1.6f
+    var lineHeight = DANMAKU_DEFAULT_LINE_HEIGHT
     
     // [问题9修复] 描边设置
     var strokeEnabled = true  // 默认开启描边
-    var strokeWidth = 1.5f  // 描边宽度（dp），与字号使用同一系统密度
+    var strokeWidth = DANMAKU_DEFAULT_STROKE_WIDTH  // 描边宽度（dp），与字号使用同一系统密度
 
     // 静态弹幕停留时长（秒）
-    var staticDurationSeconds = 4.0f
+    var staticDurationSeconds = DANMAKU_DEFAULT_STATIC_DURATION_SECONDS
 
     // 固定速度模式：视口越宽，滚动时长越长，保持像素速度稳定
     var scrollFixedVelocity = false
@@ -56,8 +56,8 @@ class DanmakuConfig {
     
     // [新增] 合并重复弹幕
     var mergeDuplicates = true
-    var duplicateMergeWindowMs = 15_000
-    var duplicateMergeCountThreshold = 2
+    var duplicateMergeWindowMs = DANMAKU_DEFAULT_DUPLICATE_MERGE_WINDOW_MS
+    var duplicateMergeCountThreshold = DANMAKU_DEFAULT_DUPLICATE_MERGE_COUNT_THRESHOLD
     var duplicateSuppressThreshold = 0
 
     // [新增] 类型屏蔽（与 B 站 blockxxx 语义对齐，true=显示/不屏蔽）

@@ -78,9 +78,10 @@ data class DanmakuWindow(
 data class DanmakuMaskFrame(
     val startTimeMs: Long,
     val endTimeMs: Long,
-    val path: Path,
+    val path: Path?,
     val sourceWidth: Int,
-    val sourceHeight: Int
+    val sourceHeight: Int,
+    val visibilityPicture: android.graphics.Picture? = null,
 )
 
 enum class DanmakuPlaybackState {
@@ -88,6 +89,12 @@ enum class DanmakuPlaybackState {
     PLAYING,
     PAUSED,
     CLOSED
+}
+
+enum class DanmakuMaskScaleMode {
+    FIT_CENTER,
+    CENTER_CROP,
+    FILL,
 }
 
 data class DanmakuRenderConfig(
@@ -104,7 +111,8 @@ data class DanmakuRenderConfig(
     val bottomMarginPx: Float = 0f,
     val pinnedDurationMs: Long = 4_000L,
     val playSpeedPercent: Int = 100,
-    val maskEnabled: Boolean = false
+    val maskEnabled: Boolean = false,
+    val maskScaleMode: DanmakuMaskScaleMode = DanmakuMaskScaleMode.FIT_CENTER,
 )
 
 data class DanmakuEngineDiagnostics(

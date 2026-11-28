@@ -220,7 +220,15 @@ class DanmakuManager private constructor(
     private var localSegmentPaths: List<String> = emptyList()
     private var isLocalSegmentSession: Boolean = false
     private var webMaskBytes: ByteArray? = null
+    private var webMaskIndex: List<WebMaskChunkIndex> = emptyList()
+    private val webMaskChunkCache = object : LinkedHashMap<Int, List<com.android.purebilibili.danmaku.engine.DanmakuMaskFrame>>(8, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<Int, List<com.android.purebilibili.danmaku.engine.DanmakuMaskFrame>>?
+        ): Boolean = size > 6
+    }
     private var webMaskFps: Int = 0
+    private var webMaskScaleMode: com.android.purebilibili.danmaku.engine.DanmakuMaskScaleMode =
+        com.android.purebilibili.danmaku.engine.DanmakuMaskScaleMode.FIT_CENTER
     private var webMaskWindowStartMs: Long = Long.MIN_VALUE
     private var webMaskWindowEndMs: Long = Long.MIN_VALUE
     private var sessionIdentity: DanmakuSessionIdentity? = null
@@ -1227,15 +1235,26 @@ class DanmakuManager private constructor(
                             .getPlayerInfo(cachedBvid, expectedCid)
                             .getOrNull()
                             ?.dmMask
-                            ?: return@launch
-                        loadWebMask(
+                        if (maskInfo == null || maskInfo.maskUrl.isBlank()) {
+                            showMaskStatusToast("已开启智能弹幕遮罩（当前视频暂无官方蒙版）")
+                            return@launch
+                        }
+                        val loaded = loadWebMask(
                             cid = expectedCid,
                             url = maskInfo.maskUrl,
                             fps = maskInfo.fps,
                             positionMs = player?.currentPosition ?: 0L,
                             requestGeneration = expectedGeneration
                         )
+                        showMaskStatusToast(
+                            if (loaded) "已开启智能弹幕遮罩" else "已开启智能弹幕遮罩（蒙版加载失败）"
+                        )
                     }
+                } else if (webMaskBytes != null) {
+                    requestWebMaskWindow(player?.currentPosition ?: 0L)
+                    showMaskStatusToast("已开启智能弹幕遮罩")
+                } else {
+                    showMaskStatusToast("已开启智能弹幕遮罩")
                 }
             } else {
                 maskLoadJob?.cancel()
@@ -1243,6 +1262,7 @@ class DanmakuManager private constructor(
                 webMaskWindowStartMs = Long.MIN_VALUE
                 webMaskWindowEndMs = Long.MIN_VALUE
                 controller?.replaceMaskFrames(emptyList(), player?.currentPosition ?: 0L)
+                showMaskStatusToast("已关闭智能弹幕遮罩")
             }
         }
         
@@ -1390,6 +1410,14 @@ class DanmakuManager private constructor(
         }
     }
 
+    fun updateMaskScaleMode(mode: com.android.purebilibili.danmaku.engine.DanmakuMaskScaleMode) {
+        if (webMaskScaleMode == mode) return
+        webMaskScaleMode = mode
+        if (config.smartOcclusionEnabled && webMaskBytes != null) {
+            applyConfigToController("mask_scale_mode")
+        }
+    }
+
     private fun applyPlaybackSpeedToController(ctrl: DanmakuEngine) {
         ctrl.updateConfig(resolvePlaybackAdjustedRenderConfig())
     }
@@ -1406,7 +1434,8 @@ class DanmakuManager private constructor(
                 baseDurationMs = originalTopShowTimeMin,
                 videoSpeed = normalizedSpeed
             ),
-            maskEnabled = config.smartOcclusionEnabled && webMaskBytes != null
+            maskEnabled = config.smartOcclusionEnabled && webMaskBytes != null,
+            maskScaleMode = webMaskScaleMode,
         )
     }
     
@@ -2024,6 +2053,8 @@ class DanmakuManager private constructor(
         localSegmentPaths = emptyList()
         isLocalSegmentSession = false
         webMaskBytes = null
+        webMaskIndex = emptyList()
+        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
         webMaskFps = 0
         webMaskWindowStartMs = Long.MIN_VALUE
         webMaskWindowEndMs = Long.MIN_VALUE
@@ -2580,16 +2611,26 @@ class DanmakuManager private constructor(
         }
     }
 
+    private fun showMaskStatusToast(message: String) {
+        scope.launch(Dispatchers.Main.immediate) {
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private suspend fun loadWebMask(
         cid: Long,
         url: String,
         fps: Int,
         positionMs: Long,
         requestGeneration: Long
-    ) {
-        val bytes = com.android.purebilibili.data.repository.DanmakuRepository.getWebMask(url) ?: return
-        if (!shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) return
+    ): Boolean {
+        val bytes = com.android.purebilibili.data.repository.DanmakuRepository.getWebMask(url) ?: return false
+        if (!shouldApplyDanmakuLoadResult(cid, requestGeneration, cachedCid, loadGeneration)) return false
+        val index = withContext(Dispatchers.Default) { WebMaskParser.parseIndex(bytes) }
+        if (index.isEmpty()) return false
         webMaskBytes = bytes
+        webMaskIndex = index
+        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
         webMaskFps = fps
         applyConfigToController("webmask_ready")
         requestWebMaskWindow(
@@ -2598,6 +2639,7 @@ class DanmakuManager private constructor(
             requestGeneration = requestGeneration,
             requestWindowGeneration = windowGeneration
         )
+        return true
     }
 
     private fun requestWebMaskWindow(
@@ -2617,14 +2659,21 @@ class DanmakuManager private constructor(
         maskLoadJob?.cancel()
         webMaskWindowStartMs = windowStartMs
         webMaskWindowEndMs = windowEndMs
+        val index = webMaskIndex
+        if (index.isEmpty()) return
+        val chunkCache = webMaskChunkCache
         maskLoadJob = scope.launch {
             val frames = withContext(Dispatchers.Default) {
-                WebMaskParser.parseWindow(
-                    data = bytes,
-                    fps = webMaskFps,
-                    windowStartMs = windowStartMs,
-                    windowEndMs = windowEndMs
-                )
+                synchronized(chunkCache) {
+                    WebMaskParser.parseWindow(
+                        data = bytes,
+                        fps = webMaskFps,
+                        windowStartMs = windowStartMs,
+                        windowEndMs = windowEndMs,
+                        preParsedIndex = index,
+                        chunkCache = chunkCache,
+                    )
+                }
             }
             if (!isCurrentSegmentWindowRequest(expectedCid, requestGeneration, requestWindowGeneration) ||
                 !config.smartOcclusionEnabled || isSeekScrubbing
@@ -2659,6 +2708,8 @@ class DanmakuManager private constructor(
         cachedBvid = ""
         cachedDurationMs = 0L
         webMaskBytes = null
+        webMaskIndex = emptyList()
+        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
         webMaskFps = 0
         webMaskWindowStartMs = Long.MIN_VALUE
         webMaskWindowEndMs = Long.MIN_VALUE
@@ -2800,6 +2851,8 @@ class DanmakuManager private constructor(
         localSegmentPaths = emptyList()
         isLocalSegmentSession = false
         webMaskBytes = null
+        webMaskIndex = emptyList()
+        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
         webMaskFps = 0
         webMaskWindowStartMs = Long.MIN_VALUE
         webMaskWindowEndMs = Long.MIN_VALUE
@@ -3178,6 +3231,8 @@ class DanmakuManager private constructor(
         maskFetchJob?.cancel()
         maskFetchJob = null
         webMaskBytes = null
+        webMaskIndex = emptyList()
+        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
         hotDanmakuIndex = null
         controller?.stop()
         // A trimmed renderer no longer owns the visible timeline. Foreground recovery
@@ -3337,6 +3392,8 @@ class DanmakuManager private constructor(
         localSegmentPaths = emptyList()
         isLocalSegmentSession = false
         webMaskBytes = null
+        webMaskIndex = emptyList()
+        synchronized(webMaskChunkCache) { webMaskChunkCache.clear() }
         webMaskFps = 0
         webMaskWindowStartMs = Long.MIN_VALUE
         webMaskWindowEndMs = Long.MIN_VALUE

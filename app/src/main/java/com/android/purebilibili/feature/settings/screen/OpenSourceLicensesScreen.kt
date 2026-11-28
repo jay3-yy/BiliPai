@@ -108,6 +108,12 @@ val openSourceLibraries = listOf(
         description = "音视频播放器、HLS/DASH、会话与数据源"
     ),
     OpenSourceLibrary(
+        name = "AndroidSVG",
+        license = "Apache 2.0",
+        url = "https://github.com/BigBadaboom/androidsvg",
+        description = "WebMask SVG 裁切路径与遮罩渲染"
+    ),
+    OpenSourceLibrary(
         name = "AndroidX Paging",
         license = "Apache 2.0",
         url = "https://github.com/androidx/androidx",

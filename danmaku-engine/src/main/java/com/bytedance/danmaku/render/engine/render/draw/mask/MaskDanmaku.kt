@@ -31,6 +31,7 @@ class MaskData: DanmakuData() {
     override var layerType: Int = LAYER_TYPE_MASK
 
     var path: Path? = null
+    var visibilityPicture: Picture? = null
     var pathHeight: Int = 0
     var pathWidth: Int = 0
     var start: Long = 0L
@@ -40,8 +41,15 @@ class MaskData: DanmakuData() {
 class MaskDrawItem: DrawItem<MaskData>() {
     private val mPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     private val mXfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+    private val visibilityPaint = Paint().apply {
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+    }
 
     var drawPath: Path? = null
+    val drawBounds = RectF()
+    val hasMask: Boolean
+        get() = !drawBounds.isEmpty &&
+            (data?.visibilityPicture != null || drawPath?.isEmpty == false)
 
     override fun getDrawType(): Int {
         return DRAW_TYPE_MASK
@@ -56,6 +64,17 @@ class MaskDrawItem: DrawItem<MaskData>() {
     }
 
     override fun onDraw(canvas: Canvas, config: DanmakuConfig) {
+        val picture = data?.visibilityPicture
+        if (picture != null) {
+            // Only the SVG viewport participates in the alpha mask.
+            val clip = canvas.save()
+            canvas.clipRect(drawBounds)
+            val layer = canvas.saveLayer(drawBounds, visibilityPaint)
+            canvas.drawPicture(picture, drawBounds)
+            canvas.restoreToCount(layer)
+            canvas.restoreToCount(clip)
+            return
+        }
         mPaint.xfermode = mXfermode
         drawPath?.let { canvas.drawPath(it, mPaint) }
         mPaint.xfermode = null
@@ -64,6 +83,7 @@ class MaskDrawItem: DrawItem<MaskData>() {
     override fun recycle() {
         super.recycle()
         drawPath = null
+        drawBounds.setEmpty()
         mPaint.reset()
     }
 }

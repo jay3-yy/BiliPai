@@ -356,6 +356,36 @@ class DanmakuSettingsMappingPolicyTest {
         assertFalse(SettingsManager.removeLegacyDanmakuCloudSyncPreference(prefs))
     }
 
+    @Test
+    fun emptyPreferences_alignOutOfBoxDefaultsAcrossSettingsAndEngineConfig() {
+        val prefs = mutablePreferencesOf()
+        val mapped = mapDanmakuSettingsFromPreferences(prefs, portraitScope)
+        val modelDefaults = DanmakuSettings()
+        val engineDefaults = com.android.purebilibili.feature.video.danmaku.DanmakuConfig()
+
+        assertEquals(modelDefaults, mapped)
+        assertEquals(0.8f, mapped.opacity)
+        assertEquals(1.0f, mapped.fontScale)
+        assertEquals(1.0f, mapped.speed)
+        assertEquals(0.5f, mapped.displayArea)
+        assertEquals(5, mapped.fontWeight)
+        assertEquals(1.0f, mapped.strokeWidth)
+        assertEquals(1.2f, mapped.lineHeight)
+        assertEquals(8.0f, mapped.scrollDurationSeconds)
+        assertEquals(4.0f, mapped.staticDurationSeconds)
+        assertTrue(mapped.mergeDuplicates)
+
+        assertEquals(mapped.opacity, engineDefaults.opacity)
+        assertEquals(mapped.fontScale, engineDefaults.fontScale)
+        assertEquals(mapped.speed, engineDefaults.speedFactor)
+        assertEquals(mapped.displayArea, engineDefaults.displayAreaRatio)
+        assertEquals(mapped.fontWeight, engineDefaults.fontWeight)
+        assertEquals(mapped.strokeWidth, engineDefaults.strokeWidth)
+        assertEquals(mapped.lineHeight, engineDefaults.lineHeight)
+        assertEquals(mapped.scrollDurationSeconds, engineDefaults.scrollDurationSeconds)
+        assertEquals(mapped.staticDurationSeconds, engineDefaults.staticDurationSeconds)
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun <T> propertyValue(instance: Any, name: String): T {
         val upperName = name.replaceFirstChar { it.uppercase() }

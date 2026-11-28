@@ -31,6 +31,7 @@ import com.bytedance.danmaku.render.engine.utils.LAYER_Z_INDEX_MASK
  */
 class MaskLayer: IRenderLayer {
 
+    private lateinit var mController: DanmakuController
     private lateinit var mCachePool: IDrawCachePool
     private var mWidth = 0
     private var mHeight = 0
@@ -39,6 +40,7 @@ class MaskLayer: IRenderLayer {
     private val mMatrix = Matrix()
 
     override fun init(controller: DanmakuController, cachePool: IDrawCachePool) {
+        mController = controller
         mCachePool = cachePool
     }
 
@@ -83,10 +85,13 @@ class MaskLayer: IRenderLayer {
     }
 
     override fun typesetting(playTime: Long, isPlaying: Boolean, configChanged: Boolean): Int {
-        val data = (mCurrentItem as? MaskDrawItem)?.data
+        val current = mCurrentItem as? MaskDrawItem
+        val data = current?.data
         if (data == null || data.start > playTime || data.end < playTime) {
             mCurrentItem?.let(::releaseItem)
             mCurrentItem = null
+        } else if (configChanged) {
+            generateDrawPath(current)
         }
         return if (mCurrentItem != null) 1 else 0
     }
@@ -114,19 +119,48 @@ class MaskLayer: IRenderLayer {
             mMatrix.reset()
             val scaleX: Float = mWidth.toFloat() / data.pathWidth
             val scaleY: Float = mHeight.toFloat() / data.pathHeight
-            if (scaleX < scaleY) {
-                mMatrix.postScale(scaleX, scaleX, 0F, 0F)
+            val scaleMode = if (::mController.isInitialized) {
+                mController.config.mask.scaleMode
             } else {
-                mMatrix.postScale(scaleY, scaleY, 0F, 0F)
+                com.bytedance.danmaku.render.engine.control.DanmakuConfig.MaskScaleMode.FIT_CENTER
+            }
+            when (scaleMode) {
+                com.bytedance.danmaku.render.engine.control.DanmakuConfig.MaskScaleMode.FILL -> {
+                    mMatrix.postScale(scaleX, scaleY, 0F, 0F)
+                }
+                com.bytedance.danmaku.render.engine.control.DanmakuConfig.MaskScaleMode.CENTER_CROP -> {
+                    val scale = if (scaleX > scaleY) scaleX else scaleY
+                    mMatrix.postScale(scale, scale, 0F, 0F)
+                    mMatrix.postTranslate(
+                        (mWidth - data.pathWidth * scale) * 0.5f,
+                        (mHeight - data.pathHeight * scale) * 0.5f,
+                    )
+                }
+                com.bytedance.danmaku.render.engine.control.DanmakuConfig.MaskScaleMode.FIT_CENTER -> {
+                    val scale = if (scaleX < scaleY) scaleX else scaleY
+                    mMatrix.postScale(scale, scale, 0F, 0F)
+                    mMatrix.postTranslate(
+                        (mWidth - data.pathWidth * scale) * 0.5f,
+                        (mHeight - data.pathHeight * scale) * 0.5f,
+                    )
+                }
             }
             val source = data.path
             if (source != null) {
                 mReusableDrawPath.rewind()
                 mReusableDrawPath.set(source)
                 mReusableDrawPath.transform(mMatrix)
+                @Suppress("DEPRECATION")
+                mReusableDrawPath.computeBounds(item.drawBounds, true)
                 item.drawPath = mReusableDrawPath
             } else {
                 item.drawPath = null
+                if (data.visibilityPicture != null) {
+                    item.drawBounds.set(0f, 0f, data.pathWidth.toFloat(), data.pathHeight.toFloat())
+                    mMatrix.mapRect(item.drawBounds)
+                } else {
+                    item.drawBounds.setEmpty()
+                }
             }
         }
     }

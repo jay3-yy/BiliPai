@@ -23,7 +23,7 @@ import com.bytedance.danmaku.render.engine.data.DanmakuData
  */
 object Events {
 
-    private val mPools = Pools.SimplePool<DanmakuEvent>(20)
+    private val mPools = Pools.SynchronizedPool<DanmakuEvent>(20)
 
     fun obtainEvent(what: Int, data: DanmakuData? = null, param: Any? = null): DanmakuEvent {
         var event = mPools.acquire()

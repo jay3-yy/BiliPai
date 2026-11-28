@@ -134,7 +134,7 @@ class RenderEngine(private val mController: DanmakuController) : ITouchDelegate 
         sortOnlyIfOutOfOrder(mDrawItems, mDrawOrderComparator)
 
         var hasVisibleDanmaku = false
-        var hasMaskPath = false
+        var activeMaskItem: MaskDrawItem? = null
         var layerLeft = mWidth.toFloat()
         var layerTop = mHeight.toFloat()
         var layerRight = 0F
@@ -143,8 +143,9 @@ class RenderEngine(private val mController: DanmakuController) : ITouchDelegate 
             for (i in 0 until mDrawItems.size) {
                 val item = mDrawItems[i]
                 if (item.data?.layerType == LAYER_TYPE_MASK) {
-                    if ((item as? MaskDrawItem)?.drawPath?.isEmpty == false) {
-                        hasMaskPath = true
+                    val maskItem = item as? MaskDrawItem
+                    if (maskItem?.hasMask == true) {
+                        activeMaskItem = maskItem
                     }
                 } else if (item.isVisible) {
                     hasVisibleDanmaku = true
@@ -157,14 +158,17 @@ class RenderEngine(private val mController: DanmakuController) : ITouchDelegate 
                 }
             }
         }
-        val hasActiveMask = hasVisibleDanmaku && hasMaskPath
+        val left = layerLeft.coerceIn(0F, mWidth.toFloat())
+        val top = layerTop.coerceIn(0F, mHeight.toFloat())
+        val right = layerRight.coerceIn(left, mWidth.toFloat())
+        val bottom = layerBottom.coerceIn(top, mHeight.toFloat())
+        val hasActiveMask = hasVisibleDanmaku &&
+            activeMaskItem != null &&
+            right > left &&
+            bottom > top &&
+            activeMaskItem.drawBounds.intersects(left, top, right, bottom)
         if (hasActiveMask) {
-            val left = layerLeft.coerceIn(0F, mWidth.toFloat())
-            val top = layerTop.coerceIn(0F, mHeight.toFloat())
-            val right = layerRight.coerceIn(left, mWidth.toFloat())
-            val bottom = layerBottom.coerceIn(top, mHeight.toFloat())
-            @Suppress("DEPRECATION")
-            mSaveLayerValue = canvas.saveLayer(left, top, right, bottom, null, Canvas.ALL_SAVE_FLAG)
+            mSaveLayerValue = canvas.saveLayer(left, top, right, bottom, null)
         }
 
         mDrawItems.forEach {

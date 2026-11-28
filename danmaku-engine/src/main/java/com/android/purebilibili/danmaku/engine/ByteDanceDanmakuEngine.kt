@@ -3,6 +3,7 @@ package com.android.purebilibili.danmaku.engine
 import android.os.Trace
 import com.bytedance.danmaku.render.engine.render.sortOnlyIfOutOfOrder
 import com.bytedance.danmaku.render.engine.DanmakuRenderHost
+import com.bytedance.danmaku.render.engine.control.DanmakuConfig
 import com.bytedance.danmaku.render.engine.data.DanmakuData
 import com.bytedance.danmaku.render.engine.render.draw.bitmap.BitmapData
 import com.bytedance.danmaku.render.engine.render.draw.mask.MaskData
@@ -90,6 +91,12 @@ internal class ByteDanceDanmakuEngine(
             if (bottom.showTimeMin != config.pinnedDurationMs) bottom.showTimeMin = config.pinnedDurationMs
             if (bottom.showTimeMax != config.pinnedDurationMs) bottom.showTimeMax = config.pinnedDurationMs
             if (mask.enable != config.maskEnabled) mask.enable = config.maskEnabled
+            val mappedMaskScaleMode = when (config.maskScaleMode) {
+                DanmakuMaskScaleMode.FIT_CENTER -> DanmakuConfig.MaskScaleMode.FIT_CENTER
+                DanmakuMaskScaleMode.CENTER_CROP -> DanmakuConfig.MaskScaleMode.CENTER_CROP
+                DanmakuMaskScaleMode.FILL -> DanmakuConfig.MaskScaleMode.FILL
+            }
+            if (mask.scaleMode != mappedMaskScaleMode) mask.scaleMode = mappedMaskScaleMode
         }
         if (remeasureText) controller.remeasureData { data ->
             when (data) {
@@ -367,6 +374,7 @@ internal class ByteDanceDanmakuEngine(
         start = frame.startTimeMs
         end = frame.endTimeMs
         path = frame.path
+        visibilityPicture = frame.visibilityPicture
         pathWidth = frame.sourceWidth
         pathHeight = frame.sourceHeight
     }

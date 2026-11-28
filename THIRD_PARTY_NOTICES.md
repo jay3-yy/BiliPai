@@ -19,6 +19,12 @@ The extract-then-render workflow was studied in Nagram's
 This integration uses the Kotlin library and BiliPai's existing RSS renderer;
 it does not copy Telegram's Instant View page model, JavaScript bundle, or viewer.
 
+## WebMask SVG compositing
+
+[AndroidSVG](https://github.com/BigBadaboom/androidsvg/tree/Release_1.4) 1.4
+renders WebMask SVG clipping and masks. It is licensed under Apache-2.0.
+The license is bundled in `app/src/main/assets/licenses/androidsvg.LICENSE`.
+
 ## Telegram / NagramX ThanosEffect
 
 The particle-dissolve shaders are imported unchanged from Telegram / NagramX.

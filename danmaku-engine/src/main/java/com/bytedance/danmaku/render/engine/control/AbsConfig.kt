@@ -22,6 +22,12 @@ abstract class AbsConfig {
 
     private val mListenerList = java.util.concurrent.CopyOnWriteArrayList<ConfigChangeListener>()
 
+    /** 由 [DanmakuController] 注入渲染互斥锁，确保所有层的配置变更与后台渲染线程严格互斥。 */
+    internal var notificationLock: Any? = null
+
+    /** 在释放 [notificationLock] 后执行的宿主刷新钩子，避免锁内触发 View 调度。 */
+    internal var onAfterConfigChanged: ((Int) -> Unit)? = null
+
     fun addListener(listener: ConfigChangeListener) {
         mListenerList.add(listener)
     }
@@ -32,9 +38,19 @@ abstract class AbsConfig {
     }
 
     internal fun notifyConfigChanged(type: Int) {
-        mListenerList.forEach {
-            it.onConfigChanged(type)
+        val lock = notificationLock
+        if (lock != null) {
+            synchronized(lock) {
+                mListenerList.forEach {
+                    it.onConfigChanged(type)
+                }
+            }
+        } else {
+            mListenerList.forEach {
+                it.onConfigChanged(type)
+            }
         }
+        onAfterConfigChanged?.invoke(type)
     }
 
 }

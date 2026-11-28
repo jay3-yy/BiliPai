@@ -629,6 +629,12 @@ class DanmakuConfig : AbsConfig() {
             }
     }
 
+    enum class MaskScaleMode {
+        FIT_CENTER,
+        CENTER_CROP,
+        FILL,
+    }
+
     /**
      * Configuration of the Mask.
      */
@@ -641,6 +647,14 @@ class DanmakuConfig : AbsConfig() {
             set(value) {
                 field = value
                 config.notifyConfigChanged(TYPE_MASK_VALUE_CHANGE)
+            }
+
+        var scaleMode: MaskScaleMode = MaskScaleMode.FIT_CENTER
+            set(value) {
+                if (field != value) {
+                    field = value
+                    config.notifyConfigChanged(TYPE_MASK_VALUE_CHANGE)
+                }
             }
     }
 }

@@ -397,11 +397,34 @@ object DanmakuRepository {
         }
     }
 
+    private const val MAX_WEB_MASK_BYTES = 16 * 1024 * 1024
+
     suspend fun getWebMask(url: String): ByteArray? = withContext(Dispatchers.IO) {
         if (url.isBlank()) return@withContext null
         val resolvedUrl = if (url.startsWith("//")) "https:$url" else url
         try {
-            api.getDanmakuSpecialDm(resolvedUrl).bytes().takeIf { it.isNotEmpty() }
+            api.getDanmakuSpecialDm(resolvedUrl).use { body ->
+                val declaredLength = body.contentLength()
+                if (declaredLength > MAX_WEB_MASK_BYTES) {
+                    android.util.Log.w("DanmakuRepo", "Webmask too large: $declaredLength bytes")
+                    return@use null
+                }
+                val initialCapacity = declaredLength.takeIf { it in 1..MAX_WEB_MASK_BYTES }?.toInt() ?: (64 * 1024)
+                val output = java.io.ByteArrayOutputStream(initialCapacity)
+                val buffer = ByteArray(16 * 1024)
+                body.byteStream().use { input ->
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        if (output.size() + read > MAX_WEB_MASK_BYTES) {
+                            android.util.Log.w("DanmakuRepo", "Webmask exceeded size limit ($MAX_WEB_MASK_BYTES bytes)")
+                            return@use null
+                        }
+                        output.write(buffer, 0, read)
+                    }
+                }
+                output.toByteArray().takeIf { it.isNotEmpty() }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

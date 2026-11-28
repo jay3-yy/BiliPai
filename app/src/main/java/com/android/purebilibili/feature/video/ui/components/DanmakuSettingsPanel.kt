@@ -362,6 +362,7 @@ fun DanmakuSettingsPanel(
         isFullscreen = isFullscreen,
         layoutPolicy = layoutPolicy,
         onDismiss = onDismiss,
+        blurContainerOnly = isFullscreen && layoutPolicy.anchor == DanmakuSettingsPanelAnchor.End,
     ) { requestPanelDismiss ->
             DanmakuSettingsPanelFrame(
                 layoutPolicy = layoutPolicy,
@@ -410,24 +411,24 @@ fun DanmakuSettingsPanel(
                             com.android.purebilibili.core.ui.components.AppFilterChip(staticDanmakuToScroll, { onStaticDanmakuToScrollChange(!staticDanmakuToScroll) }, label = { AppText("固定转滚动") })
                             com.android.purebilibili.core.ui.components.AppFilterChip(scrollFixedVelocity, { onScrollFixedVelocityChange(!scrollFixedVelocity) }, label = { AppText("滚动弹幕固定速度") })
                         }
-                        DanmakuSliderItem("显示区域", displayArea, 0.1f..1f, displayValue = { "${(it * 100).roundToInt()}%" }, onValueChange = onDisplayAreaChange, colors = panelColors, resetValue = 0.5f, steps = 8, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.DISPLAY_AREA, next) } })
-                        DanmakuSliderItem("不透明度", opacity, 0f..1f, displayValue = { "${(it * 100).roundToInt()}%" }, onValueChange = onOpacityChange, colors = panelColors, resetValue = 1f, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.OPACITY, next) } })
+                        DanmakuSliderItem("显示区域", displayArea, 0.1f..1f, displayValue = { "${(it * 100).roundToInt()}%" }, onValueChange = onDisplayAreaChange, colors = panelColors, resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_DISPLAY_AREA, steps = 8, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.DISPLAY_AREA, next) } })
+                        DanmakuSliderItem("不透明度", opacity, 0f..1f, displayValue = { "${(it * 100).roundToInt()}%" }, onValueChange = onOpacityChange, colors = panelColors, resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_OPACITY, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.OPACITY, next) } })
                         DanmakuSliderItem(
                             "滚动速度", speed, 0.5f..3f,
                             displayValue = { "${(it * 100).roundToInt()}%" },
-                            onValueChange = onSpeedChange, colors = panelColors, resetValue = 1f,
+                            onValueChange = onSpeedChange, colors = panelColors, resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_SPEED,
                             onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.SPEED, next) } },
                         )
-                        DanmakuSliderItem("字体粗细", fontWeight.toFloat(), 1f..9f, displayValue = { "${it.roundToInt()}" }, onValueChange = { onFontWeightChange(it.roundToInt()) }, colors = panelColors, resetValue = 6f, steps = 7, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.FONT_WEIGHT, next) } })
-                        DanmakuSliderItem("描边粗细", strokeWidth, 0f..5f, displayValue = { "$it" }, onValueChange = onStrokeWidthChange, colors = panelColors, resetValue = 1.5f, steps = 9, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.STROKE_WIDTH, next) } })
-                        DanmakuSliderItem("字体大小", inlineFontScale, 0.5f..2.5f, displayValue = { "${(it * 100).roundToInt()}%" }, onValueChange = onInlineFontScaleChange ?: onFontScaleChange, colors = panelColors, resetValue = 1f,
+                        DanmakuSliderItem("字体粗细", fontWeight.toFloat(), 1f..9f, displayValue = { "${it.roundToInt()}" }, onValueChange = { onFontWeightChange(it.roundToInt()) }, colors = panelColors, resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_FONT_WEIGHT.toFloat(), steps = 7, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.FONT_WEIGHT, next) } })
+                        DanmakuSliderItem("描边粗细", strokeWidth, 0f..5f, displayValue = { "$it" }, onValueChange = onStrokeWidthChange, colors = panelColors, resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_STROKE_WIDTH, steps = 9, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.STROKE_WIDTH, next) } })
+                        DanmakuSliderItem("字体大小", inlineFontScale, 0.5f..2.5f, displayValue = { "${(it * 100).roundToInt()}%" }, onValueChange = onInlineFontScaleChange ?: onFontScaleChange, colors = panelColors, resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_FONT_SCALE,
                             onValuePreview = if (onInlineFontScaleChange == null) onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.FONT_SCALE, next) } } else null)
                         onFullscreenFontScaleChange?.let { change ->
-                            DanmakuSliderItem("全屏字体大小", fullscreenFontScale, 0.5f..2.5f, displayValue = { "${(it * 100).roundToInt()}%" }, onValueChange = change, colors = panelColors, resetValue = 1.2f)
+                            DanmakuSliderItem("全屏字体大小", fullscreenFontScale, 0.5f..2.5f, displayValue = { "${(it * 100).roundToInt()}%" }, onValueChange = change, colors = panelColors, resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_FONT_SCALE)
                         }
-                        DanmakuSliderItem("滚动弹幕时长", scrollDurationSeconds, 1f..50f, displayValue = { "$it 秒" }, onValueChange = onScrollDurationSecondsChange, colors = panelColors, resetValue = 7f, steps = 48, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.SCROLL_DURATION, next) } })
-                        DanmakuSliderItem("静态弹幕时长", staticDurationSeconds, 1f..50f, displayValue = { "$it 秒" }, onValueChange = onStaticDurationSecondsChange, colors = panelColors, resetValue = 4f, steps = 48, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.STATIC_DURATION, next) } })
-                        DanmakuSliderItem("弹幕行高", lineHeight, 1f..3f, displayValue = { "$it" }, onValueChange = onLineHeightChange, colors = panelColors, resetValue = 1.6f, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.LINE_HEIGHT, next) } })
+                        DanmakuSliderItem("滚动弹幕时长", scrollDurationSeconds, 1f..50f, displayValue = { "$it 秒" }, onValueChange = onScrollDurationSecondsChange, colors = panelColors, resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_SCROLL_DURATION_SECONDS, steps = 48, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.SCROLL_DURATION, next) } })
+                        DanmakuSliderItem("静态弹幕时长", staticDurationSeconds, 1f..50f, displayValue = { "$it 秒" }, onValueChange = onStaticDurationSecondsChange, colors = panelColors, resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_STATIC_DURATION_SECONDS, steps = 48, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.STATIC_DURATION, next) } })
+                        DanmakuSliderItem("弹幕行高", lineHeight, 1f..3f, displayValue = { "$it" }, onValueChange = onLineHeightChange, colors = panelColors, resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_LINE_HEIGHT, onValuePreview = onSliderPreview?.let { preview -> { next -> preview(DanmakuSliderParameter.LINE_HEIGHT, next) } })
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -639,7 +640,7 @@ fun DanmakuSettingsPanel(
                                     },
                                     colors = panelColors,
                                     fullscreenStyle = true,
-                                    resetValue = 7f,
+                                    resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_SCROLL_DURATION_SECONDS,
                                     tickCount = 20,
                                     valueText = { String.format("%.1f 秒", it) }
                                 )
@@ -654,7 +655,7 @@ fun DanmakuSettingsPanel(
                                     },
                                     colors = panelColors,
                                     fullscreenStyle = true,
-                                    resetValue = 4f,
+                                    resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_STATIC_DURATION_SECONDS,
                                     tickCount = 20,
                                     valueText = { String.format("%.1f 秒", it) }
                                 )
@@ -669,7 +670,7 @@ fun DanmakuSettingsPanel(
                                     },
                                     colors = panelColors,
                                     fullscreenStyle = true,
-                                    resetValue = 1.6f,
+                                    resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_LINE_HEIGHT,
                                     tickCount = 14
                                 )
                             }
@@ -684,7 +685,7 @@ fun DanmakuSettingsPanel(
                                     },
                                 colors = panelColors,
                                 fullscreenStyle = isFullscreenStyle,
-                                resetValue = 1f,
+                                resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_OPACITY,
                                 tickCount = 16
                             )
                             DanmakuSliderItem(
@@ -746,7 +747,7 @@ fun DanmakuSettingsPanel(
                                     },
                                     colors = panelColors,
                                     fullscreenStyle = isFullscreenStyle,
-                                    resetValue = 5f,
+                                    resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_FONT_WEIGHT.toFloat(),
                                     tickCount = 9
                                 )
                                 DanmakuSliderItem(
@@ -760,7 +761,7 @@ fun DanmakuSettingsPanel(
                                     },
                                     colors = panelColors,
                                     fullscreenStyle = isFullscreenStyle,
-                                    resetValue = 1.5f,
+                                    resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_STROKE_WIDTH,
                                     tickCount = 12
                                 )
                                 if (!isFullscreenStyle) {
@@ -775,7 +776,7 @@ fun DanmakuSettingsPanel(
                                     },
                                         colors = panelColors,
                                         fullscreenStyle = false,
-                                        resetValue = 1.6f,
+                                        resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_LINE_HEIGHT,
                                         tickCount = 14
                                     )
                                     DanmakuSliderItem(
@@ -789,7 +790,7 @@ fun DanmakuSettingsPanel(
                                     },
                                         colors = panelColors,
                                         fullscreenStyle = false,
-                                        resetValue = 7f,
+                                        resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_SCROLL_DURATION_SECONDS,
                                         tickCount = 20,
                                         valueText = { String.format("%.1f 秒", it) }
                                     )
@@ -804,7 +805,7 @@ fun DanmakuSettingsPanel(
                                     },
                                         colors = panelColors,
                                         fullscreenStyle = false,
-                                        resetValue = 4f,
+                                        resetValue = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_STATIC_DURATION_SECONDS,
                                         tickCount = 20,
                                         valueText = { String.format("%.1f 秒", it) }
                                     )

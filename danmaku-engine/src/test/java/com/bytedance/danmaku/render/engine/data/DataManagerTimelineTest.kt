@@ -207,4 +207,48 @@ class DataManagerTimelineTest {
         assertEquals(2_200L, data.queryPlayTime())
         assertTrue(data.queryDanmaku().isEmpty())
     }
+
+    @Test
+    fun `background render thread extrapolates from main-thread anchor without invoking position provider`() {
+        var clock = 0L
+        var mediaPosition = 1_000L
+        var onMainThread = true
+        var providerReads = 0
+        val config = DanmakuConfig().apply { common.playSpeed = 200 }
+        val data = DataManager(
+            mConfig = config,
+            clockMs = { clock },
+            canQueryPositionProviderOnCurrentThread = { onMainThread },
+        )
+        val first = text(1_000)
+        val second = text(1_400)
+        val third = text(2_000)
+        data.setData(listOf(first, second, third))
+        data.setPlaybackPositionProvider {
+            providerReads++
+            mediaPosition
+        }
+        data.onPlay(mediaPosition)
+        val readsAfterStart = providerReads
+
+        // 模拟独立弹幕渲染线程逐帧查询：绝不跨线程调用 provider，而是按锚点与倍速外推。
+        onMainThread = false
+        clock = 200
+        assertEquals(1_400L, data.queryPlayTime())
+        assertEquals(readsAfterStart, providerReads)
+        assertEquals(listOf(first, second), data.queryDanmaku().toList())
+
+        // 主线程周期性校准锚点后，后台线程基于新锚点继续平滑外推且不重放已消费弹幕。
+        onMainThread = true
+        clock = 500
+        mediaPosition = 1_800L
+        data.refreshPlaybackAnchorFromProvider()
+        assertEquals(readsAfterStart + 1, providerReads)
+
+        onMainThread = false
+        clock = 600
+        assertEquals(2_000L, data.queryPlayTime())
+        assertEquals(readsAfterStart + 1, providerReads)
+        assertEquals(listOf(third), data.queryDanmaku().toList())
+    }
 }
