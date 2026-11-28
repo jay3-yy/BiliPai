@@ -1800,9 +1800,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private val interactiveHiddenVariables = mutableMapOf<String, Double>()
     private val interactiveEdgeStartPositionMs = mutableMapOf<Long, Long>()
     
-    // [新增] 播放完成选择对话框状态
-    private val _showPlaybackEndedDialog = MutableStateFlow(false)
-    val showPlaybackEndedDialog = _showPlaybackEndedDialog.asStateFlow()
     private val _completionKeepsakePrompt = MutableStateFlow<com.android.purebilibili.feature.personal.CompletionKeepsakePrompt?>(null)
     val completionKeepsakePrompt = _completionKeepsakePrompt.asStateFlow()
 
@@ -1836,15 +1833,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             )
             toast("已收进完结纪念")
         }
-    }
-    
-    fun dismissPlaybackEndedDialog() {
-        _showPlaybackEndedDialog.value = false
-    }
-    
-    fun showPlaybackEndedDialogIfNeeded() {
-        // UX: 用户关闭“自动播放下一个”后，播放结束不再弹强干扰对话框
-        _showPlaybackEndedDialog.value = false
     }
     
     // [New] Danmaku Input Dialog State (Kept)
@@ -2098,7 +2086,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private fun finishSleepAfterCurrent(): Boolean {
         val player = exoPlayer ?: return false
         if (!sleepTimerManager.finishSleepAfterCurrent(player, currentBvid, currentCid)) return false
-        _showPlaybackEndedDialog.value = false
         return true
     }
 
@@ -2561,7 +2548,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 samplePlaybackAnalytics(ended = true)
                 if (finishSleepAfterCurrent()) return
                 if (shouldSuppressPlaybackCompletionForCommentInteraction(isCommentInteractionActive)) {
-                    _showPlaybackEndedDialog.value = false
                     Logger.d("PlayerVM", "评论交互进行中，保持当前视频结束态")
                     return
                 }
@@ -2587,10 +2573,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 }
 
                 if (_isInAudioMode.value) {
-                    val didContinue = handleAudioModePlaybackEnded(ignoreSavedProgress = true)
-                    if (!didContinue) {
-                        _showPlaybackEndedDialog.value = false
-                    }
+                    handleAudioModePlaybackEnded(ignoreSavedProgress = true)
                     return
                 }
 
@@ -2607,7 +2590,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     hasNextPage = hasNextPage,
                     hasNextSeasonEpisode = hasNextSeasonEpisode
                 )
-                val outcome = playbackCoordinator.executePlaybackEndAction(
+                playbackCoordinator.executePlaybackEndAction(
                     action = action,
                     repeatCurrent = {
                         exoPlayer?.seekTo(0)
@@ -2628,10 +2611,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         playNextPageOrRecommended(ignoreSavedProgress = ignoreSavedProgress, autoPlay = autoPlay)
                     }
                 )
-                if (outcome.shouldHidePlaybackEndedDialog) {
-                    // 自动播放关闭或后续无法连播：保持结束态，不弹窗打断
-                    _showPlaybackEndedDialog.value = false
-                }
                 if (!hasNextPage && !hasNextSeasonEpisode) {
                     val success = _uiState.value as? VideoPlaybackUiState.Success
                     val info = success?.info

@@ -532,4 +532,30 @@ class SettingsSearchPolicyTest {
         )
     }
 
+    @Test
+    fun unifiedEndScreenNextPromptMatchesLegacyAliasesAndRemovesRetiredId() {
+        listOf(
+            "片尾下一集提示",
+            "接下来观看",
+            "接下来观看卡片",
+            "片尾即将播放倒计时",
+            "片尾推荐",
+            "即将播放浮卡",
+            "连播倒计时",
+        ).forEach { query ->
+            val results = resolveSettingsSearchResults(query, Int.MAX_VALUE)
+            assertTrue(
+                results.any {
+                    it.settingId == "playback.next_watch_hint_enabled" &&
+                        it.focusId == SettingsSearchFocusIds.PLAYBACK_INTERACTION
+                },
+                "Expected '$query' to resolve to playback.next_watch_hint_enabled, got $results",
+            )
+            assertTrue(
+                results.none { it.settingId == "playback.end_screen_next_countdown_enabled" },
+                "Retired settingId should not appear for '$query'",
+            )
+        }
+    }
+
 }

@@ -5854,7 +5854,6 @@ internal fun VideoDetailScreenStateHolder(
             playlistCurrentIndex = playlistCurrentIndex,
             hazeState = hazeState,
             queuePresentation = externalPlaylistQueueSheetPresentation,
-            player = playerState.player,
             onDismissQueue = { showExternalPlaylistQueueSheet = false },
             onVideoSelected = { index, item ->
                 PlaylistManager.playAt(index)

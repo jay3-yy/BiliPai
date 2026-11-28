@@ -1317,6 +1317,7 @@ data class PlayerInteractionSettings(
     val progressSnapAndOriginCancelEnabled: Boolean = true,
     val fullscreenSwipeUpMoreEnabled: Boolean = true,
     val endScreenNextCountdownEnabled: Boolean = true,
+    val endScreenNextPromptMode: EndScreenNextPromptMode = EndScreenNextPromptMode.BOTTOM_RIGHT_COUNTDOWN,
     val pinchZoomSnapAndBadgeEnabled: Boolean = true,
     val twoFingerChapterSkipEnabled: Boolean = true,
     val portraitSwipeDownMinimizeEnabled: Boolean = true
@@ -1581,6 +1582,7 @@ object SettingsManager {
     // 键定义
     private val KEY_SHOW_DETAIL_RELATED_VIDEOS = booleanPreferencesKey("show_detail_related_videos")
     private val KEY_NEXT_WATCH_HINT_ENABLED = booleanPreferencesKey("next_watch_hint_enabled")
+    private val KEY_END_SCREEN_NEXT_PROMPT_MODE = intPreferencesKey("end_screen_next_prompt_mode")
     private val KEY_AUTO_PLAY = booleanPreferencesKey("auto_play")
     private val KEY_PLAYBACK_COMPLETION_BEHAVIOR = intPreferencesKey("playback_completion_behavior")
     private val KEY_HW_DECODE = booleanPreferencesKey("hw_decode")
@@ -2302,7 +2304,18 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             progressFineScrubbingEnabled = preferences[KEY_PROGRESS_FINE_SCRUBBING_ENABLED] ?: true,
             progressSnapAndOriginCancelEnabled = preferences[KEY_PROGRESS_SNAP_AND_ORIGIN_CANCEL_ENABLED] ?: true,
             fullscreenSwipeUpMoreEnabled = preferences[KEY_FULLSCREEN_SWIPE_UP_MORE_ENABLED] ?: true,
-            endScreenNextCountdownEnabled = preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED] ?: true,
+            endScreenNextPromptMode = resolveEndScreenNextPromptMode(
+                storedModeValue = preferences[KEY_END_SCREEN_NEXT_PROMPT_MODE],
+                legacyNextWatchHintEnabled = preferences[KEY_NEXT_WATCH_HINT_ENABLED],
+                legacyEndScreenCountdownEnabled = preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED],
+            ),
+            endScreenNextCountdownEnabled = shouldShowBottomRightEndScreenCountdown(
+                resolveEndScreenNextPromptMode(
+                    storedModeValue = preferences[KEY_END_SCREEN_NEXT_PROMPT_MODE],
+                    legacyNextWatchHintEnabled = preferences[KEY_NEXT_WATCH_HINT_ENABLED],
+                    legacyEndScreenCountdownEnabled = preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED],
+                )
+            ),
             pinchZoomSnapAndBadgeEnabled = preferences[KEY_PINCH_ZOOM_SNAP_AND_BADGE_ENABLED] ?: true,
             twoFingerChapterSkipEnabled = preferences[KEY_TWO_FINGER_CHAPTER_SKIP_ENABLED] ?: true,
             portraitSwipeDownMinimizeEnabled = preferences[KEY_PORTRAIT_SWIPE_DOWN_MINIMIZE_ENABLED] ?: true
@@ -2615,11 +2628,36 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences -> preferences[KEY_SHOW_DETAIL_RELATED_VIDEOS] = enabled }
     }
 
-    fun getNextWatchHintEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_NEXT_WATCH_HINT_ENABLED] ?: true }
+    fun getEndScreenNextPromptMode(context: Context): Flow<EndScreenNextPromptMode> =
+        context.settingsDataStore.data
+            .map { preferences ->
+                resolveEndScreenNextPromptMode(
+                    storedModeValue = preferences[KEY_END_SCREEN_NEXT_PROMPT_MODE],
+                    legacyNextWatchHintEnabled = preferences[KEY_NEXT_WATCH_HINT_ENABLED],
+                    legacyEndScreenCountdownEnabled = preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED],
+                )
+            }
+            .distinctUntilChanged()
+
+    suspend fun setEndScreenNextPromptMode(context: Context, mode: EndScreenNextPromptMode) {
+        val legacyFlags = resolveLegacyEndScreenPromptFlags(mode)
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_END_SCREEN_NEXT_PROMPT_MODE] = mode.value
+            preferences[KEY_NEXT_WATCH_HINT_ENABLED] = legacyFlags.nextWatchHintEnabled
+            preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED] = legacyFlags.endScreenNextCountdownEnabled
+        }
+    }
+
+    fun getNextWatchHintEnabled(context: Context): Flow<Boolean> =
+        getEndScreenNextPromptMode(context)
+            .map { shouldShowTopRightNextWatchOverlay(it, fallbackFromCountdown = false) }
+            .distinctUntilChanged()
 
     suspend fun setNextWatchHintEnabled(context: Context, enabled: Boolean) {
-        context.settingsDataStore.edit { preferences -> preferences[KEY_NEXT_WATCH_HINT_ENABLED] = enabled }
+        setEndScreenNextPromptMode(
+            context = context,
+            mode = if (enabled) EndScreenNextPromptMode.TOP_RIGHT_HINT else EndScreenNextPromptMode.OFF,
+        )
     }
 
     fun getAutoPlay(context: Context): Flow<Boolean> = context.settingsDataStore.data
@@ -9341,13 +9379,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
-    fun getEndScreenNextCountdownEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED] ?: true }
+    fun getEndScreenNextCountdownEnabled(context: Context): Flow<Boolean> =
+        getEndScreenNextPromptMode(context)
+            .map(::shouldShowBottomRightEndScreenCountdown)
+            .distinctUntilChanged()
 
     suspend fun setEndScreenNextCountdownEnabled(context: Context, enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED] = enabled
-        }
+        setEndScreenNextPromptMode(
+            context = context,
+            mode = if (enabled) EndScreenNextPromptMode.BOTTOM_RIGHT_COUNTDOWN else EndScreenNextPromptMode.OFF,
+        )
     }
 
     fun getPinchZoomSnapAndBadgeEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
@@ -10212,6 +10253,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_LIVE_AUTO_MINI_PLAYER_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_SHOW_DETAIL_RELATED_VIDEOS, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_NEXT_WATCH_HINT_ENABLED, SettingsShareSection.PLAYBACK),
+            IntShareablePreferenceDefinition(KEY_END_SCREEN_NEXT_PROMPT_MODE, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_AUTO_PLAY, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_RESILIENT_VIDEO_BUFFER, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_WEAK_NETWORK_DEGRADE_PROMPT_ENABLED, SettingsShareSection.PLAYBACK),
@@ -10578,6 +10620,29 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             }
             if (playbackSpeedChanged) {
                 PlayerSettingsStore.reconcilePlaybackSpeedSelections(preferences)
+            }
+            when {
+                KEY_END_SCREEN_NEXT_PROMPT_MODE.name in appliedKeys -> {
+                    val mode = EndScreenNextPromptMode.fromValue(
+                        preferences[KEY_END_SCREEN_NEXT_PROMPT_MODE] ?: EndScreenNextPromptMode.BOTTOM_RIGHT_COUNTDOWN.value
+                    )
+                    preferences[KEY_END_SCREEN_NEXT_PROMPT_MODE] = mode.value
+                    val legacyFlags = resolveLegacyEndScreenPromptFlags(mode)
+                    preferences[KEY_NEXT_WATCH_HINT_ENABLED] = legacyFlags.nextWatchHintEnabled
+                    preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED] = legacyFlags.endScreenNextCountdownEnabled
+                }
+                KEY_NEXT_WATCH_HINT_ENABLED.name in appliedKeys ||
+                    KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED.name in appliedKeys -> {
+                    val migratedMode = resolveEndScreenNextPromptMode(
+                        storedModeValue = null,
+                        legacyNextWatchHintEnabled = preferences[KEY_NEXT_WATCH_HINT_ENABLED],
+                        legacyEndScreenCountdownEnabled = preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED],
+                    )
+                    preferences[KEY_END_SCREEN_NEXT_PROMPT_MODE] = migratedMode.value
+                    val legacyFlags = resolveLegacyEndScreenPromptFlags(migratedMode)
+                    preferences[KEY_NEXT_WATCH_HINT_ENABLED] = legacyFlags.nextWatchHintEnabled
+                    preferences[KEY_END_SCREEN_NEXT_COUNTDOWN_ENABLED] = legacyFlags.endScreenNextCountdownEnabled
+                }
             }
         }
         ContentDisplayPreferences.syncRememberPlayerAdjustments(updated)

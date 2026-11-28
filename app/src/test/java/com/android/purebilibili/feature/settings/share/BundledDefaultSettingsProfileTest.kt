@@ -45,7 +45,6 @@ class BundledDefaultSettingsProfileTest {
         listOf(
             "resume_playback_prompt_enabled",
             "space_played_video_locate_prompt_enabled",
-            "next_watch_hint_enabled",
             "background_playback_enabled",
             "auto_play",
             "auto_highest_quality",
@@ -54,6 +53,7 @@ class BundledDefaultSettingsProfileTest {
         ).forEach { key ->
             assertEquals(JsonPrimitive(false), profile.sections.playback[key], key)
         }
+        assertEquals(JsonPrimitive(0), profile.sections.playback["end_screen_next_prompt_mode"])
         assertEquals(JsonPrimitive(true), profile.sections.playback["click_to_play"])
         assertEquals(JsonPrimitive(true), profile.sections.playback["stop_playback_on_exit"])
         assertEquals(JsonPrimitive(1), profile.sections.playback["playback_completion_behavior"])

@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
 import androidx.compose.runtime.Composable
-import androidx.media3.common.Player
 import com.android.purebilibili.feature.video.interaction.InteractiveChoicePanelUiState
 import com.android.purebilibili.feature.video.player.PlaylistItem
 import com.android.purebilibili.feature.video.ui.components.CoinDialog
@@ -23,7 +22,6 @@ internal fun VideoDetailCommonOverlayAdapter(
     playlistCurrentIndex: Int,
     hazeState: HazeState,
     queuePresentation: ExternalPlaylistQueueSheetPresentation,
-    player: Player,
     onDismissQueue: () -> Unit,
     onVideoSelected: (Int, PlaylistItem) -> Unit,
 ) {
@@ -54,5 +52,5 @@ internal fun VideoDetailCommonOverlayAdapter(
         onDismiss = onDismissQueue,
         onVideoSelected = onVideoSelected,
     )
-    VideoDetailPlaybackEndedDialog(viewModel = playbackViewModel, player = player)
+    VideoDetailCompletionKeepsakeHost(viewModel = playbackViewModel)
 }

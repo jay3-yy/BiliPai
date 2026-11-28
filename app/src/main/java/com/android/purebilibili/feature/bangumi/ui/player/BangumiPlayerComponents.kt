@@ -929,6 +929,7 @@ fun BangumiPlayerView(
                     true
                 } else false
             },
+            fallbackFromCountdown = true,
         )
 
         if (!features.isInPipMode && !features.isAudioOnly) {

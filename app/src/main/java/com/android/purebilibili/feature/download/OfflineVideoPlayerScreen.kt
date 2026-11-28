@@ -1426,6 +1426,7 @@ fun OfflineVideoPlayerScreen(
                         true
                     } else false
                 },
+                fallbackFromCountdown = true,
             )
 
             AnimatedVisibility(

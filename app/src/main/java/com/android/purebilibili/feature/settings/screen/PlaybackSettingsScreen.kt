@@ -1687,8 +1687,11 @@ private fun PlaybackInteractionSettingsSection(
     val autoPlayEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getAutoPlay(context) }.collectAsStateWithLifecycle(initialValue = true)
     val showDetailRelatedVideos by remember(context) { SettingsManager.getShowDetailRelatedVideos(context) }
         .collectAsStateWithLifecycle(initialValue = true)
-    val nextWatchHintEnabled by remember(context) { SettingsManager.getNextWatchHintEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = true)
+    val endScreenNextPromptMode by remember(context) {
+        SettingsManager.getEndScreenNextPromptMode(context)
+    }.collectAsStateWithLifecycle(
+        initialValue = com.android.purebilibili.core.store.EndScreenNextPromptMode.BOTTOM_RIGHT_COUNTDOWN
+    )
     val externalPlaylistAutoContinueEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getExternalPlaylistAutoContinue(context) }.collectAsStateWithLifecycle(initialValue = true)
     val resumePlaybackPromptEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getResumePlaybackPromptEnabled(context) }.collectAsStateWithLifecycle(initialValue = true)
     val spacePlayedVideoLocatePromptEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getSpacePlayedVideoLocatePromptEnabled(context) }.collectAsStateWithLifecycle(initialValue = true)
@@ -1871,15 +1874,38 @@ private fun PlaybackInteractionSettingsSection(
         }
         AppPreferenceDivider()
         SettingsItemAnchor("playback.next_watch_hint_enabled") {
-            AppSwitchPreference(
+            val endScreenPromptOptions = remember {
+                listOf(
+                    AppSegmentOption(
+                        com.android.purebilibili.core.store.EndScreenNextPromptMode.OFF,
+                        com.android.purebilibili.core.store.EndScreenNextPromptMode.OFF.label,
+                    ),
+                    AppSegmentOption(
+                        com.android.purebilibili.core.store.EndScreenNextPromptMode.TOP_RIGHT_HINT,
+                        com.android.purebilibili.core.store.EndScreenNextPromptMode.TOP_RIGHT_HINT.label,
+                    ),
+                    AppSegmentOption(
+                        com.android.purebilibili.core.store.EndScreenNextPromptMode.BOTTOM_RIGHT_COUNTDOWN,
+                        com.android.purebilibili.core.store.EndScreenNextPromptMode.BOTTOM_RIGHT_COUNTDOWN.label,
+                    ),
+                )
+            }
+            SettingsSingleChoicePreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.NEXT_VIDEO_HINT),
                 title = playbackSettingTitle("playback.next_watch_hint_enabled"),
-                subtitle = "视频最后 5 秒显示“接下来观看”提示条（与全屏片尾倒计时浮卡独立控制），关闭不影响自动续播",
-                checked = nextWatchHintEnabled,
-                onCheckedChange = { enabled ->
-                    scope.launch { SettingsManager.setNextWatchHintEnabled(context, enabled) }
+                subtitle = when (endScreenNextPromptMode) {
+                    com.android.purebilibili.core.store.EndScreenNextPromptMode.OFF ->
+                        "片尾不显示下一集或推荐浮卡，关闭不影响自动续播"
+                    com.android.purebilibili.core.store.EndScreenNextPromptMode.TOP_RIGHT_HINT ->
+                        "片尾最后 5 秒在右上角显示轻量下一集提示条，关闭不影响自动续播"
+                    com.android.purebilibili.core.store.EndScreenNextPromptMode.BOTTOM_RIGHT_COUNTDOWN ->
+                        "片尾最后 8 秒在右下角显示倒计时卡片；番剧、离线与竖屏页自动回退为右上角提示"
                 },
-                iconTint = AppContentColors.secondaryText()
+                options = endScreenPromptOptions,
+                selectedValue = endScreenNextPromptMode,
+                onSelectionChange = { mode ->
+                    scope.launch { SettingsManager.setEndScreenNextPromptMode(context, mode) }
+                },
             )
         }
         AppPreferenceDivider()
@@ -2598,7 +2624,6 @@ internal enum class PlaybackFullscreenGroup(private vararg val settingIds: Strin
         "playback.show_fullscreen_time",
         "playback.fullscreen_action_counts",
         "playback.show_fullscreen_action_items",
-        "playback.end_screen_next_countdown_enabled",
     ),
     PROGRESS(
         "playback.chapter_display_mode",
@@ -3907,26 +3932,6 @@ SettingsItemAnchor("playback.app_screenshot_capture_mode") {
                 iconTint = AppContentColors.secondaryText()
             )
             }
-        val endScreenNextCountdownEnabled by remember(context) {
-            SettingsManager.getEndScreenNextCountdownEnabled(context)
-        }.collectAsStateWithLifecycle(initialValue = true)
-        AppPreferenceDivider()
-        SettingsItemAnchor("playback.end_screen_next_countdown_enabled") {
-            AppSwitchPreference(
-                icon = rememberSettingsSemanticIcon(SettingsIconRole.END_SCREEN_NEXT_COUNTDOWN),
-                title = playbackSettingTitle("playback.end_screen_next_countdown_enabled"),
-                subtitle = if (endScreenNextCountdownEnabled) {
-                    "视频临近结束时在画面右下角浮出即将播放倒计时卡片（与“接下来观看卡片”独立控制）"
-                } else {
-                    "关闭后片尾不再浮出即将播放倒计时卡片"
-                },
-                checked = endScreenNextCountdownEnabled,
-                onCheckedChange = { enabled ->
-                    scope.launch { SettingsManager.setEndScreenNextCountdownEnabled(context, enabled) }
-                },
-                iconTint = AppContentColors.secondaryText(),
-            )
-        }
     }
 
     fullscreenPreferenceGroup(PlaybackFullscreenGroup.PROGRESS) {

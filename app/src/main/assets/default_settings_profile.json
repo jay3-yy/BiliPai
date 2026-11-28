@@ -79,7 +79,7 @@
       "auto_rotate_enabled": false,
       "auto_portrait_fullscreen": false,
       "resume_playback_prompt_enabled": false,
-      "next_watch_hint_enabled": false
+      "end_screen_next_prompt_mode": 0
     },
     "gesture": {
       "exp_double_tap_like": false,
