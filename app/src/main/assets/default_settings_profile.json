@@ -89,14 +89,14 @@
       "portrait_swipe_to_fullscreen": false
     },
     "danmaku": {
-      "danmaku_opacity": 0.85,
+      "danmaku_opacity": 0.8,
       "danmaku_font_scale": 1.0,
       "danmaku_speed": 1.0,
       "danmaku_area": 0.5,
       "danmaku_font_weight": 5,
-      "danmaku_stroke_width": 1.5,
-      "danmaku_line_height": 1.6,
-      "danmaku_scroll_duration_seconds": 7.0,
+      "danmaku_stroke_width": 1.0,
+      "danmaku_line_height": 1.2,
+      "danmaku_scroll_duration_seconds": 8.0,
       "danmaku_static_duration_seconds": 4.0,
       "danmaku_scroll_fixed_velocity": false,
       "danmaku_static_to_scroll": false,

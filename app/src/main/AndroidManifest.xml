@@ -16491,6 +16491,18 @@
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
         </activity-alias>
         <!-- END BILIPAI THEME ICON PALETTE -->
+
+        <!-- Baseline Profile 写入由 PureApplication 统一延后到后台低优先级执行，
+             禁用 androidx.startup 自动注册的 ProfileInstallerInitializer，避免更新后首启双重触发。 -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+                tools:node="remove" />
+        </provider>
     </application>
 
 </manifest>

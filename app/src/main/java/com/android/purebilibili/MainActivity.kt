@@ -1000,6 +1000,7 @@ class MainActivity : AppCompatActivity() {
     //  小窗管理器
     private lateinit var miniPlayerManager: MiniPlayerManager
     private var hasCompletedInitialResume = false
+    private var preferredDisplayModeIdSnapshot: Int? = null
     private var splashFlyoutEnabledAtCreate = false
     private var splashExitCallbackTriggered = false
     private var systemSplashExited by mutableStateOf(false)
@@ -1155,7 +1156,10 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         bindPerformanceCapture(kind = "main")
         lifecycleScope.launch {
-            applyPreferredDisplayMode(SettingsManager.getScreenDisplayModeId(this@MainActivity).first())
+            SettingsManager.getScreenDisplayModeId(this@MainActivity).collect { preferredModeId ->
+                preferredDisplayModeIdSnapshot = preferredModeId
+                applyPreferredDisplayMode(preferredModeId)
+            }
         }
         //  初始调用，后续会根据主题动态更新
         enableEdgeToEdge()
@@ -2950,6 +2954,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (startupRecoveryRedirected) return
+        preferredDisplayModeIdSnapshot?.let(::applyPreferredDisplayMode)
         maybeReportFullyDrawn()
         refreshAndroid17HandoffAvailability()
         refreshSystemThemeSnapshot(reason = "resume")

@@ -1,10 +1,22 @@
 package com.android.purebilibili.feature.anime4k.gl
 
 import android.opengl.GLES30
+import android.os.Build
+import com.android.purebilibili.core.coroutines.AppScope
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+
+internal fun buildGlDriverSignature(
+    vendor: String,
+    renderer: String,
+    version: String,
+    buildFingerprint: String = Build.FINGERPRINT.orEmpty(),
+): String = "$vendor|$renderer|$version|$buildFingerprint"
 
 internal fun buildGlProgramBinaryCacheKey(
     driverSignature: String,
@@ -41,9 +53,32 @@ internal fun deserializeGlProgramBinary(raw: ByteArray): Pair<Int, ByteArray>? {
     return format to raw.copyOfRange(4, raw.size)
 }
 
+internal fun writeGlProgramBinaryAtomically(
+    dir: File,
+    target: File,
+    serializedPayload: ByteArray,
+    maxCachedPrograms: Int,
+) {
+    if (!dir.exists()) dir.mkdirs()
+    val temp = File(dir, "${target.name}.tmp")
+    temp.writeBytes(serializedPayload)
+    if (!temp.renameTo(target)) {
+        target.writeBytes(serializedPayload)
+        temp.delete()
+    }
+    val files = dir.listFiles { file -> file.isFile && file.name.endsWith(".bin") } ?: return
+    if (files.size <= maxCachedPrograms) return
+    files.sortBy { it.lastModified() }
+    val removeCount = files.size - maxCachedPrograms
+    for (i in 0 until removeCount) {
+        files[i].delete()
+    }
+}
+
 /**
  * GLES 3.0 Program Binary 磁盘缓存。
- * 绑定当前 GPU 驱动指纹与着色器源码哈希，二次创建 Surface 时跳过多 Pass CNN GLSL 编译。
+ * 绑定当前 GPU 驱动指纹与系统构建指纹，二次创建 Surface 时跳过多 Pass CNN GLSL 编译；
+ * 二进制提取在 GL 线程完成，磁盘落盘与 LRU 淘汰异步派发至后台 IO 线程。
  */
 internal class GlProgramBinaryCache(cacheRootDir: File?) {
     private val cacheDir: File? = cacheRootDir?.let { File(it, CACHE_DIR_NAME) }
@@ -60,10 +95,11 @@ internal class GlProgramBinaryCache(cacheRootDir: File?) {
         GLES30.glGetIntegerv(GLES30.GL_NUM_PROGRAM_BINARY_FORMATS, count, 0)
         supported = count[0] > 0
         driverSignature = if (supported) {
-            val vendor = GLES30.glGetString(GLES30.GL_VENDOR).orEmpty()
-            val renderer = GLES30.glGetString(GLES30.GL_RENDERER).orEmpty()
-            val version = GLES30.glGetString(GLES30.GL_VERSION).orEmpty()
-            "$vendor|$renderer|$version"
+            buildGlDriverSignature(
+                vendor = GLES30.glGetString(GLES30.GL_VENDOR).orEmpty(),
+                renderer = GLES30.glGetString(GLES30.GL_RENDERER).orEmpty(),
+                version = GLES30.glGetString(GLES30.GL_VERSION).orEmpty(),
+            )
         } else {
             ""
         }
@@ -78,7 +114,7 @@ internal class GlProgramBinaryCache(cacheRootDir: File?) {
         if (!file.isFile) return 0
         val payload = runCatching { file.readBytes() }.getOrNull() ?: return 0
         val (format, binary) = deserializeGlProgramBinary(payload) ?: run {
-            file.delete()
+            deleteFileAsync(file)
             return 0
         }
         val program = GLES30.glCreateProgram()
@@ -93,11 +129,11 @@ internal class GlProgramBinaryCache(cacheRootDir: File?) {
         val linked = IntArray(1)
         GLES30.glGetProgramiv(program, GLES30.GL_LINK_STATUS, linked, 0)
         if (linked[0] == GLES30.GL_TRUE) {
-            file.setLastModified(System.currentTimeMillis())
+            touchFileAsync(file)
             return program
         }
         GLES30.glDeleteProgram(program)
-        file.delete()
+        deleteFileAsync(file)
         return 0
     }
 
@@ -119,34 +155,41 @@ internal class GlProgramBinaryCache(cacheRootDir: File?) {
         val bytes = ByteArray(written)
         buffer.position(0)
         buffer.get(bytes, 0, written)
-        runCatching {
-            if (!dir.exists()) dir.mkdirs()
-            val target = cacheFile(vertexSource, fragmentSource) ?: return
-            val temp = File(dir, "${target.name}.tmp")
-            temp.writeBytes(serializeGlProgramBinary(binaryFormat[0], bytes))
-            if (!temp.renameTo(target)) {
-                target.writeBytes(serializeGlProgramBinary(binaryFormat[0], bytes))
-                temp.delete()
+        val target = cacheFile(vertexSource, fragmentSource) ?: return
+        val serialized = serializeGlProgramBinary(binaryFormat[0], bytes)
+        AppScope.ioScope.launch(cacheIoDispatcher) {
+            runCatching {
+                writeGlProgramBinaryAtomically(
+                    dir = dir,
+                    target = target,
+                    serializedPayload = serialized,
+                    maxCachedPrograms = MAX_CACHED_PROGRAMS,
+                )
             }
-            trimCacheIfNeeded(dir)
+        }
+    }
+
+    private fun touchFileAsync(file: File) {
+        AppScope.ioScope.launch(cacheIoDispatcher) {
+            runCatching { file.setLastModified(System.currentTimeMillis()) }
+        }
+    }
+
+    private fun deleteFileAsync(file: File) {
+        AppScope.ioScope.launch(cacheIoDispatcher) {
+            runCatching { file.delete() }
         }
     }
 
     private fun cacheFile(vertexSource: String, fragmentSource: String): File? =
         cacheDir?.let { File(it, "${buildGlProgramBinaryCacheKey(driverSignature, vertexSource, fragmentSource)}.bin") }
 
-    private fun trimCacheIfNeeded(dir: File) {
-        val files = dir.listFiles { file -> file.isFile && file.name.endsWith(".bin") } ?: return
-        if (files.size <= MAX_CACHED_PROGRAMS) return
-        files.sortBy { it.lastModified() }
-        val removeCount = files.size - MAX_CACHED_PROGRAMS
-        for (i in 0 until removeCount) {
-            files[i].delete()
-        }
-    }
-
     private companion object {
         const val CACHE_DIR_NAME = "anime4k_gl_cache"
         const val MAX_CACHED_PROGRAMS = 48
+
+        // 单并发 FIFO 串行派发，确保 tryLoadProgram 触发的坏缓存删除严格先于紧随其后的新缓存写入。
+        @OptIn(ExperimentalCoroutinesApi::class)
+        val cacheIoDispatcher = Dispatchers.IO.limitedParallelism(1)
     }
 }

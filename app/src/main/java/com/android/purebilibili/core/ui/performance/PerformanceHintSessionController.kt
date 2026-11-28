@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.PerformanceHintManager
 import android.os.Process
+import android.os.SystemClock
 import androidx.annotation.RequiresApi
 import kotlin.math.roundToLong
 
@@ -74,10 +75,21 @@ internal fun shouldReportPerformanceHintSample(
 }
 
 /**
+ * 统一 ADPF 计时时钟：Android 15+ 使用 `SystemClock.uptimeNanos()`，低版本回退 `System.nanoTime()`。
+ */
+internal fun currentAdpfClockNanos(): Long =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+        SystemClock.uptimeNanos()
+    } else {
+        System.nanoTime()
+    }
+
+/**
  * Android 12+ ADPF（`PerformanceHintManager.Session`）轻量控制器，专用于 HWUI 未纳管的应用自建渲染线程
  * （例如 `Anime4KPipelineRenderer` 的 GL 渲染线程）：
  * - 校验线程 TID 变化（Android 14+ 走 `setThreads`，低版本关闭重建）；
  * - 缓存设备不支持状态，避免反复发起失败的 Binder IPC；
+ * - 未采集可靠独立 CPU/GPU 经过时间分项前，统一按实际经过总时长上报 `reportActualWorkDuration(long)`；
  * - Android 15+ 支持 `setPreferPowerEfficiency` 与 `DeviceThermalBudgetState` 联动；
  * - 切后台、暂停或释放资源时立即 `close()`。
  */
@@ -112,7 +124,10 @@ internal class PerformanceHintSessionController(context: Context) {
         }
     }
 
-    fun reportWorkDuration(actualDurationNanos: Long, nowNanos: Long = System.nanoTime()) {
+    fun reportWorkDuration(
+        actualDurationNanos: Long,
+        nowNanos: Long = currentAdpfClockNanos(),
+    ) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         synchronized(lock) {
             if (api31Session == null) return

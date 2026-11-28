@@ -11,6 +11,7 @@ import com.android.purebilibili.core.ui.adaptive.DeviceThermalBudgetState
 import com.android.purebilibili.core.ui.adaptive.DeviceThermalTier
 import com.android.purebilibili.core.ui.performance.DEFAULT_ADPF_TARGET_FRAME_NANOS
 import com.android.purebilibili.core.ui.performance.PerformanceHintSessionController
+import com.android.purebilibili.core.ui.performance.currentAdpfClockNanos
 import com.android.purebilibili.core.ui.performance.resolveAdaptiveGlTargetFrameDurationNanos
 import com.android.purebilibili.plugin.sdk.Anime4KConfig
 import com.android.purebilibili.plugin.sdk.Anime4KPreset
@@ -167,7 +168,7 @@ internal class Anime4KPipelineRenderer(
     override fun onDrawFrame(unused: javax.microedition.khronos.opengles.GL10?) {
         if (failed) return
         try {
-            val renderStartedNs = System.nanoTime()
+            val renderStartedNs = currentAdpfClockNanos()
             val latchedNewFrame = frameAvailable
             if (latchedNewFrame) {
                 frameAvailable = false
@@ -183,12 +184,16 @@ internal class Anime4KPipelineRenderer(
 
             performanceHintSession.ensureStartedForCurrentThread(activeAdpfTargetDurationNs)
             renderFrame()
-            val renderElapsedNs = System.nanoTime() - renderStartedNs
+            val renderFinishedNs = currentAdpfClockNanos()
+            val renderElapsedNs = (renderFinishedNs - renderStartedNs).coerceAtLeast(0L)
             if (skipNextAdpfReport) {
                 // 跳过首帧与 FBO 重建首帧，避免一次性显存分配毛刺误触发 PowerHAL 长时间拉频。
                 skipNextAdpfReport = false
             } else {
-                performanceHintSession.reportWorkDuration(renderElapsedNs)
+                performanceHintSession.reportWorkDuration(
+                    actualDurationNanos = renderElapsedNs,
+                    nowNanos = renderFinishedNs,
+                )
             }
             observeRenderTime(renderElapsedNs)
             if (!notifiedFirstFrame) {

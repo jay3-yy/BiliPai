@@ -1126,20 +1126,20 @@ data class DanmakuSettings(
     val tapInteractionEnabled: Boolean = true,
     val enabled: Boolean = true,
     val opacity: Float = DANMAKU_DEFAULT_OPACITY,
-    val fontScale: Float = 1.0f,
-    val speed: Float = 1.0f,
-    val displayArea: Float = 0.5f,
-    val fontWeight: Int = 5,
-    val strokeWidth: Float = 1.5f,
-    val lineHeight: Float = 1.6f,
-    val scrollDurationSeconds: Float = 7.0f,
-    val staticDurationSeconds: Float = 4.0f,
+    val fontScale: Float = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_FONT_SCALE,
+    val speed: Float = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_SPEED,
+    val displayArea: Float = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_DISPLAY_AREA,
+    val fontWeight: Int = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_FONT_WEIGHT,
+    val strokeWidth: Float = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_STROKE_WIDTH,
+    val lineHeight: Float = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_LINE_HEIGHT,
+    val scrollDurationSeconds: Float = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_SCROLL_DURATION_SECONDS,
+    val staticDurationSeconds: Float = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_STATIC_DURATION_SECONDS,
     val scrollFixedVelocity: Boolean = false,
     val staticDanmakuToScroll: Boolean = false,
     val massiveMode: Boolean = false,
     val mergeDuplicates: Boolean = true,
-    val duplicateMergeWindowMs: Int = 15_000,
-    val duplicateMergeCountThreshold: Int = 2,
+    val duplicateMergeWindowMs: Int = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_DUPLICATE_MERGE_WINDOW_MS,
+    val duplicateMergeCountThreshold: Int = com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_DUPLICATE_MERGE_COUNT_THRESHOLD,
     val duplicateSuppressThreshold: Int = 0,
     val allowScroll: Boolean = true,
     val allowTop: Boolean = true,
@@ -2462,6 +2462,143 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getResilientVideoBufferSync(context: Context): Boolean =
         context.getSharedPreferences("auto_play_cache", Context.MODE_PRIVATE)
             .getBoolean(CACHE_KEY_RESILIENT_VIDEO_BUFFER, false)
+
+    private val KEY_WEAK_NETWORK_DEGRADE_PROMPT_ENABLED =
+        booleanPreferencesKey("weak_network_degrade_prompt_enabled")
+    private val KEY_WEAK_NETWORK_PROMPT_STRICTNESS =
+        intPreferencesKey("weak_network_prompt_strictness")
+    private val KEY_WEAK_NETWORK_PROMPT_CONSECUTIVE_NEGATIVE =
+        intPreferencesKey("weak_network_prompt_consecutive_negative")
+    private val KEY_WEAK_NETWORK_PROMPT_ACCEPTED_COUNT =
+        intPreferencesKey("weak_network_prompt_accepted_count")
+    private val KEY_WEAK_NETWORK_PROMPT_DISMISSED_COUNT =
+        intPreferencesKey("weak_network_prompt_dismissed_count")
+    private val KEY_WEAK_NETWORK_PROMPT_IGNORED_COUNT =
+        intPreferencesKey("weak_network_prompt_ignored_count")
+    private val KEY_WEAK_NETWORK_PROMPT_COOLDOWN_UNTIL =
+        longPreferencesKey("weak_network_prompt_cooldown_until")
+    private val KEY_WEAK_NETWORK_PROMPT_MOBILE_STRICTNESS =
+        intPreferencesKey("weak_network_prompt_mobile_strictness")
+    private val KEY_WEAK_NETWORK_PROMPT_MOBILE_CONSECUTIVE_NEGATIVE =
+        intPreferencesKey("weak_network_prompt_mobile_consecutive_negative")
+    private val KEY_WEAK_NETWORK_PROMPT_MOBILE_ACCEPTED_COUNT =
+        intPreferencesKey("weak_network_prompt_mobile_accepted_count")
+    private val KEY_WEAK_NETWORK_PROMPT_MOBILE_DISMISSED_COUNT =
+        intPreferencesKey("weak_network_prompt_mobile_dismissed_count")
+    private val KEY_WEAK_NETWORK_PROMPT_MOBILE_IGNORED_COUNT =
+        intPreferencesKey("weak_network_prompt_mobile_ignored_count")
+    private val KEY_WEAK_NETWORK_PROMPT_MOBILE_COOLDOWN_UNTIL =
+        longPreferencesKey("weak_network_prompt_mobile_cooldown_until")
+
+    fun getWeakNetworkDegradePromptEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { it[KEY_WEAK_NETWORK_DEGRADE_PROMPT_ENABLED] ?: true }
+
+    suspend fun setWeakNetworkDegradePromptEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[KEY_WEAK_NETWORK_DEGRADE_PROMPT_ENABLED] = enabled
+            if (enabled) {
+                prefs[KEY_WEAK_NETWORK_PROMPT_COOLDOWN_UNTIL] = 0L
+                prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_COOLDOWN_UNTIL] = 0L
+            }
+        }
+    }
+
+    internal fun getWeakNetworkAdaptiveLearningState(
+        context: Context,
+    ): Flow<com.android.purebilibili.feature.video.ui.overlay.WeakNetworkAdaptiveState> =
+        context.settingsDataStore.data.map { prefs ->
+            com.android.purebilibili.feature.video.ui.overlay.WeakNetworkAdaptiveState(
+                wifi = com.android.purebilibili.feature.video.ui.overlay.WeakNetworkLearningState(
+                    strictnessScore = prefs[KEY_WEAK_NETWORK_PROMPT_STRICTNESS] ?: 0,
+                    consecutiveNegativeCount = prefs[KEY_WEAK_NETWORK_PROMPT_CONSECUTIVE_NEGATIVE] ?: 0,
+                    acceptedCount = prefs[KEY_WEAK_NETWORK_PROMPT_ACCEPTED_COUNT] ?: 0,
+                    dismissedCount = prefs[KEY_WEAK_NETWORK_PROMPT_DISMISSED_COUNT] ?: 0,
+                    ignoredCount = prefs[KEY_WEAK_NETWORK_PROMPT_IGNORED_COUNT] ?: 0,
+                    cooldownUntilEpochMs = prefs[KEY_WEAK_NETWORK_PROMPT_COOLDOWN_UNTIL] ?: 0L,
+                ),
+                cellular = com.android.purebilibili.feature.video.ui.overlay.WeakNetworkLearningState(
+                    strictnessScore = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_STRICTNESS] ?: 0,
+                    consecutiveNegativeCount = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_CONSECUTIVE_NEGATIVE] ?: 0,
+                    acceptedCount = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_ACCEPTED_COUNT] ?: 0,
+                    dismissedCount = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_DISMISSED_COUNT] ?: 0,
+                    ignoredCount = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_IGNORED_COUNT] ?: 0,
+                    cooldownUntilEpochMs = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_COOLDOWN_UNTIL] ?: 0L,
+                ),
+            )
+        }
+
+    internal suspend fun recordWeakNetworkPromptOutcome(
+        context: Context,
+        bucket: com.android.purebilibili.feature.video.ui.overlay.WeakNetworkBucket,
+        outcome: com.android.purebilibili.feature.video.ui.overlay.WeakNetworkPromptOutcome,
+        nowEpochMs: Long = System.currentTimeMillis(),
+    ) {
+        context.settingsDataStore.edit { prefs ->
+            when (bucket) {
+                com.android.purebilibili.feature.video.ui.overlay.WeakNetworkBucket.WIFI -> {
+                    val current = com.android.purebilibili.feature.video.ui.overlay.WeakNetworkLearningState(
+                        strictnessScore = prefs[KEY_WEAK_NETWORK_PROMPT_STRICTNESS] ?: 0,
+                        consecutiveNegativeCount = prefs[KEY_WEAK_NETWORK_PROMPT_CONSECUTIVE_NEGATIVE] ?: 0,
+                        acceptedCount = prefs[KEY_WEAK_NETWORK_PROMPT_ACCEPTED_COUNT] ?: 0,
+                        dismissedCount = prefs[KEY_WEAK_NETWORK_PROMPT_DISMISSED_COUNT] ?: 0,
+                        ignoredCount = prefs[KEY_WEAK_NETWORK_PROMPT_IGNORED_COUNT] ?: 0,
+                        cooldownUntilEpochMs = prefs[KEY_WEAK_NETWORK_PROMPT_COOLDOWN_UNTIL] ?: 0L,
+                    )
+                    val updated = com.android.purebilibili.feature.video.ui.overlay.recordWeakNetworkPromptOutcome(
+                        state = current,
+                        outcome = outcome,
+                        nowEpochMs = nowEpochMs,
+                    )
+                    prefs[KEY_WEAK_NETWORK_PROMPT_STRICTNESS] = updated.strictnessScore
+                    prefs[KEY_WEAK_NETWORK_PROMPT_CONSECUTIVE_NEGATIVE] = updated.consecutiveNegativeCount
+                    prefs[KEY_WEAK_NETWORK_PROMPT_ACCEPTED_COUNT] = updated.acceptedCount
+                    prefs[KEY_WEAK_NETWORK_PROMPT_DISMISSED_COUNT] = updated.dismissedCount
+                    prefs[KEY_WEAK_NETWORK_PROMPT_IGNORED_COUNT] = updated.ignoredCount
+                    prefs[KEY_WEAK_NETWORK_PROMPT_COOLDOWN_UNTIL] = updated.cooldownUntilEpochMs
+                }
+
+                com.android.purebilibili.feature.video.ui.overlay.WeakNetworkBucket.CELLULAR -> {
+                    val current = com.android.purebilibili.feature.video.ui.overlay.WeakNetworkLearningState(
+                        strictnessScore = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_STRICTNESS] ?: 0,
+                        consecutiveNegativeCount = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_CONSECUTIVE_NEGATIVE] ?: 0,
+                        acceptedCount = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_ACCEPTED_COUNT] ?: 0,
+                        dismissedCount = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_DISMISSED_COUNT] ?: 0,
+                        ignoredCount = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_IGNORED_COUNT] ?: 0,
+                        cooldownUntilEpochMs = prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_COOLDOWN_UNTIL] ?: 0L,
+                    )
+                    val updated = com.android.purebilibili.feature.video.ui.overlay.recordWeakNetworkPromptOutcome(
+                        state = current,
+                        outcome = outcome,
+                        nowEpochMs = nowEpochMs,
+                    )
+                    prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_STRICTNESS] = updated.strictnessScore
+                    prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_CONSECUTIVE_NEGATIVE] = updated.consecutiveNegativeCount
+                    prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_ACCEPTED_COUNT] = updated.acceptedCount
+                    prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_DISMISSED_COUNT] = updated.dismissedCount
+                    prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_IGNORED_COUNT] = updated.ignoredCount
+                    prefs[KEY_WEAK_NETWORK_PROMPT_MOBILE_COOLDOWN_UNTIL] = updated.cooldownUntilEpochMs
+                }
+            }
+        }
+    }
+
+    suspend fun resetWeakNetworkPromptLearning(context: Context) {
+        context.settingsDataStore.edit { prefs ->
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_STRICTNESS)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_CONSECUTIVE_NEGATIVE)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_ACCEPTED_COUNT)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_DISMISSED_COUNT)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_IGNORED_COUNT)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_COOLDOWN_UNTIL)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_MOBILE_STRICTNESS)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_MOBILE_CONSECUTIVE_NEGATIVE)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_MOBILE_ACCEPTED_COUNT)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_MOBILE_DISMISSED_COUNT)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_MOBILE_IGNORED_COUNT)
+            prefs.remove(KEY_WEAK_NETWORK_PROMPT_MOBILE_COOLDOWN_UNTIL)
+        }
+    }
 
     private val KEY_EXTERNAL_PLAYLIST_AUTO_CONTINUE =
         booleanPreferencesKey("external_playlist_auto_continue")
@@ -5520,20 +5657,30 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     
     // ==========  弹幕设置 ==========
     
-    private const val DANMAKU_DEFAULTS_VERSION = 5
+    private const val DANMAKU_DEFAULTS_VERSION = 6
     // v4: restore navigation icon cross-scale as the default without resetting other visual choices.
     private const val HOME_VISUAL_DEFAULTS_VERSION = 4
     private const val DEFAULT_DANMAKU_OPACITY = DANMAKU_DEFAULT_OPACITY
-    private const val DEFAULT_DANMAKU_FONT_SCALE = 1.0f
-    private const val DEFAULT_DANMAKU_SPEED = 1.0f
-    private const val DEFAULT_DANMAKU_AREA = 0.5f
-    private const val DEFAULT_DANMAKU_FONT_WEIGHT = 5
-    private const val DEFAULT_DANMAKU_STROKE_WIDTH = 1.5f
-    private const val DEFAULT_DANMAKU_LINE_HEIGHT = 1.6f
-    private const val DEFAULT_DANMAKU_SCROLL_DURATION_SECONDS = 7.0f
-    private const val DEFAULT_DANMAKU_STATIC_DURATION_SECONDS = 4.0f
-    private const val DEFAULT_DANMAKU_DUPLICATE_MERGE_WINDOW_MS = 15_000
-    private const val DEFAULT_DANMAKU_DUPLICATE_MERGE_COUNT_THRESHOLD = 2
+    private const val DEFAULT_DANMAKU_FONT_SCALE =
+        com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_FONT_SCALE
+    private const val DEFAULT_DANMAKU_SPEED =
+        com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_SPEED
+    private const val DEFAULT_DANMAKU_AREA =
+        com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_DISPLAY_AREA
+    private const val DEFAULT_DANMAKU_FONT_WEIGHT =
+        com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_FONT_WEIGHT
+    private const val DEFAULT_DANMAKU_STROKE_WIDTH =
+        com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_STROKE_WIDTH
+    private const val DEFAULT_DANMAKU_LINE_HEIGHT =
+        com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_LINE_HEIGHT
+    private const val DEFAULT_DANMAKU_SCROLL_DURATION_SECONDS =
+        com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_SCROLL_DURATION_SECONDS
+    private const val DEFAULT_DANMAKU_STATIC_DURATION_SECONDS =
+        com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_STATIC_DURATION_SECONDS
+    private const val DEFAULT_DANMAKU_DUPLICATE_MERGE_WINDOW_MS =
+        com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_DUPLICATE_MERGE_WINDOW_MS
+    private const val DEFAULT_DANMAKU_DUPLICATE_MERGE_COUNT_THRESHOLD =
+        com.android.purebilibili.feature.video.danmaku.DANMAKU_DEFAULT_DUPLICATE_MERGE_COUNT_THRESHOLD
 
     private fun normalizeDanmakuFontWeight(value: Int?): Int {
         return (value ?: DEFAULT_DANMAKU_FONT_WEIGHT).coerceIn(1, 9)
@@ -10071,6 +10218,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_NEXT_WATCH_HINT_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_AUTO_PLAY, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_RESILIENT_VIDEO_BUFFER, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(KEY_WEAK_NETWORK_DEGRADE_PROMPT_ENABLED, SettingsShareSection.PLAYBACK),
             IntShareablePreferenceDefinition(KEY_PLAYBACK_COMPLETION_BEHAVIOR, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_HW_DECODE, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_BG_PLAY, SettingsShareSection.PLAYBACK),

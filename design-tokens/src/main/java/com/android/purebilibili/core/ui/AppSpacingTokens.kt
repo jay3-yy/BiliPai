@@ -10,6 +10,8 @@ object AppSpacingTokens {
     val Small = 8.dp
     val Medium = 12.dp
     val Large = 16.dp
+    /** Canonical horizontal page outer margin shared across top-level tabs, detail screens, and sheets. */
+    val PageHorizontal = Large
     val ExtraLarge = 24.dp
     val DoubleExtraLarge = 32.dp
     val TripleExtraLarge = 48.dp

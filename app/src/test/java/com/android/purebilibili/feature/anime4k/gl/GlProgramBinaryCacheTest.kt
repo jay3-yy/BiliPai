@@ -1,11 +1,15 @@
 package com.android.purebilibili.feature.anime4k.gl
 
+import java.io.File
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GlProgramBinaryCacheTest {
     @Test
@@ -39,5 +43,34 @@ class GlProgramBinaryCacheTest {
 
         assertNull(deserializeGlProgramBinary(byteArrayOf()))
         assertNull(deserializeGlProgramBinary(byteArrayOf(1, 2, 3, 4)))
+    }
+
+    @Test
+    fun driverSignatureIncludesBuildFingerprintAndAtomicWriteEvictsOldestEntries() {
+        val sigA = buildGlDriverSignature("Qualcomm", "Adreno 740", "OpenGL ES 3.2", "oem/dev/15/A")
+        val sigB = buildGlDriverSignature("Qualcomm", "Adreno 740", "OpenGL ES 3.2", "oem/dev/15/B")
+        assertNotEquals(
+            buildGlProgramBinaryCacheKey(sigA, "vs", "fs"),
+            buildGlProgramBinaryCacheKey(sigB, "vs", "fs"),
+        )
+
+        val tempDir = Files.createTempDirectory("gl_program_cache_test").toFile()
+        try {
+            val first = File(tempDir, "a.bin")
+            val second = File(tempDir, "b.bin")
+            val third = File(tempDir, "c.bin")
+            writeGlProgramBinaryAtomically(tempDir, first, serializeGlProgramBinary(1, byteArrayOf(1)), maxCachedPrograms = 2)
+            first.setLastModified(1_000L)
+            writeGlProgramBinaryAtomically(tempDir, second, serializeGlProgramBinary(1, byteArrayOf(2)), maxCachedPrograms = 2)
+            second.setLastModified(2_000L)
+            writeGlProgramBinaryAtomically(tempDir, third, serializeGlProgramBinary(1, byteArrayOf(3)), maxCachedPrograms = 2)
+
+            assertFalse(first.exists())
+            assertTrue(second.exists())
+            assertTrue(third.exists())
+            assertFalse(File(tempDir, "c.bin.tmp").exists())
+        } finally {
+            tempDir.deleteRecursively()
+        }
     }
 }

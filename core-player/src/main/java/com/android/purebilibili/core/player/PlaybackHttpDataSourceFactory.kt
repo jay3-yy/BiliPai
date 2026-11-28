@@ -71,6 +71,25 @@ private fun probeProxySelectorOffMain(): Boolean {
     return proxies.any { it.type() != Proxy.Type.DIRECT }
 }
 
+internal class DeferredPrimaryDataSourceFactory(
+    private val primaryFactoryProvider: () -> DataSource.Factory?,
+    private val fallbackFactory: DataSource.Factory,
+    private val shouldUsePrimary: () -> Boolean = { true },
+) : DataSource.Factory {
+    @Volatile
+    private var cachedPrimaryFactory: DataSource.Factory? = null
+
+    override fun createDataSource(): DataSource {
+        if (!shouldUsePrimary()) {
+            return fallbackFactory.createDataSource()
+        }
+        val primary = cachedPrimaryFactory ?: primaryFactoryProvider()?.also {
+            cachedPrimaryFactory = it
+        }
+        return (primary ?: fallbackFactory).createDataSource()
+    }
+}
+
 /**
  * 为媒体播放构造上游 HTTP `DataSource.Factory`：
  * - Android 14+ 优先走系统内置 `HttpEngine`（支持 HTTP/3 QUIC、0-RTT 与无队头阻塞，零 APK 体积增量）；
@@ -151,6 +170,9 @@ object PlaybackHttpDataSourceFactory {
         }
         val trustAll = shouldEnableTrustAllCertificates(CoreNetworkRuntime.config.debug)
         val systemProxyActive = hasSystemProxyProperty() || systemProxyDetected
+        val fallbackFactory = OkHttpDataSource.Factory(fallbackClient).apply {
+            if (headers.isNotEmpty()) setDefaultRequestProperties(headers)
+        }
         if (appContext != null &&
             !engineInitFailed &&
             shouldUsePlatformHttpEngine(
@@ -165,10 +187,14 @@ object PlaybackHttpDataSourceFactory {
         ) {
             createHttpEngineFactoryIfReadyApi34(headers)?.let { return it }
             warmUpAsync(appContext)
+            // 预热尚未完成时返回动态委托工厂，后续切曲/重建流时自动无缝切到 HttpEngine。
+            return DeferredPrimaryDataSourceFactory(
+                primaryFactoryProvider = { createHttpEngineFactoryIfReadyApi34(headers) },
+                fallbackFactory = fallbackFactory,
+                shouldUsePrimary = { !engineInitFailed && !hasSystemProxyProperty() && !systemProxyDetected },
+            )
         }
-        return OkHttpDataSource.Factory(fallbackClient).apply {
-            if (headers.isNotEmpty()) setDefaultRequestProperties(headers)
-        }
+        return fallbackFactory
     }
 
     @RequiresExtension(extension = Build.VERSION_CODES.S, version = HTTP_ENGINE_MIN_S_EXTENSION_VERSION)

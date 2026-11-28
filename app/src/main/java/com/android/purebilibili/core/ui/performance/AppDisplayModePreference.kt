@@ -61,7 +61,11 @@ internal fun Activity.applyPreferredDisplayMode(preferredModeId: Int) {
         preferredModeId = preferredModeId,
         supportedModes = supportedAppDisplayModes(),
     )
-    window.attributes = window.attributes.apply {
+    val currentAttrs = window.attributes
+    if (currentAttrs.preferredDisplayModeId == resolvedModeId && currentAttrs.preferredRefreshRate == 0f) {
+        return
+    }
+    window.attributes = currentAttrs.apply {
         preferredDisplayModeId = resolvedModeId
         preferredRefreshRate = 0f
     }

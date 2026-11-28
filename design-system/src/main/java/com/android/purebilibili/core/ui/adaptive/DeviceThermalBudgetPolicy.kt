@@ -18,6 +18,33 @@ enum class DeviceThermalTier {
 
 const val THERMAL_HEADROOM_ELEVATED_THRESHOLD = 0.88f
 const val THERMAL_HEADROOM_CRITICAL_THRESHOLD = 1.0f
+private const val THERMAL_STATUS_MODERATE_CODE = 2
+private const val THERMAL_STATUS_SEVERE_CODE = 3
+
+/**
+ * 温控预测值（`getThermalHeadroom`）对应的降档阈值：
+ * - Android 15+ 优先采用 `PowerManager.getThermalHeadroomThresholds()` 返回的设备校准值；
+ * - 低版本或平台暂不可用时回退至保守默认值。
+ */
+data class ThermalHeadroomThresholds(
+    val elevated: Float = THERMAL_HEADROOM_ELEVATED_THRESHOLD,
+    val critical: Float = THERMAL_HEADROOM_CRITICAL_THRESHOLD,
+)
+
+fun resolveThermalHeadroomThresholds(
+    statusThresholds: Map<Int, Float>,
+): ThermalHeadroomThresholds {
+    val rawCritical = statusThresholds[THERMAL_STATUS_SEVERE_CODE]
+        ?.takeIf { it.isFinite() && it > 0f }
+        ?: THERMAL_HEADROOM_CRITICAL_THRESHOLD
+    val rawElevated = statusThresholds[THERMAL_STATUS_MODERATE_CODE]
+        ?.takeIf { it.isFinite() && it > 0f }
+        ?: THERMAL_HEADROOM_ELEVATED_THRESHOLD
+    return ThermalHeadroomThresholds(
+        elevated = minOf(rawElevated, rawCritical),
+        critical = rawCritical,
+    )
+}
 
 /**
  * 根据 `PowerManager.currentThermalStatus`、`getThermalHeadroom` 预测值与省电模式解析设备档位。
@@ -27,16 +54,52 @@ fun resolveDeviceThermalTier(
     thermalStatus: Int,
     thermalHeadroom: Float = Float.NaN,
     powerSaveMode: Boolean = false,
+    headroomThresholds: ThermalHeadroomThresholds = ThermalHeadroomThresholds(),
 ): DeviceThermalTier {
-    val headroomCritical = thermalHeadroom.isFinite() && thermalHeadroom >= THERMAL_HEADROOM_CRITICAL_THRESHOLD
-    if (thermalStatus >= 3 || headroomCritical) {
+    val headroomCritical = thermalHeadroom.isFinite() && thermalHeadroom >= headroomThresholds.critical
+    if (thermalStatus >= THERMAL_STATUS_SEVERE_CODE || headroomCritical) {
         return DeviceThermalTier.CRITICAL
     }
-    val headroomElevated = thermalHeadroom.isFinite() && thermalHeadroom >= THERMAL_HEADROOM_ELEVATED_THRESHOLD
-    if (powerSaveMode || thermalStatus >= 2 || headroomElevated) {
+    val headroomElevated = thermalHeadroom.isFinite() && thermalHeadroom >= headroomThresholds.elevated
+    if (powerSaveMode || thermalStatus >= THERMAL_STATUS_MODERATE_CODE || headroomElevated) {
         return DeviceThermalTier.ELEVATED
     }
     return DeviceThermalTier.NORMAL
+}
+
+/**
+ * 计算温控预测值需要补采的延迟毫秒数：
+ * - 若本次回调命中节流窗口（[throttledRemainingMs] > 0），在窗口结束后补采最新预测值；
+ * - 只要预测值额外抬高了最终温控档位（包括 `NORMAL -> ELEVATED/CRITICAL` 及 `ELEVATED -> CRITICAL`），
+ *   就在预测窗口（[forecastWindowMs]）到期后复检一次，避免无新系统状态回调时永久卡在更高热档。
+ */
+fun resolveThermalHeadroomFollowUpDelayMs(
+    thermalStatus: Int,
+    thermalHeadroom: Float,
+    powerSaveMode: Boolean,
+    throttledRemainingMs: Long,
+    forecastWindowMs: Long,
+    headroomThresholds: ThermalHeadroomThresholds = ThermalHeadroomThresholds(),
+): Long? {
+    if (throttledRemainingMs > 0L) {
+        return throttledRemainingMs
+    }
+    if (forecastWindowMs <= 0L || !thermalHeadroom.isFinite()) {
+        return null
+    }
+    val baseTier = resolveDeviceThermalTier(
+        thermalStatus = thermalStatus,
+        thermalHeadroom = Float.NaN,
+        powerSaveMode = powerSaveMode,
+        headroomThresholds = headroomThresholds,
+    )
+    val effectiveTier = resolveDeviceThermalTier(
+        thermalStatus = thermalStatus,
+        thermalHeadroom = thermalHeadroom,
+        powerSaveMode = powerSaveMode,
+        headroomThresholds = headroomThresholds,
+    )
+    return if (effectiveTier.ordinal > baseTier.ordinal) forecastWindowMs else null
 }
 
 /**

@@ -20,7 +20,8 @@ internal object PureApplicationRuntimeConfig {
 
     fun shouldRequestDex2OatProfileInstall(sdkInt: Int): Boolean = sdkInt >= Build.VERSION_CODES.N
 
-    fun dex2OatProfileInstallDelayMs(): Long = 2_500L
+    // 延后到更新后首启的 JIT 热身、首屏渲染及更新要点弹窗之后再写入 Baseline Profile。
+    fun dex2OatProfileInstallDelayMs(): Long = 8_000L
 
     fun resolveImageMemoryCachePercent(): Double = 0.10
 

@@ -16,6 +16,6 @@ class Dex2OatProfileInstallPolicyTest {
 
     @Test
     fun profileInstallDelay_usesConservativePostStartupWindow() {
-        assertEquals(2_500L, PureApplicationRuntimeConfig.dex2OatProfileInstallDelayMs())
+        assertEquals(8_000L, PureApplicationRuntimeConfig.dex2OatProfileInstallDelayMs())
     }
 }

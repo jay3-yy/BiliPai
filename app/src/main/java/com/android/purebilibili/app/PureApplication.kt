@@ -628,12 +628,19 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
 
     private fun requestDex2OatProfileInstallNow() {
         AppScope.ioScope.launch {
-            runCatching {
-                ProfileInstaller.writeProfile(this@PureApplication)
-            }.onSuccess {
-                Logger.d(PureApplicationRuntimeConfig.TAG, "📦 Requested ART profile installation for dex2oat")
-            }.onFailure { throwable ->
-                Logger.w(PureApplicationRuntimeConfig.TAG, "⚠️ ART profile installation request failed", throwable)
+            val previousPriority = android.os.Process.getThreadPriority(android.os.Process.myTid())
+            try {
+                // 更新后首启解压转码大体积 Baseline Profile 时降低线程优先级，避免与 UI/RenderThread/JIT 抢核。
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                runCatching {
+                    ProfileInstaller.writeProfile(this@PureApplication)
+                }.onSuccess {
+                    Logger.d(PureApplicationRuntimeConfig.TAG, "📦 Requested ART profile installation for dex2oat")
+                }.onFailure { throwable ->
+                    Logger.w(PureApplicationRuntimeConfig.TAG, "⚠️ ART profile installation request failed", throwable)
+                }
+            } finally {
+                android.os.Process.setThreadPriority(previousPriority)
             }
         }
     }
