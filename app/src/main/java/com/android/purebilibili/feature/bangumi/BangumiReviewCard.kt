@@ -10,6 +10,7 @@ import com.android.purebilibili.core.ui.common.AppNativeSelectionContainer as Se
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.outlined.ThumbUp
@@ -70,14 +71,14 @@ internal fun BangumiReviewCard(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         AppText(
                             author.uname,
-                            fontSize = 13.sp,
+                            style = MaterialTheme.typography.labelMedium,
                             color = if ((author.vip?.status ?: 0) > 0 && author.vip?.type == 2) userVipPink() else secondary,
                         )
                         UserLevelBadge(level = author.level, height = 11.dp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (item.push_time_str.isNotBlank()) {
-                            AppText(item.push_time_str, fontSize = 12.sp, color = secondary)
+                            AppText(item.push_time_str, style = MaterialTheme.typography.bodySmall, color = secondary)
                             Spacer(Modifier.width(10.dp))
                         }
                         repeat(5) { index ->
@@ -95,12 +96,16 @@ internal fun BangumiReviewCard(
         }
         Spacer(Modifier.height(5.dp))
         if (item.title.isNotBlank()) {
-            AppText(item.title, fontSize = 15.sp, lineHeight = 26.25.sp, fontWeight = FontWeight.Bold)
+            AppText(
+                item.title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
         }
         if (longReview) {
-            AppText(item.content, fontSize = 14.sp, lineHeight = 24.5.sp)
+            AppText(item.content, style = MaterialTheme.typography.bodyMedium)
         } else {
-            SelectionContainer { AppText(item.content, fontSize = 14.sp, lineHeight = 24.5.sp) }
+            SelectionContainer { AppText(item.content, style = MaterialTheme.typography.bodyMedium) }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             if (!longReview) {
@@ -124,7 +129,7 @@ internal fun BangumiReviewCard(
                     )
                     AppText(
                         FormatUtils.formatStat((item.stat?.likes ?: 0).toLong()),
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.labelMedium,
                         color = if (item.stat?.liked == 1) AppContentColors.accent() else secondary,
                     )
                 }

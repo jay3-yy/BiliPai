@@ -113,6 +113,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "playback.auto_highest_quality_enabled" to "自动选择账号和设备支持的最高画质；关闭后按下方的无线网络和移动网络默认画质播放",
     "playback.auto_play_enabled" to "“自动”策略下控制当前视频下一 P；非外部列表播放时，也控制视频合集续播",
     "playback.resilient_video_buffer" to "增加视频预缓冲以应对网络波动，可能消耗更多流量；新播放器生效",
+    "playback.weak_network_degrade_prompt_enabled" to "连续卡顿或长时间缓冲时提示切换画质，并按 Wi-Fi 与移动网络分别学习灵敏度",
     "playback.auto_skip_op_ed" to "番剧提供跳过区间时，播放中自动跳过片头和片尾；保留完整片头片尾播放",
     "playback.background_playback_enabled" to "离开应用或锁屏后继续播放；关闭后离开应用或锁屏时停止播放",
     "playback.center_swipe_to_fullscreen_enabled" to "在画面中部上下滑动，进入或退出全屏；关闭后：中部纵向滑动不再触发全屏切换",

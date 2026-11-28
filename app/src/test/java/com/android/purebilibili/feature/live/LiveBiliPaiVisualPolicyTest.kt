@@ -12,7 +12,7 @@ class LiveBiliPaiVisualPolicyTest {
     fun `home metrics mirror BiliPai live constants`() {
         val metrics = resolveLiveBiliPaiHomeMetrics()
 
-        assertEquals(12, metrics.safeSpaceDp)
+        assertEquals(16, metrics.safeSpaceDp)
         assertEquals(8, metrics.cardSpaceDp)
         assertEquals(12, metrics.cardRadiusDp)
         assertEquals(16f / 10f, metrics.coverAspectRatio)
@@ -26,9 +26,9 @@ class LiveBiliPaiVisualPolicyTest {
         val md3 = resolveLiveVisualSpec(AppTopTabPresentation.MATERIAL_UNDERLINE)
         val miuix = resolveLiveVisualSpec(AppTopTabPresentation.TONAL_CAPSULE)
 
-        assertEquals(12, ios.homeMetrics.safeSpaceDp)
-        assertEquals(12, md3.homeMetrics.safeSpaceDp)
-        assertEquals(12, miuix.homeMetrics.safeSpaceDp)
+        assertEquals(16, ios.homeMetrics.safeSpaceDp)
+        assertEquals(16, md3.homeMetrics.safeSpaceDp)
+        assertEquals(16, miuix.homeMetrics.safeSpaceDp)
         assertEquals(8, ios.homeMetrics.cardSpaceDp)
         assertEquals(8, md3.homeMetrics.cardSpaceDp)
         assertEquals(8, miuix.homeMetrics.cardSpaceDp)

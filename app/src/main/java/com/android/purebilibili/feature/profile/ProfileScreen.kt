@@ -2311,7 +2311,7 @@ private fun ProfileQuickAccessDashboard(
         ProfileQuickAccess("稍后再看", rememberAppWatchLaterIcon(), BiliPaiNavKey.WatchLater, onWatchLaterClick),
     )
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
@@ -2595,7 +2595,7 @@ private fun ProfileSpaceHeader(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         if (showIdentity) {
@@ -3169,7 +3169,7 @@ private fun ProfileSpaceServices(
             style = MaterialTheme.typography.titleMedium,
             color = contentChrome.onSurfaceColor,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 20.dp)
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
         ServicesSection(
             onHistoryClick = onHistoryClick,
@@ -3332,7 +3332,7 @@ private fun ProfileSpaceSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AppText(
@@ -3342,7 +3342,11 @@ private fun ProfileSpaceSection(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f)
             )
-            AppTextButton(onClick = onMoreClick, modifier = moreModifier) {
+            AppTextButton(
+                onClick = onMoreClick,
+                modifier = moreModifier,
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 6.dp),
+            ) {
                 AppText(
                     text = "查看更多",
                     fontWeight = FontWeight.Medium

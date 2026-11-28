@@ -261,7 +261,7 @@ private fun LiveAreaMenuSheet(
                             modifier = Modifier.size(45.dp), contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                         )
                         Spacer(Modifier.height(4.dp))
-                        AppText(tab.title, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        AppText(tab.title, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }

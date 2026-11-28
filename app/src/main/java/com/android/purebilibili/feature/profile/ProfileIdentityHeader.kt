@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -121,9 +122,8 @@ internal fun ProfileIdentityHeader(
                         AppText(
                             text = user.name,
                             color = heroChrome.textColor,
-                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
-                            style = TextStyle(shadow = heroTextShadow),
+                            style = MaterialTheme.typography.titleLarge.copy(shadow = heroTextShadow),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.graphicsLayer { alpha = expandedFractionProvider() * (1f - photoFractionProvider()) },
@@ -131,7 +131,7 @@ internal fun ProfileIdentityHeader(
                         AppText(
                             text = user.name,
                             color = Color.White,
-                            fontSize = 20.sp,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -142,7 +142,7 @@ internal fun ProfileIdentityHeader(
                         AppText(
                             text = user.name,
                             color = collapsedTextColor,
-                            fontSize = 20.sp,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -168,16 +168,14 @@ internal fun ProfileIdentityHeader(
                     AppText(
                         text = "UID ${user.mid}",
                         color = if (heroChrome.textColor == Color.White) Color.White.copy(alpha = 0.90f) else heroChrome.secondaryTextColor,
-                        fontSize = 13.sp,
-                        style = TextStyle(shadow = heroTextShadow),
+                        style = MaterialTheme.typography.bodySmall.copy(shadow = heroTextShadow),
                         maxLines = 1,
                         modifier = Modifier.graphicsLayer { alpha = 1f - photoFractionProvider() },
                     )
                     AppText(
                         text = "UID ${user.mid}",
                         color = Color.White.copy(alpha = 0.80f),
-                        fontSize = 13.sp,
-                        style = TextStyle(shadow = heroTextShadow),
+                        style = MaterialTheme.typography.bodySmall.copy(shadow = heroTextShadow),
                         maxLines = 1,
                         modifier = Modifier
                             .graphicsLayer { alpha = photoFractionProvider() }

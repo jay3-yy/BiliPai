@@ -99,7 +99,6 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
-import com.android.purebilibili.core.player.withDynamicScheduling
 import com.android.purebilibili.feature.video.danmaku.rememberPlayerDanmakuTargetFrameRateHz
 import com.android.purebilibili.feature.video.danmaku.shouldUseIndependentDanmakuSurface
 import androidx.media3.common.util.UnstableApi
@@ -701,7 +700,8 @@ private fun LiveRoomScreen(
                     .withAppVideoDecoderPreference(context)
             )
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-            .withDynamicScheduling()
+            // Media3 1.11+ 默认开启动态调度；直播流对低延迟追帧更敏感，显式关闭以保留固定轮询追帧节奏。
+            .experimentalSetDynamicSchedulingEnabled(false)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -2267,20 +2267,20 @@ private fun LivePortraitOverlayAppBar(
                         anchorInfo.uname.ifBlank { roomTitle },
                         modifier = Modifier.weight(1f, fill = false),
                         color = LiveStatusPalette.MediaContent,
-                        fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     if (onlineRankText.isNotBlank()) {
                         AppText(
                             onlineRankText,
                             modifier = Modifier.padding(start = 10.dp).clickable(onClick = onOpenRank),
-                            color = LiveStatusPalette.MediaContent, fontSize = 12.sp,
+                            color = LiveStatusPalette.MediaContent, style = MaterialTheme.typography.bodySmall,
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
                 AppText(
                     subtitle, color = LiveStatusPalette.MediaContent.copy(alpha = 0.75f),
-                    fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
             }
         }

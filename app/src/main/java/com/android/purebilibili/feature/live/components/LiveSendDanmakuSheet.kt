@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ClearAll
 import androidx.compose.material.icons.outlined.EmojiEmotions
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -120,7 +121,7 @@ fun LiveSendDanmakuSheet(
                     AppText(
                         if (!permission.canSend) permission.statusText else "弹幕最多 $maxLength 字",
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                        color = AppContentColors.secondaryText(), fontSize = 12.sp,
+                        color = AppContentColors.secondaryText(), style = MaterialTheme.typography.bodySmall,
                     )
                 }
                 if (emoticonContent != null) {

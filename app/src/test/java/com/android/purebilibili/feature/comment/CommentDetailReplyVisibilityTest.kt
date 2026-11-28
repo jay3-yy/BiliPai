@@ -723,6 +723,27 @@ class CommentDetailReplyVisibilityTest {
         assertEquals("offline", model.subReplyState.value.error)
     }
 
+    @Test
+    fun `replying to root comment sends rootId as parent so server threads it under the root`() = runTest(dispatcher) {
+        var sentRoot = -1L
+        var sentParent = -1L
+        coEvery {
+            CommentRepository.addCommentForSubject(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            sentRoot = arg(3)
+            sentParent = arg(4)
+            Result.success(sent)
+        }
+
+        send(root)
+
+        assertEquals(root.rpid, sentRoot)
+        assertEquals(root.rpid, sentParent)
+        val recorded = model.subReplyState.value.items.last()
+        assertEquals(root.rpid, recorded.root)
+        assertEquals(root.rpid, recorded.parent)
+    }
+
     private fun send(target: ReplyItem) {
         model.showReplyInput(target)
         model.sendReply("local")

@@ -166,7 +166,7 @@ internal fun LiveRoomCard(
                     AppText(
                         text = if (searchResult) model.hostName else model.areaName.ifBlank { "直播间" },
                         color = LiveStatusPalette.MediaContent.copy(alpha = 0.92f),
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        style = MaterialTheme.typography.labelSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
@@ -180,7 +180,6 @@ internal fun LiveRoomCard(
                             text = viewerLabel,
                             color = LiveStatusPalette.MediaContent,
                             style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
                                 fontFeatureSettings = AppTypographyTokens.TabularNumerals
                             ),
                             maxLines = 1,

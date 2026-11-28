@@ -243,11 +243,11 @@ internal fun LiveSuperChatCard(
                           AppText(item.superChatPrice, color = bottom)
                           if (persistent && item.superChatStartTime > 0L) AppText(
                               android.text.format.DateFormat.format("MM-dd HH:mm", item.superChatStartTime * 1_000L).toString(),
-                              color = bottom, fontSize = 13.5.sp,
+                              color = bottom, style = MaterialTheme.typography.bodySmall,
                           )
                       }
                   }
-                  if (!persistent) AppText(remainingSec.toString(), color = Color.Gray, fontSize = 14.sp)
+                  if (!persistent) AppText(remainingSec.toString(), color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
               }
               }
               val message: @Composable () -> Unit = {

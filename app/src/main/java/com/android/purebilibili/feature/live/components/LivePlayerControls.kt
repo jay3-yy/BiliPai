@@ -557,9 +557,9 @@ fun LivePlayerControls(
                 ) {
                     if (isFullscreen) LivePlayerIconButton(backIcon, "返回", false, true, onBack, glassShape = CircleShape)
                     Column(Modifier.weight(1f).padding(end = 10.dp)) {
-                        AppText(title, color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        AppText(title, color = Color.White, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (isFullscreen && subtitle.isNotBlank()) {
-                            AppText(subtitle, color = Color.White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.appActionClickable(onClick = onOpenRank))
+                            AppText(subtitle, color = Color.White, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.appActionClickable(onClick = onOpenRank))
                         }
                     }
                     if (isFullscreen && !compactTop) {
@@ -672,7 +672,7 @@ fun LivePlayerControls(
                         anchorModifier = anchorSize.semantics { contentDescription = "画面比例" },
                         groups = listOf(videoFitOptions),
                     ) {
-                        AppText(videoFitDesc, color = Color.White, fontSize = 13.sp, maxLines = 1,
+                        AppText(videoFitDesc, color = Color.White, style = MaterialTheme.typography.labelMedium, maxLines = 1,
                             modifier = Modifier.padding(horizontal = 10.dp), overflow = TextOverflow.Ellipsis)
                     }
                     if (qualityOptions.isNotEmpty()) {
@@ -682,7 +682,7 @@ fun LivePlayerControls(
                             anchorModifier = anchorSize.semantics { contentDescription = "画质" },
                             groups = listOf(qualityOptions),
                         ) {
-                            AppText(currentQualityDesc, color = Color.White, fontSize = 13.sp, maxLines = 1,
+                            AppText(currentQualityDesc, color = Color.White, style = MaterialTheme.typography.labelMedium, maxLines = 1,
                                 modifier = Modifier.padding(horizontal = 10.dp), overflow = TextOverflow.Ellipsis)
                         }
                     }

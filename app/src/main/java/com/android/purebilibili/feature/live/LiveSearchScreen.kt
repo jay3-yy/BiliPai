@@ -307,7 +307,7 @@ private fun LiveSearchUserCard(item: LiveAppSearchUser, pageActive: Boolean, onC
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    AppText(cleanSearchText(item.name), modifier = Modifier.weight(1f, fill = false), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    AppText(cleanSearchText(item.name), modifier = Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (item.liveStatus == 1) {
                         PlaybackBarsIndicator(
                             isPlaying = pageActive,
@@ -322,7 +322,7 @@ private fun LiveSearchUserCard(item: LiveAppSearchUser, pageActive: Boolean, onC
                         if (item.areaName.isNotBlank()) add("分区：${cleanSearchText(item.areaName)}")
                         item.fansNum?.let { add("关注数：${formatLiveViewerCount(it)}") }
                     }.joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                    style = MaterialTheme.typography.bodySmall,
                     color = AppContentColors.secondaryText(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

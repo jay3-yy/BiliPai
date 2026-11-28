@@ -282,6 +282,7 @@ internal enum class SettingsIconRole(
     BOTTOM_BAR_SEARCH(R.drawable.ms_search_fill_24, R.drawable.ph_magnifying_glass_plus_24),
     DATA_SAVER_COVER_QUALITY(R.drawable.ms_wifi_24, R.drawable.ph_wifi_high_24),
     RESILIENT_VIDEO_BUFFER(R.drawable.ic_settings_resilient_buffer_24),
+    WEAK_NETWORK_DEGRADE_PROMPT(R.drawable.ms_speed_24, R.drawable.ph_pulse_24),
     SEGMENT_LOADING_COMPATIBILITY(R.drawable.ms_cloud_download_24, R.drawable.ph_cloud_arrow_down_24),
     NOTIFICATION_SCOPE_MESSAGE(R.drawable.ms_mail_24, R.drawable.ph_envelope_simple_24),
     NOTIFICATION_SCOPE_REPLY(R.drawable.ms_reply_24, R.drawable.ph_arrow_bend_up_left_24),

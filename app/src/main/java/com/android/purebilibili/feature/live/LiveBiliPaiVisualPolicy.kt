@@ -104,8 +104,8 @@ internal data class LiveMedalBadgeVisualSpec(
 internal fun resolveLiveVisualSpec(
     tabPresentation: AppTopTabPresentation,
 ): LiveVisualSpec {
-    // 列表在所有材质中共用内容几何，材质差异由 App 组件负责。
-    val safeSpaceDp = 12
+    // 列表在所有材质中共用内容几何，材质差异由 App 组件负责；外边距与首页其他 Tab 统一为 PageHorizontal (16dp)。
+    val safeSpaceDp = com.android.purebilibili.core.ui.AppSpacingTokens.PageHorizontal.value.toInt()
     val cardSpaceDp = 8
     val playerButtonVisualSizeDp = 30
     val roomCardDetailsMinHeightDp = 90

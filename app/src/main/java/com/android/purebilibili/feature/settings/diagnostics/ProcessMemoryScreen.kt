@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.settings
 
 import androidx.annotation.StringRes
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -176,7 +177,7 @@ private fun MemoryGlossaryDialog(onDismiss: () -> Unit) {
                 AppText(
                     text = stringResource(R.string.process_memory_scope_description),
                     color = AppContentColors.secondaryText(),
-                    fontSize = 13.sp,
+                    style = MaterialTheme.typography.bodySmall,
                 )
                 MemoryTerm(R.string.process_memory_pss, R.string.process_memory_pss_description)
                 MemoryTerm(R.string.process_memory_rss, R.string.process_memory_rss_description)
@@ -192,7 +193,7 @@ private fun MemoryGlossaryDialog(onDismiss: () -> Unit) {
                 AppText(
                     text = stringResource(R.string.process_memory_units_description),
                     color = AppContentColors.secondaryText(),
-                    fontSize = 13.sp,
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         },
@@ -205,11 +206,11 @@ private fun MemoryGlossaryDialog(onDismiss: () -> Unit) {
 @Composable
 private fun MemoryTerm(@StringRes label: Int, @StringRes description: Int) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        AppText(stringResource(label), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        AppText(stringResource(label), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
         AppText(
             text = stringResource(description),
             color = AppContentColors.secondaryText(),
-            fontSize = 13.sp,
+            style = MaterialTheme.typography.bodySmall,
         )
     }
 }
@@ -225,7 +226,7 @@ private fun MemoryTotals(snapshot: ProcessMemorySnapshot, modifier: Modifier = M
             AppText(
                 text = stringResource(R.string.process_memory_scope),
                 color = AppContentColors.secondaryText(),
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.bodySmall,
                 tapToCopyEnabled = false,
             )
             AppHorizontalDivider()
@@ -239,7 +240,7 @@ private fun MemoryTotals(snapshot: ProcessMemorySnapshot, modifier: Modifier = M
                                 modifier = Modifier.weight(1f),
                                 verticalArrangement = Arrangement.spacedBy(2.dp),
                             ) {
-                                AppText(stringResource(label), fontSize = 13.sp)
+                                AppText(stringResource(label), style = MaterialTheme.typography.bodySmall)
                                 AppText(
                                     text = value,
                                     style = appTabularNumberTextStyle(),
@@ -249,7 +250,7 @@ private fun MemoryTotals(snapshot: ProcessMemorySnapshot, modifier: Modifier = M
                                     maxLines = 1,
                                 )
                                 if (unit.isNotEmpty()) {
-                                    AppText(unit, color = AppContentColors.secondaryText(), fontSize = 11.sp)
+                                    AppText(unit, color = AppContentColors.secondaryText(), style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
@@ -262,13 +263,12 @@ private fun MemoryTotals(snapshot: ProcessMemorySnapshot, modifier: Modifier = M
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                AppText(stringResource(label), Modifier.weight(1f), fontSize = 13.sp)
+                                AppText(stringResource(label), Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
                                 AppText(
                                     text = processMemorySizeLabel(kib),
                                     modifier = Modifier.weight(1f),
-                                    style = appTabularNumberTextStyle(),
+                                    style = MaterialTheme.typography.titleMedium.merge(appTabularNumberTextStyle()),
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp,
                                     textAlign = TextAlign.End,
                                 )
                             }
@@ -301,7 +301,7 @@ private fun MemoryBreakdown(snapshot: ProcessMemorySnapshot, modifier: Modifier 
         ) {
             AppText(
                 stringResource(R.string.process_memory_breakdown),
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
             val legend: @Composable (Modifier) -> Unit = { legendModifier ->
@@ -395,7 +395,7 @@ private fun MemoryLegend(
                         text = stringResource(R.string.process_memory_category_column),
                         modifier = Modifier.weight(1f).padding(start = 16.dp),
                         color = AppContentColors.secondaryText(),
-                        fontSize = 12.sp,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                     MemoryLegendValue(
                         stringResource(R.string.process_memory_amount_column),
@@ -429,7 +429,7 @@ private fun MemoryLegend(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(Modifier.size(8.dp).background(colors[index], CircleShape))
-                        AppText(stringResource(category.label), fontSize = 13.sp)
+                        AppText(stringResource(category.label), style = MaterialTheme.typography.bodySmall)
                     }
                     if (useColumns) {
                         MemoryLegendValue(size, Modifier.width(amountWidth))

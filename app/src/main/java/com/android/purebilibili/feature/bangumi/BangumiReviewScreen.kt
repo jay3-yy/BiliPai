@@ -292,12 +292,12 @@ fun BangumiReviewScreen(
             AppText(
                 reviewCount?.let { "${com.android.purebilibili.core.util.FormatUtils.formatStat(it.toLong())}条点评" }.orEmpty(),
                 modifier = Modifier.weight(1f),
-                fontSize = 13.sp,
+                style = MaterialTheme.typography.labelMedium,
             )
             AppTextButton(onClick = { selectQuery(reviewType, 1 - sort) }, enabled = !loading) {
                 AppIcon(Icons.AutoMirrored.Outlined.Sort, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                AppText(if (sort == 0) "默认" else "最新", fontSize = 13.sp)
+                AppText(if (sort == 0) "默认" else "最新", style = MaterialTheme.typography.labelMedium)
             }
         }
     }
@@ -339,7 +339,7 @@ fun BangumiReviewScreen(
                                 AppText(
                                     type.label,
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                                    fontSize = 13.sp,
+                                    style = MaterialTheme.typography.labelMedium,
                                     color = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else AppContentColors.secondaryText(),
                                 )
                             }

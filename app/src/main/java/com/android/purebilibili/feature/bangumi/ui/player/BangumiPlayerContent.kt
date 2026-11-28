@@ -790,7 +790,7 @@ fun BangumiPlayerContent(
                 val actionColor = MaterialTheme.colorScheme.primary
                 val episodeActionEnabled = currentEpisode.aid > 0L && !tripleInProgress
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -897,20 +897,32 @@ fun BangumiPlayerContent(
 
         if (!isCourse && detail.seasons.orEmpty().count { it.seasonId > 0L } > 1) {
             item {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    AppText("相关季度", style = MaterialTheme.typography.titleMedium)
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                    AppText(
+                        "相关季度",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
                         items(detail.seasons.orEmpty().filter { it.seasonId > 0L }.distinctBy { it.seasonId }, key = { it.seasonId }) { season ->
                             val selected = season.seasonId == detail.seasonId
                             val selection = AppInteractionColors.miuixContentSelection()
                             val buttonColors = AppTextButtonDefaults.colors()
+                            val hasTintedSelectionBackground = selected && selection != null
                             AppTextButton(
                                 onClick = { onSeasonClick(season.seasonId) },
                                 enabled = !selected,
-                                colors = if (selected && selection != null) buttonColors.copy(
+                                colors = if (hasTintedSelectionBackground) buttonColors.copy(
                                     disabledContainerColor = selection.backgroundColor,
                                     disabledContentColor = selection.contentColor,
                                 ) else buttonColors,
+                                contentPadding = PaddingValues(
+                                    horizontal = if (hasTintedSelectionBackground) 10.dp else 0.dp,
+                                    vertical = 6.dp,
+                                ),
                             ) {
                                 val title = season.seasonTitle.ifBlank { season.title }.ifBlank { "季度" }
                                 // The current season is non-clickable but remains selected,

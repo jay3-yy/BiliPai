@@ -644,7 +644,7 @@ internal fun AudioNowPlayingBar(
                                     color = immersiveContentColor
                                         ?: AppContentColors.primaryText(),
                                     fontWeight = FontWeight.Normal,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 16.sp)
+                                    style = MaterialTheme.typography.labelMedium
                                 )
                                 Box(
                                     modifier = Modifier
@@ -661,7 +661,7 @@ internal fun AudioNowPlayingBar(
                                         text = state.artist,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, lineHeight = 14.sp),
+                                        style = MaterialTheme.typography.labelSmall,
                                         color = immersiveContentColor?.copy(alpha = 0.72f)
                                             ?: AppContentColors.secondaryText()
                                     )

@@ -58,6 +58,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
@@ -1488,7 +1489,7 @@ fun BangumiPlayerScreen(
             )
             val systemBarsSpec = resolveVideoDetailSystemBarsApplySpec(
                 visibilityPolicy = systemBarsVisibilityPolicy,
-                useTabletLayout = !isFullscreen && useLargeScreenLayout && !bangumiSplitPanes,
+                useTabletLayout = !isFullscreen && !bangumiSplitPanes && (useLargeScreenLayout || isPlayerCollapsed),
                 isLightBackground = isLightGroupedBackground,
                 backgroundColor = Color.Transparent.toArgb(),
                 transparentColor = Color.Transparent.toArgb(),
@@ -1558,13 +1559,40 @@ fun BangumiPlayerScreen(
                     .fillMaxSize()
                     .nestedScroll(nestedScrollConnection)
             ) {
-                // 播放器区域 - 在 layout 阶段读取折叠进度，避免跟手滚动逐帧触发整页重组
-                ImmersiveStatusBarBackdrop(
-                    ambientFrame = statusBarAmbientFrame,
-                    height = portraitPlayerTopPadding,
-                    useAmbientHaze = immersiveStatusBarBackdropEnabled,
-                    videoBoundsInWindow = { ambientPresentation.videoBoundsInWindow() },
-                )
+                // 状态栏区域：展开时跟随视频沉浸模糊，下滑折叠时在 draw 阶段平滑过渡到折叠顶栏底色并停用模糊，避免顶部残留模糊带
+                val collapsedBarSurface = MaterialTheme.colorScheme.surface
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(portraitPlayerTopPadding)
+                ) {
+                    ImmersiveStatusBarBackdrop(
+                        ambientFrame = statusBarAmbientFrame,
+                        height = portraitPlayerTopPadding,
+                        useAmbientHaze = immersiveStatusBarBackdropEnabled && !isPlayerCollapsed,
+                        videoBoundsInWindow = { ambientPresentation.videoBoundsInWindow() },
+                    )
+                    Spacer(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .drawBehind {
+                                val ratio = collapseProgressProvider().coerceIn(0f, 1f)
+                                if (ratio > 0f) {
+                                    drawRect(
+                                        color = Color.Black,
+                                        alpha = (ratio * 0.85f).coerceIn(0f, 1f),
+                                    )
+                                }
+                                val surfaceAlpha = ((ratio - 0.2f) / 0.8f).coerceIn(0f, 1f)
+                                if (surfaceAlpha > 0f) {
+                                    drawRect(
+                                        color = collapsedBarSurface,
+                                        alpha = surfaceAlpha,
+                                    )
+                                }
+                            }
+                    )
+                }
 
                 Box(
                     modifier = Modifier

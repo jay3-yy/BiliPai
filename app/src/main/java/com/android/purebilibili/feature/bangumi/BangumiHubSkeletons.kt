@@ -199,7 +199,7 @@ internal fun BangumiFollowManagerSkeleton(modifier: Modifier = Modifier) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(310.dp),
         modifier = modifier.then(animationGate.modifier).fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         userScrollEnabled = false,

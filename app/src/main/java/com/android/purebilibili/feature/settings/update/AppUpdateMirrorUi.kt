@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.settings
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -187,7 +188,7 @@ private fun <T> AppUpdateDownloadChannelButton(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         AppText(
                             text = actionTitle,
-                            fontSize = 14.sp,
+                            style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium,
                             color = titleColor,
                             maxLines = 1,
@@ -197,7 +198,7 @@ private fun <T> AppUpdateDownloadChannelButton(
                         )
                         AppText(
                             text = actionSubtitle,
-                            fontSize = 11.sp,
+                            style = MaterialTheme.typography.labelSmall,
                             color = subtitleColor,
                             maxLines = 1,
                             softWrap = false,

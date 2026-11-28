@@ -131,10 +131,13 @@ internal fun BangumiSupplementarySections(
         LazyRow(
             state = sectionListState,
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             items(sections.size) { index ->
-                AppTextButton(onClick = { selectedSection = index }) {
+                AppTextButton(
+                    onClick = { selectedSection = index },
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 6.dp),
+                ) {
                     AppText(
                         sections[index].title.ifBlank { "附加内容" },
                         color = if (index == selectedIndex) AppContentColors.accent() else AppContentColors.secondaryText(),

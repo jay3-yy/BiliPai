@@ -108,7 +108,7 @@ private fun ProfilePhoneLoadingSkeleton(blockColor: () -> Color) {
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = layoutTokens.heroBottomInsetDp.dp),
+                        .padding(horizontal = 16.dp, vertical = layoutTokens.heroBottomInsetDp.dp),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
                     repeat(3) {
@@ -128,7 +128,7 @@ private fun ProfilePhoneLoadingSkeleton(blockColor: () -> Color) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(AppSurfaceTokens.surface())
-                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 Row(

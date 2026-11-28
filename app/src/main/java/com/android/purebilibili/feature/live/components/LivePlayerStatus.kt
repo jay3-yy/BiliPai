@@ -9,6 +9,7 @@ import android.text.format.DateFormat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -46,7 +47,7 @@ internal fun LivePlayerStatus(modifier: Modifier = Modifier) {
         onDispose { context.unregisterReceiver(receiver) }
     }
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(battery?.let { "$it%" } ?: "—%", color = Color.White, fontSize = 12.sp, modifier = Modifier.widthIn(min = 30.dp))
-        Text(time, color = Color.White, fontSize = 12.sp, modifier = Modifier.widthIn(min = 35.dp))
+        Text(battery?.let { "$it%" } ?: "—%", color = Color.White, style = MaterialTheme.typography.labelMedium, modifier = Modifier.widthIn(min = 30.dp))
+        Text(time, color = Color.White, style = MaterialTheme.typography.labelMedium, modifier = Modifier.widthIn(min = 35.dp))
     }
 }

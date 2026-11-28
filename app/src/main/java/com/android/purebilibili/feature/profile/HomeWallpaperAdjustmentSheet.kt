@@ -187,7 +187,7 @@ internal fun HomeWallpaperAdjustmentSheet(
                 AppText(
                     saveError,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 24.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
             WallpaperZoomControls(
@@ -199,13 +199,13 @@ internal fun HomeWallpaperAdjustmentSheet(
                 AppText(
                     "当前壁纸效果已关闭，保存位置后可在壁纸效果中开启。",
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(horizontal = 24.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
             AppText(
                 "双指缩放、单指拖动；手机和平板分别保存。",
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
     }
@@ -217,7 +217,7 @@ private fun WallpaperZoomControls(
     enabled: Boolean,
     onChange: (WallpaperTransform) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             AppText("缩放", style = MaterialTheme.typography.labelLarge)
             AppTextButton(onClick = { onChange(WallpaperTransform()) }, enabled = enabled) { AppText("重置位置") }

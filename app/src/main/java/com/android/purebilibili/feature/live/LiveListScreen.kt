@@ -1280,7 +1280,7 @@ private fun LiveFollowAvatarRow(
                 AppText(
                     text = item.uname,
                     color = palette.primaryText,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,

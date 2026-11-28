@@ -841,7 +841,7 @@ private fun SearchKeywordCell(
             modifier = Modifier.weight(1f, fill = false),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp)
+            style = MaterialTheme.typography.bodyMedium
         )
         if (hasTrailing) {
             Spacer(modifier = Modifier.width(3.dp))
@@ -862,7 +862,7 @@ private fun SearchKeywordCell(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.outline,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp)
+                    style = MaterialTheme.typography.bodyMedium
                 )
             }
         }

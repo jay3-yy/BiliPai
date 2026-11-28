@@ -1309,6 +1309,14 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                     val directedTrafficEnabled = playbackPreferences.directedTrafficEnabled
                     val resilientVideoBuffer by remember(context) { SettingsManager.getResilientVideoBuffer(context) }
                         .collectAsStateWithLifecycle(initialValue = SettingsManager.getResilientVideoBufferSync(context))
+                    val weakNetworkDegradePromptEnabled by remember(context) {
+                        SettingsManager.getWeakNetworkDegradePromptEnabled(context)
+                    }.collectAsStateWithLifecycle(initialValue = true)
+                    val weakNetworkAdaptiveState by remember(context) {
+                        SettingsManager.getWeakNetworkAdaptiveLearningState(context)
+                    }.collectAsStateWithLifecycle(
+                        initialValue = com.android.purebilibili.feature.video.ui.overlay.WeakNetworkAdaptiveState()
+                    )
                     val isLoggedIn = com.android.purebilibili.data.repository.VideoRepository.isPlaybackLoggedIn()
                     val isVip = com.android.purebilibili.data.repository.VideoRepository.isPlaybackVip()
 
@@ -1355,6 +1363,52 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                                     scope.launch { SettingsManager.setResilientVideoBuffer(context, enabled) }
                                 },
                                 iconTint = AppContentColors.secondaryText(),
+                            )
+                        }
+                        AppPreferenceDivider()
+
+                        SettingsItemAnchor("playback.weak_network_degrade_prompt_enabled") {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.WEAK_NETWORK_DEGRADE_PROMPT),
+                                title = playbackSettingTitle("playback.weak_network_degrade_prompt_enabled"),
+                                subtitle = com.android.purebilibili.feature.video.ui.overlay.resolveWeakNetworkDegradeSettingSubtitle(
+                                    enabled = weakNetworkDegradePromptEnabled,
+                                    state = weakNetworkAdaptiveState,
+                                ),
+                                checked = weakNetworkDegradePromptEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch {
+                                        SettingsManager.setWeakNetworkDegradePromptEnabled(context, enabled)
+                                    }
+                                },
+                                iconTint = AppContentColors.secondaryText(),
+                                titleTrailingContent = if (weakNetworkDegradePromptEnabled && weakNetworkAdaptiveState.hasLearnedFeedback) {
+                                    {
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                            onClick = {
+                                                scope.launch {
+                                                    SettingsManager.resetWeakNetworkPromptLearning(context)
+                                                }
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    "已重置弱网提示习惯",
+                                                    android.widget.Toast.LENGTH_SHORT,
+                                                ).show()
+                                            },
+                                        ) {
+                                            Text(
+                                                text = "重置习惯",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    null
+                                },
                             )
                         }
                         AppPreferenceDivider()

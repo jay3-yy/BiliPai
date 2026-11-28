@@ -537,7 +537,9 @@ class CommentDetailViewModel : ViewModel() {
         val rootId = currentRootId
         if (rootId <= 0L) return
         val replying = _replyingTo.value ?: rootReply ?: return
-        val parentId = if (replying.rpid == rootId) 0L else replying.rpid
+        // B 站 /x/v2/reply/add 要求楼中楼回复同时携带非零 root 与 parent；
+        // 回复主评论本身时 parent 必须等于 rootId（传 0 会被服务端当作主评论区一级评论）。
+        val parentId = replying.rpid.takeIf { it > 0L } ?: rootId
         val oid = currentOid
         val type = currentType
         val sendSession = threadSession
